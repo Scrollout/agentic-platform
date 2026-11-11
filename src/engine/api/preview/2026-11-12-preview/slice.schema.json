@@ -73,7 +73,7 @@
       "type": "object",
       "description": "Each rule's EARS sentence, keyed by rule ID. Written by the platform from the rule's fields; never edited.",
       "propertyNames": {
-        "pattern": "^R-[0-9]+$"
+        "$ref": "slice-defs.schema.json#/$defs/rule_id"
       },
       "additionalProperties": {
         "type": "string",
@@ -190,8 +190,7 @@
                   "$ref": "slice-defs.schema.json#/$defs/part_ref"
                 },
                 {
-                  "type": "string",
-                  "pattern": "^Q-[0-9]+$"
+                  "$ref": "slice-defs.schema.json#/$defs/question_id"
                 }
               ]
             }

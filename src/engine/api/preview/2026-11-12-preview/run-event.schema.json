@@ -46,8 +46,7 @@
       ]
     },
     "step": {
-      "type": "string",
-      "pattern": "^[a-z0-9-]+$"
+      "$ref": "slice-defs.schema.json#/$defs/step_name"
     },
     "attempt": {
       "type": "integer",
@@ -61,8 +60,7 @@
       "description": "The review round a finding belongs to."
     },
     "worker": {
-      "type": "string",
-      "pattern": "^(agent|procedure):[a-z0-9-]+$",
+      "$ref": "slice-defs.schema.json#/$defs/worker_ref",
       "description": "The step's worker, as the pattern declares it."
     },
     "model": {
@@ -73,8 +71,7 @@
       "$ref": "slice-defs.schema.json#/$defs/hash"
     },
     "pattern": {
-      "type": "string",
-      "pattern": "^[a-z0-9-]+@[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "$ref": "slice-defs.schema.json#/$defs/pattern_ref",
       "description": "Pattern ID and version, as `<id>@<version>`."
     },
     "inputs": {
@@ -109,8 +106,7 @@
       "additionalProperties": false,
       "properties": {
         "name": {
-          "type": "string",
-          "pattern": "^[A-Z][A-Za-z0-9]*$"
+          "$ref": "slice-defs.schema.json#/$defs/check_name"
         },
         "passed": {
           "type": "boolean"
@@ -132,8 +128,7 @@
       "description": "A review finding. It blocks only with a file, a line and the check that confirms it; otherwise it is a suggestion.",
       "properties": {
         "rule": {
-          "type": "string",
-          "pattern": "^R-[0-9]+$"
+          "$ref": "slice-defs.schema.json#/$defs/rule_id"
         },
         "file": {
           "type": "string",
@@ -152,8 +147,7 @@
           "type": "boolean"
         },
         "check": {
-          "type": "string",
-          "pattern": "^[A-Z][A-Za-z0-9]*$",
+          "$ref": "slice-defs.schema.json#/$defs/check_name",
           "description": "The check that confirms the finding."
         }
       },
@@ -248,7 +242,7 @@
             ]
           },
           "worker": {
-            "pattern": "^agent:"
+            "$ref": "slice-defs.schema.json#/$defs/agent_worker"
           }
         },
         "required": [

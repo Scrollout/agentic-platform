@@ -18,8 +18,7 @@
   "additionalProperties": false,
   "properties": {
     "id": {
-      "type": "string",
-      "pattern": "^[a-z0-9-]+$"
+      "$ref": "slice-defs.schema.json#/$defs/pattern_id"
     },
     "version": {
       "type": "string",
@@ -90,12 +89,10 @@
         "additionalProperties": false,
         "properties": {
           "name": {
-            "type": "string",
-            "pattern": "^[a-z0-9-]+$"
+            "$ref": "slice-defs.schema.json#/$defs/step_name"
           },
           "worker": {
-            "type": "string",
-            "pattern": "^(agent|procedure):[a-z0-9-]+$",
+            "$ref": "slice-defs.schema.json#/$defs/worker_ref",
             "description": "`agent:<definition>` for an agent step or `procedure:<name>` for a fixed procedure."
           },
           "writable": {
@@ -111,8 +108,7 @@
             "type": "array",
             "minItems": 1,
             "items": {
-              "type": "string",
-              "pattern": "^[A-Z][A-Za-z0-9]*$"
+              "$ref": "slice-defs.schema.json#/$defs/check_name"
             },
             "description": "The checks that must all pass before the step is accepted."
           },
@@ -151,15 +147,14 @@
             }
           },
           "agent_digest": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{64}$",
+            "$ref": "slice-defs.schema.json#/$defs/hash",
             "description": "SHA-256 of the agent definition the step runs. A run uses exactly this definition."
           }
         },
         "if": {
           "properties": {
             "worker": {
-              "pattern": "^agent:"
+              "$ref": "slice-defs.schema.json#/$defs/agent_worker"
             }
           }
         },
@@ -174,8 +169,7 @@
       "type": "array",
       "minItems": 1,
       "items": {
-        "type": "string",
-        "pattern": "^[A-Z][A-Za-z0-9]*$"
+        "$ref": "slice-defs.schema.json#/$defs/check_name"
       },
       "description": "Named fit checks; a slice fits when all pass."
     },

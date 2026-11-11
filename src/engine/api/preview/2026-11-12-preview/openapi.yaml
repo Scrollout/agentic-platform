@@ -893,8 +893,7 @@ components:
       description: The API version. This contract is 2026-11-12-preview. A missing value returns 400
         MissingApiVersionParameter; any other value returns 400 UnsupportedApiVersionValue.
       schema:
-        type: string
-        pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}(-preview)?$
+        $ref: slice-defs.schema.json#/$defs/api_version
         examples:
         - 2026-11-12-preview
     IdempotencyKey:
@@ -935,8 +934,7 @@ components:
       required: true
       description: The operation's ID.
       schema:
-        type: string
-        pattern: ^OP-[0-9]+$
+        $ref: slice-defs.schema.json#/$defs/operation_id
     ArtifactHash:
       name: hash
       in: path
@@ -1245,8 +1243,7 @@ components:
       additionalProperties: false
       properties:
         question:
-          type: string
-          pattern: ^Q-[0-9]+$
+          $ref: slice-defs.schema.json#/$defs/question_id
         answer:
           $ref: slice-defs.schema.json#/$defs/answer
     AnswerRequest:
@@ -1281,8 +1278,7 @@ components:
       additionalProperties: false
       properties:
         project:
-          type: string
-          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          $ref: slice-defs.schema.json#/$defs/project_name
           description: The name of the new project folder, created under the projects folder chosen when
             the platform started. It must not exist yet.
     WorkerRegistration:
@@ -1292,8 +1288,7 @@ components:
       additionalProperties: false
       properties:
         endpoint:
-          type: string
-          pattern: ^http://[a-z0-9-]+:[0-9]{1,5}/?$
+          $ref: slice-defs.schema.json#/$defs/worker_endpoint
           description: >-
             The worker's base address on the internal network: `http://`, a host name of lowercase
             letters, digits and hyphens (such as its Compose service name), a port, and nothing
@@ -1308,11 +1303,9 @@ components:
         slice:
           $ref: slice-defs.schema.json#/$defs/slice_id
         step:
-          type: string
-          pattern: ^[a-z0-9-]+$
+          $ref: slice-defs.schema.json#/$defs/step_name
         endpoint:
-          type: string
-          pattern: ^http://[a-z0-9-]+:[0-9]{1,5}/?$
+          $ref: slice-defs.schema.json#/$defs/worker_endpoint
           description: The registered base address, as `WorkerRegistration.endpoint` defines it.
     OperationKind:
       type: string
@@ -1347,15 +1340,13 @@ components:
       - updated_at
       properties:
         id:
-          type: string
-          pattern: ^OP-[0-9]+$
+          $ref: slice-defs.schema.json#/$defs/operation_id
         kind:
           $ref: '#/components/schemas/OperationKind'
         status:
           $ref: '#/components/schemas/OperationStatus'
         target:
-          type: string
-          pattern: ^(S|RUN)-[0-9]+$
+          $ref: slice-defs.schema.json#/$defs/slice_or_run_id
           description: The slice or run the operation concerns.
         progress:
           type: object
@@ -1478,12 +1469,10 @@ components:
         slice:
           $ref: slice-defs.schema.json#/$defs/slice_id
         pattern:
-          type: string
-          pattern: ^[a-z0-9-]+@[0-9]+\.[0-9]+\.[0-9]+$
+          $ref: slice-defs.schema.json#/$defs/pattern_ref
           description: Pattern ID and version, as `<id>@<version>`.
         project:
-          type: string
-          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          $ref: slice-defs.schema.json#/$defs/project_name
           description: The project folder's name under the projects folder.
         status:
           $ref: '#/components/schemas/RunStatus'
@@ -1498,8 +1487,7 @@ components:
           description: While the run is interrupted or waiting for the developer, when it ends `expired`
             (14 days after it stopped).
         operation:
-          type: string
-          pattern: ^OP-[0-9]+$
+          $ref: slice-defs.schema.json#/$defs/operation_id
           description: The run's operation.
         replay_of:
           $ref: slice-defs.schema.json#/$defs/run_id
@@ -1543,8 +1531,7 @@ components:
       - field
       properties:
         step:
-          type: string
-          pattern: ^[a-z0-9-]+$
+          $ref: slice-defs.schema.json#/$defs/step_name
         field:
           type: string
           enum:

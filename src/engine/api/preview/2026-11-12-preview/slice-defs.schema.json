@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "slice-defs.schema.json",
   "title": "SliceDefinitions",
-  "description": "The parts of a slice, defined once and used by the slice, the slice proposal, the run record and the engine API.",
+  "description": "The parts of a slice and the value rules they share, defined once and used by the slice, the slice proposal, the pattern, the run record and the engine API.",
   "$defs": {
     "slice_id": {
       "type": "string",
@@ -16,6 +16,65 @@
       "type": "string",
       "pattern": "^[0-9a-f]{64}$",
       "description": "A SHA-256 hash in lowercase hex."
+    },
+    "slice_or_run_id": {
+      "type": "string",
+      "pattern": "^(S|RUN)-[0-9]+$"
+    },
+    "operation_id": {
+      "type": "string",
+      "pattern": "^OP-[0-9]+$"
+    },
+    "goal_id": {
+      "type": "string",
+      "pattern": "^G-[0-9]+$"
+    },
+    "term_id": {
+      "type": "string",
+      "pattern": "^T-[0-9]+$"
+    },
+    "rule_id": {
+      "type": "string",
+      "pattern": "^R-[0-9]+$"
+    },
+    "question_id": {
+      "type": "string",
+      "pattern": "^Q-[0-9]+$"
+    },
+    "pattern_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "pattern_ref": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+@[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "step_name": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "worker_ref": {
+      "type": "string",
+      "pattern": "^(agent|procedure):[a-z0-9-]+$"
+    },
+    "agent_worker": {
+      "pattern": "^agent:"
+    },
+    "check_name": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9]*$"
+    },
+    "project_name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+    },
+    "worker_endpoint": {
+      "type": "string",
+      "pattern": "^http://[a-z0-9-]+:[0-9]{1,5}/?$"
+    },
+    "api_version": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}(-preview)?$"
     },
     "ref": {
       "type": "string",
@@ -45,8 +104,7 @@
       "additionalProperties": false,
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^G-[0-9]+$"
+          "$ref": "#/$defs/goal_id"
         },
         "text": {
           "type": "string",
@@ -64,8 +122,7 @@
       "additionalProperties": false,
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^T-[0-9]+$"
+          "$ref": "#/$defs/term_id"
         },
         "name": {
           "type": "string",
@@ -91,12 +148,10 @@
       "additionalProperties": false,
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^R-[0-9]+$"
+          "$ref": "#/$defs/rule_id"
         },
         "goal": {
-          "type": "string",
-          "pattern": "^G-[0-9]+$"
+          "$ref": "#/$defs/goal_id"
         },
         "pattern": {
           "type": "string",
@@ -131,8 +186,7 @@
         "terms": {
           "type": "array",
           "items": {
-            "type": "string",
-            "pattern": "^T-[0-9]+$"
+            "$ref": "#/$defs/term_id"
           }
         }
       },
@@ -275,8 +329,7 @@
       "additionalProperties": false,
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^Q-[0-9]+$"
+          "$ref": "#/$defs/question_id"
         },
         "about": {
           "$ref": "#/$defs/question_about"
@@ -315,8 +368,7 @@
           "$ref": "#/$defs/part_ref"
         },
         "check": {
-          "type": "string",
-          "pattern": "^[A-Z][A-Za-z0-9]*$",
+          "$ref": "#/$defs/check_name",
           "description": "The check's name, for example ExampleTagged or PatternFit."
         },
         "passed": {
