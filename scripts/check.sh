@@ -3,7 +3,6 @@
 set -eu
 cd "$(dirname "$0")/.."
 GO_IMAGE=$(awk '$1=="golang"{print $2}' src/deploy/images.lock)
-SPECTRAL=$(awk '$1=="spectral"{print $2}' src/deploy/images.lock)
 
 GO_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/agentic-platform/go"  # shared with scripts/generate.sh
 mkdir -p "$GO_CACHE"
@@ -35,10 +34,10 @@ python3 scripts/layout-check.py
 echo "== knowledge bundle"
 python3 scripts/okf.py check
 echo "== markdown"
-npx -y markdownlint-cli2@0.18.1 --config "$(dirname "$0")/repo.markdownlint-cli2.jsonc" "docs/**/*.md" "specs/**/*.md" "src/**/*.md" AGENTS.md README.md
+scripts/npm-tool.sh markdownlint-cli2 --config scripts/repo.markdownlint-cli2.jsonc "docs/**/*.md" "specs/**/*.md" "src/**/*.md" AGENTS.md README.md
 echo "== contracts"
 for f in $(find src -path '*/api/preview/*' -name 'openapi.yaml'); do
-  npx -y "$SPECTRAL" lint "$f" --ruleset src/engine/api/ruleset.yaml --fail-severity error
+  scripts/npm-tool.sh spectral lint "$f" --ruleset src/engine/api/ruleset.yaml --fail-severity error
 done
 echo "== go vet and tests"
 go_checks

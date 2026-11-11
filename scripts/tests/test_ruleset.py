@@ -15,11 +15,11 @@ PLANTED = [
 ]
 
 
-@unittest.skipUnless(shutil.which("npx"), "npx not on PATH; cannot run Spectral")
+@unittest.skipUnless(shutil.which("docker"), "docker not on PATH; cannot run Spectral")
 class RulesetTest(unittest.TestCase):
     def lint(self, name):
         return subprocess.run(
-            ["npx", "-y", "@stoplight/spectral-cli@6.15.0", "lint",
+            ["scripts/npm-tool.sh", "spectral", "lint",
              f"{DATA}/{name}", "--ruleset", RULESET,
              "--fail-severity", "error"],
             cwd=REPO, capture_output=True, text=True, timeout=300)

@@ -1,7 +1,7 @@
 """Tests for scripts/generate.sh, run against a throwaway copy of the repository.
 
-The real working tree is never touched: scripts/generate.sh and src/ (without any
-gen/ directory) are copied into a temporary directory, the script is run there once
+The real working tree is never touched: scripts/generate.sh, scripts/npm-tool.sh,
+scripts/tools/ and src/ (without any gen/ directory) are copied into a temporary directory, the script is run there once
 to make a baseline, and every test starts from a fresh copy of that baseline.
 """
 import os
@@ -17,7 +17,7 @@ CONTRACT = "src/engine/api/preview/2026-11-12-preview/openapi.yaml"
 # A description that the generator copies into a Go comment.
 CONTRACT_TEXT = "One answer per open question."
 
-MISSING = [t for t in ("docker", "npx") if shutil.which(t) is None]
+MISSING = [t for t in ("docker",) if shutil.which(t) is None]
 
 
 def snapshot(root):
@@ -31,7 +31,7 @@ def snapshot(root):
     return out
 
 
-@unittest.skipIf(MISSING, "generate.sh needs docker and npx on PATH; missing: %s"
+@unittest.skipIf(MISSING, "generate.sh needs docker on PATH; missing: %s"
                  % ", ".join(MISSING))
 class GenerateScriptTest(unittest.TestCase):
     @classmethod
@@ -40,8 +40,12 @@ class GenerateScriptTest(unittest.TestCase):
         cls.addClassCleanup(shutil.rmtree, cls._root, ignore_errors=True)
         cls.baseline = os.path.join(cls._root, "baseline")
         os.makedirs(os.path.join(cls.baseline, "scripts"))
-        shutil.copy2(os.path.join(REPO, "scripts", "generate.sh"),
-                     os.path.join(cls.baseline, "scripts", "generate.sh"))
+        for f in ("generate.sh", "npm-tool.sh"):
+            shutil.copy2(os.path.join(REPO, "scripts", f),
+                         os.path.join(cls.baseline, "scripts", f))
+        shutil.copytree(os.path.join(REPO, "scripts", "tools"),
+                        os.path.join(cls.baseline, "scripts", "tools"),
+                        ignore=shutil.ignore_patterns("node_modules"))
         shutil.copytree(os.path.join(REPO, "src"), os.path.join(cls.baseline, "src"),
                         ignore=shutil.ignore_patterns("gen", "node_modules"))
         r = cls.run_in(cls.baseline)

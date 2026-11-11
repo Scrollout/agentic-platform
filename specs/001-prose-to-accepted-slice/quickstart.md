@@ -1,7 +1,7 @@
 # Quickstart: validating the feature end to end
 
 This guide proves the feature works. Nothing runs on the host except the container runtime and the
-launcher `src/deploy/ap`, which only calls `docker compose` ([terminal contract](contracts/cli.md)).
+launcher `src/deploy/ap`, which only calls `docker compose` ([terminal contract](../../src/cli/contract.md)).
 
 ## Prerequisites
 

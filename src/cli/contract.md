@@ -9,7 +9,7 @@ Two names, two jobs:
   first, then passes the command on. Every other command is passed unchanged to the terminal
   client, which never calls the launcher.
 - **The terminal client** runs in its own container and is a client of the engine API
-  ([engine-api.openapi.yaml](engine-api.openapi.yaml)) with the client token. It adds no behaviour
+  ([openapi.yaml](../engine/api/preview/2026-11-12-preview/openapi.yaml)) with the client token. It adds no behaviour
   of its own.
 
 Exit codes: `0` success, `1` a check or approval failed, `2` the run waits for the developer or was

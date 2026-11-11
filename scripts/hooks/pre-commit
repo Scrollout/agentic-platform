@@ -15,13 +15,12 @@ fi
 if has '^docs/'; then python3 scripts/okf.py check >/dev/null || python3 scripts/okf.py check; fi
 if has '^scripts/'; then python3 -m unittest discover -s scripts/tests -p 'test_*.py' 2>&1 | tail -1; fi
 md=$(printf '%s\n' "$staged" | grep -E '\.md$' | grep -Ev '^scripts/tests/' || true)
-if [ -n "$md" ] && command -v npx >/dev/null; then
-  printf '%s\n' "$md" | xargs npx --no-install markdownlint-cli2 --config scripts/repo.markdownlint-cli2.jsonc 2>/dev/null \
-    || printf '%s\n' "$md" | xargs npx -y markdownlint-cli2@0.18.1 --config scripts/repo.markdownlint-cli2.jsonc
+if [ -n "$md" ]; then
+  printf '%s\n' "$md" | xargs scripts/npm-tool.sh markdownlint-cli2 --config scripts/repo.markdownlint-cli2.jsonc
 fi
 if has '/api/preview/.*openapi\.yaml$|^src/engine/api/ruleset'; then
   for f in $(find src -path '*/api/preview/*' -name 'openapi.yaml'); do
-    npx -y "$(awk '$1=="spectral"{print $2}' src/deploy/images.lock)" lint "$f" --ruleset src/engine/api/ruleset.yaml --fail-severity error
+    scripts/npm-tool.sh spectral lint "$f" --ruleset src/engine/api/ruleset.yaml --fail-severity error
   done
 fi
 if has '\.go$|go\.(mod|sum)$|^src/[^/]+/api/'; then scripts/check.sh --go-only; fi

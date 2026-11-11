@@ -20,7 +20,8 @@ replay is byte-identical. The approach is the ADR 0026 spike, made general and d
 **Language/Version**: Go 1.26 for all platform code; the built slices are Go (D1)
 
 **Primary Dependencies**: Docker Agent v1.160.0 (pinned image digest), godog, cucumber/gherkin,
-oapi-codegen, Spectral, oasdiff, santhosh-tekuri/jsonschema, Schemathesis, nginx (gateway), gVisor;
+oapi-codegen, Redocly CLI (contract bundling), Spectral, oasdiff, santhosh-tekuri/jsonschema,
+Schemathesis, nginx (gateway), gVisor;
 Claude Haiku via the gateway (D2–D4, D9, D13)
 
 **Storage**: append-only JSON Lines run records and a content-addressed artifact store in a named
@@ -59,7 +60,7 @@ per token on the API
 | X. No silent loss | Pass | One recorded outcome per run; resume; budgets; hand-overs expire after 14 days (D14) |
 | XI. Agent data privacy | Exception (approved, partial) | Provider does not train on API content (D16); retention until deleted; no telemetry; no encryption between local containers or at rest in this version |
 | XII. Tenant isolation | Not applicable | One developer by scope (FR-021); listed in Complexity Tracking for the record |
-| XIII. Secure supply chain | Exception (approved, partial) | Images and tools pinned by version and digest; local scans in `scripts/check.sh`; signature verification at start; automated update pull requests deferred while there is no hosted forge |
+| XIII. Secure supply chain | Exception (approved, partial) | Images pinned by version and digest; Go tools by version, verified by the Go checksum database; Node tools with their whole dependency tree in `scripts/tools/package-lock.json`; local scans in `scripts/check.sh`; signature verification at start; automated update pull requests deferred while there is no hosted forge |
 | XIV. Safe defaults and least agency | Pass | Default-deny egress; per-step writable paths and allowed dependencies; checks fail closed; budgets; rate limits |
 | XV. Compatible public APIs | Pass | `api-version` query parameter, preview `2026-11-12-preview`, version errors, idempotency keys kept 24 hours, paginated lists |
 | XVI. Human control of agents | Exception (approved, partial) | Feature branch; local hooks run every check and refuse protected-path changes without the owner's `Approved-by:` trailer; agent commits carry an attribution trailer. Hosted branch protection when a forge is used |
@@ -69,7 +70,7 @@ per token on the API
 | XX. Deterministic acceptance | Pass | D2, D3, D5, D8, D10, D11 |
 | Contract-first | Pass | Contracts reviewed and versioned first, authoritative with their provider; failing tests before code |
 | Fresh review | Pass | A fresh reviewer per story and before done, on a model other than the author's |
-| Layout | Pass | All code under `src/`; layout check in CI |
+| Layout | Pass | All code under `src/`; layout check in `scripts/check.sh` |
 
 ## Threat model
 
@@ -92,7 +93,7 @@ agent's context (a trust boundary).
 | Run page | ✓ | | | ✓ | ✓ | | — | Bound to `127.0.0.1`; own token; Host header checked against DNS rebinding; GET only; rate limit |
 | Terminal client | ✓ | | ✓ | | | | — | Own token; every action recorded by the engine |
 | New project | | ✓ | | | | | — | Written only by steps within scope; handed over with version history |
-| Pinned images and tools | | ✓ | | | | | LLM03 | Digest pins; licence and Scorecard checks; automated updates; CI scanning |
+| Pinned images and tools | | ✓ | | | | | LLM03 | Digest pins and lock files; licence and Scorecard checks; dependency, licence and secret scans in `scripts/check.sh`; a monthly manual update review while there is no forge (XIII exception) |
 
 ## Project Structure
 
@@ -104,13 +105,7 @@ specs/001-prose-to-accepted-slice/
 ├── research.md
 ├── data-model.md
 ├── quickstart.md
-├── contracts/           # drafts; authoritative copies live with their provider
-│   ├── engine-api.openapi.yaml
-│   ├── slice.schema.json
-│   ├── slice-proposal.schema.json
-│   ├── pattern.schema.json
-│   ├── run-event.schema.json
-│   └── cli.md
+├── contracts/           # review record only; contracts live with their provider
 └── tasks.md
 ```
 
@@ -119,8 +114,10 @@ specs/001-prose-to-accepted-slice/
 ```text
 src/
 ├── engine/
-│   ├── api/preview/2026-11-12-preview/   # authoritative contract and schemas (provider: engine)
-│   ├── api/                              # generated server, handlers, auth, rate limit
+│   ├── api/preview/2026-11-12-preview/   # contract and schemas: openapi.yaml, slice, slice-defs,
+│   │                                     #   slice-proposal, pattern, run-event (provider: engine)
+│   ├── api/                              # handlers, auth, rate limit; generation config, overlay
+│   ├── api/gen/                          # generated server and types (not committed)
 │   ├── slices/                           # proposal, answers, changes, approvals
 │   ├── machine/                          # state machine, reuse, resume, budgets
 │   ├── checks/                           # check implementations, with planted fixtures
@@ -160,4 +157,6 @@ single-developer version only and are recorded in the commit that carries this p
 
 ## Exceptions to Engineering Principles
 
-None.
+| Rule | Location | Reason |
+|------|----------|--------|
+| Test-first task split (tasks.md rules; Outside-in, test-first) | T005, T012 | Each task holds a check and its planted-violation tests. The tests were written by a separate test author (commits `c3bb1ff` and `66de0d3`), so authorship is separate; only the task split is not. Later tasks keep the split. |

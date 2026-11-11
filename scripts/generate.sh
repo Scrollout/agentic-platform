@@ -14,7 +14,6 @@ mode=write
 [ "${1:-}" = "--check" ] && mode=check
 pin() { awk -v n="$1" '$1==n{print $2}' src/deploy/images.lock; }
 GO_IMAGE=$(pin golang)
-REDOCLY=$(pin redocly)
 OAPI_CODEGEN=$(pin oapi-codegen)
 GO_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/agentic-platform/go"  # module and build cache, outside the repository
 mkdir -p "$GO_CACHE"
@@ -34,7 +33,7 @@ for config in $targets; do
     -name openapi.yaml 2>/dev/null | awk -F/ '{print $(NF-1) "\t" $0}' | sort | tail -1 | cut -f2)
   [ -z "$contract" ] && { echo "generate: $config: no contract under src/$service/api/" >&2; exit 1; }
   echo "bundle   $contract"
-  npx -y "$REDOCLY" bundle "$contract" -o "$bundle" >"$tmp/redocly.log" 2>&1 \
+  NPM_TOOL_MOUNT="$tmp" scripts/npm-tool.sh redocly bundle "$contract" -o "$bundle" >"$tmp/redocly.log" 2>&1 \
     || { cat "$tmp/redocly.log" >&2; exit 1; }
 done
 

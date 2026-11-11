@@ -14,3 +14,4 @@ coverage.*
 
 # Generated from contracts by scripts/generate.sh
 src/*/api/gen/
+node_modules/

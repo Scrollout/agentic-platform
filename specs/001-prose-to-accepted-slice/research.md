@@ -60,6 +60,13 @@ fresh review round 1.
   gives Go names to the few bundled schemas whose generated names would collide, so the contract
   carries no Go names. Generated code is not committed (constitution, Clean tree):
   `scripts/generate.sh` makes it, and `--check` proves it matches the contract.
+- **Node tools**: Redocly CLI, Spectral and markdownlint-cli2 are pinned with their whole dependency
+  tree, with integrity hashes, in `scripts/tools/package-lock.json`, installed with `npm ci` and run
+  without network in the pinned Node image by `scripts/npm-tool.sh` (Principle XIII; analyze review
+  2026-11-12, finding A3).
+- **Breaking changes**: oasdiff checks a slice's contract against its previously approved version
+  (FR-004; T029, T037), and the engine's newest contract against its previous version once a
+  second exists (T024a).
 - **Rationale**: ADR 0004 names exactly these tools (S2). The plan's first draft used vacuum; that
   deviated from an accepted decision without a superseding one and is corrected here.
 - **Compatibility baseline**: a slice's first contract is checked against an empty document; a

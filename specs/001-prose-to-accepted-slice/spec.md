@@ -26,6 +26,7 @@ state worker; *hand-over* is what ADR 0026 calls escalation.
 ### Session 2026-11-12
 
 - Q: After fresh review round 1, is growing the catalogue (proposing a new pattern) part of this feature? → A: No; it moves to a later feature. This feature declines a description that no pattern fits.
+- Q: After the analyze review of 2026-11-12 found the contract adds a `cancelled` outcome, may the developer cancel a run, and how does it end? → A: Yes; a run whose operation the developer cancels ends as cancelled, a fourth outcome (constitution Principle X).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -172,7 +173,7 @@ Each failure is stopped by a check, and a replay of the same run gives byte-iden
 #### Runs end and can be explained
 
 - **FR-015**: Every run MUST end in exactly one outcome: done, handed over to the developer with
-  the reason, or expired after 14 days waiting for the developer.
+  the reason, expired after 14 days waiting for the developer, or cancelled by the developer.
 - **FR-016**: A step that fails its checks MUST be tried at most 3 times, and a review MUST run at
   most 3 rounds, before the run is handed over to the developer. Every run MUST stop within its
   declared budget of model tokens, cost and time.
@@ -219,7 +220,7 @@ Each failure is stopped by a check, and a replay of the same run gives byte-iden
   steps, each step's scope, allowed dependencies and checks, its limits and budgets, and its
   sources.
 - **Catalogue**: the set of approved patterns.
-- **Run**: one attempt to build a slice from a pattern, ending as done, handed over or expired.
+- **Run**: one attempt to build a slice from a pattern, ending as done, handed over, expired or cancelled.
 - **Step**: one part of a run, filled by an agent or a fixed procedure, with a scope and checks.
 - **Check**: a deterministic test that decides whether a step or artifact is accepted.
 - **Run record**: the ordered history of a run, from which it can be inspected, replayed and

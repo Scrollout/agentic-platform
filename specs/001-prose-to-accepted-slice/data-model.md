@@ -1,7 +1,8 @@
 # Data Model: From a description to accepted working software, one slice at a time
 
-The schemas in [contracts/](contracts/) are drafts of the contract. The authoritative copies live
-with their provider, under `src/engine/api/preview/2026-11-12-preview/`, once task T011 moves them.
+The schemas live with their provider, the engine, in
+[`src/engine/api/preview/2026-11-12-preview/`](../../src/engine/api/preview/2026-11-12-preview/)
+(moved there by T011; [contracts/](contracts/) keeps only the review record).
 All identifiers are stable once assigned and never reused.
 
 ## Slice
