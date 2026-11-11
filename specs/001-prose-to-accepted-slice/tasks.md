@@ -25,7 +25,8 @@ fresh review.
   its own copy of the repository, following Review converges (at most 3 rounds).
 - **Gate**: `/speckit-analyze` (fresh review) passed in round 2 on 2026-11-12, before T001; it is
   run again after any change to spec, plan or tasks. Re-run on 2026-11-12 after T012: round 1
-  failed (3 HIGH: A1 oasdiff, A2 `cancelled` outcome, A3 npm pins), fixed in the same change.
+  failed (3 HIGH: A1 oasdiff, A2 `cancelled` outcome, A3 npm pins), fixed in `f1d80c2`; round 2
+  (Sonnet, fresh) passed: every finding resolved, no regressions.
 - **Done means**: tests pass, `python3 scripts/okf.py check` reports OK, `docs/log.md` records the
   change.
 
