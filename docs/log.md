@@ -2,6 +2,7 @@
 
 ## 2026-11-12
 
+* **Implementation**: Feature 001, T014 and T017: the engine's run store keeps append-only JSON Lines run records per slice and a content-addressed artifact store, durable before it acknowledges, with erasure per slice.
 * **Implementation**: Feature 001, T013 and T016: `src/slice` checks slice and proposal documents against the engine's JSON Schemas (santhosh-tekuri/jsonschema v6.0.3), with planted-violation fixtures by a separate test author.
 * **Implementation**: Feature 001, T012a: a separate test author added 9 cases for `scripts/generate.sh` (newest contract version, no targets, missing pins) and `scripts/npm-tool.sh` (no network, no reinstall, a new cache per lock, markdownlint with the repository config).
 * **Implementation**: Feature 001, T011b and T011d: the engine contract now references the slice, run and hash rules in `slice-defs.schema.json` instead of repeating them, and applies the T011a review's suggestions (`registerWorker` 404, `Difference` sides, `Worker.endpoint` as a base address, the client's stop rule for run events); a fresh contract review approved them. Remaining repeated rules are task T011e.
