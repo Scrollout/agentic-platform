@@ -39,6 +39,8 @@ echo "== contracts"
 for f in $(find src -path '*/api/preview/*' -name 'openapi.yaml'); do
   scripts/npm-tool.sh spectral lint "$f" --ruleset src/engine/api/ruleset.yaml --fail-severity error
 done
+echo "== model gateway"
+sh src/deploy/gateway/test_gateway.sh >/dev/null && echo "gateway checks passed"
 echo "== go vet and tests"
 go_checks
 echo "== dependencies and licences"

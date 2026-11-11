@@ -6,6 +6,9 @@ root=$(git rev-parse --show-toplevel)
 cd "$root"
 staged=$(git diff --cached --name-only --diff-filter=ACMR)
 [ -z "$staged" ] && exit 0
+# Git sets GIT_DIR and GIT_INDEX_FILE for hooks; tests that create throwaway repositories would
+# otherwise act on this repository. Nothing below needs them.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
 has() { printf '%s\n' "$staged" | grep -Eq "$1"; }
 
 python3 scripts/layout-check.py >/dev/null || { python3 scripts/layout-check.py; exit 1; }

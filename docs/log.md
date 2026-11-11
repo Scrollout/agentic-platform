@@ -2,6 +2,7 @@
 
 ## 2026-11-12
 
+* **Implementation**: Feature 001, T019: the model gateway on the pinned nginx image forwards only `/v1/messages` and `/v1/messages/count_tokens` to Anthropic's API, injects the key from a mounted file at start, logs no headers or bodies, and runs non-root on a read-only root file system; its test runs in `scripts/check.sh`.
 * **Implementation**: Feature 001, T011e: every repeated value rule in the engine contract (IDs, step, check, project and pattern names, worker references and endpoint, api-version, hash) is defined once in `slice-defs.schema.json`; a fresh review confirmed no rule changed.
 * **Implementation**: Feature 001, T014 and T017: the engine's run store keeps append-only JSON Lines run records per slice and a content-addressed artifact store, durable before it acknowledges, with erasure per slice.
 * **Implementation**: Feature 001, T013 and T016: `src/slice` checks slice and proposal documents against the engine's JSON Schemas (santhosh-tekuri/jsonschema v6.0.3), with planted-violation fixtures by a separate test author.
