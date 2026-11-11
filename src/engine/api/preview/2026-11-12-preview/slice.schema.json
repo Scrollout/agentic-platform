@@ -95,7 +95,7 @@
     },
     "parts": {
       "type": "object",
-      "description": "The current hash of each part. `goals` hashes `{goals}`, `rules` hashes `{rules, examples, terms}` and `contract` hashes `{contract}`, each as the SHA-256 of its RFC 8785 canonical JSON. These are the bodies of the part's replace operation.",
+      "description": "The current hash of each part. `goals` hashes `{goals}`, `rules` hashes `{rules, examples, terms}` and `contract` hashes `{contract}`, each as the SHA-256 of its RFC 8785 canonical JSON. These are hashes of the canonical JSON of each replace operation's body, not the bodies themselves.",
       "required": [
         "goals",
         "rules",

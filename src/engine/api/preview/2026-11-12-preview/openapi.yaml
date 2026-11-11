@@ -13,6 +13,8 @@ info:
     with `x-sunset`, and its responses carry `Deprecation`, `Sunset` and `Link: rel="deprecation"`.
     `x-operation-name` gives each operation's permission name, and `x-error-codes` lists the
     problem codes each status code (and the operation's `error`) may carry.
+  contact:
+    name: Agentic Platform maintainers
   license:
     name: MIT
     identifier: MIT
@@ -505,6 +507,7 @@ paths:
       description: Returns the run record in `seq` order, at most 100 events per page. Until the run
         ends, the last page still has a `next_page_token`; using it later returns the events recorded
         since.
+        Once the run has ended and the last page has been read, `next_page_token` is omitted.
       security:
       - clientToken: []
       - pageToken: []
@@ -1112,13 +1115,16 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     Forbidden:
-      description: The token is valid but may not call this operation, or not for this slice or step.
+      description: The token is valid but may not call this operation. Where the operation has a 404
+        response, a slice, run or step that exists but is not for the caller is reported there as
+        not found, the same as one that does not exist.
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
     NotFound:
-      description: The slice, run, operation or artifact does not exist.
+      description: The slice, run, operation or artifact does not exist, or it exists but is not for
+        this slice or step.
       content:
         application/problem+json:
           schema:
@@ -1307,8 +1313,10 @@ components:
           pattern: ^[a-z0-9-]+$
         endpoint:
           type: string
+          pattern: ^http://[a-z0-9-]+:[0-9]+/
     OperationKind:
       type: string
+      description: What the operation does. Resuming, replaying and handing over a run all use the kind `run`.
       enum:
       - propose-slice
       - answer-questions
@@ -1443,6 +1451,23 @@ components:
       - cancelled
     Run:
       type: object
+      if:
+        required:
+        - status
+        properties:
+          status:
+            const: ended
+      then:
+        required:
+        - outcome
+        - ended_at
+      else:
+        not:
+          anyOf:
+          - required:
+            - outcome
+          - required:
+            - ended_at
       required:
       - id
       - slice
@@ -1536,10 +1561,12 @@ components:
           - decision
         left:
           type: string
-          description: The value in this run.
+          description: >-
+            The value in this run, as text. Artifact differences are content hashes, check
+            results are `passed` or `failed: <reason>`, and other fields are their JSON text.
         right:
           type: string
-          description: The value in the other run.
+          description: The value in the other run, rendered as `left` is.
     DifferenceList:
       type: object
       required:
