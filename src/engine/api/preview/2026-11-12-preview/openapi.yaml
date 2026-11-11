@@ -507,7 +507,8 @@ paths:
       description: Returns the run record in `seq` order, at most 100 events per page. Until the run
         ends, the last page still has a `next_page_token`; using it later returns the events recorded
         since.
-        Once the run has ended and the last page has been read, `next_page_token` is omitted.
+        Once the run has ended and the last page has been read, `next_page_token` is omitted; a client
+        has read the whole record when a page comes back without it.
       security:
       - clientToken: []
       - pageToken: []
@@ -594,8 +595,7 @@ paths:
         required: true
         description: The other run's ID.
         schema:
-          type: string
-          pattern: ^RUN-[0-9]+$
+          $ref: slice-defs.schema.json#/$defs/run_id
       - $ref: '#/components/parameters/PageToken'
       responses:
         '200':
@@ -809,8 +809,9 @@ paths:
       summary: Register a step worker
       description: Tells the engine that the worker for one step of one slice is ready at `endpoint`. The
         slice and step are those its worker token was issued for. Registering again replaces the
-        endpoint. Unlike other state changes it takes effect at once and returns the registration, not
-        an operation, because a worker token cannot follow operations.
+        endpoint. It returns 404 when that slice no longer exists or the slice's pattern has no such
+        step. Unlike other state changes it takes effect at once and returns the registration, not an
+        operation, because a worker token cannot follow operations.
       security:
       - workerToken: []
       x-error-codes:
@@ -920,16 +921,14 @@ components:
       required: true
       description: The slice's ID.
       schema:
-        type: string
-        pattern: ^S-[0-9]+$
+        $ref: slice-defs.schema.json#/$defs/slice_id
     RunId:
       name: runId
       in: path
       required: true
       description: The run's ID.
       schema:
-        type: string
-        pattern: ^RUN-[0-9]+$
+        $ref: slice-defs.schema.json#/$defs/run_id
     OperationId:
       name: operationId
       in: path
@@ -944,8 +943,7 @@ components:
       required: true
       description: The artifact's SHA-256, as the run record names it.
       schema:
-        type: string
-        pattern: ^[0-9a-f]{64}$
+        $ref: slice-defs.schema.json#/$defs/hash
   headers:
     Deprecation:
       description: When the operation was deprecated (RFC 9745); only on deprecated operations.
@@ -1274,8 +1272,7 @@ components:
         part:
           $ref: slice-defs.schema.json#/$defs/part
         content_hash:
-          type: string
-          pattern: ^[0-9a-f]{64}$
+          $ref: slice-defs.schema.json#/$defs/hash
           description: The part's hash as the developer reviewed it, from the slice's `parts`.
     RunRequest:
       type: object
@@ -1296,8 +1293,11 @@ components:
       properties:
         endpoint:
           type: string
-          pattern: ^http://[a-z0-9-]+:[0-9]+/
-          description: Where the engine reaches the worker on the internal network.
+          pattern: ^http://[a-z0-9-]+:[0-9]{1,5}/?$
+          description: >-
+            The worker's base address on the internal network: `http://`, a host name of lowercase
+            letters, digits and hyphens (such as its Compose service name), a port, and nothing
+            after an optional `/`.
     Worker:
       type: object
       required:
@@ -1306,14 +1306,14 @@ components:
       - endpoint
       properties:
         slice:
-          type: string
-          pattern: ^S-[0-9]+$
+          $ref: slice-defs.schema.json#/$defs/slice_id
         step:
           type: string
           pattern: ^[a-z0-9-]+$
         endpoint:
           type: string
-          pattern: ^http://[a-z0-9-]+:[0-9]+/
+          pattern: ^http://[a-z0-9-]+:[0-9]{1,5}/?$
+          description: The registered base address, as `WorkerRegistration.endpoint` defines it.
     OperationKind:
       type: string
       description: What the operation does. Resuming, replaying and handing over a run all use the kind `run`.
@@ -1383,14 +1383,11 @@ components:
           additionalProperties: false
           properties:
             slice:
-              type: string
-              pattern: ^S-[0-9]+$
+              $ref: slice-defs.schema.json#/$defs/slice_id
             run:
-              type: string
-              pattern: ^RUN-[0-9]+$
+              $ref: slice-defs.schema.json#/$defs/run_id
             reused_slice:
-              type: string
-              pattern: ^S-[0-9]+$
+              $ref: slice-defs.schema.json#/$defs/slice_id
         error:
           $ref: '#/components/schemas/Problem'
         created_at:
@@ -1407,15 +1404,13 @@ components:
       - state
       properties:
         id:
-          type: string
-          pattern: ^S-[0-9]+$
+          $ref: slice-defs.schema.json#/$defs/slice_id
         title:
           type: string
         state:
           $ref: slice.schema.json#/properties/state
         latest_run:
-          type: string
-          pattern: ^RUN-[0-9]+$
+          $ref: slice-defs.schema.json#/$defs/run_id
     SliceList:
       type: object
       required:
@@ -1479,11 +1474,9 @@ components:
       - updated_at
       properties:
         id:
-          type: string
-          pattern: ^RUN-[0-9]+$
+          $ref: slice-defs.schema.json#/$defs/run_id
         slice:
-          type: string
-          pattern: ^S-[0-9]+$
+          $ref: slice-defs.schema.json#/$defs/slice_id
         pattern:
           type: string
           pattern: ^[a-z0-9-]+@[0-9]+\.[0-9]+\.[0-9]+$
@@ -1509,8 +1502,7 @@ components:
           pattern: ^OP-[0-9]+$
           description: The run's operation.
         replay_of:
-          type: string
-          pattern: ^RUN-[0-9]+$
+          $ref: slice-defs.schema.json#/$defs/run_id
           description: For a replay, the run it replays.
         created_at:
           type: string
@@ -1562,11 +1554,13 @@ components:
         left:
           type: string
           description: >-
-            The value in this run, as text. Artifact differences are content hashes, check
-            results are `passed` or `failed: <reason>`, and other fields are their JSON text.
+            The value in this run, as text: for `artifacts`, the content hash; for `checks`,
+            `passed` or `failed: <reason>`; for `decision`, its JSON text. Absent when this run has
+            no value for the step and field (for example, it never reached the step).
         right:
           type: string
-          description: The value in the other run, rendered as `left` is.
+          description: The value in the other run, in the same form as `left`, and absent in the
+            same case.
     DifferenceList:
       type: object
       required:

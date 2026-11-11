@@ -4,6 +4,9 @@ The schemas live with their provider, the engine, in
 [`src/engine/api/preview/2026-11-12-preview/`](../../src/engine/api/preview/2026-11-12-preview/)
 (moved there by T011; [contracts/](contracts/) keeps only the review record).
 All identifiers are stable once assigned and never reused.
+A slice, run, operation or artifact that exists but is not for the calling token is reported as
+not found (404), the same as one that does not exist; 403 means the token may not call the
+operation at all.
 
 ## Slice
 
