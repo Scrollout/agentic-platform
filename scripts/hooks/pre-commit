@@ -24,4 +24,4 @@ if has '/api/preview/.*openapi\.yaml$|^src/engine/api/ruleset'; then
     npx -y "$(awk '$1=="spectral"{print $2}' src/deploy/images.lock)" lint "$f" --ruleset src/engine/api/ruleset.yaml --fail-severity error
   done
 fi
-if has '\.go$|go\.(mod|sum)$'; then scripts/check.sh --go-only; fi
+if has '\.go$|go\.(mod|sum)$|^src/[^/]+/api/'; then scripts/check.sh --go-only; fi

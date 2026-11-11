@@ -2,6 +2,7 @@
 
 ## 2026-11-12
 
+* **Implementation**: Feature 001, T012: `scripts/generate.sh` bundles the engine contract with Redocly CLI and generates the engine's strict server and the client's Go code with oapi-codegen. Generated code is not committed; `scripts/check.sh` regenerates it and fails on any difference from the contract. Added Redocly CLI to `src/deploy/images.lock` and oapi-codegen/runtime to the Go modules.
 * **Implementation**: Feature 001, T011: the engine's contracts passed review (round 1 rejected with 18 blocking findings, round 2 approved) and moved to `src/engine/api/preview/2026-11-12-preview/`. `scripts/check.sh` with the git hooks now serves as the project's CI (dependency and licence scans; code-plus-tests rule); Principle XVI recorded as a partial exception.
 * **Implementation**: Feature 001, Phase 1 (Setup): the `src/` layout and Go modules, the root-layout check and the Spectral ruleset with planted-violation tests, the image lock, local checks and git hooks instead of hosted CI (no GitHub for now), `NOTICE`, and the [protect-changes-locally playbook](/playbooks/protect-changes-locally.md).
 * **Specs**: Wrote the first feature spec, `specs/001-prose-to-accepted-slice/spec.md`, and linked it from needs N-003 and N-050 to N-063 in the [problem space](/overview/problem-space.md), now marked `specified`.

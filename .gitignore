@@ -11,3 +11,6 @@ __pycache__/
 *.out
 vendor/
 coverage.*
+
+# Generated from contracts by scripts/generate.sh
+src/*/api/gen/

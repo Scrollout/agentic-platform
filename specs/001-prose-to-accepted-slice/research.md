@@ -13,7 +13,7 @@ fresh review round 1.
 | S3 | [ADR 0026: Deterministic workflow engine](../../docs/decisions/0026-deterministic-workflow-engine.md), including its spike results |
 | S4 | [From prose to software through checked layers](../../docs/references/prose-to-software-pipeline.md) |
 | S5 | [Docker Agent reference](../../docs/references/docker-agent.md) |
-| S6 | `gh api` checks, 2026-11-11: cucumber/godog (MIT, v0.16.0), cucumber/gherkin (MIT, v42.0.1), stoplightio/spectral, oasdiff (Apache-2.0, v1.37.0), santhosh-tekuri/jsonschema (Apache-2.0, v6.0.3), oapi-codegen (Apache-2.0, v2.8.2), schemathesis (MIT) |
+| S6 | `gh api` checks, 2026-11-11: cucumber/godog (MIT, v0.16.0), cucumber/gherkin (MIT, v42.0.1), stoplightio/spectral, oasdiff (Apache-2.0, v1.37.0), santhosh-tekuri/jsonschema (Apache-2.0, v6.0.3), oapi-codegen (Apache-2.0, v2.8.2), schemathesis (MIT). 2026-11-12: Redocly CLI (`@redocly/cli`, MIT, v2.72.1 of 2026-10-29), oapi-codegen/runtime (Apache-2.0, v1.8.0 of 2026-10-23), from the npm registry and the Go module proxy |
 | S7 | godog `internal/flags/flags.go`: `--strict` "fail suite when there are pending or undefined or ambiguous steps" |
 | S8 | [EARS official guide](https://alistairmavin.com/ears/) |
 | S9 | [Gherkin reference](https://cucumber.io/docs/gherkin/reference/): `Rule` represents one business rule |
@@ -54,6 +54,12 @@ fresh review round 1.
 
 - **Decision**: the slice's contract and the engine's contract are OpenAPI 3.1, linted with Spectral
   using the project ruleset, checked with oasdiff, and Go code is generated with oapi-codegen.
+- **Generation (T012)**: the engine contract is bundled into one document with Redocly CLI, then
+  oapi-codegen generates the engine's strict `net/http` server and the client used by the terminal
+  client and the run page. An OpenAPI Overlay with the provider (`src/engine/api/engine.overlay.yaml`)
+  gives Go names to the few bundled schemas whose generated names would collide, so the contract
+  carries no Go names. Generated code is not committed (constitution, Clean tree):
+  `scripts/generate.sh` makes it, and `--check` proves it matches the contract.
 - **Rationale**: ADR 0004 names exactly these tools (S2). The plan's first draft used vacuum; that
   deviated from an accepted decision without a superseding one and is corrected here.
 - **Compatibility baseline**: a slice's first contract is checked against an empty document; a
@@ -218,6 +224,8 @@ fresh review round 1.
 | godog | MIT | 6.2 | |
 | cucumber/gherkin | MIT | 7.2 | |
 | oapi-codegen | Apache-2.0 | 7.5 | |
+| oapi-codegen/runtime | Apache-2.0 | 7.2 (2026-10-26) | library imported by the generated code |
+| Redocly CLI | MIT | not published | bundles contracts only; run locally (T063) |
 | Spectral | Apache-2.0 | 4.7 | low score; pinned by digest; watch |
 | oasdiff | Apache-2.0 | not published | run locally (task) |
 | santhosh-tekuri/jsonschema | Apache-2.0 | 3.2 | low score; pinned; small and replaceable |

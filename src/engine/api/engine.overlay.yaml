@@ -1,0 +1,25 @@
+# Go type names for engine contract schemas whose generated names would collide or say nothing.
+# Applied by oapi-codegen to the bundled contract (scripts/generate.sh); the contract itself is unchanged.
+overlay: 1.0.0
+info:
+  title: Go names for the engine API
+  version: 1.0.0
+actions:
+- target: $.components.schemas.answer
+  description: The bundled slice-defs `answer` would collide with the API's `Answer`.
+  update:
+    x-go-name: AnswerValue
+- target: $.components.schemas.answer.oneOf[0]
+  update:
+    x-go-type-name: OptionAnswer
+- target: $.components.schemas.answer.oneOf[1]
+  update:
+    x-go-type-name: TextAnswer
+- target: $.components.parameters.SliceId
+  description: The path parameter would collide with the slice-defs `slice_id` schema.
+  update:
+    x-go-name: SliceIdParameter
+- target: $.components.parameters.RunId
+  description: The path parameter would collide with the slice-defs `run_id` schema.
+  update:
+    x-go-name: RunIdParameter
