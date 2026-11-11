@@ -11,3 +11,5 @@ schemathesis               schemathesis/schemathesis:v4.33.2@sha256:b6521357a726
 oapi-codegen               github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.2
 godog                      github.com/cucumber/godog/cmd/godog@v0.16.0
 spectral                   @stoplight/spectral-cli@6.15.0
+govulncheck                golang.org/x/vuln/cmd/govulncheck@v1.9.0
+go-licenses                github.com/google/go-licenses/v2@v2.0.1

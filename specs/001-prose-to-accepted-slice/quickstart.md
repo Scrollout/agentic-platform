@@ -41,7 +41,7 @@ Expected:
 
 Negative checks (Story 1, scenarios 2 and 4):
 
-- `src/deploy/ap edit S-1 examples` to delete a rule's only scenario: `show S-1` reports the rule
+- `src/deploy/ap edit S-1 rules` to delete a rule's only scenario: `show S-1` reports the rule
   and the reason, the rules part loses its approval, and `build S-1` is refused with code
   `NotApproved`.
 - Describe a command-line tool in Python: the slice fails the `PatternFit` check and cannot be built
@@ -50,10 +50,10 @@ Negative checks (Story 1, scenarios 2 and 4):
 ## 3. Build the slice (Story 2)
 
 ```sh
-src/deploy/ap build S-1
+src/deploy/ap build S-1 notes
 ```
 
-Expected: the run ends `done` in under 30 minutes; the new project under `~/projects` contains
+Expected: the run ends `done` in under 30 minutes; the new project `~/projects/notes` contains
 generated code, tests derived from the examples (seen failing before implementation) and code that
 passes them, with its own version history. `src/deploy/ap run RUN-1` and the run page show every
 event in order, each naming the goal, rule or example it concerns.
@@ -61,7 +61,7 @@ event in order, each naming the goal, rule or example it concerns.
 ## 4. Replay, compare and resume
 
 ```sh
-src/deploy/ap replay RUN-1
+src/deploy/ap replay RUN-1 notes-replay
 src/deploy/ap compare RUN-1 RUN-2
 ```
 
@@ -77,4 +77,4 @@ src/deploy/ap test planted
 
 Expected: five scenarios, each stopped by a check in 3 out of 3 trials: test edits are impossible,
 out-of-scope changes are rejected, a forbidden import is rejected, a false "done" is not accepted,
-and a non-converging review is handed over after 3 rounds.
+and a non-converging review stops after 3 rounds and waits for the developer.

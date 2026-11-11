@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "pattern.schema.json",
   "title": "Pattern",
+  "description": "An approved way to build a slice: its steps, the checks that accept each step, its fit conditions, limits and budgets. A run names it as `<id>@<version>`.",
   "type": "object",
   "required": [
     "id",
@@ -29,6 +30,7 @@
       "minLength": 1
     },
     "status": {
+      "type": "string",
       "const": "approved"
     },
     "sources": {
@@ -47,7 +49,8 @@
             "format": "uri"
           },
           "title": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           }
         }
       }
@@ -92,20 +95,26 @@
           },
           "worker": {
             "type": "string",
-            "pattern": "^(agent|procedure):[a-z0-9-]+$"
+            "pattern": "^(agent|procedure):[a-z0-9-]+$",
+            "description": "`agent:<definition>` for an agent step or `procedure:<name>` for a fixed procedure."
           },
           "writable": {
             "type": "array",
+            "description": "Glob patterns, relative to the project folder, of the files the step may change. Everything else is read-only to it.",
             "items": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[^/]"
             }
           },
           "checks": {
             "type": "array",
             "minItems": 1,
             "items": {
-              "type": "string"
-            }
+              "type": "string",
+              "pattern": "^[A-Z][A-Za-z0-9]*$"
+            },
+            "description": "The checks that must all pass before the step is accepted."
           },
           "inputs": {
             "type": "array",
@@ -140,7 +149,24 @@
                 }
               }
             }
+          },
+          "agent_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "SHA-256 of the agent definition the step runs. A run uses exactly this definition."
           }
+        },
+        "if": {
+          "properties": {
+            "worker": {
+              "pattern": "^agent:"
+            }
+          }
+        },
+        "then": {
+          "required": [
+            "agent_digest"
+          ]
         }
       }
     },
@@ -148,7 +174,8 @@
       "type": "array",
       "minItems": 1,
       "items": {
-        "type": "string"
+        "type": "string",
+        "pattern": "^[A-Z][A-Za-z0-9]*$"
       },
       "description": "Named fit checks; a slice fits when all pass."
     },

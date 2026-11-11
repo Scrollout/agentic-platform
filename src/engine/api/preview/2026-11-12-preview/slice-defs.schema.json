@@ -1,0 +1,391 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "slice-defs.schema.json",
+  "title": "SliceDefinitions",
+  "description": "The parts of a slice, defined once and used by the slice, the slice proposal, the run record and the engine API.",
+  "$defs": {
+    "slice_id": {
+      "type": "string",
+      "pattern": "^S-[0-9]+$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^RUN-[0-9]+$"
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "A SHA-256 hash in lowercase hex."
+    },
+    "ref": {
+      "type": "string",
+      "pattern": "^(G-[0-9]+|R-[0-9]+|T-[0-9]+|R-[0-9]+/E-[0-9]+|contract/[A-Za-z][A-Za-z0-9]*)$",
+      "description": "One item of a slice: a goal `G-<n>`, rule `R-<n>`, term `T-<n>`, example `R-<n>/E-<n>` or contract operation `contract/<operationId>`."
+    },
+    "part_ref": {
+      "type": "string",
+      "pattern": "^(goals|rules|contract|G-[0-9]+|R-[0-9]+|T-[0-9]+|R-[0-9]+/E-[0-9]+|contract/[A-Za-z][A-Za-z0-9]*)$",
+      "description": "A whole part (`goals`, `rules` or `contract`) or one item of it, as in `ref`."
+    },
+    "part": {
+      "type": "string",
+      "enum": [
+        "goals",
+        "rules",
+        "contract"
+      ],
+      "description": "A part the developer approves. `rules` covers the rules, examples and terms."
+    },
+    "goal": {
+      "type": "object",
+      "required": [
+        "id",
+        "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^G-[0-9]+$"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "term": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "definition"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^T-[0-9]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "definition": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "description": "A business rule in structured EARS. The slice shows its sentence in `rule_text`.",
+      "required": [
+        "id",
+        "goal",
+        "pattern",
+        "system",
+        "response",
+        "terms"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^R-[0-9]+$"
+        },
+        "goal": {
+          "type": "string",
+          "pattern": "^G-[0-9]+$"
+        },
+        "pattern": {
+          "type": "string",
+          "enum": [
+            "ubiquitous",
+            "event",
+            "state",
+            "unwanted",
+            "option"
+          ]
+        },
+        "precondition": {
+          "type": "string",
+          "minLength": 1
+        },
+        "trigger": {
+          "type": "string",
+          "minLength": 1
+        },
+        "feature": {
+          "type": "string",
+          "minLength": 1
+        },
+        "system": {
+          "type": "string",
+          "minLength": 1
+        },
+        "response": {
+          "type": "string",
+          "minLength": 1
+        },
+        "terms": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^T-[0-9]+$"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "pattern": {
+                "const": "state"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "precondition"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pattern": {
+                "enum": [
+                  "event",
+                  "unwanted"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "trigger"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pattern": {
+                "const": "option"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "feature"
+            ]
+          }
+        }
+      ]
+    },
+    "examples": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Gherkin text with one `Rule:` block per rule. Every scenario is tagged `@R-<n>` with the rule of its block and `@E-<n>` with its own example ID, which is unique in the slice and never reused. The ExampleTagged check fails a scenario that lacks either tag, whose `@R-<n>` differs from its block's rule, or whose `@E-<n>` repeats another scenario's."
+    },
+    "contract": {
+      "type": "string",
+      "minLength": 1,
+      "description": "An OpenAPI 3.1 document as YAML text. Every operation has an `operationId` and `x-rules: [R-<n>, ...]`."
+    },
+    "question_about": {
+      "$ref": "#/$defs/ref",
+      "description": "The one item the question concerns."
+    },
+    "question_text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "question_options": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Up to 5 answers to choose from. Without options, the developer gives a free answer."
+    },
+    "answer": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "option"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "option": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4,
+              "description": "The position of the chosen option, from 0."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "A free answer of at most 200 characters."
+            }
+          }
+        }
+      ]
+    },
+    "question_draft": {
+      "type": "object",
+      "description": "A question the analyst asks. The platform gives it its `Q-<n>` ID.",
+      "required": [
+        "about",
+        "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "about": {
+          "$ref": "#/$defs/question_about"
+        },
+        "text": {
+          "$ref": "#/$defs/question_text"
+        },
+        "options": {
+          "$ref": "#/$defs/question_options"
+        }
+      }
+    },
+    "question": {
+      "type": "object",
+      "required": [
+        "id",
+        "about",
+        "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^Q-[0-9]+$"
+        },
+        "about": {
+          "$ref": "#/$defs/question_about"
+        },
+        "text": {
+          "$ref": "#/$defs/question_text"
+        },
+        "options": {
+          "$ref": "#/$defs/question_options"
+        },
+        "answer": {
+          "$ref": "#/$defs/answer"
+        },
+        "answered_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "dependentRequired": {
+        "answer": [
+          "answered_at"
+        ]
+      }
+    },
+    "check_result": {
+      "type": "object",
+      "required": [
+        "part",
+        "check",
+        "passed",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "part": {
+          "$ref": "#/$defs/part_ref"
+        },
+        "check": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]*$",
+          "description": "The check's name, for example ExampleTagged or PatternFit."
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why the check failed, or what it confirmed."
+        }
+      }
+    },
+    "goals_part": {
+      "type": "object",
+      "description": "The goals part. Its hash is the SHA-256 of this object's RFC 8785 canonical JSON.",
+      "required": [
+        "goals"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "goals": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/goal"
+          }
+        }
+      }
+    },
+    "rules_part": {
+      "type": "object",
+      "description": "The rules part: rules, examples and terms. Its hash is the SHA-256 of this object's RFC 8785 canonical JSON.",
+      "required": [
+        "rules",
+        "examples",
+        "terms"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/rule"
+          }
+        },
+        "examples": {
+          "$ref": "#/$defs/examples"
+        },
+        "terms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/term"
+          }
+        }
+      }
+    },
+    "contract_part": {
+      "type": "object",
+      "description": "The contract part. Its hash is the SHA-256 of this object's RFC 8785 canonical JSON, so it covers the YAML text exactly.",
+      "required": [
+        "contract"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "$ref": "#/$defs/contract"
+        }
+      }
+    }
+  }
+}

@@ -29,6 +29,16 @@ for f in $(find src -path '*/api/preview/*' -name 'openapi.yaml'); do
 done
 echo "== go vet and tests"
 go_checks
+echo "== dependencies and licences"
+docker run --rm -v "$PWD/src:/src" -w /src --user "$(id -u):$(id -g)" -e GOCACHE=/tmp/gocache \
+  -e GOPATH=/tmp/gopath -e GOTOOLCHAIN=local "$GO_IMAGE" sh -ec '
+  have_go=$(find . -name "*.go" -print -quit)
+  if [ -z "$have_go" ]; then echo "skip: no Go files yet"; exit 0; fi
+  go install golang.org/x/vuln/cmd/govulncheck@v1.9.0 github.com/google/go-licenses/v2@v2.0.1
+  for m in engine slice cli page tests; do
+    [ -z "$(find "$m" -name "*.go" -print -quit)" ] && continue
+    (cd "$m" && /tmp/gopath/bin/govulncheck ./... && /tmp/gopath/bin/go-licenses check ./... --disallowed_types=forbidden,unknown)
+  done'
 echo "== secrets"
 if git grep -nE 'sk-ant-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{30,}' -- . ; then echo "secret found"; exit 1; fi
 echo "all checks passed"

@@ -63,9 +63,10 @@ fresh review round 1.
 
 - **Decision**: when a slice is approved and the developer asks to build, the launcher starts that
   slice's step containers, each with only its step's writable paths mounted writable, under gVisor
-  (D13). Each container registers with the engine using its own token. `startRun` is refused with a
-  stated reason until every step of the pattern has a registered worker. Checks run in a separate
-  check container under gVisor, never in the engine.
+  (D13); it does the same before `resume` and `replay`. Each container registers with the engine
+  using its own token, which names its slice and step. `startRun`, `resumeRun` and `replayRun` are
+  refused with `WorkersNotReady` until every step of the pattern has a registered worker. Checks
+  run in a separate check container under gVisor, never in the engine.
 - **Rationale**: read-only mounts per step are a required guard (S3); the engine never receives the
   container engine's socket (S1); an API client without the launcher gets an explicit refusal, so
   the API stays the only management path (Principle III).
@@ -76,8 +77,8 @@ fresh review round 1.
 
 - **Decision**: `src/deploy/ap` installs nothing and starts nothing outside `docker compose`; besides
   calling it, it verifies image signatures and generates tokens. Its own commands are `up`, `down`,
-  `build-workers`, `page` and `test`; it runs `build-workers` before passing `build` on; every other
-  command is passed to the terminal client container.
+  `build-workers`, `page` and `test`; it runs `build-workers` before passing `build`, `resume` or
+  `replay` on; every other command is passed to the terminal client container.
 - **Rationale**: the platform needs nothing from the host beyond a container runtime (Principle
   VIII), with the gVisor runtime installed as part of it (D13).
 
@@ -86,9 +87,9 @@ fresh review round 1.
 - **Decision**: the engine API (contract at
   `src/engine/api/preview/2026-11-12-preview/openapi.yaml`) is the only management path. Every
   state-changing operation, including approvals and part changes, returns an operation that can be
-  followed and cancelled. Failed operations are retried with exponential backoff and jitter up to 3
-  times, then kept visibly as `failed` with the reason (the local form of a dead letter). The
-  engine also serves `GET /providers/Agentic.Engine/operations` and the ADR 0004 version errors.
+  followed and cancelled; the one exception is a worker's registration, which takes effect at
+  once. Failed operations are retried with exponential backoff and jitter up to 3 times, then kept
+  visibly as `failed` with the reason (the local form of a dead letter). The engine also serves `GET /providers/Agentic.Engine/operations` and the ADR 0004 version errors.
 - **Rationale**: Principles III and IV; ADR 0004's operations list and errors (S2).
 
 ### D8. Run records and reuse: append-only files and a content-addressed store
@@ -128,6 +129,8 @@ fresh review round 1.
 
 - **Decision**: `ap up` creates a session; the launcher generates a random token per session and per
   container; each container accepts only calls with the caller's token, on an internal network.
+  The engine API has three token kinds: the client token may call every developer operation, the
+  page token only GET operations, and a worker token only `registerWorker`; others get 403.
 - **Rationale**: Principle V within a local version; full workload identity is an approved
   exception (plan, Complexity Tracking). "Session" here is the platform's start, distinct from a
   build run.
@@ -145,8 +148,9 @@ fresh review round 1.
 ### D14. Budgets, timeouts and rate limits
 
 - **Decision**: the pattern declares per-run budgets (model tokens, cost in USD, wall-clock minutes:
-  30) and per-step budgets, enforced through Docker Agent budgets and the engine's clock. A hand-over
-  waits at most 14 days, then the run expires. The engine API and page allow 20 requests per second
+  30) and per-step budgets, enforced through Docker Agent budgets and the engine's clock. A run
+  waiting for the developer ends `handed-over` when the developer accepts the hand-over, or
+  `expired` after 14 days. The engine API and page allow 20 requests per second
   per token.
 - **Rationale**: Principles X and XIV; Docker Agent budgets (S5).
 
@@ -169,7 +173,8 @@ fresh review round 1.
 - **Decision**: each part's hash is the SHA-256 of its RFC 8785 canonical JSON (S14). The `rules`
   part covers rules, examples and terms. The slice exposes each part's current hash. The analyst's
   output is validated against `slice-proposal.schema.json`, which has no platform-owned fields
-  (`id`, `state`, approvals, checks, derived text).
+  (`id`, `state`, approvals, checks, history, derived text, question IDs and answers). Both schemas
+  take their parts from `slice-defs.schema.json`.
 - **Rationale**: fresh review U2 and U3.
 
 ### D18. The read-only page and ADR 0027
@@ -225,7 +230,8 @@ page, none of which an existing project provides.
 
 ### D23. Event names
 
-- **Decision**: run-event kinds are named noun plus past-tense verb: `StepStarted`, `AttemptMade`,
-  `CheckPassed`, `CheckFailed`, `StepAccepted`, `StepRejected`, `ResultReused`, `RunHandedOver`,
-  `RunExpired`, `RunCompleted`, `FindingRecorded`.
+- **Decision**: run-event kinds are named noun plus past-tense verb: `RunStarted`, `RunResumed`,
+  `RunInterrupted`, `StepStarted`, `AttemptMade`, `CheckPassed`, `CheckFailed`, `StepAccepted`,
+  `StepRejected`, `ResultReused`, `FindingRecorded`, `RunHandedOver`, `HandOverAccepted`,
+  `RunExpired`, `RunCancelled`, `RunCompleted`.
 - **Rationale**: constitution, Names say what things do.

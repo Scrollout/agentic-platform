@@ -3,6 +3,18 @@
 # project owner's approval in an "Approved-by:" trailer.
 set -eu
 msg_file="$1"
+staged=$(git diff --cached --name-only)
+
+# Tests change only through a fresh agent: a commit that changes Go code and the tests that judge
+# it needs a 'Tests-approved-by:' trailer naming the fresh reviewer or the owner.
+code=$(printf '%s\n' "$staged" | grep -E '^src/.*\.go$' | grep -Ev '_test\.go$|/testdata/' || true)
+tests=$(printf '%s\n' "$staged" | grep -E '^src/.*(_test\.go$|/testdata/)' || true)
+if [ -n "$code" ] && [ -n "$tests" ]; then
+  if ! git interpret-trailers --parse "$msg_file" | grep -q '^Tests-approved-by: '; then
+    echo "commit-msg: code and the tests that judge it changed together; add 'Tests-approved-by: <reviewer>'" >&2
+    exit 1
+  fi
+fi
 protected='^(\.specify/memory/|scripts/|src/deploy/|src/tests/|.*_test\.go$|.*/testdata/|.*go\.(mod|sum)$|\.gitignore$)'
 if git diff --cached --name-only | grep -Eq "$protected"; then
   if ! git interpret-trailers --parse "$msg_file" | grep -q '^Approved-by: '; then

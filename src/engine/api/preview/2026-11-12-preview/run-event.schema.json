@@ -1,0 +1,373 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "run-event.schema.json",
+  "title": "RunEvent",
+  "description": "One entry of a run record. Each kind requires the fields that explain it.",
+  "type": "object",
+  "required": [
+    "seq",
+    "at",
+    "run",
+    "kind"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Position in the run record, from 1, without gaps."
+    },
+    "at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "run": {
+      "$ref": "slice-defs.schema.json#/$defs/run_id"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "RunStarted",
+        "RunResumed",
+        "RunInterrupted",
+        "StepStarted",
+        "AttemptMade",
+        "CheckPassed",
+        "CheckFailed",
+        "StepAccepted",
+        "StepRejected",
+        "ResultReused",
+        "FindingRecorded",
+        "RunHandedOver",
+        "HandOverAccepted",
+        "RunExpired",
+        "RunCancelled",
+        "RunCompleted"
+      ]
+    },
+    "step": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "round": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3,
+      "description": "The review round a finding belongs to."
+    },
+    "worker": {
+      "type": "string",
+      "pattern": "^(agent|procedure):[a-z0-9-]+$",
+      "description": "The step's worker, as the pattern declares it."
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1
+    },
+    "agent_digest": {
+      "$ref": "slice-defs.schema.json#/$defs/hash"
+    },
+    "pattern": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+@[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Pattern ID and version, as `<id>@<version>`."
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "$ref": "slice-defs.schema.json#/$defs/hash"
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "slice-defs.schema.json#/$defs/hash"
+      }
+    },
+    "reuse_key": {
+      "$ref": "slice-defs.schema.json#/$defs/hash"
+    },
+    "refs": {
+      "type": "array",
+      "description": "The goals, rules, terms, examples or contract operations the event concerns.",
+      "items": {
+        "$ref": "slice-defs.schema.json#/$defs/ref"
+      }
+    },
+    "check": {
+      "type": "object",
+      "required": [
+        "name",
+        "passed",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]*$"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": [
+        "rule",
+        "text",
+        "blocking"
+      ],
+      "additionalProperties": false,
+      "description": "A review finding. It blocks only with a file, a line and the check that confirms it; otherwise it is a suggestion.",
+      "properties": {
+        "rule": {
+          "type": "string",
+          "pattern": "^R-[0-9]+$"
+        },
+        "file": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path relative to the project folder."
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "blocking": {
+          "type": "boolean"
+        },
+        "check": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]*$",
+          "description": "The check that confirms the finding."
+        }
+      },
+      "if": {
+        "properties": {
+          "blocking": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "file",
+          "line",
+          "check"
+        ]
+      }
+    },
+    "detail": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Free text; for RunHandedOver, the reason."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "RunStarted"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "pattern"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "StepStarted",
+              "AttemptMade",
+              "CheckPassed",
+              "CheckFailed",
+              "StepAccepted",
+              "StepRejected",
+              "ResultReused",
+              "FindingRecorded"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "step"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "AttemptMade",
+              "StepAccepted"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "attempt",
+          "worker",
+          "pattern",
+          "inputs",
+          "artifacts",
+          "reuse_key"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "AttemptMade",
+              "StepAccepted"
+            ]
+          },
+          "worker": {
+            "pattern": "^agent:"
+          }
+        },
+        "required": [
+          "worker"
+        ]
+      },
+      "then": {
+        "required": [
+          "model",
+          "agent_digest"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "CheckPassed",
+              "CheckFailed"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "check",
+          "refs"
+        ],
+        "properties": {
+          "refs": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "CheckPassed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "check": {
+            "properties": {
+              "passed": {
+                "const": true
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "CheckFailed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "check": {
+            "properties": {
+              "passed": {
+                "const": false
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "FindingRecorded"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "finding",
+          "round"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "ResultReused"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "reuse_key",
+          "artifacts"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "RunHandedOver"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "detail"
+        ]
+      }
+    }
+  ]
+}

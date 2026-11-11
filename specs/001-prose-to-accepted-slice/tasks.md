@@ -45,6 +45,7 @@ All code under `src/`. Go modules: `src/engine`, `src/slice`, `src/cli`, `src/pa
 - [X] T007 [P] Add local git hooks in `scripts/hooks/` (no hosted forge for now): `pre-commit` runs the fast checks for what is staged (the full suite is `scripts/check.sh`), `commit-msg` refuses a change to a protected path (constitution, `scripts/`, `src/deploy/`, tests, test data, Go module files) without an `Approved-by:` trailer; document them in `docs/playbooks/protect-changes-locally.md`
 - [X] T008 [P] Dependency updates: no hosted forge for now, so automated update pull requests are deferred (Principle XIII exception approved 2026-11-12); until then, a monthly manual review of `src/deploy/images.lock` and the Go modules
 - [X] T009 Create the local check script `scripts/check.sh` (no hosted CI for now): check tests, layout check, `okf.py check`, markdownlint, Spectral, `go vet` and `go test` for every module in the pinned Go container, secret scanning
+- [ ] T010a [P] Have a separate test author write planted-violation tests for the commit-msg hook's two rules (protected paths, code-plus-tests) in `scripts/tests/test_hooks.py`
 - [X] T010 [P] Add `NOTICE` at the repository root listing the Apache-2.0 components and their notices
 
 **Checkpoint**: an empty but checked project; `scripts/check.sh` fails on a planted layout or contract violation.
@@ -55,8 +56,9 @@ All code under `src/`. Go modules: `src/engine`, `src/slice`, `src/cli`, `src/pa
 
 **⚠️ CRITICAL**: no user story work starts until this phase is complete.
 
-- [ ] T011 Review the draft contracts with the project owner, then move them to their provider at `src/engine/api/preview/2026-11-12-preview/` (`openapi.yaml`, `slice.schema.json`, `slice-proposal.schema.json`, `pattern.schema.json`, `run-event.schema.json`), mark the copies in `specs/001-prose-to-accepted-slice/contracts/` as drafts, and record the review in the commit
-- [ ] T012 Generate the engine's Go server interfaces and types (oapi-codegen v2.8.2, strict server) into `src/engine/api/gen/` and the client into `src/cli/api/gen/` and `src/page/api/gen/`; add a CI drift check that regenerates and fails on `git diff --exit-code`
+- [X] T011 Review the draft contracts with the project owner, then move them to their provider at `src/engine/api/preview/2026-11-12-preview/` (`openapi.yaml`, `slice.schema.json`, `slice-proposal.schema.json`, `pattern.schema.json`, `run-event.schema.json`), mark the copies in `specs/001-prose-to-accepted-slice/contracts/` as drafts, and record the review in the commit
+- [ ] T011a Apply the eight non-blocking suggestions from contract review round 2 (wording of `parts`, `Worker.endpoint` pattern, 404/403 descriptions, `Run` status/outcome rule, `Difference` rendering, `info.contact`, last-page token, `OperationKind` note) in `src/engine/api/preview/2026-11-12-preview/`, or close each with a reason
+- [ ] T012 Bundle the contract into one document with Redocly CLI (ADR 0004), then generate the engine's Go server interfaces and types from the bundle (oapi-codegen v2.8.2, strict server) into `src/engine/api/gen/` and the client into `src/cli/api/gen/` and `src/page/api/gen/`; add a CI drift check that regenerates and fails on `git diff --exit-code`
 - [ ] T013 [P] Write failing schema tests in `src/slice/schema_test.go` for fixtures in `src/slice/testdata/`: a `state` rule without `precondition`, an `event` or `unwanted` rule without `trigger`, an `option` rule without `feature`, a goal id not matching `^G-[0-9]+$`, more than 10 questions, an answer over 200 characters, a proposal containing `approvals`
 - [ ] T014 [P] Write failing run-store tests in `src/engine/store/store_test.go`: events appended with increasing `seq`, an artifact stored once under the SHA-256 of its content, no event ever rewritten, erasure removes a slice's records and artifacts
 - [ ] T015 [P] Write failing engine-skeleton tests in `src/engine/api/skeleton_test.go`: a missing `api-version` returns 400 `MissingApiVersionParameter`, an unknown one 400 `UnsupportedApiVersionValue`, a call without a token 401, more than 20 requests per second per token 429, a reused `Idempotency-Key` with a different body 409 `IdempotencyKeyReused`, `GET /providers/Agentic.Engine/operations` lists every operation, and operations can be followed and cancelled
@@ -87,7 +89,7 @@ All code under `src/`. Go modules: `src/engine`, `src/slice`, `src/cli`, `src/pa
 - [ ] T027 [P] [US1] Write failing EARS-derivation tests in `src/slice/ears_test.go`: one fixture per pattern produces the exact EARS sentence; derived `text` is never taken from input
 - [ ] T028 [P] [US1] Write failing pattern-fit tests in `src/engine/checks/fit_test.go`: the notes slice fits `api-feature-go`; a slice whose contract has a non-HTTP operation, or whose rules name another system, does not, with the failing condition named
 - [ ] T029 [P] [US1] Write failing tests in `src/engine/slices/slices_test.go`: part hashes are SHA-256 of RFC 8785 canonical JSON; the `rules` part covers rules, examples and terms; approving a failing part or a stale hash fails with `StaleContentHash`; changing an approved part withdraws its approval; a resubmitted description offers the existing slice; more than one use case or an empty description asks to narrow it
-- [ ] T030 [P] [US1] Write Schemathesis conformance tests for `createSlice`, `listSlices`, `getSlice`, `changePart`, `deleteSlice`, `answerQuestions`, `approvePart`, `getOperation`, `cancelOperation` and `listProviderOperations` in `src/tests/contract/slices_test.go`, against the recorded model
+- [ ] T030 [P] [US1] Write Schemathesis conformance tests for `createSlice`, `listSlices`, `getSlice`, `replaceGoals`, `replaceRules`, `replaceContract`, `deleteSlice`, `answerQuestions`, `approvePart`, `getOperation`, `cancelOperation` and `listProviderOperations` in `src/tests/contract/slices_test.go`, against the recorded model
 - [ ] T031 [P] [US1] Write the acceptance test `src/tests/acceptance/us1_test.go` for spec scenarios US1.1 to US1.6, including the refusal of `startRun` on an unapproved slice (`NotApproved`) and on a slice the pattern does not fit (`PatternDoesNotFit`)
 
 ### Implementation for User Story 1
@@ -99,7 +101,7 @@ All code under `src/`. Go modules: `src/engine`, `src/slice`, `src/cli`, `src/pa
 - [ ] T036 [US1] Write the analyst agent `src/agents/analyst.yaml` (Haiku through the gateway, no file-writing tools, `structured_output` bound to `slice-proposal.schema.json`) until T025 passes
 - [ ] T037 [US1] Implement proposal, answers, changes, approvals and deletion in `src/engine/slices/` (run the analyst, run T016, T033, T035 and Spectral on the contract, compute part hashes) until T029 passes
 - [ ] T038 [US1] Implement the slice operations and the `startRun` refusals of the generated interface in `src/engine/api/slices.go` until T030 and the refusal parts of T031 pass
-- [ ] T039 [US1] Implement `describe`, `questions`, `show`, `edit`, `approve`, `slices`, `cancel` and `delete` in `src/cli/` per `contracts/cli.md` until T031 passes
+- [ ] T039 [US1] Implement `describe`, `questions`, `show`, `edit`, `approve`, `slices`, `cancel` and `delete` (summary and typed confirmation) in `src/cli/` per `contracts/cli.md` until T031 passes
 - [ ] T040 [US1] Fresh review of Story 1 in an isolated copy; every finding fixed, made a task, or closed with a reason
 
 **Checkpoint**: Story 1 works on its own; quickstart step 2 passes.
@@ -118,7 +120,7 @@ All code under `src/`. Go modules: `src/engine`, `src/slice`, `src/cli`, `src/pa
 - [ ] T042 [P] [US2] Write planted-violation and clean fixtures for every check in `src/engine/checks/testdata/` (scope, tests unchanged, dependencies against the pattern's allowed and forbidden lists, tests fail against the stub, all tests pass, godog `--strict`, generation drift, contract hash equals the approved hash, evidence-backed finding) and a test that runs each check on both
 - [ ] T043 [P] [US2] Write failing machine tests in `src/engine/machine/machine_test.go`: a step is accepted only when all checks pass; DONE is ignored; a check that errors counts as failed; 3 rejected attempts or 3 review rounds hand over; a later review round considers only open findings and changed lines; token, cost and time budgets hand over; a hand-over expires after 14 days; one active run at a time (`RunActive`); every run ends in one outcome; every event names model, agent digest, pattern version, inputs, reuse key and the refs it concerns
 - [ ] T044 [P] [US2] Write failing reuse, resume and replay tests in `src/engine/machine/reuse_test.go`: equal inputs give the same reuse key; an accepted result is reused without running the step; resume repeats no accepted step; a replay's artifacts are byte-identical; comparison lists only differing fields
-- [ ] T045 [P] [US2] Write Schemathesis conformance tests for `startRun`, `resumeRun`, `replayRun`, `compareRuns`, `listRuns`, `getRun`, `listRunEvents` and `registerWorker` in `src/tests/contract/runs_test.go`
+- [ ] T045 [P] [US2] Write Schemathesis conformance tests for `startRun`, `resumeRun`, `replayRun`, `acceptHandOver`, `compareRuns`, `listRuns`, `getRun`, `listRunEvents`, `getArtifact` and `registerWorker` (each with its allowed and refused token kinds) in `src/tests/contract/runs_test.go`
 - [ ] T046 [P] [US2] Write the planted-failure suite `src/tests/acceptance/planted_test.go` (five scenarios, 3 trials each) and the acceptance test `src/tests/acceptance/us2_test.go` for spec scenarios US2.1 to US2.10
 - [ ] T047 [P] [US2] Write failing tests for the run page in `src/page/page_test.go`: it sends only GET requests, binds to `127.0.0.1`, rejects an unexpected Host header, and shows a run's events and a comparison
 
@@ -131,7 +133,7 @@ All code under `src/`. Go modules: `src/engine`, `src/slice`, `src/cli`, `src/pa
 - [ ] T052 [US2] Implement reuse, resume, replay and comparison in `src/engine/machine/reuse.go` until T044 passes
 - [ ] T053 [US2] Implement worker registration and the per-slice step containers in `src/engine/api/workers.go` and the launcher's `build-workers` (only each step's writable paths mounted writable, under gVisor), and the new project folder with its own version history
 - [ ] T054 [US2] Implement the run operations in `src/engine/api/runs.go` until T045 passes
-- [ ] T055 [US2] Implement `build`, `resume`, `replay`, `compare`, `runs` and `run` in `src/cli/` and the launcher's `test planted` until T046 passes
+- [ ] T055 [US2] Implement `build`, `resume`, `replay`, `take-over`, `compare`, `artifact`, `runs` and `run` in `src/cli/` and the launcher's `test planted` until T046 passes
 - [ ] T056 [US2] Implement the read-only run page in `src/page/` until T047 passes
 - [ ] T057 [US2] Fresh review of Story 2 in an isolated copy; every finding fixed, made a task, or closed with a reason
 
