@@ -200,6 +200,75 @@ class GenerateScriptTest(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertEqual(snapshot(self.path("src/cli/api/gen")), before)
 
+    # 5. Version selection, no targets, missing pins
+
+    def add_version(self, folder, text):
+        """Copy the baseline contract into a new version folder with a changed description."""
+        dest_dir = self.path("src/engine/api", folder)
+        shutil.copytree(os.path.dirname(self.path(CONTRACT)), dest_dir)  # with its schema files
+        dest = os.path.join(dest_dir, "openapi.yaml")
+        with open(dest) as f:
+            body = f.read()
+        self.assertIn(CONTRACT_TEXT, body)
+        with open(dest, "w") as f:
+            f.write(body.replace(CONTRACT_TEXT, text))
+
+    def assert_generated_from(self, text, *absent):
+        r = self.run_in(self.work)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        for gen_dir in GEN_DIRS:
+            with open(self.gen_file(gen_dir)) as f:
+                code = f.read()
+            self.assertIn(text, code, gen_dir)
+            for other in (CONTRACT_TEXT,) + absent:
+                self.assertNotIn(other, code, gen_dir)
+
+    def test_newest_preview_wins(self):
+        self.add_version("preview/2026-12-01-preview", "Newest preview wording.")
+        self.assert_generated_from("Newest preview wording.")
+
+    def test_preview_wins_over_older_stable(self):
+        self.add_version("stable/2026-11-30", "Older stable wording.")
+        self.add_version("preview/2026-12-01-preview", "Newer preview wording.")
+        self.assert_generated_from("Newer preview wording.", "Older stable wording.")
+
+    def test_stable_wins_over_older_preview(self):
+        self.add_version("preview/2026-12-01-preview", "Older preview wording.")
+        self.add_version("stable/2026-12-15", "Newer stable wording.")
+        self.assert_generated_from("Newer stable wording.", "Older preview wording.")
+
+    def test_no_targets_exits_zero(self):
+        for d in GEN_DIRS:
+            os.remove(self.path(os.path.dirname(d), "engine.oapi-codegen.yaml"))
+        before = snapshot(self.path("src"))
+        for args in ((), ("--check",)):
+            with self.subTest(args=args):
+                r = self.run_in(self.work, *args)
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                self.assertIn("no targets", r.stdout)
+                self.assertEqual(snapshot(self.path("src")), before)
+
+    def test_missing_pin_fails_without_writing_gen(self):
+        lock = self.path("src/deploy/images.lock")
+        with open(lock) as f:
+            original = f.read()
+        for pin in ("golang", "oapi-codegen"):
+            with self.subTest(pin=pin):
+                self.reset()
+                lines = [l for l in original.splitlines() if l.split()[:1] != [pin]]
+                self.assertLess(len(lines), len(original.splitlines()))
+                with open(lock, "w") as f:
+                    f.write("\n".join(lines) + "\n")
+                for d in GEN_DIRS:
+                    shutil.rmtree(self.path(d))
+                for args in ((), ("--check",)):
+                    r = self.run_in(self.work, *args)
+                    self.assertNotEqual(r.returncode, 0, r.stdout + r.stderr)
+                    self.assertNotIn("written  ", r.stdout)
+                    self.assertNotIn("same     ", r.stdout)
+                    for d in GEN_DIRS:
+                        self.assertFalse(os.path.exists(self.path(d)), d)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -129,6 +129,131 @@ class NpmToolTest(unittest.TestCase):
                 env=self.env, cwd=root)
         self.assertFalse(stray.exists(), r.stdout + r.stderr)
 
+    # Network, caching and the Markdown linter
+
+    def test_tool_cannot_reach_the_network(self):
+        """A contract whose $ref points at a server on the host cannot be bundled.
+
+        The server listens on the Docker bridge gateway, so a container with a network can
+        fetch the $ref. The control run proves that: the same bundle succeeds and the server
+        sees a request when networking is on. Through npm-tool.sh (--network none) the bundle
+        fails and the server sees nothing.
+        """
+        import http.server
+        import threading
+        gw = subprocess.run(
+            ["docker", "network", "inspect", "bridge", "-f",
+             "{{(index .IPAM.Config 0).Gateway}}"], capture_output=True, text=True)
+        gateway = gw.stdout.strip()
+        if gw.returncode != 0 or not gateway:
+            self.skipTest("cannot find the Docker bridge gateway")
+        hits = []
+        served = Path(self.base) / "served"
+        served.mkdir(exist_ok=True)
+        (served / "schema.yaml").write_text("type: string\n")
+
+        class Handler(http.server.SimpleHTTPRequestHandler):
+            def __init__(self, *a, **k):
+                super().__init__(*a, directory=str(served), **k)
+
+            def log_message(self, fmt, *args):
+                hits.append(self.path)
+
+        server = http.server.ThreadingHTTPServer(("0.0.0.0", 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.shutdown)
+        self.addCleanup(server.server_close)
+        url = "http://%s:%d/schema.yaml" % (gateway, server.server_address[1])
+
+        root, script, env = self.fresh("network")
+        (root / "ref.yaml").write_text(
+            "openapi: 3.1.0\ninfo: {title: t, version: '1'}\npaths: {}\ncomponents:\n"
+            "  schemas:\n    Remote:\n      $ref: '%s'\n" % url)
+        out = Path(self.base) / "network-out"
+        out.mkdir(exist_ok=True)
+        # Install the tools, then run the same command with a network as a control.
+        r = run(script, "redocly", "--version", env=env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        tools = next(Path(env["XDG_CACHE_HOME"], "agentic-platform/node").iterdir())
+        image = next(l.split()[1] for l in (root / "src/deploy/images.lock").read_text().splitlines()
+                     if l.split()[:1] == ["node"])
+        user = "%d:%d" % (os.getuid(), os.getgid())
+        control = subprocess.run(
+            ["docker", "run", "--rm", "--user", user, "-v", "%s:%s:ro" % (root, root),
+             "-v", "%s:%s:ro" % (tools, tools), "-v", "%s:%s" % (out, out), "-w", str(root),
+             "-e", "HOME=/tmp", "-e", "REDOCLY_TELEMETRY=off", image,
+             str(tools / "node_modules/.bin/redocly"), "bundle", "ref.yaml",
+             "-o", str(out / "control.yaml")], capture_output=True, text=True, timeout=300)
+        if control.returncode != 0 or not hits:
+            self.skipTest("control with networking could not fetch the $ref: %s%s"
+                          % (control.stdout, control.stderr))
+        hits.clear()
+        r = run(script, "redocly", "bundle", "ref.yaml", "-o", str(out / "blocked.yaml"),
+                env={**env, "NPM_TOOL_MOUNT": str(out)}, cwd=root)
+        self.assertNotEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertFalse((out / "blocked.yaml").exists())
+        self.assertEqual(hits, [])
+
+    def test_second_run_does_not_reinstall(self):
+        root, script, env = self.fresh("reinstall")
+        r = run(script, "spectral", "--version", env=env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        dirs = list(Path(env["XDG_CACHE_HOME"], "agentic-platform/node").iterdir())
+        self.assertEqual(len(dirs), 1)
+        tools = dirs[0]
+        marker, modules = tools / ".installed", tools / "node_modules"
+        self.assertTrue(marker.is_file())
+        sentinel = tools / "sentinel"  # a reinstall removes the whole directory
+        sentinel.write_text("x")
+        before = (marker.stat().st_mtime_ns, modules.stat().st_mtime_ns)
+        r = run(script, "spectral", "--version", env=env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual((marker.stat().st_mtime_ns, modules.stat().st_mtime_ns), before)
+        self.assertTrue(sentinel.exists())
+
+    def test_changed_package_json_or_lock_gets_a_new_cache_directory(self):
+        root, script, env = self.fresh("rekey")
+        base = Path(env["XDG_CACHE_HOME"], "agentic-platform/node")
+        r = run(script, "spectral", "--version", env=env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        first = {p.name for p in base.iterdir()}
+        self.assertEqual(len(first), 1)
+        pkg = root / "scripts/tools/package.json"
+        data = json.loads(pkg.read_text())
+        data["description"] = "changed"
+        pkg.write_text(json.dumps(data, indent=2) + "\n")
+        r = run(script, "spectral", "--version", env=env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        second = {p.name for p in base.iterdir()}
+        self.assertEqual(len(second), 2)
+        for name in second:
+            self.assertTrue((base / name / ".installed").is_file())
+        # A change to the lock alone gives a third directory.
+        lock = root / "scripts/tools/package-lock.json"
+        lock.write_text(lock.read_text() + "\n")
+        r = run(script, "spectral", "--version", env=env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(len({p.name for p in base.iterdir()}), 3)
+
+    def test_markdownlint_with_repo_config(self):
+        root = self.tree
+        shutil.copy2(REPO / "scripts/repo.markdownlint-cli2.jsonc",
+                     root / "scripts/repo.markdownlint-cli2.jsonc")
+        clean, bad = root / "clean.md", root / "bad.md"
+        clean.write_text("# Title\n\nA clean paragraph.\n")
+        bad.write_text("# Title\n\n### Skipped a level\n\nText.\n")  # MD001
+        args = ["markdownlint-cli2", "--config", "scripts/repo.markdownlint-cli2.jsonc"]
+        r = run(self.script, *args, "clean.md", env=self.env, cwd=root)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        r = run(self.script, *args, "bad.md", env=self.env, cwd=root)
+        self.assertNotEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("MD001", r.stdout + r.stderr)
+        # The repo config is really in force: MD013 (line length) is off there.
+        long = root / "long.md"
+        long.write_text("# Title\n\n" + " ".join(["word"] * 100) + "\n")
+        r = run(self.script, *args, "long.md", env=self.env, cwd=root)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

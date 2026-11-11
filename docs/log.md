@@ -2,6 +2,7 @@
 
 ## 2026-11-12
 
+* **Implementation**: Feature 001, T012a: a separate test author added 9 cases for `scripts/generate.sh` (newest contract version, no targets, missing pins) and `scripts/npm-tool.sh` (no network, no reinstall, a new cache per lock, markdownlint with the repository config).
 * **Implementation**: Feature 001, T011b and T011d: the engine contract now references the slice, run and hash rules in `slice-defs.schema.json` instead of repeating them, and applies the T011a review's suggestions (`registerWorker` 404, `Difference` sides, `Worker.endpoint` as a base address, the client's stop rule for run events); a fresh contract review approved them. Remaining repeated rules are task T011e.
 * **Implementation**: Feature 001, after the re-run analyze review (round 1 failed with 3 HIGH findings): the spec now lets a developer cancel a run, which ends `cancelled` (clarification); oasdiff breaking-change checks are planned in T029, T037 and T024a; the Node tools (Redocly CLI, Spectral, markdownlint-cli2) are pinned with their whole dependency tree in `scripts/tools/package-lock.json` and run without network in the pinned Node image by `scripts/npm-tool.sh`; the draft contract copies in `specs/` were removed and the terminal contract moved to `src/cli/contract.md`.
 * **Implementation**: Feature 001, T010a and T011a: tests for the commit-msg hook by a separate author, and the eight round-2 suggestions applied to the engine contract.
