@@ -1,0 +1,27 @@
+#!/bin/sh
+# Fast checks before a commit: only what the staged files can affect. The full suite is
+# scripts/check.sh, run before a story is reported done.
+set -eu
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$staged" ] && exit 0
+has() { printf '%s\n' "$staged" | grep -Eq "$1"; }
+
+python3 scripts/layout-check.py >/dev/null || { python3 scripts/layout-check.py; exit 1; }
+if printf '%s\n' "$staged" | xargs -r grep -nE 'sk-ant-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{30,}' 2>/dev/null; then
+  echo "pre-commit: secret found in staged files" >&2; exit 1
+fi
+if has '^docs/'; then python3 scripts/okf.py check >/dev/null || python3 scripts/okf.py check; fi
+if has '^scripts/'; then python3 -m unittest discover -s scripts/tests -p 'test_*.py' 2>&1 | tail -1; fi
+md=$(printf '%s\n' "$staged" | grep -E '\.md$' | grep -Ev '^scripts/tests/' || true)
+if [ -n "$md" ] && command -v npx >/dev/null; then
+  printf '%s\n' "$md" | xargs npx --no-install markdownlint-cli2 --config scripts/repo.markdownlint-cli2.jsonc 2>/dev/null \
+    || printf '%s\n' "$md" | xargs npx -y markdownlint-cli2@0.18.1 --config scripts/repo.markdownlint-cli2.jsonc
+fi
+if has '/api/preview/.*openapi\.yaml$|^src/engine/api/ruleset'; then
+  for f in $(find src -path '*/api/preview/*' -name 'openapi.yaml'); do
+    npx -y "$(awk '$1=="spectral"{print $2}' src/deploy/images.lock)" lint "$f" --ruleset src/engine/api/ruleset.yaml --fail-severity error
+  done
+fi
+if has '\.go$|go\.(mod|sum)$'; then scripts/check.sh --go-only; fi

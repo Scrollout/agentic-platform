@@ -36,18 +36,18 @@ All code under `src/`. Go modules: `src/engine`, `src/slice`, `src/cli`, `src/pa
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 Create the layout from plan.md, a README.md in each `src/` folder stating its purpose, and `src/go.work` listing the five modules
-- [ ] T002 Add the Go 1.26 module files `src/engine/go.mod`, `src/slice/go.mod`, `src/cli/go.mod`, `src/page/go.mod`, `src/tests/go.mod`, and Go ignore patterns to `.gitignore`
-- [ ] T003 [P] Write planted-violation and clean fixtures for the root-layout check in `scripts/tests/layout/` and a test that runs the check on both (fails until T004)
-- [ ] T004 Write the root-layout check `scripts/layout-check.py` against the constitution's root allowlist until T003 passes
-- [ ] T005 [P] Write the Spectral ruleset `src/engine/api/ruleset.yaml` (operation ids, descriptions, required `api-version`, paginated lists, stable error codes) with a planted-violation fixture and a test
-- [ ] T006 [P] Run the OpenSSF Scorecard locally for Docker Agent and oasdiff and add the results to research.md (D22), then pin every image and tool by version and full digest in `src/deploy/images.lock`: Docker Agent `docker/docker-agent:1.160.0@sha256:186f001f1096d3071a49113044465be8cec453cf06b26366f4c56b6789f5103c`, `golang:1.26-alpine@sha256:30b1e546a9c7fa3b747c2bdba3a0c7bdf3a02ebb4c5b8405d2f948d7e8aac4ec`, `alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f`, nginx, Spectral, oasdiff, oapi-codegen, godog, Schemathesis
-- [ ] T007 [P] Add `.github/CODEOWNERS` naming the project owner for `.github/`, `src/deploy/`, dependency manifests, `.specify/memory/`, `scripts/` and every test and eval path; document the branch-protection settings to enable in `docs/operations/branch-protection.md`
-- [ ] T008 [P] Add automated dependency updates in `.github/dependabot.yml` for Go modules, Docker images and GitHub Actions
-- [ ] T009 Create the CI workflow `.github/workflows/ci.yml`: layout check, `okf.py check`, markdownlint, Spectral and oasdiff, `go vet` and `go test` for every module, dependency, licence and secret scanning; every action pinned by commit
-- [ ] T010 [P] Add `NOTICE` at the repository root listing the Apache-2.0 components and their notices
+- [X] T001 Create the layout from plan.md, a README.md in each `src/` folder stating its purpose, and `src/go.work` listing the five modules
+- [X] T002 Add the Go 1.26 module files `src/engine/go.mod`, `src/slice/go.mod`, `src/cli/go.mod`, `src/page/go.mod`, `src/tests/go.mod`, and Go ignore patterns to `.gitignore`
+- [X] T003 [P] Write planted-violation and clean fixtures for the root-layout check in `scripts/tests/layout/` and a test that runs the check on both (fails until T004)
+- [X] T004 Write the root-layout check `scripts/layout-check.py` against the constitution's root allowlist until T003 passes
+- [X] T005 [P] Write the Spectral ruleset `src/engine/api/ruleset.yaml` (operation ids, descriptions, required `api-version`, paginated lists, stable error codes) with a planted-violation fixture and a test
+- [X] T006 [P] Pin every image and tool by version and full digest in `src/deploy/images.lock` (Docker Agent, golang, alpine, nginx, oasdiff, Schemathesis; oapi-codegen, godog and Spectral by version). The OpenSSF Scorecard runs for Docker Agent and oasdiff need GitHub, which is not used for now; they move to T063
+- [X] T007 [P] Add local git hooks in `scripts/hooks/` (no hosted forge for now): `pre-commit` runs the fast checks for what is staged (the full suite is `scripts/check.sh`), `commit-msg` refuses a change to a protected path (constitution, `scripts/`, `src/deploy/`, tests, test data, Go module files) without an `Approved-by:` trailer; document them in `docs/playbooks/protect-changes-locally.md`
+- [X] T008 [P] Dependency updates: no hosted forge for now, so automated update pull requests are deferred (Principle XIII exception approved 2026-11-12); until then, a monthly manual review of `src/deploy/images.lock` and the Go modules
+- [X] T009 Create the local check script `scripts/check.sh` (no hosted CI for now): check tests, layout check, `okf.py check`, markdownlint, Spectral, `go vet` and `go test` for every module in the pinned Go container, secret scanning
+- [X] T010 [P] Add `NOTICE` at the repository root listing the Apache-2.0 components and their notices
 
-**Checkpoint**: an empty but checked project; CI fails on a planted layout or contract violation.
+**Checkpoint**: an empty but checked project; `scripts/check.sh` fails on a planted layout or contract violation.
 
 ---
 
@@ -68,9 +68,9 @@ All code under `src/`. Go modules: `src/engine`, `src/slice`, `src/cli`, `src/pa
 - [ ] T021 [P] Write the Dockerfiles in `src/deploy/` for the agent image (Docker Agent binary from the pinned image, Go toolchain, non-root, `TELEMETRY_ENABLED=false`), engine, check container, CLI and page, each with an ignore rule that excludes tests and evals
 - [ ] T022 Write `src/deploy/compose.yaml`: an internal network with no egress, the gateway as the only container with egress, `runtime: runsc` with CPU, memory and process limits for step and check containers, read-only root file systems, no capabilities, `no-new-privileges`, temp folders with `exec`, no container-engine socket anywhere
 - [ ] T023 Write the launcher `src/deploy/ap` (commands `up`, `down`, `build-workers`, `page`, `test`; everything else passed to the terminal client): verify image signatures before start, create per-session and per-container tokens, pass the credentials file to the gateway alone
-- [ ] T024 Add an end-to-end CI job in `.github/workflows/e2e.yml` that installs gVisor on the runner VM, runs the Compose stack against the recorded model, and runs `src/tests` contract and acceptance suites, never mounting the engine socket into a container
+- [ ] T024 Add `scripts/e2e.sh` (no hosted CI for now): runs the Compose stack with gVisor against the recorded model and the `src/tests` contract and acceptance suites, never mounting the engine socket into a container; `scripts/check.sh` calls it
 
-**Checkpoint**: `src/deploy/ap up` starts the platform; the engine answers `GET /runs?api-version=2026-11-12-preview` with an empty list; CI runs end to end.
+**Checkpoint**: `src/deploy/ap up` starts the platform; the engine answers `GET /runs?api-version=2026-11-12-preview` with an empty list; `scripts/e2e.sh` runs end to end.
 
 ---
 
@@ -135,14 +135,14 @@ All code under `src/`. Go modules: `src/engine`, `src/slice`, `src/cli`, `src/pa
 - [ ] T056 [US2] Implement the read-only run page in `src/page/` until T047 passes
 - [ ] T057 [US2] Fresh review of Story 2 in an isolated copy; every finding fixed, made a task, or closed with a reason
 
-**Checkpoint**: Stories 1 and 2 work; quickstart steps 3 to 5 pass; the walking skeleton runs end to end in CI.
+**Checkpoint**: Stories 1 and 2 work; quickstart steps 3 to 5 pass; the walking skeleton runs end to end through `scripts/e2e.sh`.
 
 ---
 
 ## Phase 5: Polish & Cross-Cutting Concerns
 
-- [ ] T058 [P] Sign every published image and attach an SBOM and build provenance in `.github/workflows/release.yml`
-- [ ] T059 [P] Run the evals (T025, T041) in CI on every change to a prompt, agent definition, model or Docker Agent version, with a test-scoped API key that has a provider spending limit
+- [ ] T058 [P] Sign every built image with a local key and attach an SBOM and build provenance in `scripts/release.sh`; the launcher verifies them at start (T023)
+- [ ] T059 [P] Run the evals (T025, T041) from `scripts/check.sh` on every change to a prompt, agent definition, model or Docker Agent version, with a test-scoped API key that has a provider spending limit
 - [ ] T060 [P] Record decision records in `docs/decisions/`: Go as the platform's stack, Docker Agent's `serve api` as the integration mode (ADR 0002 follow-up), the run store format, the slice format (structured EARS rules and Gherkin examples)
 - [ ] T061 [P] Add `docs/components/` concepts for Docker Agent, godog, cucumber/gherkin, oapi-codegen, Spectral, oasdiff, jsonschema, Schemathesis, nginx and gVisor, and an engine API concept under `docs/apis/`
 - [ ] T062 [P] Add the terms Slice, Pattern, Catalogue, Run, Step, Check and Hand-over to `docs/overview/glossary.md`

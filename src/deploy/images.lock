@@ -1,0 +1,13 @@
+# Every image and tool the platform uses, pinned by version and digest (constitution XIII).
+# Dockerfiles, Compose and CI read pins from here; update them only through dependency PRs.
+# name                     reference
+docker-agent               docker/docker-agent:1.160.0@sha256:186f001f1096d3071a49113044465be8cec453cf06b26366f4c56b6789f5103c
+golang                     golang:1.26-alpine@sha256:30b1e546a9c7fa3b747c2bdba3a0c7bdf3a02ebb4c5b8405d2f948d7e8aac4ec
+alpine                     alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
+nginx                      nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de
+oasdiff                    tufin/oasdiff:v1.37.0@sha256:ff02af37a254b5199b9d72e7bba93dae5837a9119d59459168d1398893b47aea
+schemathesis               schemathesis/schemathesis:v4.33.2@sha256:b6521357a7262c725cf10c6237fdf075b6d027219c0aca93c9930497d1824c85
+# Go and npm tools: pinned by version; their checksums are recorded in go.sum and the npm lock.
+oapi-codegen               github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.2
+godog                      github.com/cucumber/godog/cmd/godog@v0.16.0
+spectral                   @stoplight/spectral-cli@6.15.0

@@ -59,10 +59,10 @@ per token on the API
 | X. No silent loss | Pass | One recorded outcome per run; resume; budgets; hand-overs expire after 14 days (D14) |
 | XI. Agent data privacy | Exception (approved, partial) | Provider does not train on API content (D16); retention until deleted; no telemetry; no encryption between local containers or at rest in this version |
 | XII. Tenant isolation | Not applicable | One developer by scope (FR-021); listed in Complexity Tracking for the record |
-| XIII. Secure supply chain | Pass | Images and tools pinned by version and digest; automated update pull requests; CI scans; signature verification at start |
+| XIII. Secure supply chain | Exception (approved, partial) | Images and tools pinned by version and digest; local scans in `scripts/check.sh`; signature verification at start; automated update pull requests deferred while there is no hosted forge |
 | XIV. Safe defaults and least agency | Pass | Default-deny egress; per-step writable paths and allowed dependencies; checks fail closed; budgets; rate limits |
 | XV. Compatible public APIs | Pass | `api-version` query parameter, preview `2026-11-12-preview`, version errors, idempotency keys kept 24 hours, paginated lists |
-| XVI. Human control of agents | Pass | Feature branch; CODEOWNERS and branch protection on the default branch; agent commits carry an attribution trailer |
+| XVI. Human control of agents | Pass (local form) | Feature branch; local hooks run every check and refuse protected-path changes without the owner's `Approved-by:` trailer; agent commits carry an attribution trailer. Hosted branch protection when a forge is used |
 | XVII. Declare, derive, converge | Pass | Slices and patterns are declarations; EARS text, code and tests are derived |
 | XVIII. Abstractions say what | Pass | The API and CLI describe outcomes, not mechanisms |
 | XIX. Evals | Pass | Each agent's eval suite exists before the agent; adversarial cases; pass^3 (D19) |
@@ -149,9 +149,11 @@ test files and evals (one Docker ignore rule per image).
 | Principle V: per-session tokens instead of workload identity | Calls stay authenticated without an identity provider on a laptop | An identity provider for a single-user local tool; deferred to hosting |
 | Principle XI (partial): no encryption between local containers or at rest | Containers share one internal network on one machine; data stays on the developer's disk | TLS and disk encryption for a local tool; required once anything is hosted |
 | Principle XII: no tenant isolation | Single developer by scope (FR-021) | Not applicable until the hosted version |
+| Principle XIII (partial): no automated dependency update pull requests | No hosted forge for now (owner, 2026-11-12) | A self-hosted update bot for one local repository; a monthly manual review instead, until a forge is used |
 
-The project owner approved the exceptions for Principles II, V and XII on 2026-11-12, and the
-Principle XI exception on 2026-11-12 with the revised plan. They hold for this local,
+The project owner approved the exceptions for Principles II, V and XII on 2026-11-12, the
+Principle XI exception on 2026-11-12 with the revised plan, and the Principle XIII exception on
+2026-11-12 when GitHub was set aside for now. They hold for this local,
 single-developer version only and are recorded in the commit that carries this plan.
 
 ## Exceptions to Engineering Principles

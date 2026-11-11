@@ -1,0 +1,38 @@
+# Spectral ruleset for the platform's OpenAPI contracts (ADR 0004, constitution Principle XV).
+extends: ["spectral:oas"]
+
+functionsDir: ./ruleset-functions
+functions: [requiresApiVersion, listHasPageToken]
+
+rules:
+  operation-operationId: error
+  operation-description: error
+
+  ap-api-version-required:
+    description: Every operation except /providers/... requires the api-version query parameter.
+    message: "{{error}}"
+    severity: error
+    given: "$.paths[*]"
+    then:
+      function: requiresApiVersion
+
+  ap-list-has-page-token:
+    description: A GET whose 200 response has an items array accepts page_token.
+    message: "{{error}}"
+    severity: error
+    given: "$.paths[*]"
+    then:
+      function: listHasPageToken
+
+  ap-problem-has-code:
+    description: The Problem schema requires a stable error code.
+    message: Problem must require `code`.
+    severity: error
+    given: "$.components.schemas.Problem.required"
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: array
+          contains:
+            const: code

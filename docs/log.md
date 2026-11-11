@@ -2,6 +2,7 @@
 
 ## 2026-11-12
 
+* **Implementation**: Feature 001, Phase 1 (Setup): the `src/` layout and Go modules, the root-layout check and the Spectral ruleset with planted-violation tests, the image lock, local checks and git hooks instead of hosted CI (no GitHub for now), `NOTICE`, and the [protect-changes-locally playbook](/playbooks/protect-changes-locally.md).
 * **Specs**: Wrote the first feature spec, `specs/001-prose-to-accepted-slice/spec.md`, and linked it from needs N-003 and N-050 to N-063 in the [problem space](/overview/problem-space.md), now marked `specified`.
 * **Research**: Added [From prose to software through checked layers](/references/prose-to-software-pipeline.md), the prior art for the platform's prose-to-code pipeline.
 * **Decisions**: The owner accepted [ADR 0026](/decisions/0026-deterministic-workflow-engine.md) with the spike's three changes: read-only mounts per state are a required guard, blocking review findings need checkable evidence, and accepted state outputs are reused as assets.

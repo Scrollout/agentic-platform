@@ -4,3 +4,10 @@ __pycache__/
 .env
 .DS_Store
 .claude/settings.local.json
+
+# Go
+*.exe
+*.test
+*.out
+vendor/
+coverage.*

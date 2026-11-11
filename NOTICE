@@ -1,0 +1,23 @@
+Agentic Platform
+Copyright (c) 2026 Marius Gologan
+Licensed under the MIT License (see LICENSE).
+
+This project uses the following third-party components. Components under the
+Apache License 2.0 are listed with their copyright holders; any NOTICE file a
+component ships is reproduced with that component when it is distributed.
+
+Apache License 2.0
+- Docker Agent (github.com/docker/docker-agent), Copyright Docker, Inc.
+- oapi-codegen (github.com/oapi-codegen/oapi-codegen), Copyright the oapi-codegen authors
+- oasdiff (github.com/oasdiff/oasdiff), Copyright the oasdiff authors
+- Spectral (github.com/stoplightio/spectral), Copyright Stoplight, Inc.
+- jsonschema (github.com/santhosh-tekuri/jsonschema), Copyright Santhosh Kumar Tekuri
+- gVisor (github.com/google/gvisor), Copyright The gVisor Authors
+
+MIT License
+- godog (github.com/cucumber/godog) and gherkin (github.com/cucumber/gherkin),
+  Copyright Cucumber Ltd and contributors
+- Schemathesis (github.com/schemathesis/schemathesis), Copyright the Schemathesis authors
+
+BSD 2-Clause License
+- nginx (nginx.org), Copyright Igor Sysoev and Nginx, Inc.

@@ -1,0 +1,13 @@
+#!/bin/sh
+# Constitution XVI without a hosted forge: a commit that touches a protected path must record the
+# project owner's approval in an "Approved-by:" trailer.
+set -eu
+msg_file="$1"
+protected='^(\.specify/memory/|scripts/|src/deploy/|src/tests/|.*_test\.go$|.*/testdata/|.*go\.(mod|sum)$|\.gitignore$)'
+if git diff --cached --name-only | grep -Eq "$protected"; then
+  if ! git interpret-trailers --parse "$msg_file" | grep -q '^Approved-by: '; then
+    echo "commit-msg: protected paths changed; add an 'Approved-by: <owner>' trailer" >&2
+    git diff --cached --name-only | grep -E "$protected" >&2
+    exit 1
+  fi
+fi

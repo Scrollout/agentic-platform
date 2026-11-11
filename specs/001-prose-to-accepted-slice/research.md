@@ -188,11 +188,14 @@ fresh review round 1.
   limit.
 - **Rationale**: Principle XIX; the constitution's test rules.
 
-### D20. End to end in CI
+### D20. End to end, locally
 
-- **Decision**: CI runs the whole Compose stack with the gVisor runtime on a CI virtual machine,
-  never mounting the engine socket into a container, against the recorded model.
-- **Rationale**: the first feature must run end to end through CI (constitution, Outside-in).
+- **Decision**: no hosted forge or CI for now (owner, 2026-11-12). `scripts/check.sh` and
+  `scripts/e2e.sh` run every check and the whole Compose stack with gVisor locally, against the
+  recorded model, never mounting the engine socket into a container; git hooks run them before
+  every commit.
+- **Rationale**: the first feature must run end to end through its checks (constitution,
+  Outside-in); without a forge, local hooks are where they run.
 
 ### D21. What Docker Agent provides and what the platform adds
 
