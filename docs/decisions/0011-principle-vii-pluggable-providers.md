@@ -15,7 +15,7 @@ sources:
   - id: mcp-specification
     resource: https://modelcontextprotocol.io/specification/2025-11-25
     title: "MCP specification"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T18:45:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
@@ -27,8 +27,10 @@ without changing any rule.
 # Context
 
 The best model or tool changes over time and per deployment, and one governed path keeps every
-provider under the same rules (Azure resource providers[^azure-resource-providers]; MCP
-specification[^mcp-specification]).
+provider under the same rules (Azure resource providers; MCP
+specification).
+
+Sources: [Azure resource providers](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-providers-and-types); [MCP specification](https://modelcontextprotocol.io/specification/2025-11-25).
 
 # Decision
 
@@ -40,6 +42,3 @@ this record holds why they exist and what backs them.
 
 - Changing the principle needs a new decision that supersedes this one, approved by the project
   owner (constitution, Governance).
-
-[^azure-resource-providers]: Azure resource providers
-[^mcp-specification]: MCP specification

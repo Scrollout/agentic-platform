@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Tooling for the OKF v0.2 bundle in docs/.
+"""Tooling for the OKF v0.2 knowledge bundle in docs/.
 
   python3 scripts/okf.py index [BUNDLE]   regenerate every index.md
-  python3 scripts/okf.py check [BUNDLE]   validate the bundle (exit 1 on failure)
+  python3 scripts/okf.py check [BUNDLE]   validate the knowledge bundle (exit 1 on failure)
 
 `index` mirrors the reference implementation
 (GoogleCloudPlatform/open-knowledge-format, src/reference_agent/bundle/index.py):
@@ -182,7 +182,7 @@ def cmd_check(root: Path) -> int:
                 w(p, f"link to not-yet-written concept: {target}")
         if p.name == INDEX:
             if fm is not None and (p.parent != root or set(fm) - {"okf_version"}):
-                e(p, "index.md may carry frontmatter only at the bundle root, and only `okf_version`")
+                e(p, "index.md may carry frontmatter only at the knowledge bundle root, and only `okf_version`")
             continue
         if p.name == LOG:
             if fm is not None:

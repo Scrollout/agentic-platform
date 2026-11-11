@@ -21,7 +21,7 @@ sources:
   - id: cisa-kev
     resource: https://www.cisa.gov/known-exploited-vulnerabilities-catalog
     title: "CISA KEV"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T18:45:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
@@ -33,8 +33,10 @@ without changing any rule.
 # Context
 
 A platform assembled from adopted open source, external models, and third-party tools is only as
-secure as what it pulls in (SLSA[^slsa]; Sigstore[^sigstore]; NIST SP 800-218A[^nist-sp-800]; CISA
-KEV[^cisa-kev]).
+secure as what it pulls in (SLSA; Sigstore; NIST SP 800-218A; CISA
+KEV).
+
+Sources: [SLSA](https://slsa.dev/spec/v1.2/); [Sigstore](https://www.sigstore.dev/); [NIST SP 800-218A](https://csrc.nist.gov/pubs/sp/800/218/a/final); [CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog).
 
 # Decision
 
@@ -46,8 +48,3 @@ this record holds why they exist and what backs them.
 
 - Changing the principle needs a new decision that supersedes this one, approved by the project
   owner (constitution, Governance).
-
-[^slsa]: SLSA
-[^sigstore]: Sigstore
-[^nist-sp-800]: NIST SP 800-218A
-[^cisa-kev]: CISA KEV

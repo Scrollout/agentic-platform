@@ -8,7 +8,7 @@ sources:
   - id: okf-spec
     resource: /references/okf-spec.md
     title: Open Knowledge Format v0.2 specification
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T15:55:22Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Scope
@@ -19,7 +19,9 @@ One concept per policy (`type: Policy`) and one for the threat model (`type: Thr
 
 - `type: Policy`. Use one concept per file, with a kebab-case filename.
 - Policies that people must sign off on stay `draft` until they are `verified` by a `human:` actor.
-- Every concept also carries `title`, `description`, `tags`, `status` and `generated`, following the [maintenance playbook](/playbooks/maintain-knowledge-bundle.md).[^okf-spec]
+- Every concept also carries `title`, `description`, `tags`, `status` and `generated`, following the [maintenance playbook](/playbooks/maintain-knowledge-bundle.md).
+
+Sources: [Open Knowledge Format v0.2 specification](/references/okf-spec.md).
 
 # Skeleton
 
@@ -41,5 +43,3 @@ generated: { by: <actor>, at: <YYYY-MM-DDTHH:MM:SSZ> }
 
 # Exceptions
 ```
-
-[^okf-spec]: Open Knowledge Format v0.2 specification

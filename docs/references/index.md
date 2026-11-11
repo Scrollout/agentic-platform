@@ -1,3 +1,9 @@
 # Reference
 
-* [Open Knowledge Format v0.2 specification](okf-spec.md) - The format this bundle follows, pinned to the upstream commit it was written against.
+* [Agent Host Protocol (AHP)](agent-host-protocol.md) - Microsoft's protocol for several clients sharing synchronized, replayable state of agent sessions on one host, as of spec v1.0.0.
+* [Azure portal architecture](azure-portal.md) - How the Azure portal is built against Azure Resource Manager (shell, per-provider extensions, public ARM calls, Resource Graph lists, permission-aware UI, declarative forms) and what our console should adopt or avoid.
+* [Azure Resource Manager API versioning](arm-api-versioning.md) - How Azure versions APIs (date-based stable and preview api-versions, per-service ownership, breaking-change gates), where ARM falls short of its own rules, and what that means for us.
+* [Contract-driven frontend toolchain](frontend-toolchain.md) - Research on building the web console, VS Code views and dashboards against the API contracts, in parallel with the backend; one recommendation per concern with licence, maintenance and risk, as of 2026-11-11.
+* [Contract-first API development](contract-first-development.md) - Evidence that defining the API contract first, then generating SDKs and server interfaces, then writing tests and code is established practice, with its caveats and the tooling choices it needs.
+* [Docker Agent](docker-agent.md) - What Docker Agent (formerly cagent) provides, how it works, and what a multi-tenant platform built on it must add, as of v1.160.0.
+* [Open Knowledge Format v0.2 specification](okf-spec.md) - The format the knowledge bundle in docs/ follows, pinned to the upstream commit it was written against.

@@ -21,7 +21,7 @@ sources:
   - id: cisa-secure-by
     resource: https://www.cisa.gov/securebydesign
     title: "CISA Secure by Design"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T18:45:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
@@ -33,9 +33,11 @@ without changing any rule.
 # Context
 
 Excessive agency and prompt injection are the defining risks of agent systems, and defaults decide
-what an operator gets before configuring anything (OWASP AI Agent Security[^owasp-ai-agent]; OWASP
-LLM06 Excessive Agency[^owasp-llm06-excessive]; MCP Security Best Practices[^mcp-security-best];
-CISA Secure by Design[^cisa-secure-by]).
+what an operator gets before configuring anything (OWASP AI Agent Security; OWASP
+LLM06 Excessive Agency; MCP Security Best Practices;
+CISA Secure by Design).
+
+Sources: [OWASP AI Agent Security](https://cheatsheetseries.owasp.org/cheatsheets/AI_Agent_Security_Cheat_Sheet.html); [OWASP LLM06 Excessive Agency](https://genai.owasp.org/llmrisk/llm062025-excessive-agency/); [MCP Security Best Practices](https://modelcontextprotocol.io/specification/2025-11-25/basic/security_best_practices); [CISA Secure by Design](https://www.cisa.gov/securebydesign).
 
 # Decision
 
@@ -47,8 +49,3 @@ this record holds why they exist and what backs them.
 
 - Changing the principle needs a new decision that supersedes this one, approved by the project
   owner (constitution, Governance).
-
-[^owasp-ai-agent]: OWASP AI Agent Security
-[^owasp-llm06-excessive]: OWASP LLM06 Excessive Agency
-[^mcp-security-best]: MCP Security Best Practices
-[^cisa-secure-by]: CISA Secure by Design

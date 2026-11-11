@@ -18,7 +18,7 @@ sources:
   - id: azure-control-plane
     resource: https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/control-plane-and-data-plane
     title: "Azure: Control plane and data plane"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T18:45:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
@@ -31,8 +31,10 @@ this record, without changing any rule.
 
 Run traffic dwarfs management traffic, agents must not stop because management is down, and run
 content needs the smallest possible exposure. This is the static-stability pattern (AWS: Control
-planes and data planes[^aws-control-planes]; AWS: Static stability[^aws-static-stability]; Azure:
-Control plane and data plane[^azure-control-plane]).
+planes and data planes; AWS: Static stability; Azure:
+Control plane and data plane).
+
+Sources: [AWS: Control planes and data planes](https://docs.aws.amazon.com/whitepapers/latest/aws-fault-isolation-boundaries/control-planes-and-data-planes.html); [AWS: Static stability](https://aws.amazon.com/builders-library/static-stability-using-availability-zones/); [Azure: Control plane and data plane](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/control-plane-and-data-plane).
 
 # Decision
 
@@ -44,7 +46,3 @@ this record holds why they exist and what backs them.
 
 - Changing the principle needs a new decision that supersedes this one, approved by the project
   owner (constitution, Governance).
-
-[^aws-control-planes]: AWS: Control planes and data planes
-[^aws-static-stability]: AWS: Static stability
-[^azure-control-plane]: Azure: Control plane and data plane

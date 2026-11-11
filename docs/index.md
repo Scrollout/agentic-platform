@@ -13,6 +13,6 @@ okf_version: "0.2"
 * [guides](guides/index.md) - Developer how-tos.
 * [operations](operations/index.md) - Environments, deployment, observability, and SLOs.
 * [overview](overview/index.md) - Purpose, scope, and shared vocabulary of the platform.
-* [playbooks](playbooks/index.md) - Step-by-step procedures, including maintaining this bundle.
-* [references](references/index.md) - External material the bundle relies on, starting with the OKF spec.
+* [playbooks](playbooks/index.md) - Step-by-step procedures, including maintaining this knowledge bundle.
+* [references](references/index.md) - External material the knowledge bundle relies on, starting with the OKF spec.
 * [security](security/index.md) - Threat model, access control, secrets, and compliance.

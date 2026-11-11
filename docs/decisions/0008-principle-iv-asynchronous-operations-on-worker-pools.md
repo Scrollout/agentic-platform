@@ -18,7 +18,7 @@ sources:
   - id: queue-based-load
     resource: https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling
     title: "Queue-based load leveling"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T18:45:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
@@ -30,8 +30,10 @@ record, without changing any rule.
 # Context
 
 Long or multi-step work must not block clients, and one slow class of work must not starve the
-others (AIP-151[^aip-151]; Asynchronous Request-Reply[^asynchronous-request-reply]; Queue-based load
-leveling[^queue-based-load]).
+others (AIP-151; Asynchronous Request-Reply; Queue-based load
+leveling).
+
+Sources: [AIP-151](https://google.aip.dev/151); [Asynchronous Request-Reply](https://learn.microsoft.com/en-us/azure/architecture/patterns/async-request-reply); [Queue-based load leveling](https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling).
 
 # Decision
 
@@ -43,7 +45,3 @@ this record holds why they exist and what backs them.
 
 - Changing the principle needs a new decision that supersedes this one, approved by the project
   owner (constitution, Governance).
-
-[^aip-151]: AIP-151
-[^asynchronous-request-reply]: Asynchronous Request-Reply
-[^queue-based-load]: Queue-based load leveling

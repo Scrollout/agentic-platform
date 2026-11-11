@@ -15,7 +15,7 @@ sources:
   - id: openai-evaluation-best
     resource: https://platform.openai.com/docs/guides/evaluation-best-practices
     title: "OpenAI: Evaluation best practices"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T18:45:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
@@ -28,7 +28,9 @@ without changing any rule.
 
 Agent behaviour is non-deterministic, so tests alone cannot show that it still works; evals are the
 acceptance tests of agent systems (Anthropic: Demystifying evals for AI
-agents[^anthropic-demystifying-evals]; OpenAI: Evaluation best practices[^openai-evaluation-best]).
+agents; OpenAI: Evaluation best practices).
+
+Sources: [Anthropic: Demystifying evals for AI agents](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents); [OpenAI: Evaluation best practices](https://platform.openai.com/docs/guides/evaluation-best-practices).
 
 # Decision
 
@@ -40,6 +42,3 @@ this record holds why they exist and what backs them.
 
 - Changing the principle needs a new decision that supersedes this one, approved by the project
   owner (constitution, Governance).
-
-[^anthropic-demystifying-evals]: Anthropic: Demystifying evals for AI agents
-[^openai-evaluation-best]: OpenAI: Evaluation best practices

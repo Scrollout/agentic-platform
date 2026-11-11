@@ -18,7 +18,7 @@ sources:
   - id: github-protected-branches
     resource: https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches
     title: "GitHub protected branches"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T18:45:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
@@ -30,8 +30,10 @@ without changing any rule.
 # Context
 
 Agents write most of this project, act fast and at scale, and some of their actions can weaken the
-project's safeguards (Linux kernel: AI Coding Assistants[^linux-kernel-ai]; OpenSSF guide for AI
-code assistants[^openssf-guide-for]; GitHub protected branches[^github-protected-branches]).
+project's safeguards (Linux kernel: AI Coding Assistants; OpenSSF guide for AI
+code assistants; GitHub protected branches).
+
+Sources: [Linux kernel: AI Coding Assistants](https://docs.kernel.org/process/coding-assistants.html); [OpenSSF guide for AI code assistants](https://best.openssf.org/Security-Focused-Guide-for-AI-Code-Assistant-Instructions); [GitHub protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
 
 # Decision
 
@@ -43,7 +45,3 @@ this record holds why they exist and what backs them.
 
 - Changing the principle needs a new decision that supersedes this one, approved by the project
   owner (constitution, Governance).
-
-[^linux-kernel-ai]: Linux kernel: AI Coding Assistants
-[^openssf-guide-for]: OpenSSF guide for AI code assistants
-[^github-protected-branches]: GitHub protected branches

@@ -15,7 +15,7 @@ sources:
   - id: documenting-architecture-decisions
     resource: https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions
     title: "Documenting Architecture Decisions"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T18:45:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
@@ -27,8 +27,10 @@ without changing any rule.
 # Context
 
 Specs describe what is being built now; the knowledge bundle in `docs/` is what stays true
-afterwards, and it is only useful while it is accurate (Docs as Code[^docs-as-code]; Documenting
-Architecture Decisions[^documenting-architecture-decisions]).
+afterwards, and it is only useful while it is accurate (Docs as Code; Documenting
+Architecture Decisions).
+
+Sources: [Docs as Code](https://www.writethedocs.org/guide/docs-as-code/); [Documenting Architecture Decisions](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions).
 
 # Decision
 
@@ -40,6 +42,3 @@ this record holds why they exist and what backs them.
 
 - Changing the principle needs a new decision that supersedes this one, approved by the project
   owner (constitution, Governance).
-
-[^docs-as-code]: Docs as Code
-[^documenting-architecture-decisions]: Documenting Architecture Decisions

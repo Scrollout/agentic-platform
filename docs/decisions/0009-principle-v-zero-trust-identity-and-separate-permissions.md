@@ -21,7 +21,7 @@ sources:
   - id: mcp-authorization
     resource: https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization
     title: "MCP Authorization"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T18:45:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
@@ -33,8 +33,10 @@ this record, without changing any rule.
 # Context
 
 Least privilege per component, per person, and per agent; an agent with borrowed credentials is a
-confused deputy waiting to happen (NIST SP 800-207[^nist-sp-800]; SPIFFE[^spiffe]; RFC
-8693[^rfc-8693]; MCP Authorization[^mcp-authorization]).
+confused deputy waiting to happen (NIST SP 800-207; SPIFFE; RFC
+8693; MCP Authorization).
+
+Sources: [NIST SP 800-207](https://csrc.nist.gov/pubs/sp/800/207/final); [SPIFFE](https://spiffe.io/docs/latest/spiffe-about/overview/); [RFC 8693](https://www.rfc-editor.org/rfc/rfc8693); [MCP Authorization](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization).
 
 # Decision
 
@@ -46,8 +48,3 @@ this record holds why they exist and what backs them.
 
 - Changing the principle needs a new decision that supersedes this one, approved by the project
   owner (constitution, Governance).
-
-[^nist-sp-800]: NIST SP 800-207
-[^spiffe]: SPIFFE
-[^rfc-8693]: RFC 8693
-[^mcp-authorization]: MCP Authorization

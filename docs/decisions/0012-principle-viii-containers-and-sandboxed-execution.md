@@ -18,7 +18,7 @@ sources:
   - id: gvisor
     resource: https://gvisor.dev/docs/
     title: "gVisor"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T18:45:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
@@ -30,8 +30,10 @@ this record, without changing any rule.
 # Context
 
 Containers decouple the product from hosts, and agent-run code is untrusted code that needs a real
-isolation boundary (NIST SP 800-190[^nist-sp-800]; Pod Security Standards[^pod-security-standards];
-gVisor[^gvisor]).
+isolation boundary (NIST SP 800-190; Pod Security Standards;
+gVisor).
+
+Sources: [NIST SP 800-190](https://csrc.nist.gov/pubs/sp/800/190/final); [Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/); [gVisor](https://gvisor.dev/docs/).
 
 # Decision
 
@@ -43,7 +45,3 @@ this record holds why they exist and what backs them.
 
 - Changing the principle needs a new decision that supersedes this one, approved by the project
   owner (constitution, Governance).
-
-[^nist-sp-800]: NIST SP 800-190
-[^pod-security-standards]: Pod Security Standards
-[^gvisor]: gVisor

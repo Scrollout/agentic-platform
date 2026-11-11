@@ -18,7 +18,7 @@ sources:
   - id: the-twelve-factor
     resource: https://12factor.net/
     title: "The Twelve-Factor App"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T18:45:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
@@ -30,8 +30,10 @@ without changing any rule.
 # Context
 
 A routine that depends on someone remembering its steps fails when they forget, and a fact kept in
-two places drifts (Kubernetes controllers[^kubernetes-controllers]; terraform plan[^terraform-plan];
-The Twelve-Factor App[^the-twelve-factor]).
+two places drifts (Kubernetes controllers; terraform plan;
+The Twelve-Factor App).
+
+Sources: [Kubernetes controllers](https://kubernetes.io/docs/concepts/architecture/controller/); [terraform plan](https://developer.hashicorp.com/terraform/cli/commands/plan); [The Twelve-Factor App](https://12factor.net/).
 
 # Decision
 
@@ -43,7 +45,3 @@ this record holds why they exist and what backs them.
 
 - Changing the principle needs a new decision that supersedes this one, approved by the project
   owner (constitution, Governance).
-
-[^kubernetes-controllers]: Kubernetes controllers
-[^terraform-plan]: terraform plan
-[^the-twelve-factor]: The Twelve-Factor App

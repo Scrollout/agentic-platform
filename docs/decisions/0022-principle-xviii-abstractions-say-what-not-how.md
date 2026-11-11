@@ -12,7 +12,7 @@ sources:
   - id: a-philosophy-of
     resource: https://web.stanford.edu/~ouster/cgi-bin/book.php
     title: "A Philosophy of Software Design"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T18:45:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
@@ -25,7 +25,9 @@ without changing any rule.
 
 An interface shaped by its implementation leaks every change of the how to every caller; deep
 modules with small interfaces keep the system understandable (A Philosophy of Software
-Design[^a-philosophy-of]).
+Design).
+
+Sources: [A Philosophy of Software Design](https://web.stanford.edu/~ouster/cgi-bin/book.php).
 
 # Decision
 
@@ -37,5 +39,3 @@ this record holds why they exist and what backs them.
 
 - Changing the principle needs a new decision that supersedes this one, approved by the project
   owner (constitution, Governance).
-
-[^a-philosophy-of]: A Philosophy of Software Design

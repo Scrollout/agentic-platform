@@ -15,7 +15,7 @@ sources:
   - id: nist-sp-800
     resource: https://csrc.nist.gov/pubs/sp/800/218/final
     title: "NIST SP 800-218 PO.1"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T18:45:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
@@ -27,8 +27,10 @@ without changing any rule.
 # Context
 
 A choice copied from elsewhere carries that context's constraints with it. Spec-driven development
-starts from what users need and why (Spec-Driven Development[^spec-driven-development]; NIST SP
-800-218 PO.1[^nist-sp-800]).
+starts from what users need and why (Spec-Driven Development; NIST SP
+800-218 PO.1).
+
+Sources: [Spec-Driven Development](https://github.com/github/spec-kit/blob/main/spec-driven.md); [NIST SP 800-218 PO.1](https://csrc.nist.gov/pubs/sp/800/218/final).
 
 # Decision
 
@@ -40,6 +42,3 @@ this record holds why they exist and what backs them.
 
 - Changing the principle needs a new decision that supersedes this one, approved by the project
   owner (constitution, Governance).
-
-[^spec-driven-development]: Spec-Driven Development
-[^nist-sp-800]: NIST SP 800-218 PO.1

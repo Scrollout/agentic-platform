@@ -21,7 +21,7 @@ sources:
   - id: anthropic-demystifying-evals
     resource: https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents
     title: "Anthropic: Demystifying evals for AI agents"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T18:45:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
@@ -35,11 +35,13 @@ record, without changing any rule.
 Probabilistic agents give different results for the same request, drift from a project's rules,
 reach outside their task, and edit the tests that judge them, so instructions alone cannot make
 their work reliable. Coding agents delete or rewrite failing tests instead of fixing the code, and
-models favour their own output when they judge it (ImpossibleBench[^impossiblebench]; METR: Recent
-frontier models are reward hacking[^metr-recent-frontier]; LLM evaluators favor their own
-generations[^llm-evaluators-favor]). Deterministic graders are the recommended first line for
-judging agent work (Anthropic: Demystifying evals for AI agents[^anthropic-demystifying-evals]).
+models favour their own output when they judge it (ImpossibleBench; METR: Recent
+frontier models are reward hacking; LLM evaluators favor their own
+generations). Deterministic graders are the recommended first line for
+judging agent work (Anthropic: Demystifying evals for AI agents).
 This principle serves needs N-050 to N-063 in the [problem space](/overview/problem-space.md).
+
+Sources: [ImpossibleBench](https://arxiv.org/abs/2510.20270); [METR: Recent frontier models are reward hacking](https://metr.org/blog/2025-06-05-recent-reward-hacking/); [LLM evaluators favor their own generations](https://arxiv.org/abs/2404.13076); [Anthropic: Demystifying evals for AI agents](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents).
 
 # Decision
 
@@ -51,8 +53,3 @@ this record holds why they exist and what backs them.
 
 - Changing the principle needs a new decision that supersedes this one, approved by the project
   owner (constitution, Governance).
-
-[^impossiblebench]: ImpossibleBench
-[^metr-recent-frontier]: METR: Recent frontier models are reward hacking
-[^llm-evaluators-favor]: LLM evaluators favor their own generations
-[^anthropic-demystifying-evals]: Anthropic: Demystifying evals for AI agents

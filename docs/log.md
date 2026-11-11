@@ -1,8 +1,63 @@
 # Directory Update Log
 
+## 2026-11-12
+
+* **Decisions**: The owner accepted [ADR 0026](/decisions/0026-deterministic-workflow-engine.md) with the spike's three changes: read-only mounts per state are a required guard, blocking review findings need checkable evidence, and accepted state outputs are reused as assets.
+
 ## 2026-11-11
-* **Tooling**: Added GitHub Spec Kit (`specify` 1.2.6.dev0, Claude integration). Its files live in `.specify/` and `.claude/skills/speckit-*`, outside this bundle.
-* **Initialization**: Created the OKF v0.2 bundle.
+
+* **Workflow engine**: Ran the [ADR 0026](/decisions/0026-deterministic-workflow-engine.md) spike on Haiku, all in containers (4.5 minutes, about $0.04). Guards held in every planted scenario; results and recommendation added to the ADR, which stays proposed.
+* **Docker Agent**: The owner set Claude Haiku as the model for the MVP, demos and drafts ([ADR 0002](/decisions/0002-build-on-docker-agent.md)).
+* **Workflow engine**: [ADR 0026](/decisions/0026-deterministic-workflow-engine.md)'s spike now keeps model credentials (the project API key and the owner's user token, local testing only) in a single gateway container, out of every agent container.
+* **Decisions**: The owner confirmed [ADR 0002](/decisions/0002-build-on-docker-agent.md) and [ADR 0003](/decisions/0003-ahp-client-session-protocol.md), and accepted [ADR 0027](/decisions/0027-contract-driven-frontend.md), including starting the console as one app and one build.
+  * ADR 0027 amends [ADR 0004](/decisions/0004-contract-first-toolchain.md): Orval is now the TypeScript client generator.
+* **Frontend**: Removed or mitigated every known weakness of the frontend stack in [ADR 0027](/decisions/0027-contract-driven-frontend.md) (proposed) and the [frontend toolchain reference](/references/frontend-toolchain.md).
+  * Orval replaces openapi-typescript, openapi-msw and the Hey API fallback; ADR 0004 now points to the proposed change.
+  * Pact OSS checks the UI's real API usage, ClickStack replaces Perses and Recharts replaces ECharts.
+  * shadcn/ui moves to its React Aria base, and a CSP gate enforces the webview policy.
+* **Docker Agent**: The owner ruled that Docker Agent runs only in containers, never directly on a host. This is recorded in [ADR 0002](/decisions/0002-build-on-docker-agent.md) and applied to the [ADR 0026](/decisions/0026-deterministic-workflow-engine.md) spike.
+* **Frontend**: [ADR 0027](/decisions/0027-contract-driven-frontend.md) now bases the design system on shadcn/ui with Base UI primitives, plus React Aria Components where accessibility or localisation needs them; no packaged vendor design system such as Fluent UI. See the [frontend toolchain reference](/references/frontend-toolchain.md).
+* **Frontend**: [ADR 0027](/decisions/0027-contract-driven-frontend.md) now answers each Azure portal weakness, adding a module conformance suite as a release gate and a round-trip test for exports.
+* **Frontend**: Added the [Azure portal architecture reference](/references/azure-portal.md). [ADR 0027](/decisions/0027-contract-driven-frontend.md) (proposed) now models the console on the portal: a shell with one UI module per service, a UI manifest in the registry, lists from a query service, and permission-aware actions.
+* **Frontend**: Added the [frontend toolchain reference](/references/frontend-toolchain.md) and [ADR 0027](/decisions/0027-contract-driven-frontend.md) (proposed). The frontend builds against the contracts and AHP, in parallel with the backend.
+* **Decisions**: The owner accepted [ADR 0004](/decisions/0004-contract-first-toolchain.md) (contract-first toolchain, service-owned APIs and versioning).
+* **Formatting**: Replaced inline footnote markers in every concept with one `Sources:` line per section, and updated the [maintenance playbook](/playbooks/maintain-knowledge-bundle.md) rule to match.
+* **Decisions**: The owner approved [ADR 0001](/decisions/0001-adopt-okf.md) (adopt OKF), so it is now `accepted`.
+* **API versioning**: The owner agreed to carry the version in the `api-version` query parameter ([ADR 0004](/decisions/0004-contract-first-toolchain.md)).
+* **API versioning**: The owner set 12 months' notice for retiring a stable version. Researched where the version goes (query, header or path) in the [ARM API versioning reference](/references/arm-api-versioning.md); [ADR 0004](/decisions/0004-contract-first-toolchain.md) keeps the `api-version` query parameter.
+* **API versioning**: Added the [ARM API versioning reference](/references/arm-api-versioning.md), from Microsoft's guidelines and the owner's ARM probes.
+  * Extended [ADR 0004](/decisions/0004-contract-first-toolchain.md) (proposed): each microservice owns its contract and operations list; versions are date-based stable and preview, per service; CI enforces every rule.
+* **Workflow engine**: Added [ADR 0026](/decisions/0026-deterministic-workflow-engine.md) (proposed): declared state machines decide, agents act inside states, and deterministic guards gate transitions. It includes a spike plan with six planted failures.
+  * Added the terms Guard and State worker to the [glossary](/overview/glossary.md).
+* **Constitution v1.4.0**: Moved every principle's rationale and citations into its own decision record, ADRs 0005 to 0025 (one per Core Principle I to XX, plus one for the Engineering Principles).
+  * The rules are unchanged, and the constitution shrank from 6,166 to about 5,540 words.
+  * This settles the follow-up about decision records behind the principles.
+* **Constitution ratified**: The owner approved `.specify/memory/constitution.md` v1.3.0, ratified 2026-11-11. The review-only Sync Impact Report was removed.
+  * Approving Principle XX put needs N-051, N-052, N-053 and N-061 in scope in the [problem space](/overview/problem-space.md).
+  * Follow-ups: decision records behind the principles, a vulnerability fix-time decision (Principle XIII), and the API versioning and deprecation policy (Principle XV).
+* **Constitution**: The draft is now v1.3.0. It adds Core Principle XX, Deterministic Acceptance of Agent Work, which serves needs N-050 to N-063 in the [problem space](/overview/problem-space.md).
+* **Constitution**: The draft is now v1.2.0. It adds the "Review converges" Engineering Principle for need N-063 in the [problem space](/overview/problem-space.md).
+* **Problem space**: Added N-063 (review and fixing converge) and the non-converging review loop to the problem in the [platform overview](/overview/platform.md).
+* **Purpose**: Stated the platform's purpose, problem, approach, users, scope, delivery and non-goals in the [platform overview](/overview/platform.md), in the owner's wording.
+  * Settled N-001 in the [problem space](/overview/problem-space.md) and added N-002 to N-005 and the reliable-agent-work needs N-050 to N-062.
+  * N-030 (several organizations) is now in scope.
+* **Contract-first**: Rewrote the [contract-first reference](/references/contract-first-development.md).
+  * AWS evidence (Smithy, Well-Architected REL03-BP03, DevOps Guidance QA.NT.7, EventBridge) replaces Zalando as a source.
+  * The open choices are resolved by research and proposed in [ADR 0004](/decisions/0004-contract-first-toolchain.md).
+* **Problem space**: Added the [problem space](/overview/problem-space.md) with the first needs. Only N-001 (purpose) and N-020 (shared live sessions, [ADR 0003](/decisions/0003-ahp-client-session-protocol.md)) are in scope so far.
+* **Governance**: The project is MIT-licensed (`LICENSE` added).
+  * The knowledge bundle rules moved from `AGENTS.md` into the [maintenance playbook](/playbooks/maintain-knowledge-bundle.md). `AGENTS.md` now only points to the constitution, the playbook and the tools.
+* **Agent Host Protocol**: Researched AHP spec v1.0.0.
+  * Added the [AHP reference](/references/agent-host-protocol.md) and [ADR 0003](/decisions/0003-ahp-client-session-protocol.md).
+  * Updated the [architecture overview](/architecture/overview.md), [platform overview](/overview/platform.md) and [glossary](/overview/glossary.md).
+* **Contract-first**: Researched contract-first API development in the [contract-first reference](/references/contract-first-development.md).
+  * The draft constitution's Contract-first rule (v1.1.0) is based on it.
+* **Constitution**: Drafted `.specify/memory/constitution.md` v1.0.0, adapted from the Email Gateway constitution without its vertical-slice rules. It is outside the knowledge bundle (`docs/`) and awaits owner ratification.
+* **Docker Agent**: Researched Docker Agent v1.160.0 as the platform's foundation.
+  * Added the [Docker Agent reference](/references/docker-agent.md) and [ADR 0002](/decisions/0002-build-on-docker-agent.md).
+  * Updated the [platform overview](/overview/platform.md), [architecture overview](/architecture/overview.md) and [glossary](/overview/glossary.md).
+* **Tooling**: Added GitHub Spec Kit (`specify` 1.2.6.dev0, Claude integration). Its files live in `.specify/` and `.claude/skills/speckit-*`, outside the knowledge bundle (`docs/`).
+* **Initialization**: Created the OKF v0.2 knowledge bundle in `docs/`.
   * Added the [platform overview](/overview/platform.md), [glossary](/overview/glossary.md) and [architecture overview](/architecture/overview.md).
   * Added the [maintenance playbook](/playbooks/maintain-knowledge-bundle.md), [ADR 0001](/decisions/0001-adopt-okf.md) and the [OKF spec reference](/references/okf-spec.md).
   * Added documentation conventions for agents, components, apis, data, operations, security and guides.

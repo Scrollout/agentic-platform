@@ -18,7 +18,7 @@ sources:
   - id: owasp-top-10
     resource: https://genai.owasp.org/llm-top-10/
     title: "OWASP Top 10 for LLM Applications"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T18:45:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
@@ -30,8 +30,10 @@ any rule.
 # Context
 
 One installation serves several organizations, and agents add new paths for one tenant's data to
-reach another (OWASP Multi-Tenant Security[^owasp-multi-tenant]; AWS SaaS tenant
-isolation[^aws-saas-tenant]; OWASP Top 10 for LLM Applications[^owasp-top-10]).
+reach another (OWASP Multi-Tenant Security; AWS SaaS tenant
+isolation; OWASP Top 10 for LLM Applications).
+
+Sources: [OWASP Multi-Tenant Security](https://cheatsheetseries.owasp.org/cheatsheets/Multi_Tenant_Security_Cheat_Sheet.html); [AWS SaaS tenant isolation](https://docs.aws.amazon.com/whitepapers/latest/saas-tenant-isolation-strategies/saas-tenant-isolation-strategies.html); [OWASP Top 10 for LLM Applications](https://genai.owasp.org/llm-top-10/).
 
 # Decision
 
@@ -43,7 +45,3 @@ this record holds why they exist and what backs them.
 
 - Changing the principle needs a new decision that supersedes this one, approved by the project
   owner (constitution, Governance).
-
-[^owasp-multi-tenant]: OWASP Multi-Tenant Security
-[^aws-saas-tenant]: AWS SaaS tenant isolation
-[^owasp-top-10]: OWASP Top 10 for LLM Applications

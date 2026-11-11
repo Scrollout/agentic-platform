@@ -15,7 +15,7 @@ sources:
   - id: ai-agent-orchestration
     resource: https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/ai-agent-design-patterns
     title: "AI agent orchestration patterns"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T18:45:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
@@ -27,8 +27,10 @@ without changing any rule.
 # Context
 
 An accepted run that vanishes is invisible to its caller, and an unbounded agent loop is the
-agent-era form of silent failure (Temporal: Durable AI[^temporal-durable-ai]; AI agent orchestration
-patterns[^ai-agent-orchestration]).
+agent-era form of silent failure (Temporal: Durable AI; AI agent orchestration
+patterns).
+
+Sources: [Temporal: Durable AI](https://docs.temporal.io/ai); [AI agent orchestration patterns](https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/ai-agent-design-patterns).
 
 # Decision
 
@@ -40,6 +42,3 @@ this record holds why they exist and what backs them.
 
 - Changing the principle needs a new decision that supersedes this one, approved by the project
   owner (constitution, Governance).
-
-[^temporal-durable-ai]: Temporal: Durable AI
-[^ai-agent-orchestration]: AI agent orchestration patterns

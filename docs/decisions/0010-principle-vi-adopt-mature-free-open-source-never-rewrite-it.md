@@ -18,7 +18,7 @@ sources:
   - id: chaoss-metrics
     resource: https://chaoss.community/kb-metrics-and-metrics-models/
     title: "CHAOSS metrics"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T18:45:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
@@ -30,8 +30,10 @@ into this record, without changing any rule.
 # Context
 
 Proven, hardened projects beat new code on cost and risk (OpenSSF Concise
-Guide[^openssf-concise-guide]; OpenSSF Scorecard[^openssf-scorecard]; CHAOSS
-metrics[^chaoss-metrics]).
+Guide; OpenSSF Scorecard; CHAOSS
+metrics).
+
+Sources: [OpenSSF Concise Guide](https://best.openssf.org/Concise-Guide-for-Evaluating-Open-Source-Software); [OpenSSF Scorecard](https://scorecard.dev/); [CHAOSS metrics](https://chaoss.community/kb-metrics-and-metrics-models/).
 
 # Decision
 
@@ -43,7 +45,3 @@ this record holds why they exist and what backs them.
 
 - Changing the principle needs a new decision that supersedes this one, approved by the project
   owner (constitution, Governance).
-
-[^openssf-concise-guide]: OpenSSF Concise Guide
-[^openssf-scorecard]: OpenSSF Scorecard
-[^chaoss-metrics]: CHAOSS metrics

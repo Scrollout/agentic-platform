@@ -15,7 +15,7 @@ sources:
   - id: kubernetes-controllers
     resource: https://kubernetes.io/docs/concepts/architecture/controller/
     title: "Kubernetes controllers"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T18:45:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
@@ -27,8 +27,10 @@ this record, without changing any rule.
 # Context
 
 One management path means no interface can skip validation, authorization, or audit; pinned
-revisions make every run reproducible and auditable (AIP-128[^aip-128]; Kubernetes
-controllers[^kubernetes-controllers]).
+revisions make every run reproducible and auditable (AIP-128; Kubernetes
+controllers).
+
+Sources: [AIP-128](https://google.aip.dev/128); [Kubernetes controllers](https://kubernetes.io/docs/concepts/architecture/controller/).
 
 # Decision
 
@@ -40,6 +42,3 @@ this record holds why they exist and what backs them.
 
 - Changing the principle needs a new decision that supersedes this one, approved by the project
   owner (constitution, Governance).
-
-[^aip-128]: AIP-128
-[^kubernetes-controllers]: Kubernetes controllers

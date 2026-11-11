@@ -24,7 +24,7 @@ sources:
   - id: rfc-9745
     resource: https://www.rfc-editor.org/rfc/rfc9745
     title: "RFC 9745"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T18:45:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
@@ -36,7 +36,9 @@ without changing any rule.
 # Context
 
 Users automate the platform through these interfaces, and silent breaks break their automation
-(AIP-180[^aip-180]; AIP-185[^aip-185]; AIP-155[^aip-155]; AIP-158[^aip-158]; RFC 9745[^rfc-9745]).
+(AIP-180; AIP-185; AIP-155; AIP-158; RFC 9745).
+
+Sources: [AIP-180](https://google.aip.dev/180); [AIP-185](https://google.aip.dev/185); [AIP-155](https://google.aip.dev/155); [AIP-158](https://google.aip.dev/158); [RFC 9745](https://www.rfc-editor.org/rfc/rfc9745).
 
 # Decision
 
@@ -48,9 +50,3 @@ this record holds why they exist and what backs them.
 
 - Changing the principle needs a new decision that supersedes this one, approved by the project
   owner (constitution, Governance).
-
-[^aip-180]: AIP-180
-[^aip-185]: AIP-185
-[^aip-155]: AIP-155
-[^aip-158]: AIP-158
-[^rfc-9745]: RFC 9745

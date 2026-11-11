@@ -27,7 +27,7 @@ sources:
   - id: practical-mutation-testing
     resource: https://arxiv.org/abs/2102.11378
     title: "Practical Mutation Testing at Scale"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T18:45:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
@@ -39,10 +39,12 @@ any rule.
 # Context
 
 These are the general rules that keep code correct when agents write most of it (Parse, don't
-validate[^parse-don-t]; Transactional outbox[^transactional-outbox]; Saga[^saga];
-ImpossibleBench[^impossiblebench]; LLM evaluators favor their own
-generations[^llm-evaluators-favor]; Practical Mutation Testing at
-Scale[^practical-mutation-testing]).
+validate; Transactional outbox; Saga;
+ImpossibleBench; LLM evaluators favor their own
+generations; Practical Mutation Testing at
+Scale).
+
+Sources: [Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/); [Transactional outbox](https://microservices.io/patterns/data/transactional-outbox.html); [Saga](https://microservices.io/patterns/data/saga.html); [ImpossibleBench](https://arxiv.org/abs/2510.20270); [LLM evaluators favor their own generations](https://arxiv.org/abs/2404.13076); [Practical Mutation Testing at Scale](https://arxiv.org/abs/2102.11378).
 
 # Decision
 
@@ -54,10 +56,3 @@ this record holds why they exist and what backs them.
 
 - Changing the principle needs a new decision that supersedes this one, approved by the project
   owner (constitution, Governance).
-
-[^parse-don-t]: Parse, don't validate
-[^transactional-outbox]: Transactional outbox
-[^saga]: Saga
-[^impossiblebench]: ImpossibleBench
-[^llm-evaluators-favor]: LLM evaluators favor their own generations
-[^practical-mutation-testing]: Practical Mutation Testing at Scale
