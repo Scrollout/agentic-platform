@@ -6,4 +6,5 @@
 * [Contract-driven frontend toolchain](frontend-toolchain.md) - Research on building the web console, VS Code views and dashboards against the API contracts, in parallel with the backend; one recommendation per concern with licence, maintenance and risk, as of 2026-11-11.
 * [Contract-first API development](contract-first-development.md) - Evidence that defining the API contract first, then generating SDKs and server interfaces, then writing tests and code is established practice, with its caveats and the tooling choices it needs.
 * [Docker Agent](docker-agent.md) - What Docker Agent (formerly cagent) provides, how it works, and what a multi-tenant platform built on it must add, as of v1.160.0.
+* [From prose to software through checked layers](prose-to-software-pipeline.md) - Prior art for turning a developer's plain description into working software through layers of checked, traceable artifacts, what each layer's checks can and cannot prove, and the resulting pipeline for the platform.
 * [Open Knowledge Format v0.2 specification](okf-spec.md) - The format the knowledge bundle in docs/ follows, pinned to the upstream commit it was written against.

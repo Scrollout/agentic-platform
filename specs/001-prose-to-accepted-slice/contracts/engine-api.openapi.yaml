@@ -1,0 +1,828 @@
+openapi: 3.1.0
+info:
+  title: Agentic Platform engine API
+  version: 2026-11-12-preview
+  description: Turns a developer's description into an approved slice and builds it into accepted working
+    software. Every management action goes through this API; the terminal client uses all of it, the read-only
+    run page uses only its GET operations. Every operation requires the `api-version` query parameter.
+    Every caller with a valid token may call every operation in this version (one developer), so 403 does
+    not occur.
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+- url: http://engine:8080
+  description: Internal network only; not reachable from outside the platform's containers.
+security:
+- runToken: []
+tags:
+- name: slices
+  description: Describe, clarify and approve a slice.
+- name: runs
+  description: Build an approved slice and inspect its runs.
+- name: operations
+  description: Follow long-running work.
+- name: workers
+  description: Step containers announce themselves to the engine.
+paths:
+  /slices:
+    post:
+      tags:
+      - slices
+      operationId: createSlice
+      summary: Propose a slice from a description
+      description: Accepts the developer's prose and starts proposing a slice. Returns an operation to
+        follow.
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - description
+              properties:
+                description:
+                  type: string
+                  minLength: 1
+                  description: The developer's prose about one use case.
+      responses:
+        '202':
+          description: Accepted; follow the operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+    get:
+      tags:
+      - slices
+      operationId: listSlices
+      summary: List slices
+      description: Lists slices, newest first.
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/PageToken'
+      responses:
+        '200':
+          description: A page of slices.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SliceSummary'
+                  next_page_token:
+                    type: string
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+  /slices/{sliceId}:
+    get:
+      tags:
+      - slices
+      operationId: getSlice
+      summary: Get a slice
+      description: Returns the slice with its goals, terms, rules, examples, contract, open questions,
+        check results and approvals.
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/SliceId'
+      responses:
+        '200':
+          description: The slice.
+          content:
+            application/json:
+              schema:
+                $ref: slice.schema.json
+        '404':
+          $ref: '#/components/responses/Problem'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+    patch:
+      tags:
+      - slices
+      operationId: changePart
+      summary: Change part of a slice
+      description: Replaces one goal, term, rule, the examples or the contract. Checks run again and the
+        changed part's approval is withdrawn.
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/SliceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - target
+              - content
+              properties:
+                target:
+                  type: string
+                  description: A G-, T- or R- ID, or `examples` or `contract`.
+                content:
+                  description: The new content, matching the part's schema in slice.schema.json.
+      responses:
+        '202': &id001
+          description: Accepted; follow the operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+    delete:
+      tags:
+      - slices
+      operationId: deleteSlice
+      summary: Delete a slice and its runs
+      description: Erases the slice, its run records and stored artifacts; the built project folder is
+        left to the developer.
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/SliceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202': *id001
+        '404':
+          $ref: '#/components/responses/Problem'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /slices/{sliceId}/answers:
+    post:
+      tags:
+      - slices
+      operationId: answerQuestions
+      summary: Answer open questions
+      description: Records the developer's answers. The slice is revised and checked again.
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/SliceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - answers
+              properties:
+                answers:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required:
+                    - question
+                    - answer
+                    properties:
+                      question:
+                        type: string
+                        pattern: ^Q-[0-9]+$
+                      answer:
+                        type: string
+                        minLength: 1
+      responses:
+        '202':
+          description: Accepted; follow the operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /slices/{sliceId}/approvals:
+    post:
+      tags:
+      - slices
+      operationId: approvePart
+      summary: Approve part of a slice
+      description: Approves the goals, the rules (with examples and terms) or the contract at the hash
+        the developer reviewed. Rejected while the part fails a check or the hash is stale.
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/SliceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - part
+              - content_hash
+              properties:
+                part:
+                  type: string
+                  enum:
+                  - goals
+                  - rules
+                  - contract
+                content_hash:
+                  type: string
+                  pattern: ^[0-9a-f]{64}$
+                  description: The hash of the part the developer reviewed; a stale hash is rejected.
+      responses:
+        '202': *id001
+        '404':
+          $ref: '#/components/responses/Problem'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /slices/{sliceId}/runs:
+    post:
+      tags:
+      - runs
+      operationId: startRun
+      summary: Build an approved slice
+      description: Starts a run that builds the slice into a new project. Refused (409) when a part is
+        not approved, the pattern does not fit, a step has no registered worker, or another run is active;
+        the problem's `code` names which.
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/SliceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Accepted; follow the operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - project
+              properties:
+                project:
+                  type: string
+                  description: The empty folder the launcher prepared for the new project.
+  /runs:
+    get:
+      tags:
+      - runs
+      operationId: listRuns
+      summary: List runs
+      description: Lists runs, newest first.
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/PageToken'
+      responses:
+        '200':
+          description: A page of runs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Run'
+                  next_page_token:
+                    type: string
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+  /runs/{runId}:
+    get:
+      tags:
+      - runs
+      operationId: getRun
+      summary: Get a run
+      description: Returns the run and its outcome.
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: The run.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Run'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+  /runs/{runId}/events:
+    get:
+      tags:
+      - runs
+      operationId: listRunEvents
+      summary: List a run's recorded events
+      description: Returns the run record in order, from an optional sequence number.
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/RunId'
+      - name: since
+        in: query
+        description: Return events after this sequence number.
+        schema:
+          type: integer
+          minimum: 0
+      - $ref: '#/components/parameters/PageToken'
+      responses:
+        '200':
+          description: A page of events.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: run-event.schema.json
+                  next_page_token:
+                    type: string
+        '404':
+          $ref: '#/components/responses/Problem'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+  /operations/{operationId}:
+    get:
+      tags:
+      - operations
+      operationId: getOperation
+      summary: Follow a long-running operation
+      description: Returns the operation's status and, when it has finished, its result or error.
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - name: operationId
+        in: path
+        required: true
+        description: The operation's ID.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+  /runs/{runId}/resume:
+    post:
+      tags:
+      - runs
+      operationId: resumeRun
+      summary: Resume an interrupted run
+      description: Continues the run without repeating accepted steps.
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/RunId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202': *id001
+        '404':
+          $ref: '#/components/responses/Problem'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /runs/{runId}/replay:
+    post:
+      tags:
+      - runs
+      operationId: replayRun
+      summary: Replay a finished run
+      description: Starts a new run of the same slice and pattern version that reuses every accepted result;
+        its artifacts must be identical.
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/RunId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202': *id001
+        '404':
+          $ref: '#/components/responses/Problem'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /runs/{runId}/comparison:
+    get:
+      tags:
+      - runs
+      operationId: compareRuns
+      summary: Compare two runs
+      description: Lists the steps whose artifacts, check results or decisions differ between this run
+        and another.
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/RunId'
+      - name: with
+        in: query
+        required: true
+        description: The other run's ID.
+        schema:
+          type: string
+          pattern: ^RUN-[0-9]+$
+      responses:
+        '200':
+          description: The differences.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - differences
+                properties:
+                  differences:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                      - step
+                      - field
+                      properties:
+                        step:
+                          type: string
+                        field:
+                          type: string
+                        left:
+                          type: string
+                        right:
+                          type: string
+        '404':
+          $ref: '#/components/responses/Problem'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+  /operations/{operationId}/cancel:
+    post:
+      tags:
+      - operations
+      operationId: cancelOperation
+      summary: Cancel an operation
+      description: Asks the operation to stop; a cancelled run is recorded as handed over with the reason
+        `cancelled`.
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - name: operationId
+        in: path
+        required: true
+        description: The operation's ID.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202': *id001
+        '404':
+          $ref: '#/components/responses/Problem'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /workers:
+    post:
+      tags:
+      - workers
+      operationId: registerWorker
+      summary: Register a step worker
+      description: Called by a step container at start with its own token, so the engine knows the step
+        for this slice can run.
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - slice
+              - step
+              - endpoint
+              properties:
+                slice:
+                  type: string
+                  pattern: ^S-[0-9]+$
+                step:
+                  type: string
+                endpoint:
+                  type: string
+                  format: uri
+      responses:
+        '200':
+          description: Registered.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - slice
+                - step
+                properties:
+                  slice:
+                    type: string
+                  step:
+                    type: string
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '429':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /providers/Agentic.Engine/operations:
+    get:
+      tags:
+      - operations
+      operationId: listProviderOperations
+      summary: List this provider's operations
+      description: Version-neutral list of the operations this service offers, as `Agentic.Engine/<type>/<read|write|delete|action>`;
+        the vocabulary for permissions (ADR 0004).
+      security: []
+      responses:
+        '200':
+          description: The operations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - value
+                properties:
+                  value:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                      - name
+                      - display
+                      properties:
+                        name:
+                          type: string
+                        display:
+                          type: string
+components:
+  securitySchemes:
+    runToken:
+      type: http
+      scheme: bearer
+      description: A token generated by the launcher for this run and this client.
+  parameters:
+    ApiVersion:
+      name: api-version
+      in: query
+      required: true
+      description: The API version, for example 2026-11-12-preview.
+      schema:
+        type: string
+        pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}(-preview)?$
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Kept for 24 hours. Repeating a request with the same key returns the first result;
+        a different body with the same key returns 409 with code IdempotencyKeyReused.
+      schema:
+        type: string
+        maxLength: 128
+    PageToken:
+      name: page_token
+      in: query
+      description: An opaque token from a previous page.
+      schema:
+        type: string
+    SliceId:
+      name: sliceId
+      in: path
+      required: true
+      description: The slice's ID.
+      schema:
+        type: string
+        pattern: ^S-[0-9]+$
+    RunId:
+      name: runId
+      in: path
+      required: true
+      description: The run's ID.
+      schema:
+        type: string
+        pattern: ^RUN-[0-9]+$
+  responses:
+    Problem:
+      description: The request failed; the problem names the failing part and the reason.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Problem:
+      type: object
+      required:
+      - type
+      - title
+      - code
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        detail:
+          type: string
+        failures:
+          type: array
+          description: Each failing check, naming the part and the reason.
+          items:
+            type: object
+            required:
+            - part
+            - check
+            - reason
+            properties:
+              part:
+                type: string
+              check:
+                type: string
+              reason:
+                type: string
+        code:
+          type: string
+          description: A stable error code, for example MissingApiVersionParameter, UnsupportedApiVersionValue,
+            NotApproved, PatternDoesNotFit, WorkersNotReady, RunActive, StaleContentHash, IdempotencyKeyReused,
+            RateLimited.
+    Operation:
+      type: object
+      required:
+      - id
+      - status
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum:
+          - accepted
+          - running
+          - succeeded
+          - failed
+          - cancelled
+        target:
+          type: string
+          description: The slice or run the operation concerns.
+        error:
+          $ref: '#/components/schemas/Problem'
+      description: A run's operation succeeds when the run ends, whatever its outcome; the outcome is
+        on the run.
+    SliceSummary:
+      type: object
+      required:
+      - id
+      - state
+      properties:
+        id:
+          type: string
+        state:
+          type: string
+          enum:
+          - proposed
+          - questions-open
+          - checked
+          - approved
+          - building
+          - done
+          - handed-over
+          - expired
+        title:
+          type: string
+    Run:
+      type: object
+      required:
+      - id
+      - slice
+      - pattern
+      properties:
+        id:
+          type: string
+        slice:
+          type: string
+        pattern:
+          type: string
+          description: Pattern ID and version.
+        outcome:
+          type: string
+          enum:
+          - done
+          - handed-over
+          - expired
+        reason:
+          type: string
+        project:
+          type: string
+          description: Where the new project was created.
+        operation:
+          type: string
+        replay_of:
+          type: string

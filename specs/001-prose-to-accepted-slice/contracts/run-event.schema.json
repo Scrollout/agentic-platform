@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "run-event.schema.json",
+  "title": "RunEvent",
+  "type": "object",
+  "required": [
+    "seq",
+    "at",
+    "run",
+    "kind"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "seq": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "run": {
+      "type": "string",
+      "pattern": "^RUN-[0-9]+$"
+    },
+    "kind": {
+      "enum": [
+        "StepStarted",
+        "AttemptMade",
+        "CheckPassed",
+        "CheckFailed",
+        "StepAccepted",
+        "StepRejected",
+        "ResultReused",
+        "FindingRecorded",
+        "RunHandedOver",
+        "RunExpired",
+        "RunCompleted"
+      ]
+    },
+    "step": {
+      "type": "string"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "model": {
+      "type": "string"
+    },
+    "agent_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "pattern": {
+      "type": "string"
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      }
+    },
+    "reuse_key": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(G|R|T)-[0-9]+$|^R-[0-9]+/E-[0-9]+$"
+      }
+    },
+    "check": {
+      "type": "object",
+      "required": [
+        "name",
+        "passed"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": [
+        "rule",
+        "blocking"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "rule": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "line": {
+          "type": "integer"
+        },
+        "text": {
+          "type": "string"
+        },
+        "blocking": {
+          "type": "boolean"
+        }
+      }
+    },
+    "detail": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "slice-proposal.schema.json",
+  "title": "SliceProposal",
+  "type": "object",
+  "required": [
+    "description",
+    "goals",
+    "terms",
+    "rules",
+    "examples",
+    "contract"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "goals": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "text"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^G-[0-9]+$"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "terms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "definition"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^T-[0-9]+$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "definition": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/rule"
+      }
+    },
+    "examples": {
+      "type": "string",
+      "description": "Gherkin text: one Rule block per rule, tagged with the rule ID."
+    },
+    "contract": {
+      "type": "string",
+      "description": "OpenAPI 3.1 document; every operation carries x-rules."
+    },
+    "questions": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "about",
+          "text"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^Q-[0-9]+$"
+          },
+          "about": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "string"
+            }
+          },
+          "answer": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "answered_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "rule": {
+      "type": "object",
+      "required": [
+        "id",
+        "goal",
+        "pattern",
+        "system",
+        "response",
+        "terms"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^R-[0-9]+$"
+        },
+        "goal": {
+          "type": "string",
+          "pattern": "^G-[0-9]+$"
+        },
+        "pattern": {
+          "enum": [
+            "ubiquitous",
+            "event",
+            "state",
+            "unwanted",
+            "option"
+          ]
+        },
+        "precondition": {
+          "type": "string",
+          "minLength": 1
+        },
+        "trigger": {
+          "type": "string",
+          "minLength": 1
+        },
+        "feature": {
+          "type": "string",
+          "minLength": 1
+        },
+        "system": {
+          "type": "string",
+          "minLength": 1
+        },
+        "response": {
+          "type": "string",
+          "minLength": 1
+        },
+        "terms": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^T-[0-9]+$"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "pattern": {
+                "const": "state"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "precondition"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pattern": {
+                "enum": [
+                  "event",
+                  "unwanted"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "trigger"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pattern": {
+                "const": "option"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "feature"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "description": "What the analyst agent may output: no platform-owned fields."
+}

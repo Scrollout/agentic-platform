@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pattern.schema.json",
+  "title": "Pattern",
+  "type": "object",
+  "required": [
+    "id",
+    "version",
+    "scenario",
+    "sources",
+    "steps",
+    "limits",
+    "status",
+    "conditions",
+    "budgets"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "scenario": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "const": "approved"
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "url",
+          "title"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "required": [
+        "attempts",
+        "review_rounds"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "review_rounds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "worker",
+          "writable",
+          "checks",
+          "dependencies"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "worker": {
+            "type": "string",
+            "pattern": "^(agent|procedure):[a-z0-9-]+$"
+          },
+          "writable": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "checks": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "dependencies": {
+            "type": "object",
+            "required": [
+              "allowed",
+              "forbidden"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "allowed": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "forbidden": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "conditions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      },
+      "description": "Named fit checks; a slice fits when all pass."
+    },
+    "budgets": {
+      "type": "object",
+      "required": [
+        "run",
+        "step"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "run": {
+          "type": "object",
+          "required": [
+            "tokens",
+            "cost_usd",
+            "minutes"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "tokens": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "cost_usd": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "minutes": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "step": {
+          "type": "object",
+          "required": [
+            "tokens",
+            "cost_usd",
+            "minutes"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "tokens": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "cost_usd": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "minutes": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    }
+  }
+}
