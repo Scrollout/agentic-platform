@@ -1,0 +1,9 @@
+# The one image ignore rule for the Go stack (constitution, Built artifacts): every image built with
+# src/ as its context leaves out tests, test data, evals and the packaging itself.
+**/*_test.go
+**/testdata/
+**/evals/
+tests/
+deploy/
+**/.git
+**/*.md

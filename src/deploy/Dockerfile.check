@@ -1,0 +1,9 @@
+# Check container: the Go toolchain only, to run checks on generated code. Build context: src/.
+ARG GOLANG_IMAGE
+FROM ${GOLANG_IMAGE}
+RUN adduser -D -u 65532 -h /tmp/home check
+ENV GOTELEMETRY=off GOTOOLCHAIN=local GOFLAGS=-buildvcs=false \
+    HOME=/tmp/home GOPATH=/tmp/go GOCACHE=/tmp/go-cache CGO_ENABLED=0
+USER 65532:65532
+WORKDIR /work
+CMD ["go", "version"]

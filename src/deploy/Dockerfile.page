@@ -1,0 +1,15 @@
+# Build context: src/. Pins come from build args that deploy/build.sh reads from images.lock.
+ARG GOLANG_IMAGE
+FROM ${GOLANG_IMAGE} AS build
+WORKDIR /src
+COPY . .
+# src/tests is excluded from the context (src/.dockerignore), so the workspace must not use it.
+RUN go work edit -dropuse=./tests
+ENV CGO_ENABLED=0 GOFLAGS=-trimpath\ -buildvcs=false GOTOOLCHAIN=local GOTELEMETRY=off
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    cd page && go build -ldflags="-s -w -buildid=" -o /out/page ./cmd/page
+
+FROM scratch
+COPY --from=build /out/page /page
+USER 65532:65532
+ENTRYPOINT ["/page"]
