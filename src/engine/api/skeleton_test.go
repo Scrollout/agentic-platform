@@ -992,18 +992,21 @@ func TestProviderOperationsHasOneEntryPerPermissionNameWithTheJoinedSummaries(t 
 func TestARequestBodyOverTheLimitIs400InvalidRequest(t *testing.T) {
 	limit := contractLimit(t, "request-body-max-bytes")
 	r := newRig(t, nil)
-	prefix, suffix := `{"description":"`, `"}`
+	// replaceContract's body: the contract text is the only field long enough to reach the limit.
+	url := "/slices/SL-999/contract?api-version=" + apiVersion
+	// The contract text needs a line break after its first character to satisfy the schema pattern.
+	prefix, suffix := `{"contract":"a\n`, `"}`
 	over := prefix + strings.Repeat("a", limit-len(prefix)-len(suffix)+1) + suffix // limit+1 bytes
 	if len(over) != limit+1 {
 		t.Fatalf("test body is %d bytes, want %d", len(over), limit+1)
 	}
-	r.do("POST", slicesURL(""), clientToken, over, nil).problem(t, 400, gen.ErrorCodeInvalidRequest)
+	r.do("PUT", url, clientToken, over, nil).problem(t, 400, gen.ErrorCodeInvalidRequest)
 	if r.rec.count() != 0 {
 		t.Fatal("Work ran for an oversized body")
 	}
-	// A body of exactly the limit is accepted.
+	// A body of exactly the limit is not refused for size: the skeleton answers 404 for the unknown slice.
 	exact := over[:len(over)-len(suffix)-1] + suffix
-	r.do("POST", slicesURL(""), clientToken, exact, nil).operation(t, 202)
+	r.do("PUT", url, clientToken, exact, nil).problem(t, 404, gen.ErrorCodeNotFound)
 }
 
 // Not tested: a contract variant with path-level `parameters` and a folded `summary: >-`

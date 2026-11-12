@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/agentic-platform/engine/api/gen"
+	"github.com/agentic-platform/engine/slices"
 )
 
 // Job is one unit of work behind a state-changing call.
@@ -27,6 +28,8 @@ type WorkResult struct{ Slice, Run, ReusedSlice string }
 type WorkError struct {
 	Code   gen.ErrorCode
 	Detail string
+	// Failures are the failing checks behind the refusal, kept in the error's `failures`.
+	Failures []slices.Check
 }
 
 func (e *WorkError) Error() string { return string(e.Code) + ": " + e.Detail }
@@ -153,7 +156,12 @@ func (s *operations) run(ctx context.Context, op *operation, work func(ctx conte
 			s.set(op, func(v *gen.Operation) { v.Status = gen.OperationStatusCancelled })
 			return
 		case errors.As(err, &werr):
-			s.fail(op, newProblem(0, werr.Code, werr.Detail))
+			p := newProblem(0, werr.Code, werr.Detail)
+			if len(werr.Failures) > 0 {
+				f := checkResults(werr.Failures)
+				p.Failures = &f
+			}
+			s.fail(op, p)
 			return
 		case errors.As(err, &rerr) && attempt < retries:
 			s.sleep(ctx, backoff(attempt))

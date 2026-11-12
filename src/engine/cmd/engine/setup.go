@@ -50,7 +50,8 @@ var tokenVariables = []string{"ENGINE_CLIENT_TOKEN", "ENGINE_PAGE_TOKEN", "ENGIN
 
 // setup builds the engine's handler from the environment (getenv) and what the binary embeds:
 // the contract's schemas, the catalogue pattern and the analyst definition's digest. It opens
-// the run store in ENGINE_STORE_DIR, which must exist. The returned function cancels running
+// the run store in ENGINE_STORE_DIR, which must exist, and serves the slices stored there; a
+// slice record it cannot read or check stops it. The returned function cancels running
 // operations and closes the store; calling it again does nothing.
 func setup(getenv func(string) string) (http.Handler, func() error, error) {
 	env := map[string]string{}
@@ -84,19 +85,21 @@ func setup(getenv func(string) string) (http.Handler, func() error, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("the embedded analyst definition: %w", err)
 	}
+	st, err := store.Open(dir, schemas)
+	if err != nil {
+		return nil, nil, fmt.Errorf("the run store in ENGINE_STORE_DIR: %w", err)
+	}
 	svc, err := slices.New(slices.Config{
 		Schemas: schemas,
 		Analyst: analyst.NewHTTP(env["AP_ANALYST_URL"], env["AP_ANALYST_TOKEN"], digest),
 		Diff:    contracts.NewDiff(),
 		Lint:    contracts.NewLint(env["AP_LINT_URL"], env["AP_LINT_TOKEN"]),
 		Pattern: pattern,
+		Records: st,
 	})
 	if err != nil {
-		return nil, nil, err
-	}
-	st, err := store.Open(dir, schemas)
-	if err != nil {
-		return nil, nil, fmt.Errorf("the run store in ENGINE_STORE_DIR: %w", err)
+		st.Close()
+		return nil, nil, fmt.Errorf("the slices in ENGINE_STORE_DIR: %w", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

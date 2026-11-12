@@ -32,6 +32,10 @@ type Service struct {
 	// reserved holds the IDs Reserve gave out that no slice holds yet; CreateAs takes one.
 	reserved map[string]bool
 	slices   map[string]*record
+	// records keeps the slices durably (nil: in memory only). seqPending is set while the ID
+	// sequence Reserve advanced is not yet stored; no slice is stored until it is.
+	records    Records
+	seqPending bool
 }
 
 // record is a stored slice and what the service keeps beside it.
@@ -59,8 +63,15 @@ func New(cfg Config) (*Service, error) {
 	if now == nil {
 		now = time.Now
 	}
-	return &Service{schemas: cfg.Schemas, analyst: cfg.Analyst, diff: cfg.Diff, lint: cfg.Lint, pattern: cfg.Pattern,
-		attempts: attemptsOf(cfg.Pattern), now: now, reserved: map[string]bool{}, slices: map[string]*record{}}, nil
+	s := &Service{schemas: cfg.Schemas, analyst: cfg.Analyst, diff: cfg.Diff, lint: cfg.Lint, pattern: cfg.Pattern,
+		attempts: attemptsOf(cfg.Pattern), now: now, reserved: map[string]bool{}, slices: map[string]*record{},
+		records: cfg.Records}
+	if s.records != nil {
+		if err := s.load(); err != nil {
+			return nil, err
+		}
+	}
+	return s, nil
 }
 
 // attemptsOf reads limits.attempts from a pattern.yaml, its one home. A missing pattern, an
@@ -91,20 +102,30 @@ func (s *Service) Create(ctx context.Context, description string) (Result, error
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.last++
-	rec.slice.ID = "S-" + strconv.Itoa(s.last)
+	id, err := s.nextID()
+	if err != nil {
+		return Result{}, err
+	}
+	rec.slice.ID = id
+	if err := s.save(rec); err != nil {
+		return Result{}, err
+	}
 	s.slices[rec.slice.ID] = rec
 	return Result{Slice: clone(rec.slice)}, nil
 }
 
 // Reserve gives out the next slice ID from the sequence Create also draws from, without creating
 // a slice; CreateAs then creates the slice under it. An ID given out is never given out again,
-// whether or not a slice is created under it, and not after the slice is deleted.
+// whether or not a slice is created under it, and not after the slice is deleted or the service
+// restarts on the same Records. When storing the sequence fails, the ID is still given out, and
+// CreateAs and Create store no slice until a later attempt stores the sequence.
 func (s *Service) Reserve() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.last++
-	id := "S-" + strconv.Itoa(s.last)
+	id, err := s.nextID()
+	if err != nil {
+		id = "S-" + strconv.Itoa(s.last)
+	}
 	s.reserved[id] = true
 	return id
 }
@@ -126,8 +147,14 @@ func (s *Service) CreateAs(ctx context.Context, id, description string) (Result,
 	if err := s.reservableLocked(id); err != nil { // another CreateAs took it meanwhile
 		return Result{}, err
 	}
-	delete(s.reserved, id)
+	if err := s.storeSequence(); err != nil {
+		return Result{}, err
+	}
 	rec.slice.ID = id
+	if err := s.save(rec); err != nil {
+		return Result{}, err
+	}
+	delete(s.reserved, id)
 	s.slices[id] = rec
 	return Result{Slice: clone(rec.slice)}, nil
 }
@@ -353,6 +380,9 @@ func (s *Service) replace(ctx context.Context, id string, part Part, set func(*S
 	next.slice.History = append(next.slice.History, HistoryEntry{Kind: "changed", At: now, Refs: []string{string(part)}})
 	withdrawFailing(&next.slice, now)
 	next.slice.State = state(&next.slice)
+	if err := s.save(next); err != nil {
+		return Slice{}, err
+	}
 	*r = *next
 	return clone(r.slice), nil
 }
@@ -375,13 +405,18 @@ func (s *Service) Approve(ctx context.Context, id string, part Part, contentHash
 	}
 
 	now := s.now()
-	r.slice.Approvals = append(slices.DeleteFunc(r.slice.Approvals, func(a Approval) bool { return a.Part == part }),
+	next := &record{slice: clone(r.slice), baseline: r.baseline, compat: r.compat, lint: r.lint}
+	next.slice.Approvals = append(slices.DeleteFunc(next.slice.Approvals, func(a Approval) bool { return a.Part == part }),
 		Approval{Part: part, ContentHash: contentHash, At: now})
 	if part == PartContract {
-		r.baseline = r.slice.Contract
+		next.baseline = next.slice.Contract
 	}
-	r.slice.History = append(r.slice.History, HistoryEntry{Kind: "approved", At: now, Refs: []string{string(part)}})
-	r.slice.State = state(&r.slice)
+	next.slice.History = append(next.slice.History, HistoryEntry{Kind: "approved", At: now, Refs: []string{string(part)}})
+	next.slice.State = state(&next.slice)
+	if err := s.save(next); err != nil {
+		return Slice{}, err
+	}
+	*r = *next
 	return clone(r.slice), nil
 }
 

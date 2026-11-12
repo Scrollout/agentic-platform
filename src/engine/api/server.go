@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/base64"
 	"net/http"
 	"sort"
 	"strconv"
@@ -19,7 +18,16 @@ type server struct {
 	contract  contract
 	ops       *operations
 	lastSlice atomic.Int64
+	pages     pageKeys
+	// analyst holds one place per operation that may work with the analyst at once.
+	analyst chan struct{}
 }
+
+// analystCallsAtOnce is how many createSlice and answerQuestions operations may work with the
+// analyst at once across the engine, as their descriptions in the contract state. It has no
+// machine-readable home there: x-limits holds the limits every service declares, and the
+// Spectral rule ap-limits-declared and the engine read the same keys.
+const analystCallsAtOnce = 4
 
 var _ gen.StrictServerInterface = (*server)(nil)
 
@@ -59,8 +67,8 @@ func (s *server) CancelOperation(_ context.Context, req gen.CancelOperationReque
 }
 
 // ListProviderOperations lists each permission name once, sorted, with the summaries of the
-// operations that carry it, in contract order, as display text. A page token is the offset of
-// its page; one this service did not issue is refused.
+// operations that carry it, in contract order, as display text. A page token names the offset
+// of its page (pages.go); one this list did not issue is refused.
 func (s *server) ListProviderOperations(_ context.Context, req gen.ListProviderOperationsRequestObject) (gen.ListProviderOperationsResponseObject, error) {
 	ops := make([]contractOp, 0, len(s.contract.ops))
 	for _, op := range s.contract.ops {
@@ -77,40 +85,12 @@ func (s *server) ListProviderOperations(_ context.Context, req gen.ListProviderO
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].Name < all[j].Name })
 
-	from, to, next, ok := page(req.Params.PageToken, len(all))
+	from, to, next, ok := s.pages.offsetPage(operationsList, req.Params.PageToken, len(all))
 	if !ok {
 		return gen.ListProviderOperations400ApplicationProblemPlusJSONResponse{BadRequestApplicationProblemPlusJSONResponse: badPageToken()}, nil
 	}
 	list := gen.ProviderOperationList{Items: all[from:to], NextPageToken: next}
 	return gen.ListProviderOperations200JSONResponse{ProviderOperationListJSONResponse: gen.ProviderOperationListJSONResponse(list)}, nil
-}
-
-// page returns the bounds of the page a token asks for among total items, in order, and the
-// token of the page after it (nil on the last page). A page token is the offset of its page; ok
-// is false for one this service did not issue, or one past the end.
-func page(token *string, total int) (from, to int, next *string, ok bool) {
-	if token != nil {
-		raw, err := base64.RawURLEncoding.DecodeString(*token)
-		n, err2 := strconv.Atoi(string(raw))
-		if err != nil || err2 != nil || n <= 0 || n%pageSize != 0 || n >= total || issuedPageToken(n) != *token {
-			return 0, 0, nil, false
-		}
-		from = n
-	}
-	to = min(from+pageSize, total)
-	if to < total {
-		t := issuedPageToken(to)
-		next = &t
-	}
-	return from, to, next, true
-}
-
-func badPageToken() gen.BadRequestApplicationProblemPlusJSONResponse {
-	return gen.BadRequestApplicationProblemPlusJSONResponse(newProblem(http.StatusBadRequest, gen.ErrorCodeInvalidRequest, "page_token was not issued by this service"))
-}
-
-func issuedPageToken(offset int) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(strconv.Itoa(offset)))
 }
 
 func (s *server) ListSlices(context.Context, gen.ListSlicesRequestObject) (gen.ListSlicesResponseObject, error) {

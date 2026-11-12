@@ -3,9 +3,10 @@
 //
 // Every request passes the same checks, in this order: its token, then the rate limit, then its
 // api-version (400, except on the operations list), whether the token may call the operation
-// (403), then the body against the operation's request schema in the contract (400
-// InvalidRequest, or InvalidProject for a project name alone that breaks the folder-name rule
-// where the operation lists that code), then the operation itself. A request with an accepted token is counted against that
+// (403), then a body's Content-Type (application/json, else 400 InvalidRequest), then the body
+// against the operation's request schema in the contract (400 InvalidRequest, or InvalidProject
+// for a project name alone that breaks the folder-name rule where the operation lists that
+// code), then the operation itself. A request with an accepted token is counted against that
 // token's limit alone (429 beyond it). A request with no token, or one the engine does not
 // accept, is counted against the limit of its source address, the host part of the
 // connection's peer address (never a header the client sends): 401 up to that limit, 429 beyond
@@ -27,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"mime"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -83,7 +85,8 @@ func NewHandler(cfg Config) http.Handler {
 		base = context.Background()
 	}
 	c := engineContract
-	srv := &server{contract: c, ops: &operations{base: base, now: now, sleep: sleep, work: cfg.Work, ops: map[string]*operation{}}}
+	srv := &server{contract: c, ops: &operations{base: base, now: now, sleep: sleep, work: cfg.Work, ops: map[string]*operation{}},
+		pages: newPageKeys(), analyst: make(chan struct{}, analystCallsAtOnce)}
 	var impl gen.StrictServerInterface = srv
 	if cfg.Slices != nil {
 		if cfg.Store == nil {
@@ -182,6 +185,11 @@ func (f *front) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fmt.Sprintf("the body cannot be read or is larger than %d bytes", f.contract.maxBody)))
 		return
 	}
+	if len(body) > 0 && !jsonContent(r.Header.Values("Content-Type")) {
+		writeProblem(w, newProblem(http.StatusBadRequest, gen.ErrorCodeInvalidRequest,
+			"send the body as `Content-Type: application/json`"))
+		return
+	}
 	if code, detail := op.checkBody(body); code != "" {
 		writeProblem(w, newProblem(http.StatusBadRequest, gen.ErrorCode(code), detail))
 		return
@@ -200,6 +208,16 @@ func (f *front) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f.keys.serve(w, r, caller+"\x00"+keys[0], sha256.Sum256([]byte(r.Method+" "+r.URL.Path+"\x00"+string(body))), f.mux)
+}
+
+// jsonContent reports whether a request's Content-Type header values are exactly one media
+// type, application/json, with any parameters (the contract declares no other body type).
+func jsonContent(values []string) bool {
+	if len(values) != 1 {
+		return false
+	}
+	media, _, err := mime.ParseMediaType(values[0])
+	return err == nil && media == "application/json"
 }
 
 // authenticate returns the security scheme of the request's bearer token, or "" for none.

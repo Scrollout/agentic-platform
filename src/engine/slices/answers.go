@@ -100,6 +100,9 @@ func (s *Service) Answer(ctx context.Context, id string, answers []Answer) (Slic
 		}
 		return Slice{}, &Error{Code: "OperationFailed", Detail: "the slice changed while the analyst revised it; answer again"}
 	}
+	if err := s.save(rec); err != nil {
+		return Slice{}, err
+	}
 	*r = *rec
 	return clone(r.slice), nil
 }
@@ -173,11 +176,17 @@ func copyInt(p *int) *int {
 
 // Delete erases a slice and its records (deleteSlice); its ID is not given out again. An unknown
 // slice gives NotFound. Runs, and the refusal while one has not ended, come with the run store.
+// The slice's stored record is removed before the slice is.
 func (s *Service) Delete(_ context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, err := s.find(id); err != nil {
 		return err
+	}
+	if s.records != nil {
+		if err := s.records.DeleteSliceRecord(id); err != nil {
+			return fmt.Errorf("slices: removing the record of slice %s: %w", id, err)
+		}
 	}
 	delete(s.slices, id)
 	return nil

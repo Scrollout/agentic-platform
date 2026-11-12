@@ -4,7 +4,7 @@
 // is unchanged (spec FR-002 to FR-007, data-model.md).
 //
 // The analyst (a model) and oasdiff are behind the Analyst and ContractDiff interfaces. Slices
-// are kept in memory; persistence is a later task.
+// are kept durably through Records (the run store in the engine), or in memory without it.
 package slices
 
 import (
@@ -254,4 +254,8 @@ type Config struct {
 	// cannot be approved, and the analyst is asked once.
 	Pattern []byte
 	Now     func() time.Time // nil means time.Now
+	// Records keeps the slices durably: New loads every stored slice and the ID sequence from it
+	// and fails, naming the slice, on a record it cannot read or check; every change is stored
+	// before it is reported. nil keeps slices in memory only, so a restart loses them.
+	Records Records
 }

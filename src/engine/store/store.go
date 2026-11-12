@@ -1,5 +1,6 @@
-// Package store keeps each run's events and the artifacts runs produce, durably and grouped by
-// slice, so that a run can be read back in order and a slice's data can be erased.
+// Package store keeps each run's events, the artifacts runs produce and each slice's record,
+// durably and grouped by slice, so that a run can be read back in order, a slice survives a
+// restart, and a slice's data can be erased.
 //
 // Slice IDs, run IDs and artifact hashes follow the rules of the contract the store is opened
 // with (slice-defs.schema.json, through package slice); every string a method takes is parsed
@@ -36,6 +37,7 @@ type Event struct {
 // On disk: artifacts/<sha256> holds each artifact once; slices/<slice>/events.jsonl holds the
 // slice's events and slices/<slice>/artifacts the hashes the slice stored, one per line. Both
 // files only grow; erasure removes the slice's folder and every artifact no other slice holds.
+// The slice's record (slice.json) and the slice ID sequence are in records.go.
 const (
 	eventsFile = "events.jsonl"
 	ownedFile  = "artifacts"
@@ -45,6 +47,7 @@ const (
 type Store struct {
 	mu        sync.Mutex
 	ids       *slice.Schemas // the contract's rules for slice IDs, run IDs and hashes
+	root      string
 	artifacts string
 	slices    string
 	events    map[slice.RunID][]Event          // run -> events in Seq order
@@ -60,6 +63,7 @@ func Open(dir string, ids *slice.Schemas) (*Store, error) {
 	}
 	s := &Store{
 		ids:       ids,
+		root:      dir,
 		artifacts: filepath.Join(dir, "artifacts"),
 		slices:    filepath.Join(dir, "slices"),
 		events:    map[slice.RunID][]Event{},
@@ -71,8 +75,14 @@ func Open(dir string, ids *slice.Schemas) (*Store, error) {
 			return nil, err
 		}
 	}
-	// Leftovers of a PutArtifact interrupted before its rename were never acknowledged.
-	tmps, _ := filepath.Glob(filepath.Join(s.artifacts, ".tmp-*"))
+	// Leftovers of a PutArtifact, or of a slice record or sequence write, interrupted before its
+	// rename were never acknowledged.
+	var tmps []string
+	for _, pattern := range []string{filepath.Join(s.artifacts, tmpPrefix+"*"), filepath.Join(dir, tmpPrefix+"*"),
+		filepath.Join(s.slices, "*", tmpPrefix+"*")} {
+		m, _ := filepath.Glob(pattern)
+		tmps = append(tmps, m...)
+	}
 	for _, t := range tmps {
 		if err := os.Remove(t); err != nil {
 			return nil, err
@@ -302,14 +312,9 @@ func (s *Store) heldElsewhere(sl slice.ID, hash slice.Hash) bool {
 
 // appendLine appends line to the slice's file name and syncs it, and on creation its folders.
 func (s *Store) appendLine(sl slice.ID, name string, line []byte) error {
-	dir := filepath.Join(s.slices, sl.String())
-	if _, err := os.Stat(dir); errors.Is(err, fs.ErrNotExist) {
-		if err := os.Mkdir(dir, 0o700); err != nil {
-			return err
-		}
-		if err := syncDir(s.slices); err != nil {
-			return err
-		}
+	dir, err := s.sliceDir(sl)
+	if err != nil {
+		return err
 	}
 	path := filepath.Join(dir, name)
 	_, statErr := os.Stat(path)

@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/agentic-platform/engine/api/gen"
 	"github.com/agentic-platform/engine/slices"
@@ -39,7 +40,11 @@ func (s *sliceServer) CreateSlice(_ context.Context, req gen.CreateSliceRequestO
 	description := req.Body.Description
 	id := s.svc.Reserve() // the operation names the slice before it exists
 	acc := s.start("createSlice", gen.OperationKindProposeSlice, id, func(ctx context.Context) (WorkResult, error) {
-		res, err := s.svc.CreateAs(ctx, id, description)
+		var res slices.Result
+		err := s.withAnalyst(ctx, func() (err error) {
+			res, err = s.svc.CreateAs(ctx, id, description)
+			return err
+		})
 		switch {
 		case err != nil:
 			return WorkResult{}, err
@@ -53,7 +58,11 @@ func (s *sliceServer) CreateSlice(_ context.Context, req gen.CreateSliceRequestO
 
 func (s *sliceServer) ListSlices(_ context.Context, req gen.ListSlicesRequestObject) (gen.ListSlicesResponseObject, error) {
 	all := s.svc.List()
-	from, to, next, ok := page(req.Params.PageToken, len(all))
+	numbers := make([]int, len(all)) // List gives the slices by number, highest first
+	for i, sl := range all {
+		numbers[i], _ = strconv.Atoi(strings.TrimPrefix(sl.ID, "S-"))
+	}
+	from, to, next, ok := s.pages.keysetPage(slicesList, req.Params.PageToken, numbers)
 	if !ok {
 		return problemResponse(badPageToken()), nil
 	}
@@ -167,8 +176,10 @@ func (s *sliceServer) AnswerQuestions(_ context.Context, req gen.AnswerQuestions
 		return s.refuse("answerQuestions", err)
 	}
 	return gen.AnswerQuestions202JSONResponse{AcceptedJSONResponse: s.change("answerQuestions", gen.OperationKindAnswerQuestions, id, func(ctx context.Context) error {
-		_, err := s.svc.Answer(ctx, id, answers)
-		return err
+		return s.withAnalyst(ctx, func() error {
+			_, err := s.svc.Answer(ctx, id, answers)
+			return err
+		})
 	})}, nil
 }
 
@@ -224,6 +235,7 @@ func (s *sliceServer) change(opID string, kind gen.OperationKind, id string, app
 // refusal of the Service keeps its code when the contract lists that code for opID's
 // operation; any other refusal, such as one from a change that came between the check made at
 // acceptance and the work, ends the operation OperationFailed with the refusal in its detail.
+// Either way the failing checks the refusal names stay in the error's `failures`.
 func (s *sliceServer) start(opID string, kind gen.OperationKind, target string, work func(ctx context.Context) (WorkResult, error)) gen.AcceptedJSONResponse {
 	op := s.contract.op(opID)
 	return gen.AcceptedJSONResponse{Body: s.ops.startWith(kind, target, func(ctx context.Context) (WorkResult, error) {
@@ -233,10 +245,26 @@ func (s *sliceServer) start(opID string, kind gen.OperationKind, target string, 
 		case err == nil || !errors.As(err, &e):
 			return res, err
 		case op.lists("operation", e.Code):
-			return WorkResult{}, &WorkError{Code: gen.ErrorCode(e.Code), Detail: e.Detail}
+			return WorkResult{}, &WorkError{Code: gen.ErrorCode(e.Code), Detail: e.Detail, Failures: e.Failures}
 		}
-		return WorkResult{}, &WorkError{Code: gen.ErrorCodeOperationFailed, Detail: e.Error()}
+		return WorkResult{}, &WorkError{Code: gen.ErrorCodeOperationFailed, Detail: e.Error(), Failures: e.Failures}
 	})}
+}
+
+// withAnalyst runs f, which may call the analyst, once one of the engine's analystCallsAtOnce
+// places is free, and frees it when f returns. While it waits the
+// operation stays running; cancelled while it waits, it returns ctx's error without running f.
+func (s *sliceServer) withAnalyst(ctx context.Context, f func() error) error {
+	select {
+	case s.analyst <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	defer func() { <-s.analyst }()
+	if err := ctx.Err(); err != nil { // cancelled as the place came free
+		return err
+	}
+	return f()
 }
 
 // refuse answers a refusal of the Service at once, with the status code under which the
