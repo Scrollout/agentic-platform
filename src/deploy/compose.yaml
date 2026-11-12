@@ -133,8 +133,14 @@ services:
       AP_LINT_TOKEN: ${AP_LINT_TOKEN:?set AP_LINT_TOKEN (ap up does this)}
       AP_ANALYST_URL: http://analyst:8080
       AP_ANALYST_TOKEN: ${AP_ANALYST_TOKEN:?set AP_ANALYST_TOKEN (ap up does this)}
+      ENGINE_STORE_DIR: /var/lib/engine
     tmpfs:
       - /tmp:mode=1777,size=16m
+    # The engine's store (runs, slices, acceptances; T038g) on a named volume only it mounts, so
+    # the root stays read-only and `ap down` keeps the records. Docker gives a new volume the
+    # image directory's owner, 65532 (Dockerfile.engine).
+    volumes:
+      - { type: volume, source: engine-store, target: /var/lib/engine }
     networks:
       clients: {}
       agents: { ipv4_address: *engine-on-agents }
@@ -325,6 +331,10 @@ networks:
     driver_opts:
       com.docker.network.bridge.enable_ip_masquerade: "false"
     ipam: { config: [{ subnet: *page-host-subnet }] }
+
+# The engine's store; a plain local volume, kept by `ap down` (it never passes -v).
+volumes:
+  engine-store: {}
 
 secrets:
   anthropic_api_key:

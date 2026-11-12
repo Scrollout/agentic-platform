@@ -6,8 +6,8 @@ here=$(cd "$(dirname "$0")" && pwd)
 state=${XDG_STATE_HOME:-$HOME/.local/state}/agentic-platform
 sess=$state/session.env
 usage() { echo "usage: ap up|down|build-workers|page|test|<client command>" >&2; exit 3; }
-needed="engine page cli"
-names="$needed agent check tests lint"
+needed="engine cli"
+names="$needed page agent check tests lint"
 reg=${AP_REGISTRY_NAME:-ap-registry}
 if [ -n "${AP_REGISTRY_NAME:-}" ]; then net=$AP_REGISTRY_NAME-net; else net=ap-signing; fi
 cfg=${XDG_CONFIG_HOME:-$HOME/.config}/agentic-platform/signing
@@ -75,8 +75,8 @@ up)
       echo "AP_CLIENT_TOKEN=$tc"; echo "AP_PAGE_TOKEN=$tp"; echo "AP_WORKER_TOKEN=$tw"
       echo "AP_LINT_TOKEN=$tl"; echo "AP_ANALYST_TOKEN=$ta"; } > "$sess" )
   chmod 600 "$sess"
-  # images: those recorded are verified before anything starts; engine, page and cli must be
-  # recorded; agent, check, tests and lint not built are passed as placeholders and not verified
+  # images: those recorded are verified before anything starts; engine and cli must be
+  # recorded; page, agent, check, tests and lint not built are passed as placeholders and not verified
   cosign=$(awk '$1=="cosign"{print $2}' "$lock")
   [ -f "$imgs" ] || { echo "ap: no images recorded; run: src/deploy/build.sh engine" >&2; exit 1; }
   if grep -Evx 'AP_IMAGE_[A-Z]+=127\.0\.0\.1:[0-9]{1,5}/ap-[a-z]+@sha256:[0-9a-f]{64}' "$imgs" >/dev/null; then

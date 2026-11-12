@@ -29,12 +29,13 @@ state_dir=${XDG_STATE_HOME:-$HOME/.local/state}/agentic-platform
 sess=$state_dir/session.env
 images_env=$state_dir/images.env
 pub=${XDG_CONFIG_HOME:-$HOME/.config}/agentic-platform/signing/cosign.pub
-# Images `up` needs (it starts engine and page; every client command runs cli) and images it passes
+# Images `up` needs (it starts the engine; every client command runs cli) and images it passes
 # only when built (their profiles are started later, by build-workers and test). lint is started by
 # `up` too, but stays optional until its first signed build (T038g): without it, `compose up` stops
-# with "No such image ap-lint:not-built".
-needed_images="engine page cli"
-optional_images="agent check tests lint"
+# with "No such image ap-lint:not-built". page stays optional until the run page exists (T056):
+# without it, `up` starts neither page nor page-proxy (--scale ...=0) and says so.
+needed_images="engine cli"
+optional_images="page agent check tests lint"
 # shellcheck disable=SC2086
 image_vars=$(printf 'AP_IMAGE_%s ' $needed_images $optional_images | tr '[:lower:]' '[:upper:]')
 token_vars="AP_CLIENT_TOKEN AP_PAGE_TOKEN AP_WORKER_TOKEN AP_LINT_TOKEN AP_ANALYST_TOKEN"
@@ -298,7 +299,7 @@ drop_unpublished() {
 # reference in the form build.sh writes; a missing needed image stops with the build to run.
 read_images() {
   [ -f "$images_env" ] && [ -r "$images_env" ] ||
-    die 1 "no images recorded in $images_env; build them first: src/deploy/build.sh engine (and page, cli)"
+    die 1 "no images recorded in $images_env; build them first: src/deploy/build.sh engine (and cli)"
   bad=$(grep -Evx 'AP_IMAGE_[A-Z]+=127\.0\.0\.1:[0-9]{1,5}/ap-[a-z]+@sha256:[0-9a-f]{64}' "$images_env" | head -n 1)
   [ -z "$bad" ] || die 1 "$images_env has a line build.sh does not write: '$bad'; rebuild with src/deploy/build.sh <name>"
   for n in $needed_images $optional_images; do
@@ -427,8 +428,15 @@ cmd_up() {
   } >"$tmp" && chmod 600 "$tmp" && mv -f -- "$tmp" "$sess" || { rm -f -- "$tmp"; die 1 "cannot write $sess"; }
   umask "$old_umask"
 
-  say "starting the platform (gateway, engine, page, contract-lint, analyst); run page on http://127.0.0.1:$port"
-  compose up -d || die 1 "docker compose up failed; see the messages above; the session is kept until: ap down"
+  if [ "$AP_IMAGE_PAGE" = "$(placeholder page)" ]; then
+    # No run page image yet (T056): start everything else; page and page-proxy stay at zero.
+    say "the run page is not built yet (T056); starting the platform without it (gateway, engine, contract-lint, analyst)"
+    set -- --scale page=0 --scale page-proxy=0
+  else
+    say "starting the platform (gateway, engine, page, contract-lint, analyst); run page on http://127.0.0.1:$port"
+    set --
+  fi
+  compose up -d "$@" || die 1 "docker compose up failed; see the messages above; the session is kept until: ap down"
 }
 
 cmd_down() {

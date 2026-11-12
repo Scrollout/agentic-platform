@@ -491,8 +491,9 @@ class LauncherContract:
         self.assertEqual(r.returncode, 3, r.stderr)
         self.assertEqual([x for x in self.calls() if x["argv"][:1] == ["compose"] and "run" in x["argv"]], [])
 
-    def test_each_of_engine_page_cli_is_required(self):
-        for n in ("engine", "page", "cli"):
+    def test_each_of_engine_cli_is_required(self):
+        # the run page is optional until it exists (Story 2, T056); test_engine_store_and_page covers it
+        for n in ("engine", "cli"):
             with self.subTest(missing=n):
                 self.setUp()
                 self.write_images([m for m in IMAGE_NAMES if m != n])
@@ -946,7 +947,7 @@ MUTANTS = [
      {"test_images_not_built_are_placeholders_and_not_verified"}),
     ("missing_needed_image_tolerated", 'case " $needed " in *" $n "*) echo "ap: no image for $n; run: src/deploy/build.sh $n" >&2; exit 1 ;; esac',
      'case " $needed " in *" nothing "*) exit 1 ;; esac',
-     {"test_each_of_engine_page_cli_is_required", "test_up_without_recorded_images_stops_and_names_build_sh"}),
+     {"test_each_of_engine_cli_is_required", "test_up_without_recorded_images_stops_and_names_build_sh"}),
     ("garbage_images_env_accepted", "grep -Evx", "grep -Ex",
      {"test_images_env_that_is_not_what_build_sh_writes_stops_up"}),
     ("test_runs_with_placeholder", '*@sha256:*) ;; *) echo "ap: test: not available yet" >&2; exit 3 ;; esac', '*) ;; esac',

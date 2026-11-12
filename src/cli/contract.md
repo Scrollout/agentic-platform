@@ -31,9 +31,11 @@ Two names, two jobs:
   `up` starts only images it has verified ([ADR 0028](../../docs/decisions/0028-sign-platform-images-locally.md)).
   It reads the images `src/deploy/build.sh <name>` recorded in
   `${XDG_STATE_HOME:-~/.local/state}/agentic-platform/images.env` and exits 1, naming the
-  `build.sh <name>` to run, when the `engine`, `page` or `cli` image or the public key
-  `${XDG_CONFIG_HOME:-~/.config}/agentic-platform/signing/cosign.pub` is missing. It verifies the
-  signature of every image it passes to Compose, including a built `agent`, `check` or `tests`
+  `build.sh <name>` to run, when the `engine` or `cli` image or the public key
+  `${XDG_CONFIG_HOME:-~/.config}/agentic-platform/signing/cosign.pub` is missing. Until the run
+  page exists (T056) the `page` image is optional: without it `up` starts everything but the run
+  page and its forwarder and says on stderr that the run page is not built yet. It verifies the
+  signature of every image it passes to Compose, including a built `page`, `agent`, `check` or `tests`
   image, and exits 1 naming the first image that fails, before anything starts and without changing
   the session. A recorded image no longer in the local image store (a rebuild replaced it) is
   first taken back from the local image registry by digest; when the registry has lost it too,

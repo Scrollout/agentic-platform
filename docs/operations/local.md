@@ -66,7 +66,10 @@ Sources: [Docker: port publishing and gateway modes](https://docs.docker.com/eng
 
 `src/deploy/ap up --credentials <file> --projects <folder>` checks its inputs and creates new
 session tokens, or keeps those of a started session, so running it twice changes nothing. It passes the tokens and paths to Compose through environment variables only.
-`ap down` stops everything and keeps run records and projects. The launcher's commands are in the
+`ap down` stops everything and keeps run records and projects: the engine's store is the named
+volume `engine-store`, which only the engine mounts and `down` does not remove. Until the run page
+exists (T056), `ap up` without a built `page` image starts everything else and says the run page is
+not built yet. The launcher's commands are in the
 terminal contract, `src/cli/contract.md`. The variables and services are in `src/deploy/README.md`.
 
 Images are built locally with `src/deploy/build.sh <name>`, which pushes each one with an SBOM and
