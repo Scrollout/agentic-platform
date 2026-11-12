@@ -2,6 +2,7 @@
 
 ## 2026-11-12
 
+* **Tests**: Feature 001, T020: tests reach a recorded model, [WireMock](/components/wiremock.md) on an internal network standing in for the gateway (`src/tests/recorded/`, research D26). A request matches a recording only by equal method, path, query and JSON body; anything else gets 404 and is never forwarded. Recording from the provider is the owner's alone (`record.sh`). The first recording, the analyst on the example description, is synthesised from `good-notes.json` without a model call.
 * **Evals**: Feature 001: the analyst's live eval suite passed for the first time (5th run, 2026-11-12): 13 of 13 cases pass^3, 39 of 39 trials, on `claude-haiku-5-5` through the engine's retry (no retry was needed). Earlier runs: 19, 33, 38 and 37 of 39 trials, fixed by the prompt and the `examples`/`contract` text rules.
 * **Implementation**: Feature 001: when the analyst's proposal is unusable (it breaks the proposal schema, or its Gherkin or contract text does not parse), the engine asks the analyst again with the errors, up to the pattern's `limits.attempts`, then fails with `OperationFailed`; other failing checks are stored as before. Owner-approved after the fourth live eval (37 of 39 trials). Tests by a separate author; fresh review approved; follow-ups in T037c.
 * **Contract**: the `examples` and `contract` texts must also contain a real line break after their first non-blank character, refusing text escaped with literal `\n` and no line breaks (seen in a live eval). Fresh contract review approved; follow-up T036c.
