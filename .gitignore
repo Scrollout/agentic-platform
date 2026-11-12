@@ -15,3 +15,6 @@ coverage.*
 # Generated from contracts by scripts/generate.sh
 src/*/api/gen/
 node_modules/
+
+# Copies scripts/generate.sh makes for //go:embed (gen/<path> from src/<path>)
+src/*/cmd/*/gen/

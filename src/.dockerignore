@@ -7,3 +7,5 @@ tests/
 deploy/
 **/.git
 **/*.md
+# ...except what a program embeds: scripts/generate.sh copies it into gen/ beside the program.
+!*/cmd/*/gen/**

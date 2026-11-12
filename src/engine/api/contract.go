@@ -68,6 +68,7 @@ func (op contractOp) lists(key, code string) bool {
 
 type contract struct {
 	version        string                // the api-version served
+	dir            string                // its folder in contractFiles, "preview/2026-11-12-preview"
 	ops            map[string]contractOp // by route, "GET /slices/{sliceId}"
 	byID           map[string]string     // route by operationId
 	perSecond      int                   // requests in any one-second window per token
@@ -155,10 +156,22 @@ func loadContract(files fs.FS) (contract, error) {
 	if err != nil {
 		return contract{}, fmt.Errorf("%s: %w", newest, err)
 	}
-	if err := c.compileBodies(files, path.Dir(newest), raw); err != nil {
+	c.dir = path.Dir(newest)
+	if err := c.compileBodies(files, c.dir, raw); err != nil {
 		return contract{}, fmt.Errorf("%s: %w", newest, err)
 	}
 	return c, nil
+}
+
+// ContractFiles returns the files of the contract version the engine serves (its openapi.yaml
+// and *.schema.json) at the root of a file system, for slice.LoadSchemasFS: the run store and
+// the slices parse with the schemas of the same version the API serves.
+func ContractFiles() fs.FS {
+	sub, err := fs.Sub(contractFiles, engineContract.dir)
+	if err != nil {
+		panic("engine contract: " + err.Error()) // dir came from a glob over contractFiles
+	}
+	return sub
 }
 
 // schemaBase is the URL the contract's files are read under when request bodies are checked; it

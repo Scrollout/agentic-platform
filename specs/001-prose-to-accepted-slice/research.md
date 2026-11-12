@@ -374,6 +374,9 @@ page, none of which an existing project provides.
   `POST /api/sessions/{id}/agent/analyst`, reading the event stream until `stream_stopped`), the
   proposal being the last `agent_choice` content and the model the `agent_info` model; the session
   is deleted afterwards, and the call is never retried by the client (`slices.Service` retries).
+- **Agent digest**: each proposal's `agent_digest` is the SHA-256 of `analyst.yaml` and
+  `analyst/instruction.md` as mounted under `/agents`, each framed as its path, a line feed, its
+  length in decimal, a line feed and its bytes, in byte order of path (`src/engine/README.md`).
 - **Evidence** (2026-11-12, pinned Docker Agent 1.160.0, recorded model, no key): it ran under
   `runsc` read-only as 65532 (76 MiB, 48 processes); 8 concurrent sessions all returned the
   proposal; its model request matched the `analyst-example-notes` recording unchanged, so tests
