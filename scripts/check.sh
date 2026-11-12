@@ -65,6 +65,10 @@ echo "== model gateway"
 sh src/deploy/gateway/test_gateway.sh >/dev/null && echo "gateway checks passed"
 echo "== go vet and tests"
 go_checks
+echo "== recorded model (Docker, no key)"
+# Built in the pinned Go container, run on the host, where Docker is.
+go_run none "cd tests && GOPROXY=off GOFLAGS=-mod=readonly CGO_ENABLED=0 go test -c -tags docker -o /gopath/recorded.test ./recorded/"
+(cd src/tests/recorded && "$GO_CACHE/recorded.test" -test.count=1) && rm -f "$GO_CACHE/recorded.test"
 echo "== dependencies and licences"
 # Our own modules are MIT by the root LICENSE, which is outside the mounted src/, so they are ignored.
 go_run bridge "

@@ -257,6 +257,7 @@ fresh review round 1.
 | gVisor | Apache-2.0 | 6.2 | |
 | cosign | Apache-2.0 | 8.5 (2026-11-11) | signs and verifies our images (ADR 0028) |
 | CNCF Distribution (`registry`) | Apache-2.0 | 7.6 (2026-11-11) | local registry for signed images (ADR 0028) |
+| WireMock | Apache-2.0 | 5.8 (2026-11-09) | the recorded-model replay server and recorder for tests (D26) |
 | buildkit-syft-scanner | Apache-2.0 | not published | BuildKit's SBOM generator, a wrapper of syft (8.5, 2026-11-09); run locally (T063) |
 
 Custom code is limited to the engine, its checks, the slice model, the terminal client and the run
@@ -320,3 +321,43 @@ page, none of which an existing project provides.
 - **Limit**: numbers are not supported; a schema change that puts a number into a part must
   replace this with a full implementation or an adopted library first.
 - **Principle VI**: this is the written justification for custom code that an OSS project covers.
+
+### D26. The recorded model is WireMock; the custom code is a small recording tool
+
+- **Decision**: the replay server of D19 is WireMock 3.13.2 (`wiremock/wiremock:3.13.2-3-alpine`,
+  pinned by digest in `src/deploy/images.lock`), configured only by its own stub-mapping JSON files
+  in `src/tests/recorded/recordings/`. A recording matches on the method, the exact URL (path and
+  query as one string, so an extra query parameter misses) and the request body as JSON (`equalToJson`, nothing ignored); any other request gets WireMock's 404 and is never
+  forwarded, and the server runs only on an internal network. Recording is WireMock's own recorder
+  (`/__admin/recordings`) proxying to the real gateway, run only by the owner
+  (`src/tests/recorded/record.sh`). The admin API takes a random per-container credential
+  (`--admin-api-basic-auth`), so the agent under test cannot add recordings.
+- **Evidence** (2026-11-12): against the pinned Docker Agent, the analyst sent a byte-identical
+  request body twice for the same description, so exact body matching is deterministic; with no
+  recording, WireMock answered 404 and the analyst exited 1 naming the 404; WireMock's recorder,
+  put in front of a replay server, wrote a matcher equal to the synthesised one, and its event
+  stream was replayed byte for byte (`smoke.sh`). Scorecard and licences: WireMock 5.8 (Apache-2.0,
+  7.4k stars, pushed daily; 3.13.2 is the latest stable release, 4.0 is in beta), mitmproxy 6.0
+  (MIT), Hoverfly 4.7 (Apache-2.0), scored 2026-11-09 and read 2026-11-12 from the OpenSSF Scorecard API
+  (`https://api.securityscorecards.dev/projects/github.com/wiremock/wiremock`,
+  `.../github.com/mitmproxy/mitmproxy`, `.../github.com/SpectoLabs/hoverfly`). WireMock's recorder
+  writes the path and each query parameter's exact values, which would also answer a request with
+  an extra parameter, so `recording write` turns them into one exact `url` (checked 2026-11-12).
+- **Alternatives rejected**: mitmproxy's server replay (`--server-replay`, with
+  `--server-replay-extra` to refuse unknown requests) stores flows in a binary format that cannot
+  be reviewed in a diff or written without its Python API, and matches the body only as bytes;
+  Hoverfly scores lower and records only as a forward proxy, which Docker Agent's base URL does not
+  use; an own Go replay server would rewrite what WireMock does (Principle VI).
+- **Custom code** (Principle VI justification): `src/tests/recorded/recording` (one Go command,
+  no dependencies). `write` keeps only the response's `Content-Type` from WireMock's recorder
+  output, because WireMock has no setting to drop recorded response headers and the provider's
+  request and organisation ids must not reach the repository; it also moves the event stream into
+  its own file and refuses a recording that proxies. `synth` builds a recording without a model
+  call (a structured-output tool call answering a given request), which WireMock cannot do. The
+  start and record scripts are plain `docker` commands.
+- **Limit**: a changed prompt, schema, model setting or Docker Agent version misses every
+  recording of that agent until the owner records again, which costs money; this is by design, so
+  that a stale answer is never served. The first recording, `analyst-example-notes`, is
+  synthesised from `src/tests/evals/analyst/testdata/proposals/good-notes.json`, not recorded
+  from the provider.
+- **Cost**: one more pin (about 300 MB, a JVM); a component concept for WireMock.

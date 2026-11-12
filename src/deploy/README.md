@@ -63,6 +63,10 @@ The ignore rule for the Go stack is `src/.dockerignore`; it leaves out `*_test.g
 `golang`. It has the C compiler that `go test -race` needs and is used only by `scripts/check.sh`
 for the race run, never to build an image.
 
+`images.lock` also pins `wiremock`, the WireMock image that serves as the recorded-model replay
+server and its recorder in tests (`src/tests/recorded/`, research D26). It stands in for the
+gateway on test networks only; no image is built from it and Compose does not start it.
+
 - `Dockerfile.agent`: the agent step image, with Docker Agent copied from its pinned image, the Go toolchain, and `TELEMETRY_ENABLED=false`.
 - `Dockerfile.check`: the check container, with the Go toolchain only, to run checks on generated code.
 - `Dockerfile.engine`: the workflow engine, a static Go binary on `scratch`; expects the main package `src/engine/cmd/engine`.
