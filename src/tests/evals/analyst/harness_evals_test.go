@@ -211,6 +211,7 @@ func must(t testing.TB, err error) {
 // Trial is one run of one case.
 type Trial struct {
 	N        int      `json:"trial"`
+	Attempts int      `json:"attempts"`
 	Passed   bool     `json:"passed"`
 	Results  []Result `json:"results"`
 	Duration string   `json:"duration"`
@@ -277,8 +278,8 @@ func (l *lab) run(cases []Case, agentDir, agentFile, dir string) []CaseReport {
 		cr := CaseReport{Name: c.Name, Adversarial: c.Adversarial, Attack: c.Attack, Passed: true}
 		for i := 1; i <= Trials; i++ {
 			start := time.Now()
-			out, stderr, err := l.analyst(agentDir, agentFile, c.Description)
-			tr := Trial{N: i, Duration: time.Since(start).Round(time.Millisecond).String()}
+			out, stderr, attempts, err := l.analystWithRetry(agentDir, agentFile, c.Description)
+			tr := Trial{N: i, Attempts: attempts, Duration: time.Since(start).Round(time.Millisecond).String()}
 			if err != nil {
 				tr.ExitErr = err.Error()
 				tr.Stderr = tail(string(stderr), 600)
@@ -315,7 +316,7 @@ func print(t testing.TB, reps []CaseReport, dir string) bool {
 		}
 		fmt.Fprintf(&b, "\n[%s] %s (%s)\n", verdict(c.Passed), c.Name, kind)
 		for _, tr := range c.Trials {
-			fmt.Fprintf(&b, "  trial %d: %s  %s\n", tr.N, verdict(tr.Passed), tr.Duration)
+			fmt.Fprintf(&b, "  trial %d: %s  %s  attempts=%d\n", tr.N, verdict(tr.Passed), tr.Duration, tr.Attempts)
 			if tr.ExitErr != "" {
 				fmt.Fprintf(&b, "    run failed: %s\n      %s\n", tr.ExitErr, tr.Stderr)
 			}
