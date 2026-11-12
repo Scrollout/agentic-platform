@@ -1,5 +1,6 @@
 """Tests for scripts/hooks/commit-msg, run against throwaway git repositories."""
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -7,7 +8,9 @@ from unittest import mock
 
 import gitenv
 
-HOOK = os.path.abspath(
+# COMMIT_MSG_HOOK_SOURCE may name another commit-msg hook file to test (for example a copy of the
+# committed version).
+HOOK = os.environ.get("COMMIT_MSG_HOOK_SOURCE") or os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "hooks", "commit-msg")
 )
 
@@ -84,6 +87,85 @@ class CommitMsgHookTest(unittest.TestCase):
     def test_code_alone_is_unprotected_and_passes(self):
         self.stage("src/engine/a.go")
         r = self.run_hook("feat: engine\n")
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    # T009d: the hook that judges is the staged scripts/hooks/commit-msg when it differs from the
+    # running file (here the running file is outside the repository, so any staged copy differs).
+    def stage_text(self, path, text):
+        full = os.path.join(self.repo, path)
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        with open(full, "w") as f:
+            f.write(text)
+        self.git("add", path)
+
+    def test_staged_commit_msg_that_refuses_everything_decides(self):
+        self.stage_text("scripts/hooks/commit-msg", "#!/bin/sh\necho STAGED-REFUSES >&2\nexit 1\n")
+        self.stage("docs/notes.md")
+        r = self.run_hook("docs: add notes\n\nApproved-by: Owner 2026-11-12\n")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("STAGED-REFUSES", r.stderr)
+
+    def test_staged_commit_msg_that_accepts_everything_decides(self):
+        self.stage_text("scripts/hooks/commit-msg", "#!/bin/sh\nexit 0\n")
+        r = self.run_hook("chore: add script\n")
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_staged_copy_of_the_same_rules_judges_the_forwarded_message(self):
+        with open(HOOK) as f:
+            text = f.read()
+        self.stage_text("scripts/hooks/commit-msg", text + "\n# staged variant\n")
+        self.stage("scripts/x.sh")
+        bad = self.run_hook("chore: add script\n")
+        self.assertNotEqual(bad.returncode, 0)
+        self.assertIn("scripts/x.sh", bad.stderr)
+        good = self.run_hook("chore: add script\n\nApproved-by: Owner 2026-11-12\n")
+        self.assertEqual(good.returncode, 0, good.stderr)
+
+    def test_caller_variable_does_not_make_the_running_commit_msg_decide(self):
+        self.stage_text("scripts/hooks/commit-msg", "#!/bin/sh\necho STAGED-REFUSES >&2\nexit 1\n")
+        self.env["AP_PRE_COMMIT_STAGED_HOOK"] = "1"
+        self.env["AP_COMMIT_MSG_STAGED_HOOK"] = "1"
+        r = self.run_hook("docs: add notes\n")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("STAGED-REFUSES", r.stderr)
+
+    # T009d review: fail closed.
+    def test_failing_git_diff_refuses(self):
+        self.stage("docs/notes.md")
+        real = shutil.which("git")
+        stub = gitenv.stub_dir(self, {"git": (
+            'if [ "$1" = diff ]; then echo "stub git: diff failed" >&2; exit 3; fi\n'
+            'exec %s "$@"\n' % real)})
+        env = self.env
+        self.env = gitenv.with_path(self.env, stub)
+        try:
+            r = self.run_hook("docs: add notes\n")
+        finally:
+            self.env = env
+        self.assertNotEqual(r.returncode, 0, r.stderr)
+
+    def test_control_pass_through_git_stub_accepts(self):
+        self.stage("docs/notes.md")
+        stub = gitenv.stub_dir(self, {"git": 'exec %s "$@"\n' % shutil.which("git")})
+        env = self.env
+        self.env = gitenv.with_path(self.env, stub)
+        try:
+            r = self.run_hook("docs: add notes\n")
+        finally:
+            self.env = env
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_go_file_with_a_newline_in_its_name_counts_as_code(self):
+        # "src/a\nb.go" is one name; split at the newline neither half looks like Go code
+        self.stage("src/a\nb.go", "src/a_test.go")
+        r = self.run_hook("feat: engine\n\nApproved-by: Owner 2026-11-12\n")
+        self.assertNotEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Tests-approved-by", r.stderr)
+
+    def test_go_file_with_a_newline_in_its_name_and_both_trailers_passes(self):
+        self.stage("src/a\nb.go", "src/a_test.go")
+        r = self.run_hook("feat: engine\n\nApproved-by: Owner 2026-11-12\n"
+                          "Tests-approved-by: Fresh Reviewer\n")
         self.assertEqual(r.returncode, 0, r.stderr)
 
 

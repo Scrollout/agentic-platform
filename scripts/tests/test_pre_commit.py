@@ -10,8 +10,8 @@ Run from the repository root with
 scripts/tests on sys.path, which `import gitenv` needs; `unittest scripts/tests/test_pre_commit.py`
 does not).
 
-PRE_COMMIT_HOOK_SOURCE may name another hook file to test (for example a copy of the
-committed version).
+PRE_COMMIT_HOOK_SOURCE may name another pre-commit hook file to test (for example a copy of the
+committed version); COMMIT_MSG_HOOK_SOURCE does the same for the commit-msg hook.
 
 The second half (T009b and T009c) commits for real through core.hooksPath in the clone. Its
 clone commits the hook under test (so the staged and committed hook is that file) and trims
@@ -32,6 +32,8 @@ import gitenv
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 HOOK_SOURCE = os.environ.get("PRE_COMMIT_HOOK_SOURCE") or os.path.join(
     REPO, "scripts", "hooks", "pre-commit")
+COMMIT_MSG_SOURCE = os.environ.get("COMMIT_MSG_HOOK_SOURCE") or os.path.join(
+    REPO, "scripts", "hooks", "commit-msg")
 SECRET = "sk" + "-ant-" + "A1b2C3d4" * 4  # built at runtime: no secret pattern in this file
 
 
@@ -182,14 +184,17 @@ class CloneCase(unittest.TestCase):
         self.hook = os.path.join(self.clone, "scripts", "hooks", "pre-commit")
         shutil.copyfile(HOOK_SOURCE, self.hook)
         os.chmod(self.hook, 0o755)
+        self.msg_hook = os.path.join(self.clone, "scripts", "hooks", "commit-msg")
+        shutil.copyfile(COMMIT_MSG_SOURCE, self.msg_hook)
+        os.chmod(self.msg_hook, 0o755)
         if self.trim:
             for name in os.listdir(os.path.join(self.clone, "scripts", "tests")):
                 if name.startswith("test_") and name.endswith(".py"):
                     self.git("rm", "-q", "-f", "scripts/tests/" + name)
             self.write("scripts/tests/test_trivial.py", TRIVIAL_TEST)
             self.git("add", "scripts/tests/test_trivial.py")
-        self.git("add", "scripts/hooks/pre-commit")
-        self.git("commit", "-q", "--no-verify", "-m", "test setup: hook under test, trimmed tests")
+        self.git("add", "scripts/hooks/pre-commit", "scripts/hooks/commit-msg")
+        self.git("commit", "-q", "--no-verify", "-m", "test setup: hooks under test, trimmed tests")
         self.git("config", "core.hooksPath", os.path.join(self.clone, "scripts", "hooks"))
 
     def git(self, *args, check=True, env=None):
@@ -211,12 +216,13 @@ class CloneCase(unittest.TestCase):
         self.stage(path, text)
         self.git("commit", "-q", "--no-verify", "-m", "setup " + path)
 
-    def commit(self, *args):
+    def commit(self, *args, env=None):
         """A real commit through core.hooksPath (pre-commit and commit-msg run)."""
-        return self.git("commit", "-q", "-m", "test commit", "-m", APPROVAL, *args, check=False)
+        return self.git("commit", "-q", "-m", "test commit", "-m", APPROVAL, *args, check=False,
+                        env=env)
 
-    def run_hook(self):
-        return subprocess.run([self.hook], cwd=self.clone, env=self.env,
+    def run_hook(self, env=None):
+        return subprocess.run([self.hook], cwd=self.clone, env=env or self.env,
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
     def head(self):
@@ -508,6 +514,7 @@ class TempFoldersTest(CloneCase):
             "        open(%r, 'w').close()\n"
             "        time.sleep(120)\n" % marker))
         log = open(os.path.join(self.tmp, "hook.log"), "w")
+        self.addCleanup(log.close)
         p = subprocess.Popen([self.hook], cwd=self.clone, env=self.env, stdout=log, stderr=log,
                              start_new_session=True)
         self.addCleanup(lambda: (p.poll() is None) and os.killpg(p.pid, signal.SIGKILL))
@@ -694,6 +701,420 @@ class GoVersionGuardTest(CloneCase):
             f.writelines(("golang-race\n" if l.startswith("golang-race") else l) for l in lines)
         r = self.check("go1.25.3", "go1.25.3")
         self.assertNotEqual(r.returncode, 0, self.out(r))
+
+def real(name):
+    path = shutil.which(name)
+    if path is None:
+        raise AssertionError("%s is a prerequisite" % name)
+    return path
+
+
+class FailClosedToolsTest(CloneCase):
+    """T009d: a failing tool is a failing hook, never "no secret found"."""
+
+    def with_stubs(self, stubs):
+        return gitenv.with_path(self.env, gitenv.stub_dir(self, stubs))
+
+    def refused(self, stubs, staged=None):
+        self.stage(*(staged or ("src/agents/a.txt", "clean, no secret here\n")))
+        r = self.run_hook(env=self.with_stubs(stubs))
+        self.assertNotEqual(r.returncode, 0, self.out(r))
+        self.assertNotIn("staged snapshot passed", self.out(r))
+        self.assertTrue(self.out(r).strip(), "a refusal needs a message")
+        self.assertEqual(self.leftovers(), [])
+
+    def test_control_pass_through_stubs_still_pass(self):
+        stubs = {"grep": 'exec %s "$@"\n' % real("grep"), "xargs": 'exec %s "$@"\n' % real("xargs")}
+        self.stage("src/agents/a.txt", "clean\n")
+        r = self.run_hook(env=self.with_stubs(stubs))
+        self.assertEqual(r.returncode, 0, self.out(r))
+
+    def test_control_pass_through_stubs_still_find_a_secret(self):
+        stubs = {"grep": 'exec %s "$@"\n' % real("grep"), "xargs": 'exec %s "$@"\n' % real("xargs")}
+        self.stage("src/agents/a.txt", "token: %s\n" % SECRET)
+        self.assertNotEqual(self.run_hook(env=self.with_stubs(stubs)).returncode, 0)
+
+    def test_grep_exit_127_refuses(self):
+        self.refused({"grep": "exit 127\n"})
+
+    def test_grep_exit_126_refuses(self):
+        self.refused({"grep": "exit 126\n"})
+
+    def test_grep_killed_by_a_signal_refuses(self):
+        self.refused({"grep": "kill -KILL $$\n"})
+
+    def test_xargs_exit_127_refuses(self):
+        self.refused({"xargs": "exit 127\n"})
+
+    def test_xargs_exit_126_refuses(self):
+        self.refused({"xargs": "exit 126\n"})
+
+    def test_xargs_killed_by_a_signal_refuses(self):
+        self.refused({"xargs": "kill -KILL $$\n"})
+
+    def test_tool_failure_refuses_a_real_commit(self):
+        self.stage("src/agents/a.txt", "clean\n")
+        before = self.head()
+        r = self.commit(env=self.with_stubs({"xargs": "exit 127\n"}))
+        self.assertNotEqual(r.returncode, 0, self.out(r))
+        self.assertEqual(self.head(), before)
+
+
+class SortingStepWriteFailureTest(CloneCase):
+    """T009d review: the step that sorts staged entries into files and links fails closed."""
+
+    def stub_mktemp(self, name):
+        # The hook's work folder gets `name` (files or links) as a link to /dev/full: every
+        # write to it fails with ENOSPC and the file looks empty (size 0) to `[ -s ]`.
+        body = (
+            'out=$(%s "$@") || exit $?\n'
+            'case "$*" in *"/pre-commit.XXXXXX"*) ln -s /dev/full "$out/%s";; esac\n'
+            'printf "%%s\\n" "$out"\n' % (real("mktemp"), name))
+        return gitenv.with_path(self.env, gitenv.stub_dir(self, {"mktemp": body}))
+
+    def test_control_pass_through_mktemp_passes(self):
+        self.stage("src/agents/a.txt", "clean\n")
+        body = 'exec %s "$@"\n' % real("mktemp")
+        env = gitenv.with_path(self.env, gitenv.stub_dir(self, {"mktemp": body}))
+        r = self.run_hook(env=env)
+        self.assertEqual(r.returncode, 0, self.out(r))
+
+    def test_failed_write_to_the_regular_file_list_is_not_masked_by_a_later_link(self):
+        self.stage("src/agents/a.txt", "token: %s\n" % SECRET)
+        os.symlink("harmless", os.path.join(self.clone, "src/agents/z-link"))
+        self.git("add", "--", "src/agents/z-link")
+        r = self.run_hook(env=self.stub_mktemp("files"))
+        self.assertNotEqual(r.returncode, 0, self.out(r))
+        self.assertNotIn("staged snapshot passed", self.out(r))
+        self.assertEqual(self.leftovers(), [])
+
+    def test_failed_write_to_the_regular_file_list_with_a_clean_file_refuses(self):
+        self.stage("src/agents/a.txt", "clean\n")
+        r = self.run_hook(env=self.stub_mktemp("files"))
+        self.assertNotEqual(r.returncode, 0, self.out(r))
+        self.assertNotIn("staged snapshot passed", self.out(r))
+
+    def test_failed_write_to_the_link_list_is_not_masked_by_a_later_file(self):
+        self.write("src/agents/placeholder", "x\n")
+        os.symlink("elsewhere-" + SECRET, os.path.join(self.clone, "src/agents/a-link"))
+        self.git("add", "--", "src/agents/a-link")
+        self.stage("src/agents/z.txt", "clean\n")
+        r = self.run_hook(env=self.stub_mktemp("links"))
+        self.assertNotEqual(r.returncode, 0, self.out(r))
+        self.assertNotIn("staged snapshot passed", self.out(r))
+
+
+class CraftedZeroTest(CloneCase):
+    """T009d review: a hook run by a crafted path never deletes a folder outside its own."""
+
+    def crafted(self, hook, variant, *args):
+        victim = os.path.join(self.tmproot, "victim")
+        os.makedirs(victim)
+        os.makedirs(os.path.join(self.tmproot, "%s-hook.a" % os.path.basename(hook)))
+        with open(os.path.join(victim, "keep.txt"), "w") as f:
+            f.write("precious\n")
+        with open(hook) as f:
+            text = f.read()
+        path = os.path.join(victim, os.path.basename(hook))
+        with open(path, "w") as f:
+            f.write(text + variant)
+        os.chmod(path, 0o755)
+        zero = os.path.join(self.tmproot, "%s-hook.a" % os.path.basename(hook), "..", "victim",
+                            os.path.basename(hook))
+        r = subprocess.run([zero, *args], cwd=self.clone, env=self.env, stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, text=True)
+        self.assertTrue(os.path.exists(os.path.join(victim, "keep.txt")), self.out(r))
+        return r
+
+    def test_pre_commit_identical_to_the_staged_copy(self):
+        self.crafted(self.hook, "")
+
+    def test_pre_commit_differing_from_the_staged_copy(self):
+        self.crafted(self.hook, "\n# differs\n")
+
+    def test_commit_msg_identical_to_the_staged_copy(self):
+        msg = os.path.join(self.tmp, "msg.txt")
+        with open(msg, "w") as f:
+            f.write("docs: x\n")
+        self.crafted(self.msg_hook, "", msg)
+
+    def test_commit_msg_differing_from_the_staged_copy(self):
+        msg = os.path.join(self.tmp, "msg.txt")
+        with open(msg, "w") as f:
+            f.write("docs: x\n")
+        self.crafted(self.msg_hook, "\n# differs\n", msg)
+
+
+class SnapshotRepositoryStepsTest(CloneCase):
+    """T009d: each step of the snapshot repository build has its own failure exit."""
+
+    def stub_git(self, failing):
+        # Fails only the named git subcommand, and only inside the snapshot folder.
+        body = (
+            'case "$PWD" in */snapshot|*/snapshot/*)\n'
+            '  for a in "$@"; do [ "$a" = %s ] && { echo "stub git: %s failed" >&2; exit 1; }; done;;\n'
+            'esac\nexec %s "$@"\n' % (failing, failing, real("git")))
+        return gitenv.with_path(self.env, gitenv.stub_dir(self, {"git": body}))
+
+    def run_with(self, failing):
+        self.stage("scripts/tests/test_second.py", TRIVIAL_TEST)
+        return self.run_hook(env=self.stub_git(failing))
+
+    def test_control_stub_that_fails_nothing_passes(self):
+        r = self.run_with("no-such-subcommand")
+        self.assertEqual(r.returncode, 0, self.out(r))
+        self.assertIn("staged snapshot passed", r.stdout)
+
+    def test_failing_git_init_fails_the_hook(self):
+        r = self.run_with("init")
+        self.assertNotEqual(r.returncode, 0, self.out(r))
+        self.assertNotIn("staged snapshot passed", self.out(r))
+        self.assertEqual(self.leftovers(), [])
+
+    def test_failing_git_add_fails_the_hook(self):
+        r = self.run_with("add")
+        self.assertNotEqual(r.returncode, 0, self.out(r))
+        self.assertNotIn("staged snapshot passed", self.out(r))
+
+    def test_failing_snapshot_commit_fails_the_hook(self):
+        r = self.run_with("commit")
+        self.assertNotEqual(r.returncode, 0, self.out(r))
+        self.assertNotIn("staged snapshot passed", self.out(r))
+
+
+class SymlinkScanTest(CloneCase):
+    """T009d: a staged symlink's target text is scanned; a link out of the repository is not followed."""
+
+    def outside(self, text):
+        path = os.path.join(self.tmp, "outside-secret.txt")
+        with open(path, "w") as f:
+            f.write(text)
+        return path
+
+    def link(self, name, target):
+        os.symlink(target, os.path.join(self.clone, name))
+        self.git("add", "--", name)
+
+    def test_symlink_to_an_outside_file_with_a_secret_is_not_followed(self):
+        target = self.outside("token: %s\n" % SECRET)
+        self.link("src/agents/link-out", target)
+        r = self.run_hook()
+        self.assertNotIn(SECRET, self.out(r))
+        self.assertEqual(r.returncode, 0, self.out(r))
+
+    def test_relative_symlink_out_of_the_repository_is_not_followed(self):
+        target = self.outside("token: %s\n" % SECRET)
+        rel = os.path.relpath(target, os.path.join(self.clone, "src", "agents"))
+        self.link("src/agents/link-out", rel)
+        r = self.run_hook()
+        self.assertNotIn(SECRET, self.out(r))
+        self.assertEqual(r.returncode, 0, self.out(r))
+
+    def test_the_decision_does_not_depend_on_the_outside_content(self):
+        target = self.outside("nothing here\n")
+        self.link("src/agents/link-out", target)
+        clean = self.run_hook()
+        self.assertEqual(clean.returncode, 0, self.out(clean))
+        self.outside("token: %s\n" % SECRET)
+        secret = self.run_hook()
+        self.assertEqual(secret.returncode, clean.returncode, self.out(secret))
+        self.assertNotIn(SECRET, self.out(secret))
+
+    def test_symlink_whose_target_text_holds_a_secret_is_refused(self):
+        self.link("src/agents/link-text", "elsewhere-" + SECRET)
+        r = self.run_hook()
+        self.assertNotEqual(r.returncode, 0, self.out(r))
+        self.assertIn("secret", self.out(r))
+
+    def test_symlink_whose_target_text_holds_a_secret_refuses_a_real_commit(self):
+        self.link("src/agents/link-text", "elsewhere-" + SECRET)
+        before = self.head()
+        self.assertNotEqual(self.commit().returncode, 0)
+        self.assertEqual(self.head(), before)
+
+    def test_control_symlink_with_a_harmless_target_text_passes(self):
+        self.link("src/agents/link-text", "elsewhere-harmless")
+        r = self.run_hook()
+        self.assertEqual(r.returncode, 0, self.out(r))
+
+
+class HandoverCallerEnvTest(CloneCase):
+    """T009d: AP_PRE_COMMIT_STAGED_HOOK set by the caller does not skip the handover."""
+
+    def broken_staged_hook(self):
+        with open(self.hook) as f:
+            good = f.read()
+        self.stage("scripts/hooks/pre-commit", good + "\necho 'STAGED-HOOK-BROKEN' >&2\nexit 1\n")
+        self.write("scripts/hooks/pre-commit", good)
+
+    def test_caller_variable_does_not_skip_the_handover_in_a_real_commit(self):
+        self.broken_staged_hook()
+        before = self.head()
+        env = dict(self.env, AP_PRE_COMMIT_STAGED_HOOK="1")
+        r = self.commit(env=env)
+        self.assertNotEqual(r.returncode, 0, self.out(r))
+        self.assertIn("STAGED-HOOK-BROKEN", self.out(r))
+        self.assertEqual(self.head(), before)
+
+    def test_caller_variable_does_not_skip_the_handover_when_run_directly(self):
+        self.broken_staged_hook()
+        r = self.run_hook(env=dict(self.env, AP_PRE_COMMIT_STAGED_HOOK="1"))
+        self.assertNotEqual(r.returncode, 0, self.out(r))
+        self.assertIn("STAGED-HOOK-BROKEN", self.out(r))
+
+    def test_caller_variable_does_not_hide_a_staged_secret(self):
+        self.stage("src/agents/a.txt", "token: %s\n" % SECRET)
+        r = self.run_hook(env=dict(self.env, AP_PRE_COMMIT_STAGED_HOOK="1"))
+        self.assertNotEqual(r.returncode, 0, self.out(r))
+
+
+class HandoverSigtermTest(CloneCase):
+    """T009d: SIGTERM while the handed-over hook runs leaves no temp folders and refuses the commit."""
+
+    def test_sigterm_during_the_handed_over_hook(self):
+        marker = os.path.join(self.tmp, "test-started")
+        with open(self.hook) as f:
+            good = f.read()
+        # the staged hook differs from the running one, so the running one hands over to it
+        self.stage("scripts/hooks/pre-commit", good + "\n# staged variant\n")
+        self.write("scripts/hooks/pre-commit", good)
+        self.stage("scripts/tests/test_sleeper.py", (
+            "import time, unittest\n\n\nclass T(unittest.TestCase):\n"
+            "    def test_sleep(self):\n"
+            "        open(%r, 'w').close()\n"
+            "        time.sleep(120)\n" % marker))
+        before = self.head()
+        with open(os.path.join(self.tmp, "commit.log"), "w") as log:
+            p = subprocess.Popen(
+                ["git", "commit", "-q", "-m", "test commit", "-m", APPROVAL], cwd=self.clone,
+                env=self.env, stdout=log, stderr=log, start_new_session=True)
+            self.addCleanup(lambda: (p.poll() is None) and os.killpg(p.pid, signal.SIGKILL))
+            deadline = time.time() + 90
+            while not os.path.exists(marker) and time.time() < deadline and p.poll() is None:
+                time.sleep(0.2)
+            self.assertTrue(os.path.exists(marker), "the staged test never started")
+            self.assertGreaterEqual(len(self.leftovers()), 1)
+            os.killpg(p.pid, signal.SIGTERM)
+            try:
+                rc = p.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                self.fail("the commit did not end after SIGTERM")
+        self.assertNotEqual(rc, 0)
+        # git dies at once; the hooks it started clean up a moment later
+        deadline = time.time() + 15
+        while self.leftovers() and time.time() < deadline:
+            time.sleep(0.2)
+        self.assertEqual(self.leftovers(), [])
+        self.assertEqual(self.head(), before)
+
+    def test_sigterm_to_the_hook_group_when_run_directly(self):
+        marker = os.path.join(self.tmp, "test-started")
+        with open(self.hook) as f:
+            good = f.read()
+        self.stage("scripts/hooks/pre-commit", good + "\n# staged variant\n")
+        self.write("scripts/hooks/pre-commit", good)
+        self.stage("scripts/tests/test_sleeper.py", (
+            "import time, unittest\n\n\nclass T(unittest.TestCase):\n"
+            "    def test_sleep(self):\n"
+            "        open(%r, 'w').close()\n"
+            "        time.sleep(120)\n" % marker))
+        with open(os.path.join(self.tmp, "hook.log"), "w") as log:
+            p = subprocess.Popen([self.hook], cwd=self.clone, env=self.env, stdout=log,
+                                 stderr=log, start_new_session=True)
+            self.addCleanup(lambda: (p.poll() is None) and os.killpg(p.pid, signal.SIGKILL))
+            deadline = time.time() + 90
+            while not os.path.exists(marker) and time.time() < deadline and p.poll() is None:
+                time.sleep(0.2)
+            self.assertTrue(os.path.exists(marker), "the staged test never started")
+            os.killpg(p.pid, signal.SIGTERM)
+            try:
+                rc = p.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                self.fail("the hook did not exit after SIGTERM")
+        self.assertNotEqual(rc, 0)
+        deadline = time.time() + 15
+        while self.leftovers() and time.time() < deadline:
+            time.sleep(0.2)
+        self.assertEqual(self.leftovers(), [])
+
+
+class CommitMsgHandoverTest(CloneCase):
+    """T009d: the staged scripts/hooks/commit-msg judges the message, through a real git commit."""
+
+    REFUSE = "#!/bin/sh\necho 'STAGED-COMMIT-MSG-REFUSES' >&2\nexit 1\n"
+
+    def read_msg_hook(self):
+        with open(self.msg_hook) as f:
+            return f.read()
+
+    def test_unstaged_broken_commit_msg_does_not_decide_a_commit(self):
+        good = self.read_msg_hook()
+        self.write("scripts/hooks/commit-msg", good + "\necho 'WORKING-COMMIT-MSG-BROKEN' >&2\nexit 1\n")
+        self.stage("src/agents/notes.txt", "clean\n")
+        before = self.head()
+        r = self.commit()
+        self.assertEqual(r.returncode, 0, self.out(r))
+        self.assertNotIn("WORKING-COMMIT-MSG-BROKEN", self.out(r))
+        self.assertNotEqual(self.head(), before)
+        self.assertIn("WORKING-COMMIT-MSG-BROKEN", self.read_msg_hook())
+
+    def test_unstaged_weakened_commit_msg_does_not_waive_the_approval(self):
+        # the working copy no longer treats scripts/ as protected; the staged one still does
+        # (the edit is after the handover block: an edit to the block itself takes effect)
+        weak = self.read_msg_hook().replace("scripts/|", "no-such-dir/|")
+        self.assertNotEqual(weak, self.read_msg_hook())
+        self.write("scripts/hooks/commit-msg", weak)
+        self.stage("scripts/x.sh", "echo x\n")
+        before = self.head()
+        r = self.git("commit", "-q", "-m", "no trailer", check=False)
+        self.assertNotEqual(r.returncode, 0, self.out(r))
+        self.assertEqual(self.head(), before)
+
+    def test_staged_commit_msg_that_refuses_everything_refuses(self):
+        good = self.read_msg_hook()
+        self.stage("scripts/hooks/commit-msg", self.REFUSE)
+        self.write("scripts/hooks/commit-msg", good)  # the working copy is fine
+        before = self.head()
+        r = self.commit()
+        self.assertNotEqual(r.returncode, 0, self.out(r))
+        self.assertIn("STAGED-COMMIT-MSG-REFUSES", self.out(r))
+        self.assertEqual(self.head(), before)
+
+    def test_staged_commit_msg_that_refuses_everything_refuses_when_working_copy_is_too(self):
+        # control: the refusal is observable at all
+        self.stage("scripts/hooks/commit-msg", self.REFUSE)
+        r = self.commit()
+        self.assertNotEqual(r.returncode, 0, self.out(r))
+        self.assertIn("STAGED-COMMIT-MSG-REFUSES", self.out(r))
+
+    def test_protected_path_without_approved_by_is_refused(self):
+        self.stage("scripts/x.sh", "echo x\n")
+        before = self.head()
+        r = self.git("commit", "-q", "-m", "no trailer", check=False)
+        self.assertNotEqual(r.returncode, 0, self.out(r))
+        self.assertIn("scripts/x.sh", self.out(r))
+        self.assertEqual(self.head(), before)
+
+    def test_protected_path_with_approved_by_commits(self):
+        self.stage("scripts/x.sh", "echo x\n")
+        r = self.commit()
+        self.assertEqual(r.returncode, 0, self.out(r))
+
+    def test_unprotected_path_commits_without_a_trailer(self):
+        self.stage("docs/notes-unprotected.txt", "x\n")
+        r = self.git("commit", "-q", "-m", "plain", check=False)
+        self.assertEqual(r.returncode, 0, self.out(r))
+
+    def test_handed_over_commit_msg_still_gets_the_message_file(self):
+        # a staged copy that differs only by a comment must judge the same message
+        self.stage("scripts/hooks/commit-msg", self.read_msg_hook() + "\n# staged variant\n")
+        self.write("scripts/hooks/commit-msg", self.read_msg_hook())
+        before = self.head()
+        r = self.git("commit", "-q", "-m", "no trailer", check=False)
+        self.assertNotEqual(r.returncode, 0, self.out(r))
+        self.assertEqual(self.head(), before)
+        r = self.commit()
+        self.assertEqual(r.returncode, 0, self.out(r))
 
 
 if __name__ == "__main__":

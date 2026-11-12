@@ -21,3 +21,26 @@ def make_home(testcase):
     tmp = tempfile.TemporaryDirectory()
     testcase.addCleanup(tmp.cleanup)
     return tmp.name
+
+
+def stub_dir(testcase, stubs):
+    """Make a directory of executable stub commands, {name: sh body}, and return its path.
+
+    Put it first on PATH with with_path(); the stub can reach the real command by the absolute
+    path the test resolved before the stub existed.
+    """
+    tmp = tempfile.TemporaryDirectory()
+    testcase.addCleanup(tmp.cleanup)
+    for name, body in stubs.items():
+        path = os.path.join(tmp.name, name)
+        with open(path, "w") as f:
+            f.write("#!/bin/sh\n" + body)
+        os.chmod(path, 0o755)
+    return tmp.name
+
+
+def with_path(env, directory):
+    """A copy of env whose PATH starts with directory."""
+    out = dict(env)
+    out["PATH"] = directory + os.pathsep + env.get("PATH", os.defpath)
+    return out

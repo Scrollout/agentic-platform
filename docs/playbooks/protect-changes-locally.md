@@ -24,17 +24,28 @@ A fresh clone of the repository, or a change to the hooks.
 3. The hook that judges a commit is the one in that commit. `core.hooksPath` points at the
    working tree, so git starts the working-tree copy of the hook, which may be half edited. The
    hook's first block reads the staged `scripts/hooks/pre-commit` from the index and, if it
-   differs from the running file, runs it and returns its exit code. `sh` reads a script one
-   command at a time, so the rest of the working-tree file is never read. The variable
-   `AP_PRE_COMMIT_STAGED_HOOK` stops the staged hook from handing over again. A commit that
-   deletes the hook is judged by the running copy. Only an unstaged edit to that first block
-   still takes effect, so keep the block short.
+   differs from the running file, copies it into a fresh `$TMPDIR/pre-commit-hook.*` folder and
+   `exec`s it with the same arguments. `sh` reads a script one command at a time, so the rest of
+   the working-tree file is never read. No variable decides the handover: a run is the staged
+   hook exactly when its own file equals the staged one, so nothing a caller sets in the
+   environment can skip it. Because `exec` keeps the process, git waits for the staged copy and
+   a signal sent to the hook reaches it directly; there is no parent left to forward signals.
+   The staged copy recognises its folder by name and removes it once it has compared itself.
+   `scripts/hooks/commit-msg` does the same with the staged `scripts/hooks/commit-msg` (folder
+   `$TMPDIR/commit-msg-hook.*`), keeping its interface: `commit-msg <message-file>`, exit 0 to
+   accept, anything else to refuse. A commit that deletes a hook is judged by the running copy.
+   Only an unstaged edit to that first block still takes effect, so keep the block short.
 4. Staged names are passed NUL-separated or as git pathspecs, never split on white space, so a
    name with a space or a newline is still scanned for secrets and linted. Deleted paths count
    as staged: a commit that only deletes files still has its snapshot checked, for example the
    layout check, the knowledge bundle check when a `docs/` file is deleted, and the check tests
    when a `scripts/` file is deleted. The repository built from the snapshot for the check tests
    ignores `.gitignore` and global excludes, so every tracked file is in it.
+   The secret scan fails closed: it reads only regular files from the snapshot, scans a
+   symlink's target text (what git stores) instead of following it, so a link to a file outside
+   the repository is never read, and fails the hook when `xargs`, `grep` or `readlink` cannot
+   run, exits with an error or is killed. Each step of building the snapshot repository
+   (`git init`, `git add`, `git commit`) fails the hook with its own message.
 5. Go code is checked in two pinned images of the same Go release, without network:
    `go vet` and `go build` without cgo in the `golang` image, the configuration the static
    binaries ship in, then `go test -race` with cgo in the Debian-based `golang-race` image, since
@@ -49,7 +60,11 @@ A fresh clone of the repository, or a change to the hooks.
    service with one version prints `one version, nothing to compare` and passes.
 7. A commit that changes a protected path (the constitution, `scripts/`, `src/deploy/`,
    `src/tests/`, test files, test data, Go module files, `.gitignore`) is refused by
-   `scripts/hooks/commit-msg` unless its message carries an `Approved-by: <owner>` trailer.
+   `scripts/hooks/commit-msg` unless its message carries an `Approved-by: <owner>` trailer. It
+   reads the staged names NUL-separated and matches each whole name (`grep -z`), so neither a
+   name git would quote, such as one with a non-ASCII letter, nor one with a newline can slip
+   past a pattern. It fails closed: when `git diff`, `git interpret-trailers` or `grep` fails,
+   the commit is refused with a message.
 8. Only the project owner adds that trailer, or tells the agent to add it with their name and the
    date. Agents never add it on their own.
 
@@ -63,9 +78,25 @@ A fresh clone of the repository, or a change to the hooks.
   the result of a commit that does not stage it. The same edit staged decides that commit.
 - A staged secret in a file whose name has a space or a newline is refused, and so is a
   deletion-only commit that breaks a check.
+- A `grep` on `PATH` that exits 127 fails the hook; a staged symlink to `/etc/hostname` passes
+  without its content in the output; a staged symlink whose target text holds a secret is
+  refused.
+- `AP_PRE_COMMIT_STAGED_HOOK=1 git commit` still hands over to a differing staged hook, and a
+  staged `scripts/hooks/commit-msg` that refuses decides the commit even when the working copy
+  is good.
 
 # Limits
 
 Hooks run on the developer's machine and can be skipped with `--no-verify`, so they record
 approval rather than enforce it the way a hosted forge's branch protection does. When the
 repository moves to a hosted forge, add branch protection and code owners there.
+
+The handover lives in the running file: a working-tree hook whose first block is missing or
+broken is not handed over, and a working copy without the block, such as `exit 0`, decides the
+commit itself. A staged hook that lacks the block does not remove its `$TMPDIR/*-hook.*` folder,
+which holds only that copy. A caller can make a hook that runs as
+`$TMPDIR/pre-commit-hook.<name>/pre-commit` (or the `commit-msg` equivalent) remove that one
+folder; a `<name>` holding `/` or `..` is never removed. A signal sent to the hook process
+alone takes effect when the running check ends; a signal to the whole process group, as Ctrl-C, `timeout`
+or a supervisor sends, stops the check at once. When git itself is killed it does not wait for
+the hook, which removes its temporary folders a moment later.

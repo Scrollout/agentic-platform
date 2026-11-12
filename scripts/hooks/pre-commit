@@ -10,11 +10,14 @@
 #
 # The hook that judges a commit is the one in that commit. core.hooksPath points at the working
 # tree, so the hook git starts may be a half-edited copy. Its first block therefore reads the
-# staged scripts/hooks/pre-commit from the index and, if it differs from the running file, runs it
-# and returns its exit code; sh reads a script one command at a time, so nothing after that block
-# in the running file is read. AP_PRE_COMMIT_STAGED_HOOK stops the staged hook from handing over
-# again. A commit that deletes the hook is judged by the running one. Keep the block short: an
-# unstaged edit to the block itself still takes effect.
+# staged scripts/hooks/pre-commit from the index and, if it differs from the running file, execs
+# it in a fresh temporary folder; sh reads a script one command at a time, so nothing after that
+# block in the running file is read. No variable decides this: a run is the staged hook exactly
+# when its own file equals the staged one, so a caller cannot skip the handover. exec keeps the
+# process: a signal sent to the hook reaches the staged copy, and git waits for it. The staged
+# copy recognises its folder by name ($TMPDIR/pre-commit-hook.*) and removes it once it has
+# compared itself. A commit that deletes the hook is judged by the running one. Keep the block
+# short: an unstaged edit to the block itself still takes effect.
 #
 # Staged names are handled NUL-separated or through git pathspecs, never split on white space,
 # so names with spaces or newlines are checked. Deleted paths count as changed: a commit that
@@ -22,19 +25,30 @@
 set -eu
 root=$(git rev-parse --show-toplevel)
 cd "$root"
-if [ -z "${AP_PRE_COMMIT_STAGED_HOOK:-}" ]; then
-  hook=$(mktemp "${TMPDIR:-/tmp}/pre-commit-hook.XXXXXX")
-  trap 'rm -f "$hook"' EXIT
+# self: this run's own folder when it is a handed-over copy, one level below $TMPDIR (no "/" or
+# "..", so a crafted $0 cannot point rm -rf elsewhere). Assignments, not tests: under set -e a
+# failing git in "$(...)" stops the hook only when the substitution is assigned.
+self=; mid=${0#"${TMPDIR:-/tmp}"/pre-commit-hook.}; mid=${mid%/pre-commit}
+case $0 in "${TMPDIR:-/tmp}"/pre-commit-hook.*/pre-commit)
+  case $mid in */*|.|..|'') ;; *) self=${0%/pre-commit} ;; esac ;;
+esac
+staged_hook=$(git ls-files -- ':(top)scripts/hooks/pre-commit') \
+  || { echo "pre-commit: cannot read the index" >&2; exit 1; }
+if [ -n "$staged_hook" ]; then
+  hookdir=$(mktemp -d "${TMPDIR:-/tmp}/pre-commit-hook.XXXXXX")
+  trap 'rm -rf "$hookdir" ${self:+"$self"}' EXIT
   trap 'exit 1' HUP INT TERM
-  if git show :scripts/hooks/pre-commit >"$hook" 2>/dev/null && ! cmp -s "$0" "$hook"; then
+  git show :scripts/hooks/pre-commit >"$hookdir/pre-commit" \
+    || { echo "pre-commit: cannot read the staged scripts/hooks/pre-commit" >&2; exit 1; }
+  if ! cmp -s "$0" "$hookdir/pre-commit"; then
     echo "pre-commit: running the staged scripts/hooks/pre-commit, which differs from $0"
-    rc=0
-    AP_PRE_COMMIT_STAGED_HOOK=1 sh "$hook" "$@" || rc=$?
-    exit "$rc"
+    [ -z "$self" ] || rm -rf "$self"
+    # The EXIT trap stays: it runs only if exec fails, and then removes hookdir.
+    trap 'rm -rf "$hookdir"' EXIT
+    exec sh "$hookdir/pre-commit" "$@"
   fi
-  rm -f "$hook"; trap - EXIT HUP INT TERM
+  rm -rf "$hookdir" ${self:+"$self"}; trap - EXIT HUP INT TERM
 fi
-unset AP_PRE_COMMIT_STAGED_HOOK
 work=$(mktemp -d "${TMPDIR:-/tmp}/pre-commit.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 trap 'exit 1' HUP INT TERM
@@ -68,10 +82,41 @@ tr '\0' '\n' <"$work/changed" | sed 's/^/  /'
 run "root layout"
 python3 scripts/layout-check.py >/dev/null || { python3 scripts/layout-check.py; exit 1; }
 run "secret scan of the staged files"
-# Judged by grep's output, not xargs' exit code: xargs exits 0 on an empty list and 123 when any
-# batch of names has no match, even if another batch has one.
-xargs -0 -r grep -HnE 'sk-ant-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{30,}' -- <"$work/content" \
-  >"$work/secrets" 2>/dev/null || true
+# Only regular files are read. A symlink is never followed (its target may be outside the
+# repository, or a device): its target text, which is what git stores, is scanned instead. A
+# gitlink has no content here. Any other entry, or any tool failure, fails the hook: a scan that
+# did not run is not a clean scan. Each grep's exit status is mapped inside its batch (0 or 1 is
+# fine, anything else exits 255, which stops xargs with 124), because xargs folds every status
+# from 1 to 125, including grep's 2 and a shell's 126 and 127, into 123. A hit is told by the
+# output, so the scan passes only when xargs exits 0 and writes nothing.
+secret='sk-ant-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{30,}'
+scan_failed() {
+  cat "$work/secrets.err" >&2
+  echo "pre-commit: the secret scan failed ($1, exit $2); the commit is refused" >&2; exit 1
+}
+rc=0
+xargs -0 -r sh -c 'w=$1; shift; for p do
+    if [ -L "$p" ]; then printf "%s\0" "$p" >>"$w/links" || exit 255
+    elif [ -f "$p" ]; then printf "%s\0" "$p" >>"$w/files" || exit 255
+    elif [ -d "$p" ]; then :
+    else echo "pre-commit: staged entry missing from the snapshot: $p" >&2; exit 255
+    fi
+  done' sh "$work" <"$work/content" 2>"$work/secrets.err" || rc=$?
+[ "$rc" -eq 0 ] || scan_failed "sorting the staged entries" "$rc"
+: >"$work/secrets"
+if [ -s "$work/files" ]; then
+  xargs -0 -r sh -c 'grep -HnE -e "$0" -- "$@"; rc=$?; [ "$rc" -le 1 ] || exit 255' "$secret" \
+    <"$work/files" >"$work/secrets" 2>"$work/secrets.err" || rc=$?
+  [ "$rc" -eq 0 ] || scan_failed "grep over the staged files" "$rc"
+fi
+if [ -s "$work/links" ]; then
+  xargs -0 -r sh -c 'for p do
+      t=$(readlink -- "$p") || exit 255
+      rc=0; printf "%s\n" "$t" | grep -E -e "$0" >/dev/null || rc=$?
+      case $rc in 0) printf "%s: symlink target: %s\n" "$p" "$t" ;; 1) ;; *) exit 255 ;; esac
+    done' "$secret" <"$work/links" >>"$work/secrets" 2>"$work/secrets.err" || rc=$?
+  [ "$rc" -eq 0 ] || scan_failed "grep over the staged symlink targets" "$rc"
+fi
 if [ -s "$work/secrets" ]; then
   cat "$work/secrets"; echo "pre-commit: secret found in staged files" >&2; exit 1
 fi
@@ -83,9 +128,13 @@ if [ -n "$scripts" ]; then
   run "check tests"
   # Some tests clone the repository: give the snapshot its own repository, holding exactly it.
   # -f and an empty excludes file: neither .gitignore nor a global exclude may drop a tracked file.
-  git init -q && git -c core.excludesFile=/dev/null -c core.autocrlf=false add -A -f \
-    && git -c user.name=pre-commit -c user.email=pre-commit@localhost \
-    -c commit.gpgsign=false commit -q --no-verify -m "staged snapshot"
+  # Each step has its own exit: under set -e a failure inside an && list does not stop the hook.
+  git init -q || { echo "pre-commit: git init of the snapshot repository failed" >&2; exit 1; }
+  git -c core.excludesFile=/dev/null -c core.autocrlf=false add -A -f \
+    || { echo "pre-commit: git add in the snapshot repository failed" >&2; exit 1; }
+  git -c user.name=pre-commit -c user.email=pre-commit@localhost -c commit.gpgsign=false \
+    commit -q --no-verify -m "staged snapshot" \
+    || { echo "pre-commit: the snapshot repository commit failed" >&2; exit 1; }
   python3 -m unittest discover -s scripts/tests -p 'test_*.py' >"$work/unittest.log" 2>&1 \
     || { cat "$work/unittest.log"; exit 1; }
   tail -3 "$work/unittest.log"
