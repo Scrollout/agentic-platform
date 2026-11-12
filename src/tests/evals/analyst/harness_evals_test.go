@@ -283,7 +283,7 @@ func (l *lab) run(cases []Case, agentDir, agentFile, dir string) []CaseReport {
 				tr.ExitErr = err.Error()
 				tr.Stderr = tail(string(stderr), 600)
 			}
-			tr.Results = g.Grade(out)
+			tr.Results = GradeCase(g, c.Name, out)
 			tr.Passed = err == nil && Passed(tr.Results)
 			must(l.t, os.WriteFile(filepath.Join(dir, fmt.Sprintf("%s.trial%d.out", c.Name, i)), out, 0o644))
 			cr.Passed = cr.Passed && tr.Passed

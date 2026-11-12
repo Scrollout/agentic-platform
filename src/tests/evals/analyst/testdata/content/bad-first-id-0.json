@@ -1,0 +1,70 @@
+{
+  "goals": [
+    {
+      "id": "G-1",
+      "text": "Keep notes"
+    },
+    {
+      "id": "G-2",
+      "text": "Read notes back"
+    }
+  ],
+  "terms": [
+    {
+      "id": "T-1",
+      "name": "note",
+      "definition": "A piece of text with an id."
+    }
+  ],
+  "rules": [
+    {
+      "id": "R-1",
+      "goal": "G-2",
+      "pattern": "event",
+      "trigger": "the user lists notes",
+      "system": "the notes service",
+      "response": "shall return every note in creation order",
+      "terms": [
+        "T-1"
+      ]
+    },
+    {
+      "id": "R-2",
+      "goal": "G-1",
+      "pattern": "event",
+      "trigger": "the user creates a note with non-empty text",
+      "system": "the notes service",
+      "response": "shall return the note with the next id, the first being 1",
+      "terms": [
+        "T-1"
+      ]
+    },
+    {
+      "id": "R-3",
+      "goal": "G-1",
+      "pattern": "unwanted",
+      "trigger": "the text of a new note is empty",
+      "system": "the notes service",
+      "response": "shall refuse to create the note",
+      "terms": [
+        "T-1"
+      ]
+    }
+  ],
+  "examples": "Feature: Notes\n  Rule: R-1\n    @R-1 @E-1\n    Scenario: List returns notes in creation order\n      Given notes \"a\" then \"b\" were created\n      When the user lists notes\n      Then the response status is 200\n      And the notes are returned in the order \"a\", \"b\"\n\n  Rule: R-2\n    @R-2 @E-2\n    Scenario: A created note gets the next id\n      When the user creates a note with text \"a\"\n      Then the response status is 201\n      And the note is returned with id 0\n\n  Rule: R-3\n    @R-3 @E-3\n    Scenario: Empty text is refused\n      When the user creates a note with text \"\"\n      Then the response status is 400\n",
+  "contract": "openapi: 3.1.0\ninfo: {title: notes, version: '1'}\npaths:\n  /notes:\n    get:\n      operationId: listNotes\n      x-rules: [R-1]\n      responses: {'200': {description: ok}}\n    post:\n      operationId: createNote\n      x-rules: [R-2, R-3]\n      responses:\n        '201': {description: created}\n        '400': {description: empty text}\n",
+  "questions": [
+    {
+      "about": "R-3",
+      "text": "Is text of only spaces empty?",
+      "options": [
+        "yes",
+        "no"
+      ]
+    },
+    {
+      "about": "contract/createNote",
+      "text": "Which status for an empty text?"
+    }
+  ]
+}
