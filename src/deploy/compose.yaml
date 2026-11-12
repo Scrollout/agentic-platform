@@ -21,10 +21,12 @@
 # Profiles: no profile is what `ap up` starts (gateway, engine, page). `client` and `tests` are run
 # on demand with `docker compose run --rm`; `workers` are started by `ap build-workers`.
 #
-# Networks: every one is internal (no route out) except `egress`, which only the gateway joins,
-# and `page-host`, which exists only so the page's port can be published on 127.0.0.1 (Docker does
-# not publish ports from internal networks). `page-host` has IP masquerading off: no NAT, but not
-# isolation (host services on the bridge address stay reachable; T022a).
+# Networks: every one is internal and isolated (no route out, and no address of the host's, so no
+# host service is reachable from it) except `egress`, which only the gateway joins, and
+# `page-host`, which only the page forwarder joins. Docker publishes no port from an internal
+# network, so the forwarder, a static nginx, takes the page's port on 127.0.0.1 and passes requests
+# to the page on the internal network `page`. `page-host` has IP masquerading off (no NAT), but the
+# host's addresses stay reachable from it: that exposure is the forwarder's alone (T022a).
 
 name: agentic-platform
 
@@ -91,8 +93,9 @@ services:
       resources:
         limits: { cpus: "2", memory: 512m, pids: 256 }
 
-  # Read-only run page (research D18), on 127.0.0.1 only. PAGE_HOST is the one Host header it
-  # accepts (DNS rebinding guard, plan threat model).
+  # Read-only run page (research D18), reached only through page-proxy on 127.0.0.1. PAGE_HOST is
+  # the one Host header it accepts (DNS rebinding guard, plan threat model); the forwarder passes
+  # the client's Host unchanged.
   page:
     <<: *hardened
     image: ${AP_IMAGE_PAGE:?set AP_IMAGE_PAGE to the signed ap-page image (ap up does this; build it with src/deploy/build.sh page)}
@@ -103,12 +106,30 @@ services:
       PAGE_HOST: 127.0.0.1:${AP_PAGE_PORT:?set AP_PAGE_PORT (ap up does this)}
       ENGINE_URL: http://engine:8080
       ENGINE_TOKEN: ${AP_PAGE_TOKEN:?set AP_PAGE_TOKEN (ap up does this)}
-    ports:
-      - { target: 8080, published: "${AP_PAGE_PORT:?set AP_PAGE_PORT (ap up does this)}", host_ip: 127.0.0.1, protocol: tcp }
-    networks: [clients, page-host]
+    networks: [clients, page]
     deploy:
       resources:
         limits: { cpus: "0.5", memory: 128m, pids: 64 }
+
+  # The run page's forwarder (src/deploy/page-proxy/nginx.conf): the only container on
+  # `page-host`, publishing the page's port on 127.0.0.1 only. One fixed file, no variables; nginx
+  # runs directly, without the image's entrypoint scripts.
+  page-proxy:
+    <<: *hardened
+    image: ${AP_GATEWAY_IMAGE:?set AP_GATEWAY_IMAGE to the nginx pin in src/deploy/images.lock (ap up does this)}
+    user: "65532:65532"
+    entrypoint: ["nginx", "-c", "/etc/ap/nginx.conf", "-g", "daemon off;"]
+    command: []
+    volumes:
+      - { type: bind, source: ./page-proxy/nginx.conf, target: /etc/ap/nginx.conf, read_only: true }
+    tmpfs:
+      - /tmp:mode=1777,size=16m
+    ports:
+      - { target: 8080, published: "${AP_PAGE_PORT:?set AP_PAGE_PORT (ap up does this)}", host_ip: 127.0.0.1, protocol: tcp }
+    networks: [page, page-host]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 64m, pids: 64 }
 
   # Terminal client (src/cli/contract.md), run per command by the launcher.
   cli:
@@ -174,10 +195,19 @@ services:
       - { type: bind, source: "${AP_PROJECTS_DIR:?set AP_PROJECTS_DIR to the projects folder (ap up does this)}", target: /projects, read_only: true }
     networks: [checks]
 
+# `isolated` (Docker 28 and later) gives an internal network's bridge no address on the host, so a
+# container on it reaches only the other containers on it; a plain internal network still reaches
+# every host service listening on the bridge address.
+x-isolated: &isolated
+  internal: true
+  driver_opts:
+    com.docker.network.bridge.gateway_mode_ipv4: isolated
+
 networks:
-  clients: { internal: true }
-  agents: { internal: true }
-  checks: { internal: true }
+  clients: *isolated
+  agents: *isolated
+  checks: *isolated
+  page: *isolated
   egress: {}
   page-host:
     driver_opts:

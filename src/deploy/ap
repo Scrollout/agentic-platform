@@ -9,16 +9,19 @@
 #
 # Values reach Compose only through the environment (never a command line, so `ps` does not show
 # them). `up` on a started session keeps its tokens, so running it twice changes nothing; only
-# `up` after `down` makes new ones. The session (tokens, paths, port) is kept for later commands in
-# ${XDG_STATE_HOME:-$HOME/.local/state}/agentic-platform/session.env, mode 600, removed by `down`.
+# `up` after `down` makes new ones, and a second `up` with other credentials or projects is refused.
+# The session (tokens, paths, port) is kept for later commands in
+# ${XDG_STATE_HOME:-$HOME/.local/state}/agentic-platform/session.env (folder mode 700, file mode
+# 600, owned by the developer; any other file is refused, never read), removed by `down`.
 #
 # Images (ADR 0028): build.sh records each signed image as a digest reference in
 # ${XDG_STATE_HOME:-$HOME/.local/state}/agentic-platform/images.env. `up` verifies every image it
 # passes to Compose with the public key in ${XDG_CONFIG_HOME:-$HOME/.config}/agentic-platform/
 # signing/cosign.pub, from a cosign container on the registry's internal network (`ap-signing`),
-# against the local registry; any failure stops `up` before anything starts. The session keeps the verified
-# references, so later commands start exactly those images. `registry` starts the local registry
-# if it isn't running (build.sh and `up` call it).
+# against the local registry; any failure stops `up` before anything starts. A recorded image no
+# longer in the local image store (replaced by a rebuild) is pulled back by digest from the local
+# registry first. The session keeps the verified references, so later commands start exactly those
+# images. `registry` starts the local registry if it isn't running (build.sh and `up` call it).
 set -u
 
 here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
@@ -40,6 +43,7 @@ default_registry_port=5005
 reg=${AP_REGISTRY_NAME:-ap-registry}
 case $reg in [a-z0-9]*[!a-z0-9_.-]* | [!a-z0-9]* | '') printf 'ap: AP_REGISTRY_NAME %s is not a container name ([a-z0-9][a-z0-9_.-]*)\n' "'$reg'" >&2; exit 3 ;; esac
 reg_volume=$reg-data
+reg_hostnet=$reg-host
 if [ "$reg" = ap-registry ]; then reg_net=ap-signing; else reg_net=$reg-net; fi
 
 say() { printf 'ap: %s\n' "$*" >&2; }
@@ -66,6 +70,12 @@ EOF
 
 compose() { docker compose -f "$here/compose.yaml" "$@"; }
 
+# A one-off container of the session; without a terminal on stdin (a pipe, a script) Compose must
+# not allocate one.
+compose_run() {
+  if [ -t 0 ]; then compose run --rm "$@"; else compose run --rm -T "$@"; fi
+}
+
 pin() { awk -v n="$1" '$1 == n { print $2 }' "$here/images.lock"; }
 
 upper() { printf '%s' "$1" | tr '[:lower:]' '[:upper:]'; }
@@ -80,9 +90,30 @@ rand() { od -An -N32 -tx1 /dev/urandom | tr -d ' \n'; }
 # Single-quote a value for the session file, which is read back with `.`.
 quote() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
 
+# The session file is read with `.`, so it must be one only the developer could have written: a
+# regular file (not a link), owned by them, mode 600. Sets why when it is not.
+session_ok() {
+  why=''
+  if [ -L "$sess" ] || [ ! -f "$sess" ]; then why="is not a regular file"; return 1; fi
+  set -f
+  # shellcheck disable=SC2046
+  set -- $(ls -ldn -- "$sess")
+  set +f
+  case $1 in -rw------- | -rw-------.) ;; *) why="is not mode 600 (it is $1)"; return 1 ;; esac
+  [ "$3" = "$(id -u)" ] || { why="is not owned by you"; return 1; }
+  [ -r "$sess" ] || { why="is not readable"; return 1; }
+}
+
+# One value of the session file, read in a subshell so nothing else of it is kept.
+session_value() {
+  # shellcheck disable=SC1090,SC2086
+  (unset $vars; . "$sess" >/dev/null 2>&1 || exit 1; eval "printf '%s' \"\${$1:-}\"")
+}
+
 # Load the session, or stop if the platform was not started.
 load() {
-  [ -f "$sess" ] || die 3 "the platform is not started; run: ap up --credentials <file> --projects <folder>"
+  [ -e "$sess" ] || [ -L "$sess" ] || die 3 "the platform is not started; run: ap up --credentials <file> --projects <folder>"
+  session_ok || die 1 "the session file $sess $why; it is not read; run: ap down"
   set -a
   # shellcheck disable=SC1090
   . "$sess"
@@ -108,12 +139,44 @@ check_credentials() {
   [ "$3" = "$(id -u)" ] || die 3 "credentials file '$f' must be owned by you"
 }
 
+# A network the registry joins, with the one driver option that matters: an internal network is
+# `isolated` (its bridge has no host address, so nothing on it reaches the host), the publishing
+# network has IP masquerading off (no NAT, so no working route out). A network with other options
+# is replaced, together with the registry container attached to it (its data volume is kept).
+ensure_reg_net() {
+  nname=$1 nopt=$2 nval=$3
+  shift 3
+  if docker network inspect "$nname" >/dev/null 2>&1; then
+    [ "$(docker network inspect -f "{{index .Options \"$nopt\"}}" "$nname")" = "$nval" ] && return 0
+    say "replacing the network $nname (it lacks $nopt=$nval); the registry's data is kept"
+    if docker container inspect "$reg" >/dev/null 2>&1; then
+      docker rm -f "$reg" >/dev/null || die 1 "cannot remove the container $reg"
+    fi
+    docker network rm "$nname" >/dev/null || die 1 "cannot remove the network $nname (is a build running?)"
+  fi
+  docker network create "$@" -o "$nopt=$nval" "$nname" >/dev/null || die 1 "cannot create the network $nname"
+}
+
+# The networks' `isolated` gateway mode exists from Docker 28; an older engine may ignore the option
+# and leave the host reachable from every internal network, so it is refused.
+need_docker() {
+  dv=$(docker version --format '{{.Server.Version}}' 2>/dev/null) || dv=''
+  [ -n "$dv" ] || die 1 "cannot read the Docker server's version; is Docker running?"
+  case ${dv%%.*} in
+    '' | *[!0-9]*) die 3 "unrecognised Docker server version '$dv'; the platform needs Docker 28 or later" ;;
+  esac
+  [ "${dv%%.*}" -ge 28 ] ||
+    die 3 "Docker $dv is too old: the platform needs Docker 28 or later, whose isolated internal networks keep containers from reaching the host"
+}
+
 # The local image registry (ADR 0028): container $reg from the registry pin, published on
-# 127.0.0.1:$AP_REGISTRY_PORT only, data in the volume $reg_volume, and also on the internal network
-# $reg_net, where cosign reaches it as $reg:5000. Converges: a registry created from the same pin,
-# port and run flags is left alone (only started if stopped); any other is replaced, keeping its
-# data volume.
+# 127.0.0.1:$AP_REGISTRY_PORT only from its own network $reg_hostnet (masquerading off, nothing else
+# on it), data in the volume $reg_volume, and also on the isolated internal network $reg_net, where
+# cosign reaches it as $reg:5000. Converges: a registry created from the same pin, port, run flags
+# and networks is left alone (only started if stopped); any other is replaced, keeping its data
+# volume.
 ensure_registry() {
+  need_docker
   rport=${AP_REGISTRY_PORT:-$default_registry_port}
   case $rport in '' | *[!0-9]*) die 3 "AP_REGISTRY_PORT '$rport' is not a port number" ;; esac
   [ "$rport" -ge 1 ] && [ "$rport" -le 65535 ] || die 3 "AP_REGISTRY_PORT '$rport' is not a port number"
@@ -123,12 +186,12 @@ ensure_registry() {
   # change to them, the pin or the port replaces an existing container.
   rflags="--restart no --read-only --tmpfs /tmp:mode=1777,size=64m --cap-drop ALL
     --security-opt no-new-privileges --user 65532:65532 --memory 256m --cpus 1 --pids-limit 128
-    -e REGISTRY_LOG_LEVEL=info -v $reg_volume:/var/lib/registry --network bridge
+    -e REGISTRY_LOG_LEVEL=info -v $reg_volume:/var/lib/registry --network $reg_hostnet
     -p 127.0.0.1:$rport:5000"
   want="$rimage 127.0.0.1:$rport flags:$(printf '%s %s' "$rflags" "$reg_net" | tr -s ' \n' '  ' | cksum | cut -d' ' -f1)"
 
-  docker network inspect "$reg_net" >/dev/null 2>&1 ||
-    docker network create --internal "$reg_net" >/dev/null || die 1 "cannot create the network $reg_net"
+  ensure_reg_net "$reg_net" com.docker.network.bridge.gateway_mode_ipv4 isolated --internal
+  ensure_reg_net "$reg_hostnet" com.docker.network.bridge.enable_ip_masquerade false
 
   have=$(docker container inspect -f '{{index .Config.Labels "org.agentic-platform.registry"}}' "$reg" 2>/dev/null) ||
     have=absent
@@ -189,9 +252,16 @@ read_images() {
 }
 
 # Verify one image's signature with the public key, from a cosign container on the internal
-# network only, against the registry's internal name. The private key is never mounted.
+# network only, against the registry's internal name. The private key is never mounted. An image
+# no longer in the local image store (a rebuild replaced it) is first pulled back, by its digest,
+# from the local registry on 127.0.0.1, so Compose can start it without pulling.
 verify_image() {
   vname=$1 vref=$2
+  if ! docker image inspect "$vref" >/dev/null 2>&1; then
+    say "the $vname image $vref is not in the local image store; pulling it back from the local registry"
+    docker pull -q "$vref" >/dev/null ||
+      die 1 "the $vname image $vref is in neither the local image store nor the local registry; rebuild it with src/deploy/build.sh $vname"
+  fi
   out=$(docker run --rm --network "$reg_net" --read-only --cap-drop ALL --security-opt no-new-privileges \
     --user "$(id -u):$(id -g)" -v "$pub:/k/cosign.pub:ro" "$cosign_image" verify --key /k/cosign.pub \
     --insecure-ignore-tlog --allow-http-registry "$reg:5000/ap-$vname@${vref#*@}" 2>&1) || {
@@ -212,6 +282,7 @@ cmd_up() {
   done
   [ -n "$cred" ] && [ -n "$proj" ] || usage
   [ "$(id -u)" != 0 ] || die 3 "do not run ap as root: the gateway runs as your user"
+  need_docker
 
   check_credentials "$cred"
   cred=$(abs_file "$cred") || die 3 "credentials file '$cred' cannot be resolved"
@@ -222,24 +293,25 @@ cmd_up() {
 
   # A started session is kept as it is (constitution XVII: a second `up` changes nothing): its
   # tokens and, unless AP_PAGE_PORT is set, its port. Only after `down` does `up` make new tokens.
+  # A second `up` with other credentials or projects is refused: they would recreate the gateway
+  # and the workers under a running session.
   old_client='' old_page='' old_worker='' old_port=''
   if [ -e "$sess" ] || [ -L "$sess" ]; then
+    session_ok || die 1 "the session file $sess $why; it is not read; run: ap down"
     broken="the session file $sess is unreadable or incomplete; run: ap down"
-    [ -f "$sess" ] && [ -r "$sess" ] || die 1 "$broken"
-    # shellcheck disable=SC1090,SC2086
-    old=$(unset $vars; . "$sess" >/dev/null 2>&1 &&
-      printf '%s %s %s %s' "${AP_CLIENT_TOKEN:-}" "${AP_PAGE_TOKEN:-}" "${AP_WORKER_TOKEN:-}" "${AP_PAGE_PORT:-}") ||
+    old_client=$(session_value AP_CLIENT_TOKEN) && old_page=$(session_value AP_PAGE_TOKEN) &&
+      old_worker=$(session_value AP_WORKER_TOKEN) && old_port=$(session_value AP_PAGE_PORT) &&
+      old_cred=$(session_value AP_CREDENTIALS_FILE) && old_proj=$(session_value AP_PROJECTS_DIR) ||
       die 1 "$broken"
-    # shellcheck disable=SC2086
-    set -- $old
-    [ $# -eq 4 ] || die 1 "$broken"
-    old_client=$1 old_page=$2 old_worker=$3 old_port=$4
+    [ -n "$old_port" ] && [ -n "$old_cred" ] && [ -n "$old_proj" ] || die 1 "$broken"
     for t in "$old_client" "$old_page" "$old_worker"; do
       [ "${#t}" -ge 32 ] || die 1 "$broken"
       case $t in *[!0-9a-f]*) die 1 "$broken" ;; esac
     done
     [ "$old_client" != "$old_page" ] && [ "$old_client" != "$old_worker" ] && [ "$old_page" != "$old_worker" ] ||
       die 1 "$broken"
+    [ "$cred" = "$old_cred" ] && [ "$proj" = "$old_proj" ] ||
+      die 3 "the platform is running with --credentials '$old_cred' --projects '$old_proj'; run ap down first to start it with others"
   fi
 
   port=${AP_PAGE_PORT:-${old_port:-$default_page_port}}
@@ -278,7 +350,7 @@ cmd_up() {
 
   old_umask=$(umask)
   umask 077
-  mkdir -p -- "$state_dir" || die 1 "cannot create $state_dir"
+  mkdir -p -- "$state_dir" && chmod 700 -- "$state_dir" || die 1 "cannot create $state_dir or make it private (mode 700)"
   tmp=$sess.$$
   {
     echo "# agentic-platform session, written by ap up; removed by ap down"
@@ -287,7 +359,7 @@ cmd_up() {
   umask "$old_umask"
 
   say "starting the platform (gateway, engine, page); run page on http://127.0.0.1:$port"
-  compose up -d || die 1 "docker compose up failed; see the messages above (ap down stops what started)"
+  compose up -d || die 1 "docker compose up failed; see the messages above; the session is kept until: ap down"
 }
 
 cmd_down() {
@@ -301,7 +373,9 @@ cmd_down() {
   # shellcheck disable=SC2086
   export $vars
   # shellcheck disable=SC1090
-  if [ -f "$sess" ] && [ -r "$sess" ] && (. "$sess") >/dev/null 2>&1; then load; fi
+  if [ -e "$sess" ] || [ -L "$sess" ]; then
+    if session_ok && (. "$sess") >/dev/null 2>&1; then load; else say "the session file $sess is not read: it ${why:-cannot be read}"; fi
+  fi
   say "stopping the platform; run records and project folders are kept"
   compose --profile '*' down --remove-orphans || die 1 "docker compose down failed; the session is kept"
   rm -f -- "$sess"
@@ -327,7 +401,7 @@ cmd_test() {
     *@sha256:*) ;;
     *) die 3 "test: not available yet: the test harness image (T024, T046); once built with src/deploy/build.sh tests, run ap up again" ;;
   esac
-  compose run --rm tests "$@"
+  compose_run tests "$@"
 }
 
 [ $# -ge 1 ] || usage
@@ -342,12 +416,12 @@ case $cmd in
   build-workers) [ $# -eq 1 ] || usage; load; build_workers "$1" ;;
   test) cmd_test "$@" ;;
   registry) [ $# -eq 0 ] || usage; ensure_registry ;;
-  build) [ $# -ge 1 ] || usage; load; build_workers "$1" || exit $?; compose run --rm cli build "$@" ;;
+  build) [ $# -ge 1 ] || usage; load; build_workers "$1" || exit $?; compose_run cli build "$@" ;;
   resume | replay)
     # The workers are those of the run's slice; finding it needs the run's record from the engine.
     [ $# -ge 1 ] || usage
     load
     die 3 "$cmd: not available yet: T053 (workers for the run's slice)"
     ;;
-  *) load; compose run --rm cli "$cmd" "$@" ;;
+  *) load; compose_run cli "$cmd" "$@" ;;
 esac

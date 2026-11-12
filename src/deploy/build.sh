@@ -11,7 +11,9 @@
 # The key pair and signing configuration live in ${XDG_CONFIG_HOME:-~/.config}/agentic-platform/
 # signing/ and are made on first use. The private key's password comes from COSIGN_PASSWORD, or
 # cosign asks for it on the terminal. The private key is mounted, read-only, into the signing
-# container only. Exit codes: 0 built, signed and recorded; 1 any step failed; 3 usage error.
+# container only. Builds may run at the same time: recording takes a lock (images.env.lock), so no
+# build loses another's line. Exit codes: 0 built, signed and recorded; 1 any step failed; 3 usage
+# error.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd -P)
 
@@ -97,7 +99,13 @@ fi
 # starts it by digest without pulling.
 tag=127.0.0.1:$port/ap-$name:dev
 meta=$(mktemp "${TMPDIR:-/tmp}/ap-build-meta.XXXXXX")
-trap 'rm -f -- "$meta"' EXIT
+lock=$state/images.env.lock
+locked=''
+cleanup() {
+  rm -f -- "$meta"
+  if [ -n "$locked" ]; then rm -rf -- "$lock"; fi
+}
+trap cleanup EXIT
 docker buildx build -f "$here/Dockerfile.$name" -t "$tag" \
   --sbom="generator=$sbom_image" --provenance=mode=max --push --metadata-file "$meta" \
   --build-arg "GOLANG_IMAGE=$golang_image" \
@@ -106,8 +114,10 @@ docker buildx build -f "$here/Dockerfile.$name" -t "$tag" \
 digest=$(grep -o '"containerimage.digest": *"sha256:[0-9a-f]\{64\}"' "$meta" | grep -o 'sha256:[0-9a-f]\{64\}' | head -n 1) ||
   die 1 "the build of $name reported no pushed digest"
 ref=127.0.0.1:$port/ap-$name@$digest
-docker image inspect "$ref" >/dev/null 2>&1 ||
-  die 1 "$ref is not in the local image store (it needs Docker's containerd image store)"
+# Another build of the same name since this push moves the tag, and the local store then drops this
+# digest; it is pulled back by digest from the local registry.
+docker image inspect "$ref" >/dev/null 2>&1 || docker pull -q "$ref" >/dev/null ||
+  die 1 "$ref is in neither the local image store nor the local registry"
 say "built and pushed $ref (with SBOM and provenance)"
 
 # Sign the digest. cosign reaches the registry by its container name on its internal network, the
@@ -120,11 +130,49 @@ cosign_run --network "$reg_net" \
   die 1 "cosign could not sign $ref"
 say "signed $ref"
 
-# Record it: replace this name's line, keep the others, write atomically.
+# Take the record lock: a directory, made atomically by mkdir, holding the owner's process ID. A lock
+# without an owner yet is being taken, so it is waited for. A lock whose owner is no longer running
+# (a build that was killed) is stale: one waiter reclaims it by renaming it away, which only one can
+# do, and checks that what it renamed is still the dead owner's lock; if another waiter took the lock
+# in between, it is put back. Limit: a process ID reused by an unrelated process keeps a stale lock
+# alive until the wait ends, and the error then names the lock to remove.
+lock_wait_s=120
+take_lock() {
+  local i=0 owner moved
+  until mkdir -- "$lock" 2>/dev/null; do
+    owner=$(cat -- "$lock/pid" 2>/dev/null) || owner=''
+    if [ -n "$owner" ] && ! kill -0 "$owner" 2>/dev/null; then
+      moved=$lock.stale.$$
+      if mv -- "$lock" "$moved" 2>/dev/null; then
+        if [ "$(cat -- "$moved/pid" 2>/dev/null)" = "$owner" ]; then
+          say "removed the stale lock $lock of build process $owner, which is no longer running"
+          rm -rf -- "$moved"
+        elif [ ! -e "$lock" ]; then
+          mv -- "$moved" "$lock" 2>/dev/null || rm -rf -- "$moved"
+        else
+          rm -rf -- "$moved"
+        fi
+      fi
+      continue
+    fi
+    i=$((i + 1))
+    [ "$i" -le $((lock_wait_s * 2)) ] ||
+      die 1 "another build has held $lock for $lock_wait_s seconds; if no build is running, remove it"
+    sleep 0.5
+  done
+  locked=yes
+  printf '%s\n' "$$" >"$lock/pid"
+}
+
+# Record it: replace this name's line, keep the others, write atomically, under the lock.
 mkdir -p -- "$state"
+chmod 700 -- "$state"
+take_lock
 tmp=$(mktemp "$state/images.env.XXXXXX")
 {
   if [ -f "$images_env" ]; then grep -v "^AP_IMAGE_$NAME=" "$images_env" || true; fi
   printf 'AP_IMAGE_%s=%s\n' "$NAME" "$ref"
 } >"$tmp" && chmod 600 -- "$tmp" && mv -f -- "$tmp" "$images_env" || { rm -f -- "$tmp"; die 1 "cannot write $images_env"; }
+rm -rf -- "$lock"
+locked=''
 say "recorded AP_IMAGE_$NAME=$ref in $images_env"

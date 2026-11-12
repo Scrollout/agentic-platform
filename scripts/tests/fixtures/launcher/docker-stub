@@ -6,8 +6,17 @@ calls. `port` calls print a loopback address. STUB_* variables are not recorded.
 STUB_VERIFY_FAIL makes a `run ... verify ...` call (the signature check) exit 1 with a cosign-like
 message when it is "*" or any argument contains it, e.g. STUB_VERIFY_FAIL=/ap-engine@ fails the
 engine image's check only.
+
+Registry and image state, for tests of `ap registry` and of images missing from the local store
+(T058a); all off unless set:
+STUB_LABELS         a JSON object; `docker container inspect -f '{{index .Config.Labels "k"}}' <name>`
+                    prints its value for k (and exits 0), as a container made earlier would
+STUB_REGISTRY_ABSENT  `docker container inspect` exits 1 (no such container)
+STUB_DOCKER_VERSION  the server version `docker version --format ...` prints (default 29.9.3; empty: exit 1)
+STUB_EXIT_PULL      exit code of a `pull` call
+STUB_IMAGE_MISSING  an `inspect` of an image reference (one containing "@sha256:") exits 1
 """
-import json, os, sys
+import json, os, re, sys
 argv = sys.argv[1:]
 env = {k: v for k, v in os.environ.items() if not k.startswith("STUB_")}
 with open(os.environ["STUB_LOG"], "a") as f:
@@ -17,6 +26,25 @@ if argv[:1] == ["run"] and "verify" in argv:
     if pat and (pat == "*" or any(pat in a for a in argv)):
         sys.stderr.write("Error: no signatures found\n")
         sys.exit(1)
+if argv[:2] == ["container", "inspect"]:
+    if os.environ.get("STUB_REGISTRY_ABSENT"):
+        sys.stderr.write("Error: No such container\n")
+        sys.exit(1)
+    m = re.search(r'index \.Config\.Labels "([^"]+)"', " ".join(argv))
+    if m and "STUB_LABELS" in os.environ:
+        print(json.loads(os.environ["STUB_LABELS"]).get(m.group(1), ""))
+        sys.exit(0)
+if "inspect" in argv and os.environ.get("STUB_IMAGE_MISSING") and any("@sha256:" in a for a in argv):
+    sys.stderr.write("Error: No such image\n")
+    sys.exit(1)
+if argv[:1] == ["version"]:
+    v = os.environ.get("STUB_DOCKER_VERSION", "29.9.3")
+    if not v:
+        sys.exit(1)
+    print(v)
+    sys.exit(0)
+if "pull" in argv[:2] and "STUB_EXIT_PULL" in os.environ:
+    sys.exit(int(os.environ["STUB_EXIT_PULL"]))
 if "port" in argv:
     print("127.0.0.1:49999")
 code = int(os.environ.get("STUB_EXIT", "0"))

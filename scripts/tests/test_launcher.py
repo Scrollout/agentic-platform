@@ -11,6 +11,7 @@ argv and environment. The behaviour assertions live in `LauncherContract` and ru
 import io
 import json
 import os
+import pty
 import re
 import shutil
 import stat
@@ -110,7 +111,7 @@ class LauncherContract:
     def up_index(self):
         return [i for i, c in enumerate(self.calls()) if c["argv"][:1] == ["compose"] and "up" in c["argv"]]
     # helpers
-    def ap(self, *args, **env):
+    def ap(self, *args, stdin=subprocess.DEVNULL, **env):
         e = {k: v for k, v in os.environ.items() if not k.startswith(("AP_", "STUB_"))}
         e.update(REFERENCE_IMAGES_LOCK=str(self.LOCK), HOME=str(self.home), XDG_STATE_HOME=str(self.state),
                  XDG_CONFIG_HOME=str(self.config), STUB_LOG=str(self.log),
@@ -118,7 +119,7 @@ class LauncherContract:
         e.update(self.REG_ENV)
         e.update({k: str(v) for k, v in env.items()})
         return subprocess.run(["sh", str(self.AP), *args], env=e, capture_output=True, text=True,
-                              timeout=60, stdin=subprocess.DEVNULL)
+                              timeout=60, stdin=stdin)
 
     def calls(self):
         if not self.log.exists():
@@ -234,6 +235,7 @@ class LauncherContract:
         r = self.up()
         self.assertNotEqual(r.returncode, 0)
         self.assertEqual(self.up_calls(), [])
+        self.assertIn("root", r.stderr, "the refusal must say why (the session owner check would also stop a fake root)")
 
     def test_no_token_or_credential_content_in_any_argv_or_other_environment(self):
         self.up()
@@ -516,6 +518,141 @@ class LauncherContract:
                 if label != "another image's digest":  # images before the bad line may be verified first
                     self.assertEqual(self.verify_calls(), [], "verified something from a file that is not build.sh's")
 
+    # T023b: the state folder, the session file, `-T` and a second `up` with other paths
+    def compose_calls(self):
+        return [c for c in self.calls() if c["argv"][:1] == ["compose"]]
+
+    def test_up_tightens_an_existing_state_folder_to_700(self):
+        folder = self.session.parent
+        for mode in (0o755, 0o777, 0o750):
+            with self.subTest(mode=oct(mode)):
+                folder.chmod(mode)
+                self.assertEqual(self.up().returncode, 0)
+                self.assertEqual(stat.S_IMODE(folder.stat().st_mode), 0o700)
+                self.ap("down")
+
+    def test_a_session_file_that_is_not_mode_600_is_refused(self):
+        self.assertEqual(self.up().returncode, 0)
+        before = self.session.read_bytes()
+        for mode in (0o644, 0o660, 0o666, 0o640, 0o700, 0o400):
+            with self.subTest(mode=oct(mode)):
+                self.session.chmod(mode)
+                self.clear()
+                r = self.up()
+                self.assertIn(r.returncode, (1, 3), r.stderr)
+                self.assertEqual(self.compose_calls(), [], "Compose was called with a session file of mode %o" % mode)
+                self.assertEqual(self.session.read_bytes(), before)
+                for t in TOKEN_VARS:
+                    self.assertNotIn(re.search(t + r"='?([0-9a-f]+)", before.decode()).group(1), r.stdout + r.stderr)
+
+    def test_a_session_file_that_is_not_mode_600_is_not_read_by_other_commands(self):
+        """The session file is read as shell code by every later command, so a loose one stops them too."""
+        self.assertEqual(self.up().returncode, 0)
+        self.session.chmod(0o666)
+        for args in (["page"], ["describe"], ["test", "planted"]):
+            with self.subTest(args=args):
+                self.clear()
+                r = self.ap(*args)
+                self.assertIn(r.returncode, (1, 3), r.stderr)
+                self.assertEqual([c for c in self.compose_calls() if "run" in c["argv"]], [])
+                self.assertNotIn("http://127.0.0.1", r.stdout)
+
+    def test_a_session_file_that_is_a_symlink_to_a_mode_600_file_is_refused(self):
+        self.assertEqual(self.up().returncode, 0)
+        target = self.base / "elsewhere.env"
+        shutil.move(str(self.session), str(target))
+        target.chmod(0o600)
+        self.session.symlink_to(target)
+        for args in (["up", "--credentials", str(self.cred), "--projects", str(self.proj)], ["page"], ["describe"]):
+            with self.subTest(args=args[:1]):
+                self.clear()
+                r = self.ap(*args)
+                self.assertIn(r.returncode, (1, 3), r.stderr)
+                self.assertEqual(self.compose_calls(), [], "a symlinked session file was used")
+
+    def test_a_session_file_with_code_in_it_is_never_run_when_its_mode_is_loose(self):
+        self.assertEqual(self.up().returncode, 0)
+        marker = self.base / "pwned"
+        with open(self.session, "a") as f:
+            f.write("touch '%s'\n" % marker)
+        self.session.chmod(0o664)
+        self.up()
+        self.ap("page")
+        self.assertFalse(marker.exists(), "a group-writable session file was executed")
+
+    def compose_run_flags(self, argv):
+        i = argv.index("run")
+        stop = next(k for k, x in enumerate(argv) if k > i and x in ("cli", "tests"))
+        return argv[i + 1:stop]
+
+    def test_compose_run_gets_T_when_stdin_is_not_a_terminal(self):
+        self.assertEqual(self.up().returncode, 0)
+        for args in (["describe", "x"], ["test", "planted"]):
+            with self.subTest(args=args):
+                self.clear()
+                self.assertEqual(self.ap(*args).returncode, 0)
+                runs = [c for c in self.compose_calls() if "run" in c["argv"]]
+                self.assertEqual(len(runs), 1)
+                self.assertIn("-T", self.compose_run_flags(runs[0]["argv"]), runs[0]["argv"])
+
+    def test_compose_run_has_no_T_when_stdin_is_a_terminal(self):
+        self.assertEqual(self.up().returncode, 0)
+        master, slave = pty.openpty()
+        try:
+            for args in (["describe", "x"], ["test", "planted"]):
+                with self.subTest(args=args):
+                    self.clear()
+                    self.assertEqual(self.ap(*args, stdin=slave).returncode, 0)
+                    runs = [c for c in self.compose_calls() if "run" in c["argv"]]
+                    self.assertEqual(len(runs), 1)
+                    self.assertNotIn("-T", runs[0]["argv"])
+        finally:
+            os.close(master)
+            os.close(slave)
+
+    def other_credentials(self):
+        other = self.base / "other-models.env"
+        other.write_text(SECRET + "-other\n")
+        other.chmod(0o600)
+        return other
+
+    def test_a_second_up_with_other_paths_is_refused_and_names_ap_down(self):
+        self.assertEqual(self.up().returncode, 0)
+        before = self.session.read_bytes()
+        other_proj = self.base / "projects-two"
+        other_proj.mkdir()
+        cases = {"credentials": ("--credentials", str(self.other_credentials()), "--projects", str(self.proj)),
+                 "projects": ("--credentials", str(self.cred), "--projects", str(other_proj)),
+                 "both": ("--credentials", str(self.other_credentials()), "--projects", str(other_proj))}
+        for label, args in cases.items():
+            with self.subTest(differs=label):
+                self.clear()
+                r = self.ap("up", *args)
+                self.assertEqual(r.returncode, 3, r.stderr)
+                self.assertIn("ap down", r.stderr)
+                self.assertEqual(self.up_calls(), [], "Compose was told to up with the other paths")
+                self.assertEqual(self.compose_calls(), [])
+                self.assertEqual(self.session.read_bytes(), before, "the running session was changed")
+
+    def test_a_second_up_with_the_same_paths_spelled_differently_reuses_the_session(self):
+        self.assertEqual(self.up().returncode, 0)
+        link = self.base / "link"
+        link.symlink_to(self.base)
+        r = self.ap("up", "--credentials", str(link / "models.env"), "--projects", str(link / "projects") + "/")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        a, b = self.up_calls()
+        for v in TOKEN_VARS + ("AP_PAGE_PORT",):
+            self.assertEqual(a["env"][v], b["env"][v], v)
+
+    def test_up_with_other_paths_is_accepted_after_down(self):
+        self.assertEqual(self.up().returncode, 0)
+        self.assertEqual(self.ap("down").returncode, 0)
+        other_proj = self.base / "projects-two"
+        other_proj.mkdir()
+        r = self.ap("up", "--credentials", str(self.other_credentials()), "--projects", str(other_proj))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(len(self.up_calls()), 2)
+
     def test_second_up_verifies_again(self):
         self.up()
         self.up()
@@ -530,6 +667,84 @@ class RealLauncherTest(LauncherContract, unittest.TestCase):
         if not REAL_AP.is_file():
             self.fail("src/deploy/ap does not exist yet")
         super().setUp()
+
+    # T058a, against the stub: `ap registry` converges the registry, and a recorded digest missing
+    # from the local image store is pulled back before Compose starts
+    def creation_calls(self, name):
+        """Calls that make the registry container `name` (docker create / run --name)."""
+        out = []
+        for i, c in enumerate(self.calls()):
+            a = c["argv"]
+            if a[:1] in (["create"], ["run"]) or a[:2] == ["container", "create"]:
+                if "--name" in a and a[a.index("--name") + 1] == name:
+                    out.append((i, c))
+        return out
+
+    def removal_calls(self, name):
+        return [(i, c) for i, c in enumerate(self.calls())
+                if (c["argv"][:1] == ["rm"] or c["argv"][:2] == ["container", "rm"]) and name in c["argv"]]
+
+    def test_ap_registry_with_another_port_makes_the_container_again_and_keeps_its_volume(self):
+        """With the stub nothing is running, so the first call creates the registry on 5005 and the
+        second, on 5006, must (re)create it for 5006 with the old one removed first, never removing
+        the volume. That an unchanged registry is left alone is proven against real Docker in test_signing."""
+        name = self.reg
+        r = self.ap("registry", STUB_REGISTRY_ABSENT="1", AP_REGISTRY_PORT="5005")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        (_, made), = self.creation_calls(name)
+        self.assertIn("127.0.0.1:5005:5000", " ".join(made["argv"]))
+        self.clear()
+        r = self.ap("registry", AP_REGISTRY_PORT="5006")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        (ri, _), = self.removal_calls(name)[:1]
+        (ci, again), = self.creation_calls(name)
+        self.assertLess(ri, ci)
+        self.assertIn("127.0.0.1:5006:5000", " ".join(again["argv"]))
+        self.assertNotIn("127.0.0.1:5005:5000", " ".join(again["argv"]))
+        for c in self.calls():
+            self.assertFalse("volume" in c["argv"][:2] and "rm" in c["argv"],
+                             "the registry's data volume was removed: %s" % c["argv"])
+
+    def test_up_pulls_back_a_recorded_digest_that_is_not_in_the_local_store(self):
+        r = self.up(STUB_IMAGE_MISSING="1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        (up_i,) = self.up_index()
+        pulls = [(i, c) for i, c in enumerate(self.calls()) if "pull" in c["argv"][:2]]
+        for k, ref in self.recorded().items():
+            hits = [i for i, c in pulls if ref in c["argv"]]
+            self.assertEqual(len(hits), 1, "%s (%s) not pulled once: %s" % (k, ref, [c["argv"] for _, c in pulls]))
+            self.assertLess(hits[0], up_i, "pulled after compose up")
+
+    def test_a_docker_engine_older_than_28_stops_up_and_registry_with_exit_3(self):
+        """Docker before 28 ignores the isolating network option, leaving the host reachable."""
+        for version in ("27.5.1", "20.10.24"):
+            for args in (["up", "--credentials", str(self.cred), "--projects", str(self.proj)], ["registry"]):
+                with self.subTest(version=version, command=args[0]):
+                    self.clear()
+                    r = self.ap(*args, STUB_DOCKER_VERSION=version)
+                    self.assertEqual(r.returncode, 3, r.stderr)
+                    self.assertIn("Docker 28", r.stderr)
+                    self.assertEqual(self.compose_calls(), [])
+                    self.assertEqual([c for c in self.calls() if c["argv"][:2] in (["network", "create"], ["create"])], [])
+
+    def test_an_unreadable_docker_version_stops_up_and_registry_with_exit_1(self):
+        for args in (["up", "--credentials", str(self.cred), "--projects", str(self.proj)], ["registry"]):
+            with self.subTest(command=args[0]):
+                self.clear()
+                r = self.ap(*args, STUB_DOCKER_VERSION="")
+                self.assertEqual(r.returncode, 1, r.stderr)
+                self.assertEqual(self.compose_calls(), [])
+
+    def test_docker_28_and_later_is_accepted(self):
+        for version in ("28.0.0", "29.9.3"):
+            self.clear()
+            self.assertEqual(self.up(STUB_DOCKER_VERSION=version).returncode, 0)
+            self.ap("down")
+
+    def test_a_failed_pull_stops_up_before_compose(self):
+        r = self.up(STUB_IMAGE_MISSING="1", STUB_EXIT_PULL="1")
+        self.assertEqual(r.returncode, 1, r.stderr)
+        self.assertEqual(self.up_calls(), [])
 
 
 class ReferenceLauncherTest(LauncherContract, unittest.TestCase):
@@ -604,19 +819,19 @@ MUTANTS = [
      {"test_up_starts_compose_with_session_environment"}),
     ("page_binds_all_interfaces", 'echo "http://127.0.0.1:$AP_PAGE_PORT"', 'echo "http://0.0.0.0:$AP_PAGE_PORT"',
      {"test_page_prints_loopback_url"}),
-    ("client_exit_swallowed", 'compose run --rm cli "$cmd" "$@" ;;', 'compose run --rm cli "$cmd" "$@" || true ;;',
+    ("client_exit_swallowed", 'compose run $tflag --rm cli "$cmd" "$@" ;;', 'compose run --rm cli "$cmd" "$@" || true ;;',
      {"test_client_exit_code_is_returned"}),
-    ("client_args_split", 'compose run --rm cli "$cmd" "$@" ;;', 'compose run --rm cli "$cmd" $* ;;',
+    ("client_args_split", 'compose run $tflag --rm cli "$cmd" "$@" ;;', 'compose run --rm cli "$cmd" $* ;;',
      {"test_client_commands_are_passed_with_arguments_intact"}),
-    ("build_client_first", 'build) load; build_workers "${1:-}" || exit 1; compose run --rm cli build "$@" ;;',
-     'build) load; compose run --rm cli build "$@"; build_workers "${1:-}" ;;',
+    ("build_client_first", 'build) load; build_workers "${1:-}" || exit 1; compose run $tflag --rm cli build "$@" ;;',
+     'build) load; compose run $tflag --rm cli build "$@"; build_workers "${1:-}" ;;',
      {"test_build_runs_build_workers_before_the_client"}),
     ("build_ignores_workers_failure", 'build_workers "${1:-}" || exit 1;', 'build_workers "${1:-}" || true;',
      {"test_build_runs_build_workers_before_the_client"}),
     ("unknown_option_ignored", "-*) usage ;;", "-*) exit 0 ;;",
      {"test_unknown_own_option_is_usage_error"}),
-    ("docker_socket_mounted", "compose run --rm cli \"$cmd\" \"$@\" ;;",
-     "compose run --rm -v /var/run/docker.sock:/var/run/docker.sock cli \"$cmd\" \"$@\" ;;",
+    ("docker_socket_mounted", "compose run $tflag --rm cli \"$cmd\" \"$@\" ;;",
+     "compose run $tflag --rm -v /var/run/docker.sock:/var/run/docker.sock cli \"$cmd\" \"$@\" ;;",
      {"test_client_commands_are_passed_with_arguments_intact"}),
     ("verify_skipped", 'docker run --rm --network "$net"', 'true --rm --network "$net"',
      VERIFY_TESTS),
@@ -658,6 +873,34 @@ MUTANTS = [
      {"test_images_not_built_are_placeholders_and_not_verified"}),
     ("verifies_only_engine", 'for n in $names; do\n    N=$(echo "$n" | tr a-z A-Z)\n    v=', 'for n in engine; do\n    N=$(echo "$n" | tr a-z A-Z)\n    v=',
      {"test_up_verifies_every_image_it_passes_to_compose_before_compose_up"}),
+    # T023b
+    ("state_folder_not_tightened", 'mkdir -p "$state"; chmod 700 "$state"\n', 'mkdir -p "$state"\n',
+     {"test_up_tightens_an_existing_state_folder_to_700"}),
+    ("session_mode_not_checked", "-rw-------*) ;; *) echo", "*) ;; *) echo",
+     {"test_a_session_file_that_is_not_mode_600_is_refused",
+      "test_a_session_file_that_is_not_mode_600_is_not_read_by_other_commands",
+      "test_a_session_file_with_code_in_it_is_never_run_when_its_mode_is_loose"}),
+    ("up_reads_session_unchecked", '  check_session\n  [ -f "$sess" ] && . "$sess" || true\n', '  [ -f "$sess" ] && . "$sess" || true\n',
+     {"test_a_session_file_that_is_not_mode_600_is_refused",
+      "test_a_session_file_with_code_in_it_is_never_run_when_its_mode_is_loose"}),
+    ("load_reads_session_unchecked", '  check_session\n  set -a; . "$sess"', '  set -a; . "$sess"',
+     {"test_a_session_file_that_is_not_mode_600_is_not_read_by_other_commands"}),
+    ("symlinked_session_followed", '  [ ! -L "$sess" ] || { echo "ap: the session file $sess is a link; run: ap down" >&2; exit 1; }\n', "",
+     {"test_a_session_file_that_is_a_symlink_to_a_mode_600_file_is_refused"}),
+    ("no_T_flag", "tflag=-T\n", "tflag=\n", {"test_compose_run_gets_T_when_stdin_is_not_a_terminal"}),
+    ("T_flag_on_a_terminal", "[ -t 0 ] && tflag=\n", "", {"test_compose_run_has_no_T_when_stdin_is_a_terminal"}),
+    ("other_paths_accepted", '[ -n "${AP_CREDENTIALS_FILE:-}" ] &&', "false &&",
+     {"test_a_second_up_with_other_paths_is_refused_and_names_ap_down"}),
+    ("other_projects_accepted", ' || [ "$AP_PROJECTS_DIR" != "$proj" ]', "",
+     {"test_a_second_up_with_other_paths_is_refused_and_names_ap_down"}),
+    ("other_credentials_accepted", '[ "$AP_CREDENTIALS_FILE" != "$cred" ] || ', "",
+     {"test_a_second_up_with_other_paths_is_refused_and_names_ap_down"}),
+    ("other_paths_exit_1", "run: ap down\" >&2; exit 3", "run: ap down\" >&2; exit 1",
+     {"test_a_second_up_with_other_paths_is_refused_and_names_ap_down"}),
+    ("other_paths_message_without_ap_down", "uses other --credentials or --projects; run: ap down", "uses other --credentials or --projects",
+     {"test_a_second_up_with_other_paths_is_refused_and_names_ap_down"}),
+    ("paths_compared_unresolved", 'cred=$(rp "$cred"); proj=$(cd "$proj" && pwd -P)\n', "",
+     {"test_a_second_up_with_the_same_paths_spelled_differently_reuses_the_session"}),
 ]
 # A variant whose build-workers works: every assertion must still hold (the other branch of the build test).
 WORKING_BUILD_WORKERS = (

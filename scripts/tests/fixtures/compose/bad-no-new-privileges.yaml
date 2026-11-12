@@ -1,5 +1,5 @@
 # Planted violation of one rule: no_new_privileges
-# Generated shape: JSON, which is valid YAML. Reads the eight AP_* variables.
+# Generated shape: JSON, which is valid YAML. Reads the AP_* variables (images by role: AP_IMAGE_*).
 {
   "name": "ap-fixture",
   "services": {
@@ -22,7 +22,10 @@
       "image": "${AP_GATEWAY_IMAGE}",
       "secrets": [
         "anthropic_api_key"
-      ]
+      ],
+      "cpus": 0.5,
+      "mem_limit": "128m",
+      "pids_limit": 64
     },
     "engine": {
       "read_only": true,
@@ -51,7 +54,12 @@
           "source": "${AP_PROJECTS_DIR}",
           "target": "/projects"
         }
-      ]
+      ],
+      "cpus": 0.5,
+      "mem_limit": "128m",
+      "pids_limit": 64,
+      "pull_policy": "never",
+      "restart": "no"
     },
     "page": {
       "read_only": true,
@@ -63,8 +71,7 @@
       ],
       "user": "65532:65532",
       "networks": [
-        "internal",
-        "page-host"
+        "internal"
       ],
       "tmpfs": [
         "/tmp"
@@ -81,7 +88,11 @@
           "published": "${AP_PAGE_PORT}",
           "protocol": "tcp"
         }
-      ]
+      ],
+      "cpus": 0.5,
+      "mem_limit": "128m",
+      "pids_limit": 64,
+      "pull_policy": "never"
     },
     "cli": {
       "read_only": true,
@@ -99,7 +110,11 @@
       "image": "${AP_IMAGE_CLI}",
       "environment": {
         "TOKEN": "${AP_CLIENT_TOKEN}"
-      }
+      },
+      "cpus": 0.5,
+      "mem_limit": "128m",
+      "pids_limit": 64,
+      "pull_policy": "never"
     },
     "tests": {
       "read_only": true,
@@ -119,7 +134,11 @@
       "image": "${AP_IMAGE_TESTS}",
       "environment": {
         "TOKEN": "${AP_CLIENT_TOKEN}"
-      }
+      },
+      "cpus": 0.5,
+      "mem_limit": "128m",
+      "pids_limit": 64,
+      "pull_policy": "never"
     },
     "agent-one": {
       "read_only": true,
@@ -143,7 +162,8 @@
       "image": "${AP_IMAGE_AGENT}",
       "environment": {
         "TOKEN": "${AP_WORKER_TOKEN}"
-      }
+      },
+      "pull_policy": "never"
     },
     "check-one": {
       "read_only": true,
@@ -167,12 +187,16 @@
       "image": "${AP_IMAGE_CHECK}",
       "environment": {
         "TOKEN": "${AP_WORKER_TOKEN}"
-      }
+      },
+      "pull_policy": "never"
     }
   },
   "networks": {
     "internal": {
-      "internal": true
+      "internal": true,
+      "driver_opts": {
+        "com.docker.network.bridge.gateway_mode_ipv4": "isolated"
+      }
     },
     "egress": {},
     "page-host": {

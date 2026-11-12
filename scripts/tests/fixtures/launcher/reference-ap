@@ -15,13 +15,25 @@ imgs=$state/images.env
 compose() { docker compose -f "$here/compose.yaml" --profile '*' "$@"; }
 # images not built are placeholders that name no image
 load() {
-  [ -f "$sess" ] || { echo "ap: not up" >&2; exit 3; }
+  [ -f "$sess" ] || [ -L "$sess" ] || { echo "ap: not up" >&2; exit 3; }
+  check_session
   set -a; . "$sess"
   for n in $names; do N=$(echo "$n" | tr a-z A-Z); eval "unset AP_IMAGE_$N"; done
   [ ! -f "$imgs" ] || . "$imgs"
   for n in $names; do N=$(echo "$n" | tr a-z A-Z); eval "[ -n \"\${AP_IMAGE_$N:-}\" ] || AP_IMAGE_$N=ap-$n:not-built"; done
   set +a
 }
+rp() { d=$(cd "$(dirname "$1")" && pwd -P) && printf '%s/%s' "$d" "$(basename "$1")"; }
+# T023b: a session file is read as shell code, so it must be a file of ours, mode 600
+check_session() {
+  [ -f "$sess" ] || [ -L "$sess" ] || return 0
+  [ ! -L "$sess" ] || { echo "ap: the session file $sess is a link; run: ap down" >&2; exit 1; }
+  set -- $(ls -lnL "$sess")
+  case $1 in -rw-------*) ;; *) echo "ap: the session file $sess must be mode 600; run: ap down" >&2; exit 1 ;; esac
+  [ "$3" = "$(id -u)" ] || { echo "ap: the session file $sess is not yours; run: ap down" >&2; exit 1; }
+}
+tflag=-T
+[ -t 0 ] && tflag=
 rand() { od -An -N24 -tx1 /dev/urandom | tr -d ' \n'; }
 build_workers() { echo "build-workers: not available yet" >&2; return 1; }
 [ $# -ge 1 ] || usage
@@ -45,8 +57,13 @@ up)
   [ "$uid" != 0 ] || { echo "ap: refusing to run as root" >&2; exit 3; }
   [ -d "$proj" ] || { echo "ap: projects folder missing" >&2; exit 3; }
   mkdir -p "$state"; chmod 700 "$state"
-  # converge: a second up reuses the session's tokens and port
+  cred=$(rp "$cred"); proj=$(cd "$proj" && pwd -P)
+  # converge: a second up reuses the session's tokens and port, but only for the same paths
+  check_session
   [ -f "$sess" ] && . "$sess" || true
+  if [ -n "${AP_CREDENTIALS_FILE:-}" ] && { [ "$AP_CREDENTIALS_FILE" != "$cred" ] || [ "$AP_PROJECTS_DIR" != "$proj" ]; }; then
+    echo "ap: the running session uses other --credentials or --projects; run: ap down" >&2; exit 3
+  fi
   tc=${AP_CLIENT_TOKEN:-$(rand)}; tp=${AP_PAGE_TOKEN:-$(rand)}; tw=${AP_WORKER_TOKEN:-$(rand)}
   port=${AP_PAGE_PORT:-$(( 20000 + $(od -An -N2 -tu2 /dev/urandom) % 20000 ))}
   lock=${REFERENCE_IMAGES_LOCK:-$here/images.lock}
@@ -83,7 +100,7 @@ build-workers) [ $# -eq 1 ] || usage; load; build_workers "$1" ;;
 page) load; echo "http://127.0.0.1:$AP_PAGE_PORT" ;;
 test) load
   case $AP_IMAGE_TESTS in *@sha256:*) ;; *) echo "ap: test: not available yet" >&2; exit 3 ;; esac
-  compose run --rm tests "$@" ;;
-build) load; build_workers "${1:-}" || exit 1; compose run --rm cli build "$@" ;;
-*) load; compose run --rm cli "$cmd" "$@" ;;
+  compose run $tflag --rm tests "$@" ;;
+build) load; build_workers "${1:-}" || exit 1; compose run $tflag --rm cli build "$@" ;;
+*) load; compose run $tflag --rm cli "$cmd" "$@" ;;
 esac

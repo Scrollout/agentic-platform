@@ -15,12 +15,18 @@ Two names, two jobs:
   and a credentials file inside the projects folder. The file holds only the provider key. `up`
   after `down` starts a new session with new tokens; `up` on a started session keeps its tokens and
   port, so running it twice changes nothing, and refuses (exit 1, telling the developer to run
-  `down`) when the session file is unreadable or incomplete. The run page's port is
+  `down`) when the session file is unreadable or incomplete. `up` on a started session with another
+  credentials file or projects folder than the session's refuses (exit 3, telling the developer to
+  run `down` first). The run page's port is
   `AP_PAGE_PORT`, or the session's port, or 7878, and `page` prints its address. `down` works with
   a missing or broken session file. The session is kept, readable only by the developer,
-  in `${XDG_STATE_HOME:-~/.local/state}/agentic-platform/session.env` until `down`. Every command
+  in `${XDG_STATE_HOME:-~/.local/state}/agentic-platform/session.env` (folder mode 700, file mode
+  600) until `down`, also after an `up` that failed. A session file that is not a regular file
+  owned by the developer with mode 600 is never read: every command but `down` refuses it (exit 1,
+  telling the developer to run `down`), and `down` stops the platform without it. Every command
   but `up`, `down` and `registry` needs a started session (exit 3 without one). A command whose parts do not exist yet
-  exits 3 with `not available yet: <task>`.
+  exits 3 with `not available yet: <task>`. Commands passed to the terminal client read standard
+  input as it is, a terminal or not.
 
   `up` starts only images it has verified ([ADR 0028](../../docs/decisions/0028-sign-platform-images-locally.md)).
   It reads the images `src/deploy/build.sh <name>` recorded in
@@ -29,7 +35,9 @@ Two names, two jobs:
   `${XDG_CONFIG_HOME:-~/.config}/agentic-platform/signing/cosign.pub` is missing. It verifies the
   signature of every image it passes to Compose, including a built `agent`, `check` or `tests`
   image, and exits 1 naming the first image that fails, before anything starts and without changing
-  the session. Later commands start the images the session's `up` verified; after a rebuild, run
+  the session. A recorded image no longer in the local image store (a rebuild replaced it) is
+  first taken back from the local image registry by digest; when the registry has lost it too,
+  `up` exits 1 naming the `build.sh <name>` to run. Later commands start the images the session's `up` verified; after a rebuild, run
   `up` again. The local image registry listens on `127.0.0.1:${AP_REGISTRY_PORT:-5005}` only.
   `AP_REGISTRY_NAME` (default `ap-registry`) is for running a second, independent registry (for
   example in tests); its container, volume and network are named after it (`<name>`,
