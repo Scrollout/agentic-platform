@@ -47,7 +47,7 @@ func newServiceWithPattern(t *testing.T, a slices.Analyst, pattern []byte) *slic
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := slices.New(slices.Config{Schemas: schemas, Analyst: a, Diff: &fakeDiff{}, Pattern: pattern})
+	s, err := slices.New(slices.Config{Schemas: schemas, Analyst: a, Diff: &fakeDiff{}, Pattern: pattern, Lint: &fakeLint{}})
 	if err != nil {
 		t.Fatal(err)
 	}

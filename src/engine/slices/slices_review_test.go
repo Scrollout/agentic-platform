@@ -72,7 +72,7 @@ func rvService(t *testing.T, p slices.Proposal, d slices.ContractDiff, pattern [
 	if d == nil {
 		d = &rvDiff{}
 	}
-	s, err := slices.New(slices.Config{Schemas: schemas, Analyst: &rvAnalyst{p: p}, Diff: d, Pattern: pattern})
+	s, err := slices.New(slices.Config{Schemas: schemas, Analyst: &rvAnalyst{p: p}, Diff: d, Pattern: pattern, Lint: &fakeLint{}})
 	if err != nil {
 		t.Fatal(err)
 	}

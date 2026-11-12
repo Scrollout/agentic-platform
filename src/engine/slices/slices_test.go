@@ -173,7 +173,7 @@ func newService(t *testing.T, a slices.Analyst, d slices.ContractDiff) *slices.S
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := slices.New(slices.Config{Schemas: schemas, Analyst: a, Diff: d, Pattern: pattern})
+	s, err := slices.New(slices.Config{Schemas: schemas, Analyst: a, Diff: d, Pattern: pattern, Lint: &fakeLint{}})
 	if err != nil {
 		t.Fatal(err)
 	}

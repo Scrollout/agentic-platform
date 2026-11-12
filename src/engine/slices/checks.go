@@ -52,6 +52,7 @@ func (s *Service) partChecks(sl *Slice) ([]Check, error) {
 		traceFails = append(traceFails, Check{Part: f.Part, Check: CheckTraceability, Reason: f.Reason})
 	}
 	out = append(out, perPart(CheckTraceability, traceFails, "every link between the part's IDs holds")...)
+	out = append(out, exampleTagged(sl.Examples)...)
 
 	if s.pattern == nil { // fail closed: no pattern means nothing shows the slice fits
 		out = append(out, Check{Part: string(PartContract), Check: "PatternFit", fromPattern: true,
@@ -101,11 +102,7 @@ func schemaFailures(err error) ([]Check, error) {
 			}
 			return
 		}
-		reason := fmt.Sprintf("at /%s: the value breaks the schema rule %s",
-			strings.Join(e.InstanceLocation, "/"), strings.Join(e.ErrorKind.KeywordPath(), "/"))
-		if r, ok := e.ErrorKind.(*kind.Required); ok {
-			reason += " (missing " + strings.Join(r.Missing, ", ") + ")"
-		}
+		reason := schemaReason(e)
 		parts := allParts
 		if len(e.InstanceLocation) > 0 {
 			if p, ok := partOfField[e.InstanceLocation[0]]; ok {
@@ -113,11 +110,41 @@ func schemaFailures(err error) ([]Check, error) {
 			}
 		}
 		for _, p := range parts {
-			out = append(out, Check{Part: string(p), Check: CheckSchema, Reason: reason})
+			out = append(out, Check{Part: string(p), Check: CheckSchema, Reason: fmt.Sprintf("the %s part, at %s: %s", p, pointer(e.InstanceLocation), reason)})
 		}
 	}
 	walk(ve)
 	return out, nil
+}
+
+// schemaReason says in words what a leaf validation error found, without the schema's location:
+// a schema's URL is a local file path when the schemas are read from disk, and a reason must not
+// carry one (T037a). A message that would carry a URL gives the keyword's name instead.
+func schemaReason(e *jsonschema.ValidationError) string {
+	msg := ""
+	if out := e.BasicOutput(); out != nil && out.Error != nil {
+		msg = out.Error.String()
+	}
+	if msg == "" || strings.Contains(msg, "://") || strings.Contains(msg, "file:") {
+		msg = "the value breaks the schema rule " + strings.Join(e.ErrorKind.KeywordPath(), "/")
+	}
+	if r, ok := e.ErrorKind.(*kind.Required); ok && !strings.Contains(msg, "missing") {
+		msg += " (missing " + strings.Join(r.Missing, ", ") + ")"
+	}
+	return msg
+}
+
+// pointer writes an instance location as a JSON pointer (RFC 6901) into the parts document.
+func pointer(loc []string) string {
+	if len(loc) == 0 {
+		return "the document's root"
+	}
+	var b strings.Builder
+	for _, t := range loc {
+		b.WriteByte('/')
+		b.WriteString(strings.NewReplacer("~", "~0", "/", "~1").Replace(t))
+	}
+	return b.String()
 }
 
 // partOfField maps a field of the parts document to the part it belongs to.
@@ -148,6 +175,53 @@ func (s *Service) compatibility(ctx context.Context, base, contract string) []Ch
 	if len(out) == 0 {
 		out = []Check{{Part: string(PartContract), Check: CheckContractCompatibility, Passed: true,
 			Reason: "no breaking change against " + against}}
+	}
+	return out
+}
+
+// lintContract runs the Spectral lint on the contract. Each error-level finding fails the check
+// and names its rule; warnings and info do not fail it; a lint that cannot run fails it too, and
+// so does no lint configured (fail closed, as a missing pattern does).
+func (s *Service) lintContract(ctx context.Context, contract string) []Check {
+	if s.lint == nil {
+		return []Check{{Part: string(PartContract), Check: CheckContractLint,
+			Reason: "no lint is configured, so the contract is not shown to follow OpenAPI's rules"}}
+	}
+	findings, err := s.lint.Lint(ctx, contract)
+	if err != nil {
+		return []Check{{Part: string(PartContract), Check: CheckContractLint,
+			Reason: fmt.Sprintf("the lint could not run, so the contract is not shown to follow OpenAPI's rules: %v", err)}}
+	}
+	var out []Check
+	for _, f := range findings {
+		if f.Level == "error" {
+			out = append(out, Check{Part: string(PartContract), Check: CheckContractLint,
+				Reason: fmt.Sprintf("lint rule %s: %s", f.Code, f.Text)})
+		}
+	}
+	if len(out) == 0 {
+		out = []Check{{Part: string(PartContract), Check: CheckContractLint, Passed: true,
+			Reason: "no lint error under OpenAPI's standard rules"}}
+	}
+	return out
+}
+
+// exampleTagged is the ExampleTagged check on the rules part: slice.ExampleTags's findings as
+// failed results, or one passed result. Examples that are not Gherkin fail it, as they fail
+// slice.Trace's check.
+func exampleTagged(examples string) []Check {
+	fs, err := slice.ExampleTags(examples)
+	if err != nil {
+		return []Check{{Part: string(PartRules), Check: CheckExampleTagged,
+			Reason: "the examples are not valid Gherkin, so their tags cannot be read: " + err.Error()}}
+	}
+	if len(fs) == 0 {
+		return []Check{{Part: string(PartRules), Check: CheckExampleTagged, Passed: true,
+			Reason: "every scenario carries its rule's tag and a unique example tag"}}
+	}
+	out := make([]Check, len(fs))
+	for i, f := range fs {
+		out[i] = Check{Part: f.Part, Check: CheckExampleTagged, Reason: f.Reason}
 	}
 	return out
 }

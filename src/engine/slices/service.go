@@ -20,6 +20,7 @@ type Service struct {
 	schemas *slice.Schemas
 	analyst Analyst
 	diff    ContractDiff
+	lint    ContractLint // nil: a failed ContractLint check
 	pattern []byte
 	// attempts is the pattern's limits.attempts: how often Create asks the analyst for a usable
 	// proposal. 1 when there is no pattern or it gives no positive limit (fail closed on cost).
@@ -37,8 +38,9 @@ type record struct {
 	// baseline is the contract last approved, which a changed contract is compared with; "" until
 	// a contract is approved. It outlives the approval a change withdraws (FR-004).
 	baseline string
-	// compat is the latest compatibility result, kept until the contract changes.
-	compat []Check
+	// compat and lint are the latest compatibility and lint results, kept until the contract
+	// changes.
+	compat, lint []Check
 }
 
 // New returns a service. Schemas, Analyst and Diff are required.
@@ -55,7 +57,7 @@ func New(cfg Config) (*Service, error) {
 	if now == nil {
 		now = time.Now
 	}
-	return &Service{schemas: cfg.Schemas, analyst: cfg.Analyst, diff: cfg.Diff, pattern: cfg.Pattern,
+	return &Service{schemas: cfg.Schemas, analyst: cfg.Analyst, diff: cfg.Diff, lint: cfg.Lint, pattern: cfg.Pattern,
 		attempts: attemptsOf(cfg.Pattern), now: now, slices: map[string]*record{}}, nil
 }
 
@@ -88,7 +90,7 @@ func (s *Service) Create(ctx context.Context, description string) (Result, error
 		return Result{Slice: sl, Reused: true}, nil
 	}
 
-	p, sl, err := s.propose(ctx, description)
+	p, sl, err := s.propose(ctx, AnalystInput{Description: description}, 0)
 	if err != nil {
 		return Result{}, err
 	}
@@ -116,11 +118,14 @@ func (s *Service) Create(ctx context.Context, description string) (Result, error
 // maxItems, which the proposal schema also gives).
 const maxQuestions = 10
 
-// propose asks the analyst for a proposal of description and builds the slice from it. An
-// unusable proposal is sent back with its faults until one is usable or s.attempts calls were
-// made. An analyst error is returned at once, not retried.
-func (s *Service) propose(ctx context.Context, description string) (Proposal, Slice, error) {
-	in := AnalystInput{Description: description}
+// propose asks the analyst for a proposal from base (a description, and when revising the
+// current proposal and the questions) and builds the slice from it; asked is the number of
+// questions the slice already has, which count against the limit with the new ones. An unusable
+// proposal is sent back with its faults until one is usable or s.attempts calls were made. An
+// analyst error is returned at once, not retried.
+func (s *Service) propose(ctx context.Context, base AnalystInput, asked int) (Proposal, Slice, error) {
+	description := base.Description
+	in := base
 	for attempt := 1; ; attempt++ {
 		p, err := s.analyst.Propose(ctx, in)
 		if errors.Is(err, ErrMultipleUseCases) {
@@ -134,9 +139,9 @@ func (s *Service) propose(ctx context.Context, description string) (Proposal, Sl
 			Goals: p.Goals, Terms: p.Terms, Rules: p.Rules,
 		})
 		normalise(&sl)
-		if len(p.Questions) > maxQuestions {
+		if asked+len(p.Questions) > maxQuestions {
 			return Proposal{}, Slice{}, &Error{Code: "TooManyQuestions",
-				Detail: fmt.Sprintf("the slice would need %d questions, more than %d; narrow the description", len(p.Questions), maxQuestions)}
+				Detail: fmt.Sprintf("the slice would need %d questions, more than %d; narrow the description", asked+len(p.Questions), maxQuestions)}
 		}
 		faults, err := s.unusable(&sl, p.Questions)
 		if err != nil {
@@ -150,7 +155,8 @@ func (s *Service) propose(ctx context.Context, description string) (Proposal, Sl
 				"the analyst's proposal was unusable after %d attempts (limits.attempts): %s", attempt, strings.Join(faults, "; "))}
 		}
 		prev := p
-		in = AnalystInput{Description: description, Previous: &prev, Errors: faults}
+		in = base
+		in.Previous, in.Errors = &prev, faults
 	}
 }
 
@@ -173,7 +179,7 @@ func (s *Service) unusable(sl *Slice, questions []QuestionDraft) ([]string, erro
 	}
 	var out []string
 	for _, f := range fails { // a fault at the document's root is reported once per part
-		r := "the proposal breaks slice-proposal.schema.json " + f.Reason
+		r := "the proposal breaks the proposal schema: " + f.Reason
 		if !slices.Contains(out, r) {
 			out = append(out, r)
 		}
@@ -333,9 +339,8 @@ func (s *Service) Approve(ctx context.Context, id string, part Part, contentHash
 	return clone(r.slice), nil
 }
 
-// open reports whether a question is open. No question is answered in this version (answers are
-// a later task), so every question is open.
-func open(Question) bool { return true }
+// open reports whether a question is open: it has no answer yet.
+func open(q Question) bool { return q.Answer == nil }
 
 // concerns reports whether a question's subject (question_about: G-<n>, R-<n>, T-<n>,
 // R-<n>/E-<n> or contract/<operationId>, or a part's name) lies in part. A subject of no known
@@ -365,8 +370,9 @@ func (s *Service) recheck(ctx context.Context, r *record, contractChanged bool) 
 	}
 	if contractChanged {
 		r.compat = s.compatibility(ctx, r.baseline, r.slice.Contract)
+		r.lint = s.lintContract(ctx, r.slice.Contract)
 	}
-	r.slice.Checks = append(cs, r.compat...)
+	r.slice.Checks = append(append(cs, r.compat...), r.lint...)
 	return nil
 }
 
@@ -387,11 +393,11 @@ func setParts(sl *Slice) error {
 	return nil
 }
 
-// state is the slice's lifecycle state: questions-open while a question is open (none is
-// answered yet in this version), approved when all three parts hold an approval, else checked.
+// state is the slice's lifecycle state: questions-open while a question is open, approved when
+// all three parts hold an approval, else checked.
 func state(sl *Slice) string {
 	switch {
-	case len(sl.Questions) > 0:
+	case slices.ContainsFunc(sl.Questions, open):
 		return "questions-open"
 	case len(sl.Approvals) == len(allParts):
 		return "approved"
@@ -427,6 +433,14 @@ func clone(sl Slice) Slice {
 	c.Questions = slices.Clone(sl.Questions)
 	for i := range c.Questions {
 		c.Questions[i].Options = slices.Clone(c.Questions[i].Options)
+		if a := c.Questions[i].Answer; a != nil {
+			ac := *a
+			if a.Option != nil {
+				o := *a.Option
+				ac.Option = &o
+			}
+			c.Questions[i].Answer = &ac
+		}
 	}
 	c.Approvals = slices.Clone(sl.Approvals)
 	c.Checks = slices.Clone(sl.Checks)

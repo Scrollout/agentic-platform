@@ -127,6 +127,8 @@ const (
 	CheckSchema                = "Schema"                // the part against slice-defs.schema.json
 	CheckTraceability          = "Traceability"          // slice.Trace: the links between IDs
 	CheckContractCompatibility = "ContractCompatibility" // oasdiff against the baseline
+	CheckContractLint          = "ContractLint"          // Spectral with OpenAPI's standard rules
+	CheckExampleTagged         = "ExampleTagged"         // each scenario's @R-<n> and @E-<n> tags
 )
 
 // Parts holds each part's current hash, lowercase hex SHA-256.
@@ -150,16 +152,42 @@ type Approval struct {
 	At          time.Time
 }
 
-// Question is a question with its platform ID.
+// Question is a question with its platform ID. It is open while Answer is nil; AnsweredAt is
+// when the answer was recorded.
 type Question struct {
-	ID      string
-	About   string
-	Text    string
-	Options []string
+	ID         string
+	About      string
+	Text       string
+	Options    []string
+	Answer     *Answer
+	AnsweredAt time.Time
+}
+
+// Answer is the developer's answer to one question (slice-defs.schema.json `answer`): exactly one
+// of Option, the position of a chosen option from 0, or Text, a free answer of at most 200
+// characters.
+type Answer struct {
+	Question string
+	Option   *int
+	Text     string
+}
+
+// maxAnswerText is the longest free answer, in characters (slice-defs.schema.json `answer`).
+const maxAnswerText = 200
+
+// LintFinding is one Spectral finding on a contract. Level is "error", "warn" or "info"; only
+// "error" fails the lint check. Code is the rule's name.
+type LintFinding struct{ Level, Code, Text string }
+
+// ContractLint lints a contract with Spectral and OpenAPI's standard rules (spectral:oas), not
+// the engine's own ruleset. The service may call Lint from several goroutines at once.
+type ContractLint interface {
+	Lint(ctx context.Context, contract string) ([]LintFinding, error)
 }
 
 // HistoryEntry is one change to the slice. Kind is proposed, revised, answered, changed or
-// approved; a proposal names its model and agent digest; Refs are the parts it concerns.
+// approved; a proposal or revision names its model and agent digest; Refs are the parts it
+// concerns, or for answered the questions answered.
 type HistoryEntry struct {
 	Kind        string
 	At          time.Time
@@ -213,6 +241,10 @@ type Config struct {
 	Schemas *slice.Schemas // the contract's schemas: proposal, parts and IDs
 	Analyst Analyst
 	Diff    ContractDiff
+	// Lint lints the contract when the slice is created and whenever its contract changes. nil
+	// fails closed: every slice carries a failed ContractLint result on its contract, which then
+	// cannot be approved; a lint that cannot run fails the check too.
+	Lint ContractLint
 	// Pattern is the catalogue pattern's pattern.yaml, whose conditions run as checks.Fit and
 	// whose limits.attempts bounds how often Create asks the analyst for a usable proposal. nil
 	// fails closed: every slice carries a failed PatternFit result on its contract, which then

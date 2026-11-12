@@ -25,3 +25,8 @@ rule that does not exist. It returns nil when every link holds. Shape is not its
 schemas decide that, so run `CheckSlice` or `CheckProposal` first. Examples that are not valid
 Gherkin are a `rules` finding, a contract that cannot be read a `contract` finding, and a document
 that is not JSON one finding with an empty part.
+
+`ExampleTags(text)` parses Gherkin examples with the same parser and returns a `rules` finding for
+each scenario without exactly one `@R-<n>` tag matching its `Rule: R-<n>` block, or without exactly
+one `@E-<n>` tag no other scenario carries; each reason names the scenario. An error means the text
+is not Gherkin. The engine runs it as the `ExampleTagged` check.
