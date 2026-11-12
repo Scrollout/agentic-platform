@@ -9,7 +9,10 @@ component ships is reproduced with that component when it is distributed.
 Apache License 2.0
 - Docker Agent (github.com/docker/docker-agent), Copyright Docker, Inc.
 - oapi-codegen (github.com/oapi-codegen/oapi-codegen), Copyright the oapi-codegen authors
-- oasdiff (github.com/oasdiff/oasdiff), Copyright the oasdiff authors
+- oasdiff (github.com/oasdiff/oasdiff), Copyright the oasdiff authors, with its
+  Apache-2.0 dependencies go-openapi/jsonpointer (Copyright the go-openapi
+  maintainers), go.yaml.in/yaml/v4 (Copyright the yaml authors) and
+  cloud.google.com/go (Copyright Google LLC)
 - Spectral (github.com/stoplightio/spectral), Copyright Stoplight, Inc.
 - jsonschema (github.com/santhosh-tekuri/jsonschema), Copyright Santhosh Kumar Tekuri
 - gVisor (github.com/google/gvisor), Copyright The gVisor Authors
@@ -17,6 +20,7 @@ Apache License 2.0
 MIT License
 - godog (github.com/cucumber/godog) and gherkin (github.com/cucumber/gherkin),
   Copyright Cucumber Ltd and contributors
+- kin-openapi (github.com/getkin/kin-openapi), Copyright the kin-openapi authors
 - Schemathesis (github.com/schemathesis/schemathesis), Copyright the Schemathesis authors
 
 BSD 2-Clause License
