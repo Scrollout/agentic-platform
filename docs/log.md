@@ -2,6 +2,7 @@
 
 ## 2026-11-12
 
+* **Implementation**: Feature 001, T015 and T018: the engine skeleton serves the generated API with version check, per-token authentication and authorization, a sliding one-second rate limit, idempotency keys kept for the contract's retention, and operations with retries, cancellation and visible failures; every client-visible fact is read from the contract with go-yaml.
 * **Contract**: the engine contract now declares its client-visible limits once in a root `x-limits` block (requests per second per token, idempotency-key retention, body size), adds the universal error `OperationFailed`, defines the operations list as one entry per permission name, and returns 400 for an unissued page token; two fresh contract review rounds (round 1 rejected, round 2 approved).
 * **Implementation**: Feature 001, T019: the model gateway on the pinned nginx image forwards only `/v1/messages` and `/v1/messages/count_tokens` to Anthropic's API, injects the key from a mounted file at start, logs no headers or bodies, and runs non-root on a read-only root file system; its test runs in `scripts/check.sh`.
 * **Implementation**: Feature 001, T011e: every repeated value rule in the engine contract (IDs, step, check, project and pattern names, worker references and endpoint, api-version, hash) is defined once in `slice-defs.schema.json`; a fresh review confirmed no rule changed.

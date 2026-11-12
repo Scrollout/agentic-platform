@@ -2,7 +2,10 @@ module github.com/agentic-platform/engine
 
 go 1.26
 
-require github.com/oapi-codegen/runtime v1.8.0
+require (
+	github.com/oapi-codegen/runtime v1.8.0
+	go.yaml.in/yaml/v3 v3.0.4
+)
 
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
