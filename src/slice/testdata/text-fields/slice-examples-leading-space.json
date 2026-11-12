@@ -1,0 +1,47 @@
+{
+  "goals": [
+    {
+      "id": "G-1",
+      "text": "Browse products"
+    }
+  ],
+  "terms": [],
+  "rules": [
+    {
+      "id": "R-1",
+      "goal": "G-1",
+      "pattern": "ubiquitous",
+      "system": "the shop",
+      "response": "shall list products",
+      "terms": []
+    }
+  ],
+  "examples": " \n\t\"Feature: Browse\\n  Rule: R-1\\n    @R-1 @E-1\\n    Scenario: List\\n      Given products\\n\"",
+  "contract": "openapi: 3.1.0\ninfo: {title: t, version: '1'}\npaths: {}\n",
+  "id": "S-1",
+  "title": "Browse products",
+  "description": "Let me browse products.",
+  "state": "proposed",
+  "rule_text": {
+    "R-1": "The shop shall list products."
+  },
+  "questions": [],
+  "parts": {
+    "goals": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "rules": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "contract": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "approvals": [],
+  "checks": [],
+  "history": [
+    {
+      "kind": "proposed",
+      "at": "2026-11-12T10:00:00Z",
+      "model": "m",
+      "agent_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "refs": [
+        "goals"
+      ]
+    }
+  ]
+}

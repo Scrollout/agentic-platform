@@ -28,6 +28,30 @@ Never add any other key, at any level. In particular, never write `id`, `title`,
 `text` or `sentence` in a rule, or an `id`, `answer` or `answered_at` in a question: the platform
 sets those. A proposal holding any of them is rejected.
 
+## The two text fields
+
+`examples` and `contract` are plain multi-line text: the Gherkin document and the YAML document
+themselves, exactly as they would be saved to a file. Encode them in the tool's arguments the way
+you encode any other string value, once. Never put the text in quotes of its own, and never escape
+it a second time. Decoded, `examples` begins with the characters `Feature:` and `contract` begins
+with the characters `openapi: 3.1.0`, and their lines are separated by real line breaks. A value
+that begins with a quote mark, or that holds a backslash followed by `n` where a line should end,
+cannot be parsed and fails the whole proposal. The decoded values look like this, and nothing else:
+
+```text
+Feature: Notes
+
+  Rule: R-1
+  ...
+```
+
+```text
+openapi: 3.1.0
+info:
+  title: Notes service
+  ...
+```
+
 Number each kind of ID from 1 upwards with no gaps, in the order the items appear: `G-1`, `G-2`
 for goals, `T-1` for terms, `R-1` for rules, `E-1` for examples.
 
@@ -128,7 +152,11 @@ need.
   the request body schemas, with their constraints (`required`, `minLength`, `minimum`) as the
   rules state them.
 - Put reusable schemas under `components.schemas`. Every `$ref` is local and starts with `#/`.
-- Escape the YAML correctly inside the JSON string: the string's newlines are `\n`.
+- Write valid YAML in block style, indented with two spaces. Put a string value in double quotes
+  when it holds a colon followed by a space, a space followed by `#`, or starts with a character
+  YAML gives a meaning to (`{`, `[`, `*`, `&`, `!`, `|`, `>`, `@`, `%`, a quote mark), so that a
+  description such as
+  `description: "Returns 400: the text is empty"` stays one string.
 
 ## Questions
 
@@ -141,7 +169,9 @@ and ask about that part. At most 10 questions; fewer is better, none is fine.
 
 - `about` names the one item the question concerns: a goal `G-<n>`, a rule `R-<n>`, a term `T-<n>`,
   an example `R-<n>/E-<n>` (its rule and its own ID), or a contract operation
-  `contract/<operationId>`. It must exist in the proposal.
+  `contract/<operationId>`. It must exist in the proposal: an operation's ID is the exact
+  `operationId` of an operation in your `contract`, never an operation you did not write. To ask
+  about behaviour the contract does not have, ask about the rule or goal instead.
 - `text` is one question, answerable without reading anything else.
 - `options` is optional: 2 to 5 short answers to choose from, the one your proposal assumes
   first. Leave it out when only a free answer fits; a free answer is at most 200 characters.
@@ -158,4 +188,7 @@ Check the proposal against this list and fix what fails:
    example ID repeats.
 5. Every operation has an `operationId` and an `x-rules` list whose IDs all exist; every `$ref`
    starts with `#/`; `openapi` is `3.1.0`.
-6. Every question's `about` exists; there are at most 10 questions.
+6. `examples` begins with `Feature:` and `contract` with `openapi: 3.1.0`, with real line breaks,
+   not wrapped in quotes or escaped twice; the contract is valid YAML.
+7. Every question's `about` exists, and each `contract/<operationId>` names an `operationId` in
+   the contract; there are at most 10 questions.
