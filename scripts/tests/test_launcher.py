@@ -28,10 +28,10 @@ STUB = HERE / "fixtures/launcher/docker-stub"
 REFERENCE = HERE / "fixtures/launcher/reference-ap"
 TMP_BASE = os.environ.get("XDG_RUNTIME_DIR") or None
 SECRET = "fake-model-key-LAUNCHERSECRET-9f8e7d6c5b4a"  # the credentials file holds only the key
-TOKEN_VARS = ("AP_CLIENT_TOKEN", "AP_PAGE_TOKEN", "AP_WORKER_TOKEN")
+TOKEN_VARS = ("AP_CLIENT_TOKEN", "AP_PAGE_TOKEN", "AP_WORKER_TOKEN", "AP_LINT_TOKEN", "AP_ANALYST_TOKEN")
 REAL_LOCK = REPO / "src/deploy/images.lock"
 REFERENCE_LOCK = HERE / "fixtures/launcher/reference-images.lock"
-IMAGE_NAMES = ("engine", "page", "cli", "agent", "check", "tests")
+IMAGE_NAMES = ("engine", "page", "cli", "agent", "check", "tests", "lint")
 PRIVATE_KEY = "FAKE-PRIVATE-KEY-MATERIAL-NOT-A-REAL-KEY"  # in the fake cosign.key; must never reach docker
 
 
@@ -208,7 +208,7 @@ class LauncherContract:
         toks = [env.get(v, "") for v in TOKEN_VARS]
         for t in toks:
             self.assertRegex(t, r"^[0-9a-fA-F]{32,}$")
-        self.assertEqual(len(set(toks)), 3, "tokens must be pairwise distinct")
+        self.assertEqual(len(set(toks)), 5, "tokens must be pairwise distinct")
 
     def test_second_up_reuses_the_session(self):
         """Converge, do not sequence (constitution XVII): the same tokens, so Compose changes nothing."""
@@ -244,7 +244,7 @@ class LauncherContract:
         self.ap("describe", "some text")
         self.ap("down")
         tokens = {c["env"][v] for c in self.up_calls() for v in TOKEN_VARS}
-        self.assertEqual(len(tokens), 3)
+        self.assertEqual(len(tokens), 5)
         self.assertTrue(self.calls())
         for c in self.calls():
             for a in c["argv"]:

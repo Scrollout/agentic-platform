@@ -83,7 +83,7 @@ gateway on test networks only; no image is built from it and Compose does not st
   has no file, http or https resolvers, so an external reference is an error finding and nothing is
   read or fetched. `GET /health` is open. The engine's client is `src/engine/contracts/lint.go`. Its
   tests are `src/tests/lint/` (Docker, run by `scripts/check.sh`), which run the server from the
-  `node` pin with the npm-tool cache mounted at `/tools`. Compose does not start it yet.
+  `node` pin with the npm-tool cache mounted at `/tools`. Compose starts it as `contract-lint`.
 
 ## Compose and the launcher
 
@@ -96,10 +96,10 @@ the [terminal contract](../cli/contract.md). It calls only `docker` and passes e
 | `AP_CREDENTIALS_FILE` | Absolute path of the file holding only the provider key; it reaches the gateway alone, as the Compose secret `anthropic_api_key` |
 | `AP_PROJECTS_DIR` | Absolute path of the projects folder |
 | `AP_PAGE_PORT` | Host port of the run page, published on `127.0.0.1` only (by `page-proxy`) |
-| `AP_CLIENT_TOKEN`, `AP_PAGE_TOKEN`, `AP_WORKER_TOKEN` | This session's tokens, 64 hex characters each; `ap up` on a started session keeps them, and only `ap up` after `ap down` makes new ones |
+| `AP_CLIENT_TOKEN`, `AP_PAGE_TOKEN`, `AP_WORKER_TOKEN`, `AP_LINT_TOKEN`, `AP_ANALYST_TOKEN` | This session's tokens, 64 hex characters each and pairwise distinct; `ap up` on a started session keeps them, and only `ap up` after `ap down` makes new ones. The last two are what the engine calls `contract-lint` and `analyst` with; each reaches only the engine and its own service |
 | `AP_HOST_USER` | The developer's `uid:gid`: the gateway runs as it to read the key file (mode 600; Compose cannot change a file secret's owner outside Swarm), and step workers run as it to write projects |
 | `AP_GATEWAY_IMAGE` | The `nginx` pin from `images.lock`, its one home; the gateway and `page-proxy` run it |
-| `AP_IMAGE_ENGINE`, `AP_IMAGE_PAGE`, `AP_IMAGE_CLI`, `AP_IMAGE_AGENT`, `AP_IMAGE_CHECK`, `AP_IMAGE_TESTS` | Each image's digest reference from `images.env`, verified by `ap up` before anything starts and kept in the session; an image a profile `up` does not start (`agent`, `check`, `tests`) is verified when built and otherwise given the placeholder `ap-<name>:not-built`, so Compose can read the file |
+| `AP_IMAGE_ENGINE`, `AP_IMAGE_PAGE`, `AP_IMAGE_CLI`, `AP_IMAGE_AGENT`, `AP_IMAGE_CHECK`, `AP_IMAGE_TESTS`, `AP_IMAGE_LINT` | Each image's digest reference from `images.env`, verified by `ap up` before anything starts and kept in the session; an image a profile `up` does not start (`agent`, `check`, `tests`), and `lint` until its first signed build (T038g), is verified when built and otherwise given the placeholder `ap-<name>:not-built`, so Compose can read the file. `up` does start `contract-lint`, so without `build.sh lint` its `docker compose up` fails with `No such image: ap-lint:not-built` |
 
 `AP_REGISTRY_PORT` (default 5005) and `AP_REGISTRY_NAME` (default `ap-registry`) are read by
 `build.sh` and `ap`, not by Compose. `AP_REGISTRY_NAME` is for running a second, independent
@@ -123,7 +123,9 @@ folder mode 700 (also when it exists), writes the file mode 600, and reads it ba
 when it is a regular file owned by the developer with mode 600; any other file stops every command
 but `down` with exit 1 and `run: ap down`, and `down` stops the platform without reading it. The
 file records the credentials file and projects folder; a second `up` with others exits 3 and says to
-run `ap down` first. A failed `up` (Compose failed) keeps its session until `ap down`. Client
+run `ap down` first. A failed `up` (Compose failed) keeps its session until `ap down`. A session
+started before the `contract-lint` and `analyst` services were added lacks their tokens, so `up`
+says it is incomplete: run `ap down` once, then `ap up`. Client
 commands, `build` and `test` pass `-T` to `docker compose run` when standard input is not a
 terminal.
 
@@ -133,8 +135,10 @@ limits, and writable `tmpfs` only where it needs one; no service mounts a contai
 
 | Service | Started by | Networks | Notes |
 |---------|------------|----------|-------|
-| `gateway` | `ap up` | `agents`, `egress` | The only container with egress and the only one with the key |
-| `engine` | `ap up` | `clients`, `agents`, `checks` | Holds the three tokens; no store volume yet (the engine does not open its store yet) |
+| `gateway` | `ap up` | `agents`, `analyst`, `egress` | The only container with egress and the only one with the key |
+| `engine` | `ap up` | `clients`, `agents`, `checks`, `lint`, `analyst` | Holds the three caller tokens, and `AP_LINT_URL` (`http://contract-lint:8080`), `AP_LINT_TOKEN`, `AP_ANALYST_URL` (`http://analyst:8080`) and `AP_ANALYST_TOKEN`, which it reads from T038g; no store volume yet (the engine does not open its store yet) |
+| `contract-lint` | `ap up` | `lint` | `AP_IMAGE_LINT`; gVisor; its token as `LINT_TOKEN`; reachable by the engine only; finds `engine` through `extra_hosts` (the gVisor rule; it calls no one) |
+| `analyst` | `ap up` | `analyst` | The `docker-agent` pin by digest (an upstream image like the gateway's, so no `AP_IMAGE_` variable; written out in `compose.yaml`, and a test fails when it differs from `images.lock`); gVisor; `/docker-agent serve api /agents/analyst.yaml` on port 8080 with `--session-db /tmp/session.db` on a tmpfs owned by UID 65532; `src/agents` mounted read-only at `/agents`; the token from its environment through `sh -c`, so not on its command line; `MODEL_GATEWAY_URL=http://gateway:8080`, a placeholder `ANTHROPIC_API_KEY` and `TELEMETRY_ENABLED=false`; finds `engine` and `gateway` through `extra_hosts`; its only way out is the gateway |
 | `page` | `ap up` | `clients`, `page` | Reached only through `page-proxy`; checks the Host header |
 | `page-proxy` | `ap up` | `page`, `page-host` | The `nginx` pin with the fixed `page-proxy/nginx.conf`; publishes the page's port on `127.0.0.1` only and passes each request, Host header unchanged, to the page |
 | `cli` | each client command (`run --rm`, profile `client`) | `clients` | Client token |
@@ -168,13 +172,15 @@ gVisor's own network stack never sees the NAT rule in the container's namespace 
 the host's Docker configuration (a per-container annotation is refused without
 `--allow-flag-override`). So `compose.yaml` gives the networks shared with the workers fixed
 subnets and the engine and gateway fixed addresses on them, and the workers find those two names
-through `/etc/hosts` (`extra_hosts`). Each subnet and address is declared once, under
+through `/etc/hosts` (`extra_hosts`); so do `contract-lint` and `analyst`, also under gVisor. Each subnet and address is declared once, under
 `x-addresses`:
 
 | Network | Subnet | Fixed addresses | Who uses them |
 |---------|--------|-----------------|---------------|
 | `agents` | `10.231.1.0/24` (others from `10.231.1.128/25`) | `engine` `10.231.1.2`, `gateway` `10.231.1.3` | `step-agent` |
 | `checks` | `10.231.2.0/24` (others from `10.231.2.128/25`) | `engine` `10.231.2.2` | `check` |
+| `lint` | `10.231.6.0/24` (others from `10.231.6.128/25`) | `engine` `10.231.6.2` | `contract-lint` |
+| `analyst` | `10.231.7.0/24` (others from `10.231.7.128/25`) | `engine` `10.231.7.2`, `gateway` `10.231.7.3` | `analyst` |
 | `egress` | `10.231.3.0/24` | none | the host firewall rule |
 | `page-host` | `10.231.4.0/24` | none | the host firewall rule |
 

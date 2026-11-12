@@ -24,7 +24,7 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures/compose"
 VARS = ["AP_CREDENTIALS_FILE", "AP_PROJECTS_DIR", "AP_PAGE_PORT",
         "AP_CLIENT_TOKEN", "AP_PAGE_TOKEN", "AP_WORKER_TOKEN", "AP_GATEWAY_IMAGE", "AP_HOST_USER",
         "AP_IMAGE_ENGINE", "AP_IMAGE_PAGE", "AP_IMAGE_CLI", "AP_IMAGE_AGENT", "AP_IMAGE_CHECK",
-        "AP_IMAGE_TESTS"]
+        "AP_IMAGE_TESTS", "AP_IMAGE_LINT", "AP_LINT_TOKEN", "AP_ANALYST_TOKEN"]
 ISOLATED = "com.docker.network.bridge.gateway_mode_ipv4"
 MASQ = "com.docker.network.bridge.enable_ip_masquerade"
 
@@ -38,20 +38,23 @@ def gateway_pin():
     raise AssertionError("no nginx pin in images.lock")
 KEY = "fake-model-key-TESTKEY-0123456789abcdef"  # also written in fixtures/compose/bad-key-in-env.yaml
 TOKENS = {"AP_CLIENT_TOKEN": "c11e47" + "a" * 26, "AP_PAGE_TOKEN": "9a6e00" + "b" * 26,
-          "AP_WORKER_TOKEN": "w0rke4" + "c" * 26}
+          "AP_WORKER_TOKEN": "w0rke4" + "c" * 26,
+          "AP_LINT_TOKEN": "11a7e0" + "d" * 26, "AP_ANALYST_TOKEN": "a0a1y5" + "e" * 26}
 TMP_BASE = os.environ.get("XDG_RUNTIME_DIR") or None
 RULES = ["name", "read_only", "cap_drop", "no_new_privileges", "privileged", "non_root",
          "engine_socket", "var_run_bind", "network_egress", "gateway_networks", "runtime",
          "masquerade_page_only", "limit_cpu", "limit_memory", "limit_pids", "credentials_gateway",
          "credentials_only_gateway", "key_in_env", "page_port_loopback", "other_ports",
-         "token_engine", "token_page", "token_cli", "token_worker", "token_gateway", "image_digest",
+         "token_engine", "token_page", "token_cli", "token_worker", "token_gateway", "token_lint",
+         "token_analyst", "image_digest",
          "pull_policy_never", "gateway_digest", "restart", "page_isolation", "internal_isolated"]
 SOCKETS = ("docker.sock", "containerd.sock", "podman.sock")
 # Services are identified by the role of the variable their image comes from (ADR 0028: the image
 # is a signed digest reference the launcher passes in), not by an image name.
 IMAGE_VARS = {"AP_IMAGE_ENGINE": ("engine", "engine"), "AP_IMAGE_PAGE": ("page", "page"),
               "AP_IMAGE_CLI": ("cli", "cli"), "AP_IMAGE_AGENT": ("agent", "worker"),
-              "AP_IMAGE_CHECK": ("check", "worker"), "AP_IMAGE_TESTS": ("tests", "client")}
+              "AP_IMAGE_CHECK": ("check", "worker"), "AP_IMAGE_TESTS": ("tests", "client"),
+              "AP_IMAGE_LINT": ("lint", "lint")}
 REGISTRY = "127.0.0.1:5005"
 # One distinct digest reference per variable, so a resolved image maps back to its variable.
 IMAGE_ENV = {v: "%s/ap-%s@sha256:%064x" % (REGISTRY, n, i + 1)
@@ -77,7 +80,8 @@ PLANTED = {
     "bad-page-port-loopback-unset": "page_port_loopback", "bad-other-ports": "other_ports",
     "bad-token-engine": "token_engine", "bad-token-page": "token_page",
     "bad-token-cli": "token_cli", "bad-token-worker": "token_worker",
-    "bad-token-gateway": "token_gateway", "bad-image-tag-only": "image_digest",
+    "bad-token-gateway": "token_gateway",
+    "bad-token-lint": "token_lint", "bad-token-analyst": "token_analyst", "bad-image-tag-only": "image_digest",
     # T022b: limits on every service, ours never pulled, the gateway pinned by digest, no restart
     "bad-limit-cpu-engine": "limit_cpu", "bad-limit-cpu-gateway": "limit_cpu",
     "bad-limit-cpu-zero-cli": "limit_cpu", "bad-limit-memory-page": "limit_memory",
@@ -94,8 +98,9 @@ PLANTED = {
     "bad-forwarder-token": "page_isolation", "bad-forwarder-projects-mount": "page_isolation",
     "bad-forwarder-engine-network": "page_isolation", "bad-forwarder-egress-network": "page_isolation",
 }
-GOOD = {"good": ["agent-one", "check-one", "cli", "engine", "gateway", "page", "tests"],
-        "good-forwarder": ["agent-one", "check-one", "cli", "engine", "gateway", "page", "page-forwarder", "tests"]}
+GOOD = {"good": ["agent-one", "analyst", "check-one", "cli", "contract-lint", "engine", "gateway", "page", "tests"],
+        "good-forwarder": ["agent-one", "analyst", "check-one", "cli", "contract-lint", "engine", "gateway", "page",
+                           "page-forwarder", "tests"]}
 
 
 def image_ref(svc):
@@ -111,6 +116,8 @@ def image_kind(svc):
     repo = ref.split("@")[0].rsplit("/", 1)[-1].split(":")[0]
     if repo == "nginx":
         return ("nginx", "gateway")
+    if repo == "docker-agent":  # the analyst runs on the upstream docker-agent pin, as the gateway on nginx
+        return ("docker-agent", "analyst")
     for n, role in IMAGE_VARS.values():
         if repo == "ap-" + n:
             return (n, role)
@@ -123,7 +130,7 @@ def role_of(svc):
 
 
 def roles_of(cfg, env=None):
-    """service name -> role: engine, page, cli, client, worker, gateway, forwarder or other.
+    """service name -> role: engine, page, cli, client, worker, lint, analyst, gateway, forwarder or other.
 
     The gateway is the nginx service that reaches the credentials file (else the only nginx one). A
     publishing forwarder (T022a) is any other nginx service, or a service with an image that is none
@@ -265,7 +272,7 @@ def check_config(cfg, env):
         # upstream images pinned by digest too
         if not re.search(r"@sha256:[0-9a-f]{64}$", image_ref(svc)):
             fail("gateway_digest" if role == "gateway" else "image_digest", name)
-        if role not in ("gateway", "forwarder") and svc.get("pull_policy") != "never":
+        if role not in ("gateway", "forwarder", "analyst") and svc.get("pull_policy") != "never":
             fail("pull_policy_never", name)
         # restart: unset or "no" (a stopped platform stays stopped; `ap down` is how it ends)
         restart_policy = ((svc.get("deploy") or {}).get("restart_policy") or {}).get("condition")
@@ -290,15 +297,21 @@ def check_config(cfg, env):
         blob = json.dumps(svc)
         vals = _env_values(svc)
         have = {k: v in vals for k, v in tok.items()}
-        allowed = {"engine": {"AP_CLIENT_TOKEN", "AP_PAGE_TOKEN", "AP_WORKER_TOKEN"},
+        # the engine may also hold the lint and analyst tokens (it calls both) but need not; each of
+        # those two services holds its own token only, and must hold it
+        allowed = {"engine": {"AP_CLIENT_TOKEN", "AP_PAGE_TOKEN", "AP_WORKER_TOKEN", "AP_LINT_TOKEN",
+                              "AP_ANALYST_TOKEN"},
                    "page": {"AP_PAGE_TOKEN"}, "cli": {"AP_CLIENT_TOKEN"}, "client": {"AP_CLIENT_TOKEN"},
-                   "worker": {"AP_WORKER_TOKEN"}}.get(role, set())
+                   "worker": {"AP_WORKER_TOKEN"}, "lint": {"AP_LINT_TOKEN"},
+                   "analyst": {"AP_ANALYST_TOKEN"}}.get(role, set())
+        required = allowed - {"AP_LINT_TOKEN", "AP_ANALYST_TOKEN"} if role == "engine" else allowed
         rule = {"engine": "token_engine", "page": "token_page", "cli": "token_cli", "client": "token_cli",
-                "worker": "token_worker", "gateway": "token_gateway"}.get(role)
+                "worker": "token_worker", "gateway": "token_gateway", "lint": "token_lint",
+                "analyst": "token_analyst"}.get(role)
         if rule:
             if any(k not in allowed and v in blob for k, v in tok.items()):
                 fail(rule, name)
-            if role != "gateway" and any(not have[k] for k in allowed):
+            if role != "gateway" and any(not have[k] for k in required):
                 fail(rule, name)
     if not any(r == "gateway" for r in roles.values()):
         fail("gateway_networks", "<no gateway>")
@@ -440,7 +453,7 @@ class ComposeTest(unittest.TestCase):
         and nothing is a tag (the launcher verified these digests; ADR 0028)."""
         cfg = self.checker_input(COMPOSE) if COMPOSE.is_file() else self.fail("no compose.yaml")
         by_name = roles_of(cfg, self.env)
-        refs = [s.get("image") for n, s in cfg["services"].items() if by_name[n] not in ("gateway", "forwarder")]
+        refs = [s.get("image") for n, s in cfg["services"].items() if by_name[n] not in ("gateway", "forwarder", "analyst")]
         self.assertEqual(sorted(set(refs)), sorted(IMAGE_ENV.values()), refs)
         for ref in refs:
             self.assertRegex(ref, r"@sha256:[0-9a-f]{64}$")

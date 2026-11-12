@@ -8,17 +8,24 @@
 #   AP_CLIENT_TOKEN      this session's token for the terminal client and the test harness
 #   AP_PAGE_TOKEN        this session's token for the run page
 #   AP_WORKER_TOKEN      this session's token for step and check workers
+#   AP_LINT_TOKEN        this session's token the engine calls the contract-lint service with
+#   AP_ANALYST_TOKEN     this session's token the engine calls the analyst service with
 #   AP_HOST_USER         the developer's numeric uid:gid; the gateway runs as it to read the key
 #                        file (mode 600), and step workers run as it to write the projects folder
 #   AP_GATEWAY_IMAGE     the nginx pin from images.lock (its one home); the launcher reads it
-#   AP_IMAGE_ENGINE, AP_IMAGE_PAGE, AP_IMAGE_CLI, AP_IMAGE_AGENT, AP_IMAGE_CHECK, AP_IMAGE_TESTS
+#   AP_IMAGE_ENGINE, AP_IMAGE_PAGE, AP_IMAGE_CLI, AP_IMAGE_AGENT, AP_IMAGE_CHECK, AP_IMAGE_TESTS,
+#   AP_IMAGE_LINT
 #                        each image's signed digest reference, recorded by build.sh and verified by
 #                        the launcher before start (ADR 0028)
 #
 # Our images are built locally by build.sh, started by digest from the local image store and
 # never pulled (pull_policy: never).
 #
-# Profiles: no profile is what `ap up` starts (gateway, engine, page). `client` and `tests` are run
+# The analyst runs the upstream docker-agent pin by digest, written out below because Compose
+# cannot read images.lock and the variables above are all the launcher's; test_services_lint_analyst
+# fails when the two differ.
+#
+# Profiles: no profile is what `ap up` starts (gateway, engine, page, contract-lint, analyst). `client` and `tests` are run
 # on demand with `docker compose run --rm`; `workers` are started by `ap build-workers`.
 #
 # Networks: every one is internal and isolated (no route out, and no address of the host's, so no
@@ -35,7 +42,7 @@
 # resolver (runsc --reproduce-nat would copy it, but that is a runtime flag of the host's Docker
 # configuration, not of this file). So the networks the workers share with the engine and the
 # gateway have fixed subnets, those two services fixed addresses on them, and each worker finds
-# them through its /etc/hosts (extra_hosts). Every subnet and address is declared once, in
+# them through its /etc/hosts (extra_hosts); so do contract-lint and the analyst, also under gVisor. Every subnet and address is declared once, in
 # x-addresses; other containers get theirs from the upper half of each subnet (ip_range), so no
 # container can take a fixed address. Containers under runc still use Docker's DNS (T022c).
 
@@ -52,6 +59,13 @@ x-addresses:
   checks-subnet: &checks-subnet 10.231.2.0/24
   checks-range: &checks-range 10.231.2.128/25
   engine-on-checks: &engine-on-checks 10.231.2.2
+  lint-subnet: &lint-subnet 10.231.6.0/24
+  lint-range: &lint-range 10.231.6.128/25
+  engine-on-lint: &engine-on-lint 10.231.6.2
+  analyst-subnet: &analyst-subnet 10.231.7.0/24
+  analyst-range: &analyst-range 10.231.7.128/25
+  engine-on-analyst: &engine-on-analyst 10.231.7.2
+  gateway-on-analyst: &gateway-on-analyst 10.231.7.3
   egress-subnet: &egress-subnet 10.231.3.0/24
   page-host-subnet: &page-host-subnet 10.231.4.0/24
 
@@ -97,12 +111,14 @@ services:
       - /tmp:mode=1777,size=16m
     networks:
       agents: { ipv4_address: *gateway-on-agents }
+      analyst: { ipv4_address: *gateway-on-analyst }
       egress: {}
     deploy:
       resources:
         limits: { cpus: "1", memory: 128m, pids: 128 }
 
-  # Workflow engine (src/engine). It holds all three tokens to tell callers apart (research D12).
+  # Workflow engine (src/engine). It holds the three caller tokens to tell callers apart (research
+  # D12), and the tokens it calls contract-lint and the analyst with (research D27, D28).
   engine:
     <<: *hardened
     image: ${AP_IMAGE_ENGINE:?set AP_IMAGE_ENGINE to the signed ap-engine image (ap up does this; build it with src/deploy/build.sh engine)}
@@ -113,15 +129,68 @@ services:
       ENGINE_CLIENT_TOKEN: ${AP_CLIENT_TOKEN:?set AP_CLIENT_TOKEN (ap up does this)}
       ENGINE_PAGE_TOKEN: ${AP_PAGE_TOKEN:?set AP_PAGE_TOKEN (ap up does this)}
       ENGINE_WORKER_TOKEN: ${AP_WORKER_TOKEN:?set AP_WORKER_TOKEN (ap up does this)}
+      AP_LINT_URL: http://contract-lint:8080
+      AP_LINT_TOKEN: ${AP_LINT_TOKEN:?set AP_LINT_TOKEN (ap up does this)}
+      AP_ANALYST_URL: http://analyst:8080
+      AP_ANALYST_TOKEN: ${AP_ANALYST_TOKEN:?set AP_ANALYST_TOKEN (ap up does this)}
     tmpfs:
       - /tmp:mode=1777,size=16m
     networks:
       clients: {}
       agents: { ipv4_address: *engine-on-agents }
       checks: { ipv4_address: *engine-on-checks }
+      lint: { ipv4_address: *engine-on-lint }
+      analyst: { ipv4_address: *engine-on-analyst }
     deploy:
       resources:
         limits: { cpus: "2", memory: 512m, pids: 256 }
+
+  # contract-lint (src/deploy/lint/server.mjs, research D28): Spectral behind a small HTTP front,
+  # under gVisor, on `lint` with the engine only. It reads its token as LINT_TOKEN. It calls no one;
+  # the engine's entry in extra_hosts is the gVisor rule every sandboxed service follows (T022c).
+  contract-lint:
+    <<: *hardened
+    image: ${AP_IMAGE_LINT:?set AP_IMAGE_LINT to the signed ap-lint image (ap up does this; build it with src/deploy/build.sh lint)}
+    pull_policy: never
+    runtime: runsc
+    user: "65532:65532"
+    environment:
+      LINT_TOKEN: ${AP_LINT_TOKEN:?set AP_LINT_TOKEN (ap up does this)}
+    tmpfs:
+      - /tmp:mode=1777,size=16m
+    extra_hosts: { engine: *engine-on-lint }
+    networks: [lint]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256m, pids: 64 }
+
+  # The analyst (src/agents/README.md, research D27): Docker Agent's `serve api` with the agent
+  # definitions read-only, under gVisor, on `analyst` with the engine and the gateway only. The
+  # token reaches it through its environment and a shell, so it is not on the command line
+  # (`docker inspect` would show it). The model key never reaches it: the gateway adds it, and the
+  # placeholder only lets the Anthropic client start.
+  analyst:
+    <<: *hardened
+    image: docker/docker-agent:1.160.0@sha256:186f001f1096d3071a49113044465be8cec453cf06b26366f4c56b6789f5103c
+    runtime: runsc
+    user: "65532:65532"
+    entrypoint: ["sh", "-c", "exec /docker-agent serve api /agents/analyst.yaml --listen 0.0.0.0:8080 --auth-token \"$$AP_ANALYST_TOKEN\" --session-db /tmp/session.db"]
+    command: []
+    environment:
+      AP_ANALYST_TOKEN: ${AP_ANALYST_TOKEN:?set AP_ANALYST_TOKEN (ap up does this)}
+      MODEL_GATEWAY_URL: http://gateway:8080
+      ANTHROPIC_API_KEY: placeholder-not-a-key
+      TELEMETRY_ENABLED: "false"
+      HOME: /tmp/home
+    volumes:
+      - { type: bind, source: ../agents, target: /agents, read_only: true }
+    tmpfs:
+      - /tmp:uid=65532,gid=65532,mode=0700,size=64m
+    extra_hosts: { engine: *engine-on-analyst, gateway: *gateway-on-analyst }
+    networks: [analyst]
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 1g, pids: 512 }
 
   # Read-only run page (research D18), reached only through page-proxy on 127.0.0.1. PAGE_HOST is
   # the one Host header it accepts (DNS rebinding guard, plan threat model); the forwarder passes
@@ -244,6 +313,12 @@ networks:
     <<: *isolated
     ipam: { config: [{ subnet: *checks-subnet, ip_range: *checks-range }] }
   page: *isolated
+  lint:
+    <<: *isolated
+    ipam: { config: [{ subnet: *lint-subnet, ip_range: *lint-range }] }
+  analyst:
+    <<: *isolated
+    ipam: { config: [{ subnet: *analyst-subnet, ip_range: *analyst-range }] }
   egress:
     ipam: { config: [{ subnet: *egress-subnet }] }
   page-host:

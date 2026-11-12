@@ -30,12 +30,15 @@ sess=$state_dir/session.env
 images_env=$state_dir/images.env
 pub=${XDG_CONFIG_HOME:-$HOME/.config}/agentic-platform/signing/cosign.pub
 # Images `up` needs (it starts engine and page; every client command runs cli) and images it passes
-# only when built (their profiles are started later, by build-workers and test).
+# only when built (their profiles are started later, by build-workers and test). lint is started by
+# `up` too, but stays optional until its first signed build (T038g): without it, `compose up` stops
+# with "No such image ap-lint:not-built".
 needed_images="engine page cli"
-optional_images="agent check tests"
+optional_images="agent check tests lint"
 # shellcheck disable=SC2086
 image_vars=$(printf 'AP_IMAGE_%s ' $needed_images $optional_images | tr '[:lower:]' '[:upper:]')
-vars="AP_CREDENTIALS_FILE AP_PROJECTS_DIR AP_PAGE_PORT AP_CLIENT_TOKEN AP_PAGE_TOKEN AP_WORKER_TOKEN AP_HOST_USER AP_GATEWAY_IMAGE $image_vars"
+token_vars="AP_CLIENT_TOKEN AP_PAGE_TOKEN AP_WORKER_TOKEN AP_LINT_TOKEN AP_ANALYST_TOKEN"
+vars="AP_CREDENTIALS_FILE AP_PROJECTS_DIR AP_PAGE_PORT $token_vars AP_HOST_USER AP_GATEWAY_IMAGE $image_vars"
 default_page_port=7878
 default_registry_port=5005
 # The registry's names, derived here only. AP_REGISTRY_NAME runs a second, independent registry
@@ -93,6 +96,18 @@ placeholder() { printf 'ap-%s:not-built' "$1"; }
 
 # 64 hex characters from the kernel's random source.
 rand() { od -An -N32 -tx1 /dev/urandom | tr -d ' \n'; }
+
+# True when the arguments are one token per name in token_vars, each at least 32 lowercase hex
+# characters, and pairwise distinct.
+tokens_ok() {
+  # shellcheck disable=SC2086
+  [ $# -eq "$(set -- $token_vars; echo $#)" ] || return 1
+  for t in "$@"; do
+    [ "${#t}" -ge 32 ] || return 1
+    case $t in *[!0-9a-f]*) return 1 ;; esac
+  done
+  [ "$(printf '%s\n' "$@" | sort -u | wc -l)" -eq $# ]
+}
 
 # Single-quote a value for the session file, which is read back with `.`.
 quote() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
@@ -346,21 +361,20 @@ cmd_up() {
   # tokens and, unless AP_PAGE_PORT is set, its port. Only after `down` does `up` make new tokens.
   # A second `up` with other credentials or projects is refused: they would recreate the gateway
   # and the workers under a running session.
-  old_client='' old_page='' old_worker='' old_port=''
+  old_tokens='' old_port=''
   if [ -e "$sess" ] || [ -L "$sess" ]; then
     session_ok || die 1 "the session file $sess $why; it is not read; run: ap down"
     broken="the session file $sess is unreadable or incomplete; run: ap down"
-    old_client=$(session_value AP_CLIENT_TOKEN) && old_page=$(session_value AP_PAGE_TOKEN) &&
-      old_worker=$(session_value AP_WORKER_TOKEN) && old_port=$(session_value AP_PAGE_PORT) &&
+    old_port=$(session_value AP_PAGE_PORT) &&
       old_cred=$(session_value AP_CREDENTIALS_FILE) && old_proj=$(session_value AP_PROJECTS_DIR) ||
       die 1 "$broken"
     [ -n "$old_port" ] && [ -n "$old_cred" ] && [ -n "$old_proj" ] || die 1 "$broken"
-    for t in "$old_client" "$old_page" "$old_worker"; do
-      [ "${#t}" -ge 32 ] || die 1 "$broken"
-      case $t in *[!0-9a-f]*) die 1 "$broken" ;; esac
+    for v in $token_vars; do
+      t=$(session_value "$v") || die 1 "$broken"
+      old_tokens="$old_tokens $t"
     done
-    [ "$old_client" != "$old_page" ] && [ "$old_client" != "$old_worker" ] && [ "$old_page" != "$old_worker" ] ||
-      die 1 "$broken"
+    # shellcheck disable=SC2086
+    tokens_ok $old_tokens || die 1 "$broken"
     [ "$cred" = "$old_cred" ] && [ "$proj" = "$old_proj" ] ||
       die 3 "the platform is running with --credentials '$old_cred' --projects '$old_proj'; run ap down first to start it with others"
   fi
@@ -383,18 +397,22 @@ cmd_up() {
     [ "$val" = "$(placeholder "$n")" ] || verify_image "$n" "$val"
   done
 
-  if [ -n "$old_client" ]; then
-    client=$old_client page=$old_page worker=$old_worker
+  if [ -n "$old_tokens" ]; then
+    tokens=$old_tokens
     say "the platform's session is already started; keeping its tokens"
   else
-    # A new session: fresh tokens, one per kind of caller (research D12).
-    client=$(rand) page=$(rand) worker=$(rand)
-    [ "${#client}" -ge 32 ] && [ "$client" != "$page" ] && [ "$client" != "$worker" ] && [ "$page" != "$worker" ] ||
-      die 1 "could not generate distinct session tokens"
+    # A new session: fresh tokens, one per kind of caller (research D12) and one per service the
+    # engine calls (contract-lint, the analyst; research D27, D28).
+    tokens=''
+    for v in $token_vars; do tokens="$tokens $(rand)"; done
+    # shellcheck disable=SC2086
+    tokens_ok $tokens || die 1 "could not generate distinct session tokens"
   fi
+  # shellcheck disable=SC2086
+  set -- $tokens
+  AP_CLIENT_TOKEN=$1 AP_PAGE_TOKEN=$2 AP_WORKER_TOKEN=$3 AP_LINT_TOKEN=$4 AP_ANALYST_TOKEN=$5
 
   AP_CREDENTIALS_FILE=$cred AP_PROJECTS_DIR=$proj AP_PAGE_PORT=$port
-  AP_CLIENT_TOKEN=$client AP_PAGE_TOKEN=$page AP_WORKER_TOKEN=$worker
   AP_HOST_USER=$(id -u):$(id -g) AP_GATEWAY_IMAGE=$gateway_image
   # shellcheck disable=SC2086
   export $vars
@@ -409,7 +427,7 @@ cmd_up() {
   } >"$tmp" && chmod 600 "$tmp" && mv -f -- "$tmp" "$sess" || { rm -f -- "$tmp"; die 1 "cannot write $sess"; }
   umask "$old_umask"
 
-  say "starting the platform (gateway, engine, page); run page on http://127.0.0.1:$port"
+  say "starting the platform (gateway, engine, page, contract-lint, analyst); run page on http://127.0.0.1:$port"
   compose up -d || die 1 "docker compose up failed; see the messages above; the session is kept until: ap down"
 }
 
@@ -418,7 +436,8 @@ cmd_down() {
   # Compose needs every variable to read the file, though none is used to stop. A missing,
   # unreadable or broken session falls back to placeholders, so `down` always recovers.
   AP_CREDENTIALS_FILE=/nonexistent AP_PROJECTS_DIR=/nonexistent AP_PAGE_PORT=$default_page_port
-  AP_CLIENT_TOKEN=none AP_PAGE_TOKEN=none AP_WORKER_TOKEN=none AP_HOST_USER=65534:65534
+  AP_CLIENT_TOKEN=none AP_PAGE_TOKEN=none AP_WORKER_TOKEN=none AP_LINT_TOKEN=none AP_ANALYST_TOKEN=none
+  AP_HOST_USER=65534:65534
   AP_GATEWAY_IMAGE=none
   for n in $needed_images $optional_images; do eval "AP_IMAGE_$(upper "$n")=\$(placeholder \"\$n\")"; done
   # shellcheck disable=SC2086

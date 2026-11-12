@@ -14,6 +14,7 @@
       "user": "101:101",
       "networks": [
         "internal",
+        "analyst",
         "egress"
       ],
       "tmpfs": [
@@ -37,7 +38,9 @@
       ],
       "user": "65532:65532",
       "networks": [
-        "internal"
+        "internal",
+        "lint",
+        "analyst"
       ],
       "tmpfs": [
         "/tmp"
@@ -46,7 +49,9 @@
       "environment": {
         "ENGINE_CLIENT_TOKEN": "${AP_CLIENT_TOKEN}",
         "ENGINE_PAGE_TOKEN": "${AP_PAGE_TOKEN}",
-        "ENGINE_WORKER_TOKEN": "${AP_WORKER_TOKEN}"
+        "ENGINE_WORKER_TOKEN": "${AP_WORKER_TOKEN}",
+        "ENGINE_LINT_TOKEN": "${AP_LINT_TOKEN}",
+        "ENGINE_ANALYST_TOKEN": "${AP_ANALYST_TOKEN}"
       },
       "volumes": [
         {
@@ -191,6 +196,55 @@
         "TOKEN": "${AP_WORKER_TOKEN}"
       },
       "pull_policy": "never"
+    },
+    "contract-lint": {
+      "read_only": true,
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "user": "65532:65532",
+      "networks": [
+        "lint"
+      ],
+      "tmpfs": [
+        "/tmp"
+      ],
+      "image": "${AP_IMAGE_LINT}",
+      "environment": {
+        "AP_LINT_TOKEN": "${AP_LINT_TOKEN}"
+      },
+      "cpus": 0.5,
+      "mem_limit": "128m",
+      "pids_limit": 64,
+      "pull_policy": "never"
+    },
+    "analyst": {
+      "read_only": true,
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "user": "65532:65532",
+      "networks": [
+        "analyst"
+      ],
+      "tmpfs": [
+        "/tmp"
+      ],
+      "image": "docker/docker-agent:1.160.0@sha256:186f001f1096d3071a49113044465be8cec453cf06b26366f4c56b6789f5103c",
+      "environment": {
+        "AP_ANALYST_TOKEN": "${AP_ANALYST_TOKEN}",
+        "MODEL_GATEWAY_URL": "http://gateway:8080"
+      },
+      "cpus": 0.5,
+      "mem_limit": "128m",
+      "pids_limit": 64,
+      "runtime": "runsc"
     }
   },
   "networks": {
@@ -204,6 +258,18 @@
     "page-host": {
       "driver_opts": {
         "com.docker.network.bridge.enable_ip_masquerade": "false"
+      }
+    },
+    "lint": {
+      "internal": true,
+      "driver_opts": {
+        "com.docker.network.bridge.gateway_mode_ipv4": "isolated"
+      }
+    },
+    "analyst": {
+      "internal": true,
+      "driver_opts": {
+        "com.docker.network.bridge.gateway_mode_ipv4": "isolated"
       }
     }
   },

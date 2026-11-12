@@ -15,11 +15,15 @@ installed on the host beyond a container runtime with Compose and the gVisor run
 
 # Topology
 
-Eight services, declared once in `src/deploy/compose.yaml`, plus the local image registry
+Ten services, declared once in `src/deploy/compose.yaml`, plus the local image registry
 `ap-registry`, which `build.sh` and `ap up` start when it isn't running:
 
 - The model gateway, the only container with egress and the only one that can read the provider key.
-- The engine, which holds the session's three tokens.
+- The engine, which holds the session's three caller tokens and the tokens it calls the two
+  services below with.
+- The contract-lint service (Spectral) and the analyst (Docker Agent's `serve api`), under gVisor,
+  each on its own internal network with the engine; the analyst's network also has the gateway, its
+  only way out.
 - The read-only run page, and its forwarder, which publishes the page's port on `127.0.0.1` only.
 - The terminal client and the test harness, run per command.
 - The step agent and check workers, under gVisor with CPU, memory and process limits.
