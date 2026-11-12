@@ -331,6 +331,147 @@ exec "$real" "$@"
 """
 
 
+DOCKER_BARRIER_SHIM = """#!/bin/sh
+# Stands in for `docker` (the real one is $REAL_DOCKER). The first `network create` or `create` call
+# of a process waits (up to BARRIER_SECONDS) until another process has also reached one, then does the
+# real thing; after that nothing waits. Two processes that both found the registry absent therefore
+# both try to make it at the same moment, which is the race (T022d).
+case "$1 $2" in
+  "network create" | "create --name"*)
+    if [ ! -e "$BARRIER_DIR/passed" ]; then
+      : > "$BARRIER_DIR/at.$$"
+      i=0
+      while [ "$(ls "$BARRIER_DIR" | grep -c '^at\\.')" -lt 2 ] && [ "$i" -lt "$BARRIER_SECONDS" ]; do
+        sleep 1; i=$((i + 1))
+      done
+      : > "$BARRIER_DIR/passed"
+    fi ;;
+esac
+exec "$REAL_DOCKER" "$@"
+"""
+
+
+class RegistryRaceTest(unittest.TestCase):
+    """T022d, real Docker and the real scripts: two `build.sh` runs that start while no registry runs
+    both make it at the same moment (a shim for `docker` holds each at its first create until the other
+    is there too, so the race happens every time, not by luck); both must succeed and both images must
+    be recorded. Each test has its own registry name, port and folders; the key pair is seeded, since
+    making it is not what is tested."""
+
+    @classmethod
+    def setUpClass(cls):
+        if not shutil.which("docker") or sh("docker", "info").returncode != 0:
+            raise AssertionError("docker is required for the signing tests and is not reachable")
+        cls.defaults_before = snapshot_defaults()
+        cls.cosign = pin("cosign")
+        cls.password = secrets.token_hex(16)
+        cls.base = Path(tempfile.mkdtemp(prefix="test-signing-race-", dir=TMP_BASE))
+        cls.addClassCleanup(shutil.rmtree, cls.base, ignore_errors=True)
+        cls.addClassCleanup(cls.check_defaults)
+        keys = cls.base / "keys"
+        keys.mkdir()
+        keys.chmod(0o777)
+        r = sh("docker", "run", "--rm", "--user", "%d:%d" % (os.getuid(), os.getgid()), "-e", "COSIGN_PASSWORD=" + cls.password,
+               "-v", "%s:/w" % keys, "-w", "/w", cls.cosign, "generate-key-pair")
+        if r.returncode != 0:
+            raise AssertionError("cannot make a key pair: %s" % r.stderr)
+        cls.keys = keys
+
+    @classmethod
+    def check_defaults(cls):
+        after = snapshot_defaults()
+        if after != cls.defaults_before:
+            raise AssertionError("default-named registry objects changed during the test:\nbefore %s\nafter  %s"
+                                 % (cls.defaults_before, after))
+
+    def setUp(self):
+        self.name = "ap-test-" + secrets.token_hex(4)
+        self.port = free_port()
+        self.refs = set()
+        d = Path(tempfile.mkdtemp(prefix="t-", dir=self.base))
+        self.config, self.state = d / "config", d / "state"
+        signing = self.config / "agentic-platform/signing"
+        signing.mkdir(parents=True)
+        self.state.mkdir()
+        for f in ("cosign.key", "cosign.pub"):
+            shutil.copy(self.keys / f, signing / f)
+        (signing / "cosign.key").chmod(0o600)
+        self.images_env = self.state / "agentic-platform/images.env"
+        self.bar = d / "barrier"
+        self.shim = d / "shim"
+        self.bar.mkdir()
+        self.shim.mkdir()
+        (self.shim / "docker").write_text(DOCKER_BARRIER_SHIM)
+        (self.shim / "docker").chmod(0o755)
+        self.addCleanup(self.cleanup_docker)
+
+    def cleanup_docker(self):
+        for ref in sorted(self.refs):
+            sh("docker", "rmi", "-f", ref)
+        remove_registry_objects(self.name)
+
+    def run_builds(self, images):
+        """Start one build per name in `images` at once, with no registry running; return their results."""
+        self.assertEqual(sh("docker", "container", "inspect", self.name).returncode, 1, "a registry is already running")
+        env = {k: v for k, v in os.environ.items() if k != "COSIGN_PASSWORD"}
+        env.update(XDG_CONFIG_HOME=str(self.config), XDG_STATE_HOME=str(self.state), AP_REGISTRY_PORT=str(self.port),
+                   AP_REGISTRY_NAME=self.name, COSIGN_PASSWORD=self.password, REAL_DOCKER=shutil.which("docker"),
+                   PATH="%s%s%s" % (self.shim, os.pathsep, os.environ["PATH"]), BARRIER_DIR=str(self.bar),
+                   BARRIER_SECONDS="60")
+        procs = []
+        for image in images:
+            self.refs.add("127.0.0.1:%d/ap-%s:dev" % (self.port, image))
+            procs.append((image, subprocess.Popen(["bash", str(BUILD), image], cwd=REPO, env=env,
+                                                  stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                                  stderr=subprocess.PIPE, text=True)))
+        outs = [(i, p, p.communicate(timeout=1800)) for i, p in procs]
+        self.assertEqual(len(list(self.bar.glob("at.*"))), 2, "the two builds did not both reach the registry's creation")
+        return outs
+
+    def recorded(self):
+        out = {}
+        for line in self.images_env.read_text().splitlines() if self.images_env.is_file() else []:
+            if line.strip():
+                k, _, v = line.partition("=")
+                out[k] = v.strip("'\"")
+        return out
+
+    def assertRecorded(self, outs, keys):
+        for image, p, (so, se) in outs:
+            self.assertEqual(p.returncode, 0, "build %s failed:\n%s" % (image, se[-3000:]))
+        rec = self.recorded()
+        self.assertEqual(sorted(rec), sorted(keys), "an image was not recorded: %s" % rec)
+        for k, v in rec.items():
+            self.assertRegex(v, r"^127\.0\.0\.1:%d/ap-%s@%s$" % (self.port, k[len("AP_IMAGE_"):].lower(), DIGEST))
+        # one registry was made, and it answers
+        r = sh("docker", "container", "inspect", "-f", "{{.State.Running}}", self.name)
+        self.assertEqual(r.stdout.strip(), "true", r.stderr)
+
+    def test_two_builds_of_different_images_with_no_registry_both_succeed_and_are_recorded(self):
+        outs = self.run_builds(["check", "agent"])
+        self.assertRecorded(outs, ["AP_IMAGE_AGENT", "AP_IMAGE_CHECK"])
+
+    def test_two_builds_of_the_same_image_with_no_registry_both_succeed_and_it_is_recorded(self):
+        outs = self.run_builds(["check", "check"])
+        self.assertRecorded(outs, ["AP_IMAGE_CHECK"])
+
+    def test_two_ap_registry_calls_with_no_registry_both_succeed(self):
+        """The same race without a build: `ap registry` twice at once."""
+        env = {k: v for k, v in os.environ.items() if k != "COSIGN_PASSWORD"}
+        env.update(XDG_CONFIG_HOME=str(self.config), XDG_STATE_HOME=str(self.state), AP_REGISTRY_PORT=str(self.port),
+                   AP_REGISTRY_NAME=self.name, REAL_DOCKER=shutil.which("docker"),
+                   PATH="%s%s%s" % (self.shim, os.pathsep, os.environ["PATH"]), BARRIER_DIR=str(self.bar),
+                   BARRIER_SECONDS="60")
+        procs = [subprocess.Popen(["sh", str(AP), "registry"], env=env, stdin=subprocess.DEVNULL,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for _ in range(2)]
+        outs = [p.communicate(timeout=300) for p in procs]
+        self.assertEqual(len(list(self.bar.glob("at.*"))), 2, "the two calls did not both reach the creation")
+        for p, (so, se) in zip(procs, outs):
+            self.assertEqual(p.returncode, 0, se[-3000:])
+        r = sh("docker", "container", "inspect", "-f", "{{.State.Running}}", self.name)
+        self.assertEqual(r.stdout.strip(), "true", r.stderr)
+
+
 class SigningHardeningTest(unittest.TestCase):
     """T058a, with real Docker and the real scripts: concurrent and repeated builds, password handling and
     the registry's convergence. Each test has its own signing and state folders under a key pair made

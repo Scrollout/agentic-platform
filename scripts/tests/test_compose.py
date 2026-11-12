@@ -5,6 +5,7 @@ It must pass on the real file and on fixtures/compose/good.yaml, and fail on eac
 fixture for exactly the one rule that fixture violates (constitution: checks prove they can fail).
 Nothing here reads compose.yaml as text; only the resolved configuration is judged.
 """
+import ipaddress
 import json
 import os
 import re
@@ -567,6 +568,344 @@ class NetworkIsolationTest(unittest.TestCase):
         self.assertTrue(self.gateways["plain"])
         self.assertTrue(self.reaches(self.plain, self.gateways["plain"]),
                         "the control cannot reach the listener, so the isolation test proves nothing")
+
+
+# T022c: Docker's embedded DNS (127.0.0.11) does not work under runsc, so a gVisor worker must be given
+# another way to find the engine and the gateway by name. The rule is judged on the resolved
+# configuration; the behaviour is tried with real containers.
+DNS_FIXTURES = Path(__file__).resolve().parent / "fixtures/compose-dns"
+DNS_PLANTED = ["bad-address-not-fixed", "bad-address-on-unshared-network", "bad-check-no-engine",
+               "bad-engine-missing", "bad-gateway-missing", "bad-no-extra-hosts", "bad-wrong-address"]
+PEERS = ("engine", "gateway")  # the names a worker uses: http://engine:8080, http://gateway:8080
+
+
+def svc_networks(svc):
+    n = svc.get("networks")
+    return list(n) if n else ["default"]
+
+
+def net_address(svc, net):
+    return ((svc.get("networks") or {}).get(net) or {}).get("ipv4_address")
+
+
+def extra_hosts(svc):
+    """name -> set of addresses of a service's resolved extra_hosts (list "name=ip" or a mapping)."""
+    out = {}
+    eh = svc.get("extra_hosts") or []
+    items = eh.items() if isinstance(eh, dict) else [tuple(re.split(r"[=:]", x, maxsplit=1)) for x in eh]
+    for name, ip in items:
+        for one in (ip if isinstance(ip, list) else [ip]):
+            out.setdefault(name, set()).add(str(one))
+    return out
+
+
+def sandboxed_services(cfg):
+    return sorted(n for n, s in (cfg.get("services") or {}).items() if s.get("runtime") == "runsc")
+
+
+def peers_for(cfg, name):
+    """The peers (engine, gateway) a sandboxed service shares a network with. The engine must be
+    shared (every worker talks to it); the gateway only where the design lets the worker reach it
+    (the check container has no route to the gateway, by the threat model)."""
+    s = cfg["services"][name]
+    out = {}
+    for peer in PEERS:
+        t = (cfg["services"] or {}).get(peer)
+        shared = [n for n in svc_networks(s) if t is not None and n in svc_networks(t)]
+        if shared:
+            out[peer] = shared
+    return out
+
+
+def check_resolution(cfg):
+    """Violations of T022c as (service, reason): every runsc service must have, for the engine and
+    (when they share a network) the gateway, an extra_hosts entry for the peer's name equal to a fixed
+    address the peer has on a network they share."""
+    bad = []
+    services = cfg.get("services") or {}
+    if "engine" not in services or "gateway" not in services:
+        bad.append(("<stack>", "no engine or no gateway service"))
+    for name in sandboxed_services(cfg):
+        peers = peers_for(cfg, name)
+        if "engine" not in peers:
+            bad.append((name, "shares no network with the engine"))
+        hosts = extra_hosts(services[name])
+        for peer, shared in sorted(peers.items()):
+            fixed = {net_address(services[peer], n) for n in shared} - {None}
+            if not fixed:
+                bad.append((name, "%s has no fixed address on a shared network" % peer))
+            elif not (hosts.get(peer, set()) & fixed):
+                bad.append((name, "extra_hosts has no entry %s -> %s" % (peer, sorted(fixed))))
+    return bad
+
+
+class ResolutionRuleTest(unittest.TestCase):
+    """The config-level rule, with a clean fixture and one planted violation per way to get it wrong."""
+
+    def resolved(self, file):
+        r = compose_config(file, {})
+        self.assertEqual(r.returncode, 0, "docker compose config failed on %s:\n%s" % (file, r.stderr))
+        return json.loads(r.stdout)
+
+    @classmethod
+    def setUpClass(cls):
+        require_docker()
+
+    def test_clean_fixture_passes_and_has_sandboxed_services(self):
+        cfg = self.resolved(DNS_FIXTURES / "good.yaml")
+        self.assertEqual(sandboxed_services(cfg), ["check", "step-agent"])
+        self.assertEqual(check_resolution(cfg), [])
+
+    def test_every_planted_fixture_fails(self):
+        self.assertEqual(sorted(p.stem for p in DNS_FIXTURES.glob("bad-*.yaml")), DNS_PLANTED)
+        for stem in DNS_PLANTED:
+            with self.subTest(fixture=stem):
+                self.assertNotEqual(check_resolution(self.resolved(DNS_FIXTURES / (stem + ".yaml"))), [])
+
+    def test_planted_fixtures_name_the_service_that_breaks_it(self):
+        want = {"bad-no-extra-hosts": "step-agent", "bad-gateway-missing": "step-agent",
+                "bad-engine-missing": "step-agent", "bad-wrong-address": "step-agent",
+                "bad-address-not-fixed": "step-agent", "bad-address-on-unshared-network": "check",
+                "bad-check-no-engine": "check"}
+        for stem, svc in want.items():
+            with self.subTest(fixture=stem):
+                bad = check_resolution(self.resolved(DNS_FIXTURES / (stem + ".yaml")))
+                self.assertEqual(sorted({b[0] for b in bad}), [svc], bad)
+
+    def test_the_real_file_gives_every_sandboxed_service_a_resolution_path(self):
+        cfg = real_resolved_config()
+        self.assertTrue({"step-agent", "check"} <= set(sandboxed_services(cfg)), sandboxed_services(cfg))
+        self.assertEqual(check_resolution(cfg), [])
+
+
+def real_resolved_config():
+    base = tempfile.mkdtemp(prefix="test-dns-", dir=TMP_BASE)
+    try:
+        key = Path(base) / "models.env"
+        key.write_text(KEY + "\n")
+        key.chmod(0o600)
+        env = {"AP_CREDENTIALS_FILE": str(key), "AP_PROJECTS_DIR": base, "AP_PAGE_PORT": "18081", **TOKENS,
+               "AP_GATEWAY_IMAGE": gateway_pin(), "AP_HOST_USER": "1234:1234", **IMAGE_ENV}
+        r = compose_config(COMPOSE, env)
+        if r.returncode != 0:
+            raise AssertionError("docker compose config failed on %s:\n%s" % (COMPOSE, r.stderr))
+        return json.loads(r.stdout)
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def docker(*args, **kw):
+    kw.setdefault("capture_output", True)
+    kw.setdefault("text", True)
+    kw.setdefault("timeout", 120)
+    return subprocess.run(["docker", *args], **kw)
+
+
+class RunscNameResolutionTest(unittest.TestCase):
+    """T022c with real Docker and gVisor: throwaway networks made like the resolved configuration's
+    (driver options, internal, subnets), stand-in containers for the engine and the gateway with the
+    addresses and aliases the configuration gives them, and for each `runtime: runsc` service a runsc
+    container with that service's networks, extra_hosts and dns. It must resolve `engine` (and
+    `gateway` where the service shares a network with it) and get an HTTP answer from each. Controls:
+    a runc container with only the networks resolves by Docker's DNS (the stand-ins are right), and the
+    runsc container without the service's settings does not (the check can fail)."""
+    PORT = 8080
+
+    @classmethod
+    def setUpClass(cls):
+        require_docker()
+        cls.tag = "ap-test-dns-" + os.urandom(4).hex()
+        cls.addClassCleanup(cls.cleanup)
+        cls.image = None
+        for line in (REPO / "src/deploy/images.lock").read_text().splitlines():
+            f = line.split()
+            if len(f) >= 2 and f[0] == "golang":
+                cls.image = f[1]
+        if not cls.image or docker("image", "inspect", cls.image).returncode != 0:
+            raise AssertionError("the golang pin from images.lock must be in the local image store (build.sh check pulls it)")
+        r = docker("info", "--format", "{{json .Runtimes}}")
+        if "runsc" not in r.stdout:
+            raise AssertionError("the runsc runtime (gVisor) is required and Docker does not list it: %s" % r.stdout)
+        cls.cfg = real_resolved_config()
+        cls.sandboxed = sandboxed_services(cls.cfg)
+        if not {"step-agent", "check"} <= set(cls.sandboxed):
+            raise AssertionError("expected runsc services step-agent and check, got %s" % cls.sandboxed)
+        cls.peers = {n: peers_for(cls.cfg, n) for n in cls.sandboxed}
+        used = sorted({n for s in cls.sandboxed for n in svc_networks(cls.cfg["services"][s])})
+        cls.netname = {}
+        # The configuration's subnets are fixed, so a platform running on them (or another test) would
+        # clash: each is moved to a throwaway 10.x.y.0 range of the same size, with every address in
+        # the configuration moved by the same offset (the rule under test is unchanged by that).
+        cls.moves = []
+        for i, n in enumerate(used):
+            cls.make_network(n, i)
+        for peer in PEERS:
+            cls.make_peer(peer, used)
+
+    @classmethod
+    def move(cls, ip):
+        """An address of the configuration, moved into its network's throwaway range."""
+        if not ip:
+            return ip
+        a = ipaddress.ip_address(ip)
+        for old, new in cls.moves:
+            if a.version == old.version and a in old:
+                return str(new.network_address + (int(a) - int(old.network_address)))
+        return ip
+
+    @classmethod
+    def move_net(cls, cidr):
+        """A CIDR range of the configuration, moved like an address."""
+        n = ipaddress.ip_network(cidr)
+        return ipaddress.ip_network("%s/%d" % (cls.move(str(n.network_address)), n.prefixlen))
+
+    @classmethod
+    def make_network(cls, key, index):
+        net = (cls.cfg.get("networks") or {}).get(key) or {}
+        name = "%s-%s" % (cls.tag, key)
+        args = ["network", "create"]
+        if net.get("internal"):
+            args.append("--internal")
+        if net.get("driver") not in (None, "", "bridge"):
+            args += ["--driver", net["driver"]]
+        for k, v in (net.get("driver_opts") or {}).items():
+            args += ["-o", "%s=%s" % (k, v)]
+        for c in (net.get("ipam") or {}).get("config") or []:
+            if not c.get("subnet"):
+                continue
+            old = ipaddress.ip_network(c["subnet"])
+            base = 100 + int(cls.tag[-2:], 16) % 100
+            cls.moves.append((old, ipaddress.ip_network("10.%d.%d.0/%d" % (base, index, old.prefixlen))))
+            args += ["--subnet", str(cls.moves[-1][1])]
+            for flag, field in (("--gateway", "gateway"), ("--ip-range", "ip_range")):
+                if c.get(field):
+                    args += [flag, cls.move(c[field]) if field == "gateway" else str(cls.move_net(c[field]))]
+        r = docker(*args, name)
+        if r.returncode != 0:
+            raise AssertionError("cannot make a network like %s: %s (a running platform on the same subnet "
+                                 "would clash)" % (key, r.stderr.strip()))
+        cls.netname[key] = name
+
+    @classmethod
+    def make_peer(cls, peer, used):
+        svc = cls.cfg["services"][peer]
+        nets = [n for n in svc_networks(svc) if n in used]
+        if not nets:
+            raise AssertionError("%s is on none of the networks the sandboxed services use" % peer)
+        name = "%s-%s" % (cls.tag, peer)
+        # a tiny HTTP listener (busybox nc; the image has no httpd applet): one fixed answer
+        body = ("while true; do printf 'HTTP/1.0 200 OK\\r\\nContent-Length: %d\\r\\n\\r\\nstand-in-%s\\n' | nc -l -p %d; done"
+                % (len("stand-in-" + peer) + 1, peer, cls.PORT))
+        r = docker("create", "--name", name, "--entrypoint", "sh", cls.image, "-c", body)
+        if r.returncode != 0:
+            raise AssertionError(r.stderr)
+        # created on the default bridge: take it off, then join the throwaway networks as configured
+        docker("network", "disconnect", "bridge", name)
+        for n in nets:
+            conf = (svc.get("networks") or {}).get(n) or {}
+            args = ["network", "connect", "--alias", peer]
+            for a in conf.get("aliases") or []:
+                args += ["--alias", a]
+            if conf.get("ipv4_address"):
+                args += ["--ip", cls.move(conf["ipv4_address"])]
+            r = docker(*args, cls.netname[n], name)
+            if r.returncode != 0:
+                raise AssertionError("%s cannot join %s: %s" % (peer, n, r.stderr.strip()))
+        r = docker("start", name)
+        if r.returncode != 0:
+            raise AssertionError(r.stderr)
+
+    @classmethod
+    def cleanup(cls):
+        names = docker("ps", "-a", "--format", "{{.Names}}", "--filter", "name=" + cls.tag).stdout.split()
+        for n in names:
+            docker("rm", "-f", n)
+        for n in docker("network", "ls", "--format", "{{.Name}}", "--filter", "name=" + cls.tag).stdout.split():
+            docker("network", "rm", n)
+        left = docker("ps", "-a", "--format", "{{.Names}}", "--filter", "name=" + cls.tag).stdout.split() + \
+            docker("network", "ls", "--format", "{{.Name}}", "--filter", "name=" + cls.tag).stdout.split()
+        if left:
+            raise AssertionError("Docker objects of the test left behind: %s" % left)
+
+    # a worker container under test
+    def worker(self, service, runtime, settings):
+        """Start a container like `service` (its networks; its extra_hosts and dns when `settings`) and
+        return its name."""
+        svc = self.cfg["services"][service]
+        name = "%s-w-%s-%s-%s" % (self.tag, service, runtime, "cfg" if settings else "bare")
+        nets = svc_networks(svc)
+        args = ["create", "--name", name, "--runtime", runtime, "--read-only", "--cap-drop", "ALL",
+                "--security-opt", "no-new-privileges", "--user", "65532:65532", "--tmpfs", "/tmp",
+                "--entrypoint", "sleep"]
+        if settings:
+            for host, ips in sorted(extra_hosts(svc).items()):
+                for ip in sorted(ips):
+                    args += ["--add-host", "%s:%s" % (host, self.move(ip))]
+            for d in svc.get("dns") or []:
+                args += ["--dns", self.move(d)]
+            for d in svc.get("dns_search") or []:
+                args += ["--dns-search", d]
+            for d in svc.get("dns_opt") or []:
+                args += ["--dns-opt", d]
+        r = docker(*args, self.image, "300")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        docker("network", "disconnect", "bridge", name)
+        for n in nets:
+            conf = (svc.get("networks") or {}).get(n) or {}
+            a = ["network", "connect"]
+            if conf.get("ipv4_address"):
+                a += ["--ip", self.move(conf["ipv4_address"])]
+            r = docker(*a, self.netname[n], name)
+            self.assertEqual(r.returncode, 0, r.stderr)
+        r = docker("start", name)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.addCleanup(docker, "rm", "-f", name)
+        return name
+
+    def resolves(self, container, peer):
+        r = docker("exec", container, "getent", "hosts", peer, timeout=90)
+        return r.returncode == 0 and bool(r.stdout.split())
+
+    def fetch(self, container, peer):
+        r = docker("exec", container, "wget", "-q", "-T", "8", "-O", "-", "http://%s:%d/" % (peer, self.PORT), timeout=90)
+        return r.stdout.strip() if r.returncode == 0 else None
+
+    def test_every_runsc_service_reaches_its_peers_by_name(self):
+        for service in self.sandboxed:
+            c = self.worker(service, "runsc", settings=True)
+            peers = self.peers[service]
+            self.assertIn("engine", peers, "%s shares no network with the engine" % service)
+            for peer in sorted(peers):
+                with self.subTest(service=service, peer=peer):
+                    self.assertTrue(self.resolves(c, peer), "%s under runsc cannot resolve %s" % (service, peer))
+                    self.assertEqual(self.fetch(c, peer), "stand-in-" + peer,
+                                     "%s under runsc gets no answer from http://%s:%d" % (service, peer, self.PORT))
+
+    def test_control_runsc_without_the_services_settings_cannot_resolve(self):
+        """The embedded DNS fails under runsc: without extra_hosts and dns the names do not resolve,
+        so the test above can fail."""
+        for service in self.sandboxed:
+            c = self.worker(service, "runsc", settings=False)
+            for peer in sorted(self.peers[service]):
+                with self.subTest(service=service, peer=peer):
+                    self.assertFalse(self.resolves(c, peer),
+                                     "runsc resolved %s from Docker's DNS alone: the premise of T022c no longer holds" % peer)
+
+    def test_control_runc_with_only_the_networks_resolves_by_docker_dns(self):
+        """The stand-ins have the names and addresses of the configuration, so a failure above is the
+        worker's name resolution and not the stand-ins."""
+        for service in self.sandboxed:
+            c = self.worker(service, "runc", settings=False)
+            for peer in sorted(self.peers[service]):
+                with self.subTest(service=service, peer=peer):
+                    self.assertTrue(self.resolves(c, peer), "runc cannot resolve %s on the stand-in networks" % peer)
+                    self.assertEqual(self.fetch(c, peer), "stand-in-" + peer)
+
+    def test_the_check_worker_has_no_route_to_the_gateway(self):
+        """The resolution fix must not give the check container the gateway (plan threat model)."""
+        self.assertNotIn("gateway", self.peers["check"])
+        c = self.worker("check", "runsc", settings=True)
+        self.assertFalse(self.resolves(c, "gateway"), "check resolves the gateway")
 
 
 class MissingDockerFailsTest(unittest.TestCase):

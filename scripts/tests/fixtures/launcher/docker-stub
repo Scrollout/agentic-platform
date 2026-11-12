@@ -46,7 +46,8 @@ if argv[:1] == ["version"]:
 if "pull" in argv[:2] and "STUB_EXIT_PULL" in os.environ:
     sys.exit(int(os.environ["STUB_EXIT_PULL"]))
 if "port" in argv:
-    print("127.0.0.1:49999")
+    # the registry's published port (ap checks it is published): the one ap was asked for
+    print("127.0.0.1:" + os.environ.get("AP_REGISTRY_PORT", "5005") if "5000/tcp" in argv else "127.0.0.1:49999")
 code = int(os.environ.get("STUB_EXIT", "0"))
 if "run" in argv and "cli" in argv and "STUB_EXIT_CLI" in os.environ:
     code = int(os.environ["STUB_EXIT_CLI"])

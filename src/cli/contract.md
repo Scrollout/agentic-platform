@@ -42,7 +42,10 @@ Two names, two jobs:
   `AP_REGISTRY_NAME` (default `ap-registry`) is for running a second, independent registry (for
   example in tests); its container, volume and network are named after it (`<name>`,
   `<name>-data`, `<name>-net`; by default `ap-registry`, `ap-registry-data`, `ap-signing`), and a
-  name that is not `[a-z0-9][a-z0-9_.-]*` is a usage error (exit 3).
+  name that is not `[a-z0-9][a-z0-9_.-]*` is a usage error (exit 3). Several `registry`, `up` and
+  `build.sh` commands may start the registry at the same time: each one returns when the one
+  registry answers, and none fails because another made it first. A registry that cannot publish
+  its port (the port is taken) is removed again, its data kept, and `registry` exits 1.
 - **The terminal client** runs in its own container and is a client of the engine API
   ([openapi.yaml](../engine/api/preview/2026-11-12-preview/openapi.yaml)) with the client token. It adds no behaviour
   of its own.

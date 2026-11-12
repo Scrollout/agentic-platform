@@ -1,0 +1,37 @@
+# Clean fixture for the name-resolution rule of runsc services (T022c): the engine and gateway have
+# fixed addresses on the network they share with the sandboxed agent, which maps their names to them
+# with extra_hosts; the check worker shares only the engine's network and gets only the engine.
+name: ap-dns-fixture
+services:
+  gateway:
+    image: example/gateway:1
+    networks:
+      agents: { ipv4_address: 172.30.10.11 }
+  engine:
+    image: example/engine:1
+    networks:
+      agents: { ipv4_address: 172.30.10.10 }
+      checks: { ipv4_address: 172.30.20.10 }
+  step-agent:
+    image: example/agent:1
+    runtime: runsc
+    extra_hosts:
+      engine: 172.30.10.10
+      gateway: 172.30.10.11
+    networks: [agents]
+  check:
+    image: example/check:1
+    runtime: runsc
+    extra_hosts:
+      engine: 172.30.20.10
+    networks: [checks]
+  plain:
+    image: example/plain:1
+    networks: [agents]
+networks:
+  agents:
+    internal: true
+    ipam: { config: [{ subnet: 172.30.10.0/24 }] }
+  checks:
+    internal: true
+    ipam: { config: [{ subnet: 172.30.20.0/24 }] }

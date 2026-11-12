@@ -22,7 +22,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
-REAL_AP = REPO / "src/deploy/ap"
+# AP_TEST_AP points the real-launcher tests at another copy of ap (to see them fail against a mutant)
+REAL_AP = Path(os.environ.get("AP_TEST_AP") or REPO / "src/deploy/ap")
 STUB = HERE / "fixtures/launcher/docker-stub"
 REFERENCE = HERE / "fixtures/launcher/reference-ap"
 TMP_BASE = os.environ.get("XDG_RUNTIME_DIR") or None
@@ -740,6 +741,87 @@ class RealLauncherTest(LauncherContract, unittest.TestCase):
             self.clear()
             self.assertEqual(self.up(STUB_DOCKER_VERSION=version).returncode, 0)
             self.ap("down")
+
+    # T022d: a non-numeric Docker version, and a session file owned by someone else
+    def test_a_non_numeric_docker_version_stops_up_and_registry_with_exit_3_and_no_docker_changes(self):
+        for version in ("dev", "abc.1", "v29.0.0", "28abc.1", ".5", "-1.0", "unknown", "2x8.0", "master-28.1"):
+            for args in (["up", "--credentials", str(self.cred), "--projects", str(self.proj)], ["registry"]):
+                with self.subTest(version=version, command=args[0]):
+                    self.clear()
+                    r = self.ap(*args, STUB_DOCKER_VERSION=version)
+                    self.assertEqual(r.returncode, 3, r.stderr)
+                    self.assertIn(version, r.stderr, "the message should name the version it cannot read")
+                    self.assertEqual(self.compose_calls(), [], "Compose was called")
+                    changing = [c["argv"] for c in self.calls()
+                                if c["argv"][:1] in (["create"], ["run"], ["rm"], ["start"]) or
+                                c["argv"][:2] in (["network", "create"], ["network", "rm"], ["volume", "create"],
+                                                  ["container", "create"], ["container", "rm"])]
+                    self.assertEqual(changing, [], "Docker was changed")
+
+    def test_a_numeric_major_with_a_suffix_is_accepted(self):
+        for version in ("28.0.0-rc.1", "29.9.3+dfsg", "30"):
+            with self.subTest(version=version):
+                self.clear()
+                self.assertEqual(self.up(STUB_DOCKER_VERSION=version).returncode, 0)
+                self.ap("down")
+
+    def ls_as_other_user(self):
+        """A stub `ls` before the real one on PATH: `ls -ldn -- <session file>` (how ap reads the owner)
+        reports the owner STUB_LS_OWNER instead of the real one; every other call, and every other
+        file (the credentials file, whose owner `up` also reads), is the real `ls`."""
+        real = shutil.which("ls")
+        stub = self.bin / "ls"
+        stub.write_text("#!/bin/sh\n"
+                        'for last in "$@"; do :; done\n'
+                        'case "$last" in\n'
+                        '  */session.env) if [ -n "${STUB_LS_OWNER:-}" ]; then\n'
+                        '      %s "$@" | awk -v o="$STUB_LS_OWNER" \'{ $3 = o; print }\'; exit 0; fi ;;\n'
+                        'esac\n'
+                        'exec %s "$@"\n' % (real, real))
+        stub.chmod(0o755)
+
+    def test_a_session_file_owned_by_another_user_is_refused(self):
+        """Mode 600 and a regular file, but owned by someone else: it is code `ap` would run as the
+        developer, so no command but `down` reads it."""
+        self.ls_as_other_user()
+        self.assertEqual(self.up().returncode, 0)
+        before = self.session.read_bytes()
+        other = str(os.getuid() + 1)
+        # control: the stub with the developer's own uid changes nothing, so the refusals below are the owner
+        self.clear()
+        r = self.ap("page", STUB_LS_OWNER=str(os.getuid()))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        for args in (["page"], ["describe"], ["test", "planted"], ["build-workers", "slice1"],
+                     ["up", "--credentials", str(self.cred), "--projects", str(self.proj)]):
+            with self.subTest(args=args):
+                self.clear()
+                r = self.ap(*args, STUB_LS_OWNER=other)
+                self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+                self.assertIn("not owned by you", r.stderr)
+                self.assertIn("ap down", r.stderr)
+                self.assertEqual(self.compose_calls(), [], "Compose was called with a foreign session file")
+                self.assertEqual(self.session.read_bytes(), before)
+                self.assertNotIn("http://127.0.0.1", r.stdout)
+        for t in TOKEN_VARS:
+            token = re.search(t + r"='?([0-9a-f]+)", before.decode()).group(1)
+            self.assertNotIn(token, r.stdout + r.stderr)
+        # `down` still works, without reading the file
+        self.clear()
+        r = self.ap("down", STUB_LS_OWNER=other)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue([c for c in self.compose_calls() if "down" in c["argv"]], "down did not call Compose")
+        self.assertFalse(self.session.exists())
+
+    def test_a_foreign_session_file_with_code_in_it_is_never_run(self):
+        self.ls_as_other_user()
+        self.assertEqual(self.up().returncode, 0)
+        marker = self.base / "ran-foreign-session"
+        with open(self.session, "a") as f:
+            f.write("touch %s\n" % marker)
+        self.session.chmod(0o600)
+        r = self.ap("page", STUB_LS_OWNER=str(os.getuid() + 1))
+        self.assertEqual(r.returncode, 1, r.stderr)
+        self.assertFalse(marker.exists(), "a session file owned by another user was run")
 
     def test_a_failed_pull_stops_up_before_compose(self):
         r = self.up(STUB_IMAGE_MISSING="1", STUB_EXIT_PULL="1")

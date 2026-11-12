@@ -87,6 +87,7 @@ agent's context (a trust boundary).
 | Step agents | | ✓ | | | ✓ | ✓ | ASI02 tool misuse, LLM06 excessive agency | gVisor, read-only outside scope, no capabilities, no egress, resource limits |
 | Check container running generated code | | ✓ | | ✓ | ✓ | ✓ | ASI05 code execution | gVisor, no network, time and resource limits, ephemeral file system |
 | Gateway | ✓ | | | ✓ | ✓ | | LLM02 | Only holder of credentials; only the provider host; no header or body logging; budget caps |
+| Host-reachable bridges: page forwarder, gateway, image registry | | | | ✓ | | ✓ | — | Stated limit (T022d): only these three can reach the host's services, since Docker publishes no port from an `isolated` network and the gateway needs egress; each is a pinned, static component with a fixed configuration and nothing else on its network. Mitigation path: an optional host firewall rule, added by the owner with root and never by `ap`, drops new connections from the platform's subnets (`10.231.0.0/16`) to the host ([local environment](../../docs/operations/local.md#optional-host-firewall-rule)) |
 | Launcher | | ✓ | | | | ✓ | LLM03 supply chain | Verifies image signatures at start; pins by digest; never passes the socket to a container |
 | Engine API | ✓ | | ✓ | | ✓ | | ASI03 identity abuse | Per-container tokens; rate limit; idempotency; every action recorded |
 | Run store | | ✓ | ✓ | ✓ | | | — | Append-only records; content addressed by hash; erasure on delete |

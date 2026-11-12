@@ -44,7 +44,14 @@ reg=${AP_REGISTRY_NAME:-ap-registry}
 case $reg in [a-z0-9]*[!a-z0-9_.-]* | [!a-z0-9]* | '') printf 'ap: AP_REGISTRY_NAME %s is not a container name ([a-z0-9][a-z0-9_.-]*)\n' "'$reg'" >&2; exit 3 ;; esac
 reg_volume=$reg-data
 reg_hostnet=$reg-host
-if [ "$reg" = ap-registry ]; then reg_net=ap-signing; else reg_net=$reg-net; fi
+# The default registry's publishing network has a fixed subnet in the platform's 10.231.0.0/16 (the
+# other subnets are in compose.yaml), so the optional host firewall rule in docs/operations/local.md
+# covers it; a second registry's is chosen by Docker.
+if [ "$reg" = ap-registry ]; then
+  reg_net=ap-signing reg_hostnet_subnet=10.231.5.0/24
+else
+  reg_net=$reg-net reg_hostnet_subnet=''
+fi
 
 say() { printf 'ap: %s\n' "$*" >&2; }
 die() { code=$1; shift; say "$*"; exit "$code"; }
@@ -141,20 +148,24 @@ check_credentials() {
 
 # A network the registry joins, with the one driver option that matters: an internal network is
 # `isolated` (its bridge has no host address, so nothing on it reaches the host), the publishing
-# network has IP masquerading off (no NAT, so no working route out). A network with other options
-# is replaced, together with the registry container attached to it (its data volume is kept).
+# network has IP masquerading off (no NAT, so no working route out); and its subnet when one is
+# given (empty: any). A network with another option or subnet is replaced, together with the
+# registry container attached to it (its data volume is kept).
 ensure_reg_net() {
-  nname=$1 nopt=$2 nval=$3
-  shift 3
+  nname=$1 nopt=$2 nval=$3 nsubnet=$4
+  shift 4
   if docker network inspect "$nname" >/dev/null 2>&1; then
-    [ "$(docker network inspect -f "{{index .Options \"$nopt\"}}" "$nname")" = "$nval" ] && return 0
-    say "replacing the network $nname (it lacks $nopt=$nval); the registry's data is kept"
+    [ "$(docker network inspect -f "{{index .Options \"$nopt\"}}" "$nname")" = "$nval" ] &&
+      { [ -z "$nsubnet" ] || [ "$(docker network inspect -f '{{range .IPAM.Config}}{{.Subnet}} {{end}}' "$nname")" = "$nsubnet " ]; } &&
+      return 0
+    say "replacing the network $nname (it lacks $nopt=$nval${nsubnet:+ or the subnet $nsubnet}); the registry's data is kept"
     if docker container inspect "$reg" >/dev/null 2>&1; then
       docker rm -f "$reg" >/dev/null || die 1 "cannot remove the container $reg"
     fi
     docker network rm "$nname" >/dev/null || die 1 "cannot remove the network $nname (is a build running?)"
   fi
-  docker network create "$@" -o "$nopt=$nval" "$nname" >/dev/null || die 1 "cannot create the network $nname"
+  docker network create "$@" ${nsubnet:+--subnet "$nsubnet"} -o "$nopt=$nval" "$nname" >/dev/null ||
+    die 1 "cannot create the network $nname"
 }
 
 # The networks' `isolated` gateway mode exists from Docker 28; an older engine may ignore the option
@@ -173,8 +184,14 @@ need_docker() {
 # 127.0.0.1:$AP_REGISTRY_PORT only from its own network $reg_hostnet (masquerading off, nothing else
 # on it), data in the volume $reg_volume, and also on the isolated internal network $reg_net, where
 # cosign reaches it as $reg:5000. Converges: a registry created from the same pin, port, run flags
-# and networks is left alone (only started if stopped); any other is replaced, keeping its data
-# volume.
+# and networks is left alone (only started if stopped, attached if detached); any other is
+# replaced, keeping its data volume. Returns once the registry answers.
+#
+# Several `ap` and build.sh processes may converge it at the same time (T022d): a step that fails
+# because another process changed the registry in between (a name already taken, a removal
+# already in progress, a container removed under it) fails the whole pass, which runs again from
+# the start in a subshell and then finds what the other process made. Every step is safe to
+# repeat, so no lock is needed; a step that keeps failing stops after five passes.
 ensure_registry() {
   need_docker
   rport=${AP_REGISTRY_PORT:-$default_registry_port}
@@ -190,8 +207,28 @@ ensure_registry() {
     -p 127.0.0.1:$rport:5000"
   want="$rimage 127.0.0.1:$rport flags:$(printf '%s %s' "$rflags" "$reg_net" | tr -s ' \n' '  ' | cksum | cut -d' ' -f1)"
 
-  ensure_reg_net "$reg_net" com.docker.network.bridge.gateway_mode_ipv4 isolated --internal
-  ensure_reg_net "$reg_hostnet" com.docker.network.bridge.enable_ip_masquerade false
+  pass=1
+  until started=$(converge_registry); do
+    rc=$?
+    [ "$rc" -eq 1 ] && [ "$pass" -lt 5 ] || exit "$rc"
+    say "setting up the image registry $reg failed (another ap or build.sh may be setting it up too); trying again"
+    pass=$((pass + 1))
+    sleep 1
+  done
+  i=0
+  until docker exec "$reg" wget -q -O /dev/null http://127.0.0.1:5000/v2/ >/dev/null 2>&1; do
+    i=$((i + 1))
+    [ "$i" -lt 20 ] || die 1 "the image registry did not become ready; see: docker logs $reg"
+    sleep 1
+  done
+  [ -z "$started" ] || say "the image registry $reg is running on 127.0.0.1:$rport"
+}
+
+# One pass of ensure_registry, run in a subshell (its `die` ends only the pass). Prints `started`
+# when it started the container.
+converge_registry() (
+  ensure_reg_net "$reg_net" com.docker.network.bridge.gateway_mode_ipv4 isolated '' --internal
+  ensure_reg_net "$reg_hostnet" com.docker.network.bridge.enable_ip_masquerade false "$reg_hostnet_subnet"
 
   have=$(docker container inspect -f '{{index .Config.Labels "org.agentic-platform.registry"}}' "$reg" 2>/dev/null) ||
     have=absent
@@ -213,19 +250,33 @@ ensure_registry() {
     # shellcheck disable=SC2086
     docker create --name "$reg" --label "org.agentic-platform.registry=$want" $rflags "$rimage" >/dev/null ||
       die 1 "cannot create the container $reg"
-    docker network connect "$reg_net" "$reg" || die 1 "cannot attach $reg to $reg_net"
   fi
+  [ "$(docker container inspect -f "{{if index .NetworkSettings.Networks \"$reg_net\"}}yes{{end}}" "$reg" 2>/dev/null)" = yes ] ||
+    docker network connect "$reg_net" "$reg" >&2 || die 1 "cannot attach $reg to $reg_net"
   if [ "$(docker container inspect -f '{{.State.Running}}' "$reg" 2>/dev/null)" = true ]; then
-    return 0
+    drop_unpublished || die 1 "the image registry $reg was running without its port 127.0.0.1:$rport"
+    exit 0
   fi
-  docker start "$reg" >/dev/null || die 1 "cannot start the container $reg"
-  i=0
-  until docker exec "$reg" wget -q -O /dev/null http://127.0.0.1:5000/v2/ >/dev/null 2>&1; do
-    i=$((i + 1))
-    [ "$i" -lt 20 ] || die 1 "the image registry did not become ready; see: docker logs $reg"
+  docker start "$reg" >/dev/null || { drop_unpublished; die 1 "cannot start the container $reg"; }
+  drop_unpublished || die 1 "the image registry $reg started without its port 127.0.0.1:$rport"
+  echo started
+)
+
+# When its port is taken, a registry can be left running without it, by a failed start or even by
+# a later start that succeeds (seen on Docker 29.9). A registry container that has not published
+# 127.0.0.1:$rport within five seconds (another process may be starting it) is removed, keeping
+# its data volume, so the next pass creates it again; returns 1 then.
+drop_unpublished() {
+  j=0
+  until [ "$(docker port "$reg" 5000/tcp 2>/dev/null)" = "127.0.0.1:$rport" ]; do
+    j=$((j + 1))
+    if [ "$j" -ge 5 ]; then
+      say "the image registry $reg did not publish 127.0.0.1:$rport (is the port taken?); removing the container, its data is kept"
+      docker rm -f "$reg" >/dev/null 2>&1
+      return 1
+    fi
     sleep 1
   done
-  say "the image registry $reg is running on 127.0.0.1:$rport"
 }
 
 # Read images.env into AP_IMAGE_<NAME> for the images Compose uses. Every line must be a digest

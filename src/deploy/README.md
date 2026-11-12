@@ -31,7 +31,10 @@ Builds may run at the same time, of the same or of different images: recording t
 loses another's line; a build waits for it up to two minutes, then exits 1 naming it. A lock whose
 build is no longer running is removed by the next build. When two builds of the same name overlap,
 the one that records last wins, and an image whose tag another build has since moved is pulled
-back into the local store by digest.
+back into the local store by digest. Builds that start together on a machine with no registry
+running and no key pair yet are safe too: `ap registry` lets each of them find the one registry
+the first made (see below), and only one makes the key pair, under the lock `keys.lock` in the
+signing folder, while the others wait for it and then sign with it.
 
 The key's password comes from `COSIGN_PASSWORD`, or cosign asks on the terminal; with neither,
 `build.sh` stops before building. It exits 0 when the image is built, signed and recorded, 1 when a
@@ -41,8 +44,13 @@ The registry is the container `ap-registry` from the `registry` pin, on
 `127.0.0.1:${AP_REGISTRY_PORT:-5005}` only, with its data in the volume `ap-registry-data`; see the
 [registry concept](../../docs/components/distribution-registry.md) for its hardening and limits.
 It publishes its port from its own network `ap-registry-host` (IP masquerading off, nothing else on
-it), not Docker's default bridge, and cosign reaches it on the isolated internal network
-`ap-signing`. Building an image again replaces the previous one under the same name in the local
+it, subnet `10.231.5.0/24`), not Docker's default bridge, and cosign reaches it on the isolated
+internal network `ap-signing`. `ap registry` may run several times at once (two builds starting
+together): a step that fails because another run changed the registry in between (a name already
+taken, a removal already in progress) fails that pass, which runs again, up to five passes, and
+then finds what the other made. A registry whose port is taken is left running without it by
+Docker 29; `ap registry` removes such a container (its data is kept) and exits 1 after the last
+pass. Building an image again replaces the previous one under the same name in the local
 store, so run `ap up` after a rebuild; an `up` whose recorded image is no longer in the local store
 pulls it back by digest from the local registry on `127.0.0.1` before verifying it. Every build yields a new digest, even from unchanged source, because the
 provenance and SBOM carry the build's time; so the next `ap up` recreates that image's containers.
@@ -82,8 +90,9 @@ the [terminal contract](../cli/contract.md). It calls only `docker` and passes e
 registry (for example in tests): the container is `$AP_REGISTRY_NAME`, its volume
 `$AP_REGISTRY_NAME-data`, its internal network `$AP_REGISTRY_NAME-net` and its publishing network
 `$AP_REGISTRY_NAME-host`; unset, they are `ap-registry`, `ap-registry-data`, `ap-signing` and
-`ap-registry-host`. A network with other driver options (one made by an earlier `ap`) is replaced,
-with the registry container; the data volume is kept. Images are signed and verified under the
+`ap-registry-host`; only the default publishing network has the fixed subnet, a second registry's
+is chosen by Docker. A network with other driver options or another subnet (one made by an earlier
+`ap`) is replaced, with the registry container; the data volume is kept. Images are signed and verified under the
 container's name, so build and start with the same value.
 
 `ap up` needs the `engine`, `page` and `cli` images and the public key, and exits 1 naming the
@@ -114,8 +123,8 @@ limits, and writable `tmpfs` only where it needs one; no service mounts a contai
 | `page-proxy` | `ap up` | `page`, `page-host` | The `nginx` pin with the fixed `page-proxy/nginx.conf`; publishes the page's port on `127.0.0.1` only and passes each request, Host header unchanged, to the page |
 | `cli` | each client command (`run --rm`, profile `client`) | `clients` | Client token |
 | `tests` | `ap test <suite>` (profile `tests`) | `clients` | Client token; no `Dockerfile.tests` yet |
-| `step-agent` | `ap build-workers` (profile `workers`) | `agents` | gVisor, `/tmp` executable, projects read-only; the template for per-step workers |
-| `check` | `ap build-workers` (profile `workers`) | `checks` | gVisor, `/tmp` executable, projects read-only; cannot reach the gateway |
+| `step-agent` | `ap build-workers` (profile `workers`) | `agents` | gVisor, `/tmp` executable, projects read-only; finds `engine` and `gateway` through `extra_hosts`; the template for per-step workers |
+| `check` | `ap build-workers` (profile `workers`) | `checks` | gVisor, `/tmp` executable, projects read-only; finds `engine` through `extra_hosts`; cannot reach the gateway |
 
 All networks are internal except `egress` and `page-host`, and every internal one is `isolated`
 (`com.docker.network.bridge.gateway_mode_ipv4`, Docker 28 and later): its bridge has no address on
@@ -131,7 +140,31 @@ of this static, pinned component, not of the page. Publishing relies on Docker's
 (the default) to carry `127.0.0.1` to the container. The gateway's `egress` is a plain bridge
 with NAT: besides the provider, the gateway can reach host services, the local network and the
 whole internet, and only its fixed nginx configuration (one upstream, one path) limits what it
-asks for.
+asks for. The owner may close the host to the forwarder, the gateway and the registry with one
+host firewall rule, an optional step that needs root and that `ap` never runs; see
+[the local environment](../../docs/operations/local.md#optional-host-firewall-rule).
+
+Names under gVisor: a container under `runtime: runsc` cannot use Docker's embedded DNS server
+(`127.0.0.11`; tested with runsc release-20261109.0 on Docker 29.9.3: the lookup is refused, while
+the same container under runc resolves the peer and a gVisor container reaches it by address).
+gVisor's own network stack never sees the NAT rule in the container's namespace that carries
+`127.0.0.11` to Docker's resolver; runsc's `--reproduce-nat` flag copies it, but that is a flag of
+the host's Docker configuration (a per-container annotation is refused without
+`--allow-flag-override`). So `compose.yaml` gives the networks shared with the workers fixed
+subnets and the engine and gateway fixed addresses on them, and the workers find those two names
+through `/etc/hosts` (`extra_hosts`). Each subnet and address is declared once, under
+`x-addresses`:
+
+| Network | Subnet | Fixed addresses | Who uses them |
+|---------|--------|-----------------|---------------|
+| `agents` | `10.231.1.0/24` (others from `10.231.1.128/25`) | `engine` `10.231.1.2`, `gateway` `10.231.1.3` | `step-agent` |
+| `checks` | `10.231.2.0/24` (others from `10.231.2.128/25`) | `engine` `10.231.2.2` | `check` |
+| `egress` | `10.231.3.0/24` | none | the host firewall rule |
+| `page-host` | `10.231.4.0/24` | none | the host firewall rule |
+
+Every container under runc keeps using Docker's DNS. The subnets lie outside Docker's default
+address pools; one that overlaps another network on the machine stops `ap up` with Compose's
+`Pool overlaps` message, and only one Compose project from this file can run at a time.
 
 `ap up` and `ap registry` need Docker 28 or later and exit 3 naming the version otherwise, because
 an older engine may ignore the `isolated` option and leave the host reachable. Networks made by an

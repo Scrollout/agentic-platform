@@ -5,7 +5,7 @@ description: The platform on one developer's machine, started by the ap launcher
 tags: [operations, deployment, local]
 status: draft
 resource: /src/deploy/compose.yaml
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-12T10:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-12T08:25:00Z }
 ---
 
 # Purpose
@@ -35,8 +35,20 @@ internal network; the page checks the Host header. The forwarder can still reach
 addresses and send packets out that get no reply; that limit is the forwarder's, a static pinned
 component, and no longer the page's. The gateway's egress network is a plain bridge with NAT:
 besides the provider it can reach host services, the local network and the whole internet, and
-only its fixed nginx configuration (one upstream, one path) limits what it asks for. Check workers
-share a network with the engine only, so they cannot reach the gateway.
+only its fixed nginx configuration (one upstream, one path) limits what it asks for. The image
+registry's publishing network has the same exposure. These three are the only containers that can
+reach the host's services; the owner may close that with the optional host firewall rule under
+Access. Check workers share a network with the engine only, so they cannot reach the gateway.
+
+The step and check workers run under gVisor, which cannot use Docker's embedded DNS server: its own
+network stack never sees the rule that carries `127.0.0.11` to Docker's resolver. The runtime flag
+that would copy that rule (`--reproduce-nat`) belongs to the host's Docker configuration, so
+instead the engine and the gateway have fixed addresses on the networks they share with the
+workers, and the workers find them by name through their hosts file. All the platform's fixed
+subnets lie in `10.231.0.0/16`, outside Docker's default address pools; they and the addresses are
+declared once in `compose.yaml` (the registry's publishing network, `10.231.5.0/24`, in `ap`). A
+subnet that overlaps another network on the machine stops `ap up` with Compose's `Pool overlaps`
+message, and only one platform can run on a machine at a time.
 
 The launcher needs Docker 28 or later, the first with `isolated` networks, and refuses an older
 one. Networks made by an earlier version of the launcher lack `isolated`; the next `ap up` has
@@ -44,7 +56,7 @@ Compose recreate them, stopping and restarting the containers on them. If someth
 not start still uses one (a client command in flight), that `up` fails: run `ap down`, then
 `ap up`.
 
-Sources: [Docker: port publishing and gateway modes](https://docs.docker.com/engine/network/port-publishing/); [Docker: bridge network driver options](https://docs.docker.com/engine/network/drivers/bridge/); [Feature 001 tasks, T022a](../../specs/001-prose-to-accepted-slice/tasks.md) (tested on Docker 29.9.3, 2026-11-12: a container on a plain internal network reached a host service on the bridge address, one on an `isolated` internal network did not; `isolated` is refused on a non-internal network, and a port published from a network with `inhibit_ipv4` did not answer).
+Sources: [Docker: port publishing and gateway modes](https://docs.docker.com/engine/network/port-publishing/); [Docker: bridge network driver options](https://docs.docker.com/engine/network/drivers/bridge/); [Compose: extra_hosts and ipv4_address](https://docs.docker.com/reference/compose-file/services/); [Feature 001 tasks, T022a and T022c](../../specs/001-prose-to-accepted-slice/tasks.md) (tested on Docker 29.9.3, 2026-11-12: a container on a plain internal network reached a host service on the bridge address, one on an `isolated` internal network did not; `isolated` is refused on a non-internal network, and a port published from a network with `inhibit_ipv4` did not answer; under runsc release-20261109.0 a lookup through `127.0.0.11` was refused while runc resolved the same peer, `runsc flags` describes `--reproduce-nat` as "scrape the host netns NAT table and reproduce it in the sandbox", the annotation `dev.gvisor.flag.reproduce-nat` was refused without `--allow-flag-override`, and with the fixed addresses a gVisor worker resolved and reached the engine and gateway by name).
 
 # Deployment
 
@@ -73,3 +85,25 @@ The developer reaches the platform through the launcher and the run page on `127
 provider key file holds only the key, owned by the developer with mode 600. The gateway runs as
 the developer's user so it can read the file, because Compose cannot change a file secret's owner
 outside Swarm.
+
+## Optional host firewall rule
+
+The run page's forwarder, the gateway and the image registry are on bridges that keep the host's
+addresses reachable, so a compromised one could reach a service listening on the host. The owner
+may close that with one rule in the host's firewall. It needs root, `ap` never adds it, and nothing
+in the platform depends on it. It drops every new connection from the platform's subnets to the
+host itself, and keeps the replies to connections the host opens, which carry the run page and the
+registry's published ports:
+
+```sh
+sudo iptables -I INPUT -s 10.231.0.0/16 -m conntrack ! --ctstate ESTABLISHED,RELATED -j DROP
+```
+
+Check it with the same rule and `-C` in place of `-I`; remove it with `-D`. It does not survive a
+restart: keep it the way the distribution keeps firewall rules (for example `iptables-save`, or
+the matching rule in `nftables.conf`, `ufw` or `firewalld`). It does not stop the gateway reaching
+the local network or the internet, which goes through the host, not to it. Tested in a network
+namespace of its own (iptables 1.8 with nf_tables, 2026-11-12): a new connection from a
+`10.231.0.0/16` address to a host address was dropped, and a connection the host opened to that
+address, and one from another address, went through; not tested on a running platform, since
+adding it needs root.
