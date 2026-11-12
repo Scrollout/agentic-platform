@@ -72,6 +72,18 @@ gateway on test networks only; no image is built from it and Compose does not st
 - `Dockerfile.engine`: the workflow engine, a static Go binary on `scratch`; expects the main package `src/engine/cmd/engine`.
 - `Dockerfile.cli`: the terminal client, a static Go binary on `scratch`; expects `src/cli/cmd/cli`.
 - `Dockerfile.page`: the read-only run page, a static Go binary on `scratch`; expects `src/page/cmd/page`.
+- `Dockerfile.lint`: the contract-lint service (T038e, research D28), built as `build.sh lint` and
+  recorded as `AP_IMAGE_LINT`. It is the pinned `node` image with `/tools/node_modules` installed by
+  `npm ci` from `scripts/tools/package-lock.json`, which verifies every package's integrity, and
+  `lint/server.mjs` at `/app/server.mjs`. Both come from named build contexts (`npm-tools`,
+  `lint-service`), because the lockfile lies outside `src/` and `src/deploy/` is left out of the
+  context. The server is Spectral's library behind `node:http`. `POST /lint` takes the contract as
+  its body, at most 1 MiB, with `Authorization: Bearer $LINT_TOKEN`, and answers
+  `[{level,code,text,path}]` under `spectral:oas` (recommended), within 30 s. Its `$ref` resolver
+  has no file, http or https resolvers, so an external reference is an error finding and nothing is
+  read or fetched. `GET /health` is open. The engine's client is `src/engine/contracts/lint.go`. Its
+  tests are `src/tests/lint/` (Docker, run by `scripts/check.sh`), which run the server from the
+  `node` pin with the npm-tool cache mounted at `/tools`. Compose does not start it yet.
 
 ## Compose and the launcher
 

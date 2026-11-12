@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build, sign and record one platform image (ADR 0028):
-#   src/deploy/build.sh <agent|check|engine|cli|page|tests> [docker build options]
+#   src/deploy/build.sh <agent|check|engine|cli|page|lint|tests> [docker build options]
 #
 # Builds src/deploy/Dockerfile.<name> with an SBOM and build provenance, pushes it to the local
 # registry (started if it isn't running: `ap registry`; AP_REGISTRY_PORT, AP_REGISTRY_NAME),
@@ -20,7 +20,7 @@ here=$(cd "$(dirname "$0")" && pwd -P)
 
 say() { printf 'build: %s\n' "$*" >&2; }
 die() { local code=$1; shift; say "$*"; exit "$code"; }
-usage() { die 3 "usage: build.sh <agent|check|engine|cli|page|tests> [docker build options] (a name with a Dockerfile.<name>)"; }
+usage() { die 3 "usage: build.sh <agent|check|engine|cli|page|lint|tests> [docker build options] (a name with a Dockerfile.<name>)"; }
 
 [ $# -ge 1 ] || usage
 name=$1
@@ -39,6 +39,7 @@ cosign_image=$(pin cosign)
 sbom_image=$(pin sbom-scanner)
 golang_image=$(pin golang)
 agent_image=$(pin docker-agent)
+node_image=$(pin node)
 
 port=${AP_REGISTRY_PORT:-5005}
 # The registry's names, as `ap` derives them (AP_REGISTRY_NAME runs a second, independent registry).
@@ -147,11 +148,18 @@ fi
 # registry; with the containerd image store the image also stays in the local store, so Compose
 # starts it by digest without pulling.
 tag=127.0.0.1:$port/ap-$name:dev
+# The lint image takes what lies outside src/ or is left out of its context (src/.dockerignore drops
+# deploy/) from named contexts: the Node tools' lockfile and the service's code.
+contexts=()
+if [ "$name" = lint ]; then
+  contexts=(--build-context "npm-tools=$here/../../scripts/tools" --build-context "lint-service=$here/lint")
+fi
 meta=$(mktemp "${TMPDIR:-/tmp}/ap-build-meta.XXXXXX")
 docker buildx build -f "$here/Dockerfile.$name" -t "$tag" \
   --sbom="generator=$sbom_image" --provenance=mode=max --push --metadata-file "$meta" \
   --build-arg "GOLANG_IMAGE=$golang_image" \
   --build-arg "DOCKER_AGENT_IMAGE=$agent_image" \
+  --build-arg "NODE_IMAGE=$node_image" "${contexts[@]}" \
   "$@" "$here/.." || die 1 "docker buildx build failed for $name"
 digest=$(grep -o '"containerimage.digest": *"sha256:[0-9a-f]\{64\}"' "$meta" | grep -o 'sha256:[0-9a-f]\{64\}' | head -n 1) ||
   die 1 "the build of $name reported no pushed digest"

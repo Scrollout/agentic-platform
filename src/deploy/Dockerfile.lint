@@ -1,0 +1,18 @@
+# contract-lint service (T038e, research D28): Spectral behind src/deploy/lint/server.mjs, in the
+# pinned node image. Build context: src/ (unused); deploy/build.sh passes the named contexts
+# npm-tools (scripts/tools: package.json and the lockfile) and lint-service (src/deploy/lint).
+# Layout as the service's tests run it: /tools/node_modules from `npm ci` of the lockfile, which
+# verifies every package's integrity, and the server at /app/server.mjs.
+ARG NODE_IMAGE
+FROM ${NODE_IMAGE} AS tools
+WORKDIR /tools
+COPY --from=npm-tools package.json package-lock.json ./
+RUN npm ci --ignore-scripts --no-audit --no-fund --cache /tmp/npm-cache && rm -rf /tmp/npm-cache
+
+FROM ${NODE_IMAGE}
+COPY --from=tools /tools/node_modules /tools/node_modules
+COPY --from=lint-service server.mjs /app/server.mjs
+ENV TOOLS=/tools HOME=/tmp NODE_ENV=production
+USER 65532:65532
+EXPOSE 8080
+ENTRYPOINT ["node", "/app/server.mjs"]
