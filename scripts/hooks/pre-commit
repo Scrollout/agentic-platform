@@ -61,11 +61,14 @@ git diff --cached --name-only -z --no-renames >"$work/changed"
 git diff --cached --name-only -z --no-renames --diff-filter=d >"$work/content"
 git diff --cached --name-only -z --no-renames --diff-filter=d -- '*.md' ':(exclude)scripts/tests/' >"$work/md"
 touches() { ! git diff --cached --quiet --no-renames -- "$@"; }
-docs=; scripts=; contracts=; go=
+docs=; scripts=; contracts=; go=; inline=
 touches 'docs/' && docs=1
 touches 'scripts/' && scripts=1
 touches ':(glob)**/api/preview/**/*openapi.yaml' 'src/engine/api/ruleset*' && contracts=1
 touches '*.go' '*go.mod' '*go.sum' ':(glob)src/*/api/**' && go=1
+# Committed inline schema blocks (scripts/generate.sh): the files that carry them, their source
+# schemas and the generator.
+touches ':(glob)src/agents/**/*.yaml' ':(glob)src/**/*.schema.json' 'scripts/generate.sh' && inline=1
 snap="$work/snapshot"
 git checkout-index --all --prefix="$snap/"
 tracked=$(git ls-files -z | tr -cd '\0' | wc -c | tr -d ' ')
@@ -151,7 +154,11 @@ if [ -n "$contracts" ]; then
   done
 fi
 if [ -n "$go" ]; then
+  # check.sh --go-only checks the committed blocks first, so inline needs no run of its own here.
   run "generated code, go vet and race tests"
   scripts/check.sh --go-only
+elif [ -n "$inline" ]; then
+  run "committed generated blocks"
+  scripts/generate.sh --check-committed
 fi
 echo "pre-commit: staged snapshot passed"

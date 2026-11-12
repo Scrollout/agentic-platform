@@ -1,0 +1,13 @@
+# A minimal agent for TestHarnessStub only: it talks to the stub gateway at http://gateway:8080.
+# It is not the analyst and says nothing about the analyst's prompt.
+agents:
+  root:
+    model: stub
+    description: Harness test agent
+    instruction: Answer.
+
+models:
+  stub:
+    provider: anthropic
+    model: claude-haiku-5-5
+    base_url: http://gateway:8080

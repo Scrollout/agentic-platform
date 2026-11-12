@@ -16,6 +16,9 @@ go_run() {  # go_run <network: bridge|none> <script> [image]: a shell in a pinne
 GO_MODULES="engine slice cli page tests"
 
 go_checks() {
+  # Committed generated blocks first: regenerating would overwrite their drift before --check.
+  echo "== committed generated blocks: prove they match their sources"
+  scripts/generate.sh --check-committed
   echo "== generated code: regenerate, then prove a second run finds no difference"
   scripts/generate.sh
   scripts/generate.sh --check
