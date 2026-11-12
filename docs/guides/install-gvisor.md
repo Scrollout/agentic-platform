@@ -103,8 +103,14 @@ Sources: [gVisor installation](https://gvisor.dev/docs/user_guide/install/);
    sudo systemctl restart docker
    ```
 
+Under gVisor, a resource limit is enforced on the whole sandbox, not on one process: going over
+the memory or process limit stops the container (exit 137 for memory) instead of failing one
+allocation or `fork`. The sandbox's own threads count toward the process limit, so a very low
+`--pids-limit` (16 on the first machine tested) stops the container from starting; 64 and the
+Compose file's 512 work.
+
 `docker run --runtime=runsc --rm alpine dmesg` shows gVisor's own boot messages, but gVisor warns
 that this output is easy to fake, so it is a hint, not a security check.
 
 Sources: [gVisor Docker quick start](https://gvisor.dev/docs/user_guide/quick_start/docker/);
-[gVisor systemd cgroup driver](https://gvisor.dev/docs/user_guide/systemd/).
+[gVisor systemd cgroup driver](https://gvisor.dev/docs/user_guide/systemd/); feature 001 research D13 (tested 2026-11-12).

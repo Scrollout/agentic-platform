@@ -159,6 +159,13 @@ fresh review round 1.
   Apache-2.0, Scorecard 6.2 (S10).
 - **Cost**: the developer installs the gVisor runtime once (`runsc install`), as part of the
   container runtime.
+- **Tested** (2026-11-12, runsc release-20261109.0, Docker 29 with cgroup v2 and the systemd
+  driver, no `--systemd-cgroup` flag needed): a container with the step and check workers' Compose
+  settings (gVisor, UID 65532, read-only root, all capabilities dropped, `no-new-privileges`, an
+  executable `/tmp` tmpfs, 2 CPUs, 2 GB, 512 processes, an internal network) built and ran a Go
+  program, could not write its root file system and had no egress. Limits apply to the whole
+  sandbox: over 64 MB of memory it was stopped with exit 137; over 64 processes it was stopped; with
+  a 16-process limit it could not start, because the sandbox's own threads count.
 
 ### D14. Budgets, timeouts and rate limits
 
