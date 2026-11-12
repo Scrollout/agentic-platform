@@ -18,7 +18,7 @@ printf '%s\n' "$KEY" >"$KEYFILE"; chmod 644 "$KEYFILE"
 pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; FAIL=1; }
 cleanup() {
-  docker rm -f "$ID-gw" "$ID-stub" "$ID-gw2" "$ID-bad1" "$ID-bad2" "$ID-bad3" >/dev/null 2>&1
+  docker rm -f "$ID-gw" "$ID-stub" "$ID-gw2" "$ID-bad1" "$ID-bad2" "$ID-bad3" "$ID-bad4" >/dev/null 2>&1
   docker network rm "$ID-net" >/dev/null 2>&1
   rm -rf "$SCRATCH"
 }
@@ -154,6 +154,16 @@ docker rm -f "$ID-bad1" "$ID-bad2" "$ID-bad3" >/dev/null 2>&1
 bad_start "$ID-bad1" "" "custom missing path" -e GATEWAY_CREDENTIAL_FILE=/run/secrets/other_key
 case "$LAST_OUT" in *"/run/secrets/other_key"*) pass "custom path: message names that file";; *) fail "custom path: message does not name /run/secrets/other_key";; esac
 docker logs "$ID-bad1" 2>&1 | grep -qF "$KEY" && fail "failure output holds the key" || pass "failure output holds no key"
+# T019a: a file that exists and is non-empty but that the gateway's user (101) cannot read: owner-only
+# (mode 600, owned by the user running this test), mounted read-only. The README promises exit 1 and
+# this exact message. Real TLS and certificate verification to the provider wait for T059 (the evals
+# run, which has a test-scoped key); this script has no internet and a fake key.
+printf '%s\n' "$KEY" >"$SCRATCH/unreadable"; chmod 600 "$SCRATCH/unreadable"
+[ -s "$SCRATCH/unreadable" ] && pass "unreadable fixture is non-empty" || fail "unreadable fixture is empty; the case proves nothing"
+bad_start "$ID-bad4" "$SCRATCH/unreadable" "unreadable non-empty file"
+[ "$(docker inspect -f '{{.State.ExitCode}}' "$ID-bad4" 2>/dev/null)" = 1 ] && pass "unreadable: exit code is exactly 1" || fail "unreadable: exit code is not 1"
+case "$LAST_OUT" in *"gateway: credential file '/run/secrets/anthropic_api_key' is missing, unreadable or empty"*) pass "unreadable: README message";; *) fail "unreadable: message is not the README's: $LAST_OUT";; esac
+docker logs "$ID-bad4" 2>&1 | grep -qF "$KEY" && fail "unreadable: output holds the key" || pass "unreadable: output holds no key"
 
 echo "== 6. forwarding and credential injection (derived config, local stub upstream)"
 # The shipped upstream is fixed to https://api.anthropic.com and cannot be redirected, so this uses a
