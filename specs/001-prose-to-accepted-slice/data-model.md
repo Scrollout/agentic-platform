@@ -93,6 +93,11 @@ cost in USD, minutes), `status` (`approved`). A step: `name`, `worker` (`agent:<
   `handed-over`, `expired`, `cancelled`), `reason`, `expires_at`. An interrupted run continues with
   resume. A run waiting for the developer ends `handed-over` when the developer accepts the
   hand-over, or `expired` 14 days after it stopped; cancelling its operation ends it `cancelled`.
+  These are the terminal states Principle X requires: `done` is succeeded; `handed-over` is failed
+  (the platform could not finish within its attempts, review rounds or budgets, and the developer
+  took the work over); `expired` is timed out; `cancelled` is cancelled. A build refused before it
+  is accepted as a run (`NotApproved`, `PatternDoesNotFit`, `RunActive`, `WorkersNotReady`) is the
+  rejected-by-policy case: no run is created.
 - **Run record**: append-only JSON Lines. Each event: `seq`, `at`, `run`, `kind` (see research
   D23), `step`, `attempt`, `round` (review), `worker`, `model`, `agent_digest`, `pattern`,
   `inputs[]` and `artifacts[]` (hashes), `reuse_key`, `refs[]` (the `G-`, `R-`, `T-`,
@@ -101,3 +106,38 @@ cost in USD, minutes), `status` (`approved`). A step: `name`, `worker` (`agent:<
   fields that explain it (see `run-event.schema.json`).
 - **Accepted result**: `key` (the reuse key), `artifacts[]`, `run`. Found under its key, it is
   reused (FR-019).
+
+## Run rules the machine follows
+
+These settle what the spec leaves open; the machine tests (T043) and check tests (T042) pin them.
+
+- **Active run**: a run is active until it has an outcome. A run waiting for the developer is
+  active, so a second build is refused with `RunActive` (FR-021).
+- **Budgets**: a step whose use takes the run or the step past a token, cost or time budget is not
+  accepted, and the run is handed over with the budget it crossed as the reason (FR-016).
+- **Review rounds**: between review rounds the code step runs again with the open blocking findings
+  as its input; a later round sees only those findings and the lines the fix changed (FR-016,
+  Review converges).
+- **Refs**: every event names the refs it concerns: a check's own refs, otherwise the run's refs
+  (the slice's goals, rules and examples) (SC-006).
+- **Reuse key**: deterministic and different whenever any of its ingredients differs (pattern
+  version, step, input hashes, agent definition digest, model id; research D8); its exact encoding
+  belongs to the implementation.
+- **A failing worker or model**: a worker that errors, including an unavailable model, makes a
+  rejected attempt, retried within the step's attempts; the run can then be resumed (edge case).
+
+## Step checks
+
+- **Scope**: a step may change only paths its `writable` globs match; `dir/**` means everything
+  below `dir`, any other entry one exact path.
+- **Tests unchanged**: files the tests step wrote are byte-identical after every later step.
+- **Dependencies**: `go.mod` and imports against the pattern's allowed and forbidden lists;
+  forbidden wins over allowed.
+- **Tests fail against the stub**: before code, the derived tests build and fail; a test that does
+  not build does not count as failing.
+- **All tests pass** and **godog `--strict`**: after code; godog runs from the project's vendored
+  dependencies inside the check container, with no network (D3, T050).
+- **Generation drift**: generated code equals a fresh generation from the approved contract.
+- **Contract hash**: the project's contract equals the approved contract's hash.
+- **Evidence-backed finding**: a review finding blocks only when it names a rule ID, file and line
+  and the rule test it names fails at that place; any other finding is a suggestion (FR-017, D11).
