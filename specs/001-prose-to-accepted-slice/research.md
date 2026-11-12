@@ -306,3 +306,17 @@ page, none of which an existing project provides.
 - **Cost**: two more pins (`registry`, `cosign`, plus the SBOM scanner); a registry container
   while building and starting; one decision record when adopted (hard to reverse), and component
   concepts for cosign and Distribution.
+
+### D25. RFC 8785 canonical JSON is written in the engine, not adopted
+
+- **Decision**: part hashes (D17) use a small RFC 8785 canonicaliser in `src/engine/slices`
+  (`canonical.go`) instead of a library. It covers objects, arrays and strings, which is all a
+  slice part contains under the schemas (no numbers, booleans or nulls), and refuses anything else.
+- **Evidence** (2026-11-12): the reference implementation `github.com/cyberphone/json-canonicalization`
+  has an OpenSSF Scorecard of 2.2, its licence is reported as NOASSERTION by GitHub, and it has no
+  tagged Go release (only a pseudo-version); Principle VI asks for mature, stable projects. The
+  engine's canonicaliser matched an independent Python reference on 3,000 random nested inputs,
+  including control characters, `<>&`, U+2028/U+2029 and characters outside the BMP (T037).
+- **Limit**: numbers are not supported; a schema change that puts a number into a part must
+  replace this with a full implementation or an adopted library first.
+- **Principle VI**: this is the written justification for custom code that an OSS project covers.

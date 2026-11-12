@@ -1,0 +1,6 @@
+# A pattern with one condition, so a test can fail a pattern condition on the rules part alone.
+id: one-system
+version: 1.0.0
+status: approved
+conditions:
+  - RulesNameOneSystem

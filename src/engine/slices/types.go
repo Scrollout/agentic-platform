@@ -1,0 +1,217 @@
+// Package slices owns a slice from the analyst's proposal to its approval: it builds the slice
+// from the proposal, runs the checks of each part (schema, traceability, pattern fit, contract
+// compatibility), keeps each part's hash, and records approvals that hold only while that hash
+// is unchanged (spec FR-002 to FR-007, data-model.md).
+//
+// The analyst (a model) and oasdiff are behind the Analyst and ContractDiff interfaces. Slices
+// are kept in memory; persistence is a later task.
+package slices
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/agentic-platform/slice"
+)
+
+// Part is a part the developer approves (slice-defs.schema.json `part`).
+type Part string
+
+const (
+	PartGoals    Part = "goals"
+	PartRules    Part = "rules" // the rules, examples and terms
+	PartContract Part = "contract"
+)
+
+var allParts = []Part{PartGoals, PartRules, PartContract}
+
+// The records of a slice, with the contract's JSON names (slice-defs.schema.json).
+type (
+	Goal struct {
+		ID   string `json:"id"`
+		Text string `json:"text"`
+	}
+	Term struct {
+		ID         string `json:"id"`
+		Name       string `json:"name"`
+		Definition string `json:"definition"`
+	}
+	Rule struct {
+		ID           string   `json:"id"`
+		Goal         string   `json:"goal"`
+		Pattern      string   `json:"pattern"`
+		Precondition string   `json:"precondition,omitempty"`
+		Trigger      string   `json:"trigger,omitempty"`
+		Feature      string   `json:"feature,omitempty"`
+		System       string   `json:"system"`
+		Response     string   `json:"response"`
+		Terms        []string `json:"terms"` // nil is the empty list
+	}
+)
+
+// RulesPart is the body of a rules change: the rules part covers rules, examples and terms.
+type RulesPart struct {
+	Rules    []Rule `json:"rules"`
+	Examples string `json:"examples"`
+	Terms    []Term `json:"terms"`
+}
+
+// QuestionDraft is a question the analyst asks; the platform gives it its ID.
+type QuestionDraft struct {
+	About   string   `json:"about"`
+	Text    string   `json:"text"`
+	Options []string `json:"options,omitempty"`
+}
+
+// Proposal is the analyst's output (slice-proposal.schema.json) plus the model and agent
+// definition digest that produced it, which the slice's history names.
+type Proposal struct {
+	Goals     []Goal          `json:"goals"`
+	Terms     []Term          `json:"terms"`
+	Rules     []Rule          `json:"rules"`
+	Examples  string          `json:"examples"`
+	Contract  string          `json:"contract"`
+	Questions []QuestionDraft `json:"questions,omitempty"`
+
+	Model       string `json:"model"`
+	AgentDigest string `json:"agent_digest"`
+}
+
+// AnalystInput is what the analyst proposes from. Current and Questions are set when revising a
+// slice after answers.
+type AnalystInput struct {
+	Description string
+	Current     *Proposal
+	Questions   []Question
+}
+
+// Analyst is the model behind the analyst agent.
+type Analyst interface {
+	Propose(ctx context.Context, in AnalystInput) (Proposal, error)
+}
+
+// ErrMultipleUseCases is what an analyst returns for a description that covers more than one use
+// case; Create answers it with NarrowDescription.
+var ErrMultipleUseCases = errors.New("the description covers more than one use case")
+
+// ContractFinding is one oasdiff finding. Level is "error", "warn" or "info"; only "error" fails
+// the compatibility check.
+type ContractFinding struct{ Level, ID, Text string }
+
+// ContractDiff compares a contract revision with base, oasdiff's way. base is "" (an empty
+// document) when no contract of the slice was approved yet (research D4).
+type ContractDiff interface {
+	Diff(ctx context.Context, base, revision string) ([]ContractFinding, error)
+}
+
+// Check is one check's latest result on a part (check_result). Part is "goals", "rules" or
+// "contract"; Reason names the item when one is at fault.
+type Check struct {
+	Part   string
+	Check  string
+	Passed bool
+	Reason string
+
+	fromPattern bool // a condition of the catalogue pattern (checks.Fit), not a check of this package
+}
+
+// The names of the checks this package runs besides the pattern's conditions.
+const (
+	CheckSchema                = "Schema"                // the part against slice-defs.schema.json
+	CheckTraceability          = "Traceability"          // slice.Trace: the links between IDs
+	CheckContractCompatibility = "ContractCompatibility" // oasdiff against the baseline
+)
+
+// Parts holds each part's current hash, lowercase hex SHA-256.
+type Parts struct{ Goals, Rules, Contract string }
+
+func (p Parts) of(part Part) string {
+	switch part {
+	case PartGoals:
+		return p.Goals
+	case PartRules:
+		return p.Rules
+	default:
+		return p.Contract
+	}
+}
+
+// Approval is a part's approval at the hash the developer reviewed.
+type Approval struct {
+	Part        Part
+	ContentHash string
+	At          time.Time
+}
+
+// Question is a question with its platform ID.
+type Question struct {
+	ID      string
+	About   string
+	Text    string
+	Options []string
+}
+
+// HistoryEntry is one change to the slice. Kind is proposed, revised, answered, changed or
+// approved; a proposal names its model and agent digest; Refs are the parts it concerns.
+type HistoryEntry struct {
+	Kind        string
+	At          time.Time
+	Model       string
+	AgentDigest string
+	Refs        []string
+}
+
+// Slice is one use case and its state before a build. State is proposed, questions-open, checked
+// or approved.
+type Slice struct {
+	ID, Description, Contract, Examples, State string
+	Goals                                      []Goal
+	Terms                                      []Term
+	Rules                                      []Rule
+	Questions                                  []Question
+	Parts                                      Parts
+	Approvals                                  []Approval // only those that hold
+	Checks                                     []Check
+	History                                    []HistoryEntry
+}
+
+// Result is what Create returns. Reused is true when Slice is an approved slice of the same
+// description, offered instead of a new proposal.
+type Result struct {
+	Slice  Slice
+	Reused bool
+}
+
+// Error is a refusal in the contract's terms: Code is an openapi.yaml ErrorCode, and Failures
+// lists the failing checks of PartFailsChecks and PatternDoesNotFit.
+type Error struct {
+	Code     string
+	Detail   string
+	Failures []Check
+}
+
+func (e *Error) Error() string {
+	if len(e.Failures) == 0 {
+		return e.Code + ": " + e.Detail
+	}
+	reasons := make([]string, len(e.Failures))
+	for i, f := range e.Failures {
+		reasons[i] = fmt.Sprintf("%s %s: %s", f.Part, f.Check, f.Reason)
+	}
+	return fmt.Sprintf("%s: %s (%s)", e.Code, e.Detail, strings.Join(reasons, "; "))
+}
+
+// Config is what a Service needs.
+type Config struct {
+	Schemas *slice.Schemas // the contract's schemas: proposal, parts and IDs
+	Analyst Analyst
+	Diff    ContractDiff
+	// Pattern is the catalogue pattern's pattern.yaml, whose conditions run as checks.Fit. nil
+	// fails closed: every slice carries a failed PatternFit result on its contract, which then
+	// cannot be approved.
+	Pattern []byte
+	Now     func() time.Time // nil means time.Now
+}

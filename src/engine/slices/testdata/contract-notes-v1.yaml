@@ -1,0 +1,12 @@
+openapi: 3.1.0
+info:
+  title: Notes
+  version: '1'
+paths:
+  /notes:
+    get:
+      operationId: listNotes
+      x-rules: [R-2]
+      responses:
+        '200':
+          description: The notes.

@@ -1,0 +1,376 @@
+package slices
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/agentic-platform/slice"
+)
+
+// Service holds the slices of one installation. It is safe for concurrent use.
+type Service struct {
+	schemas *slice.Schemas
+	analyst Analyst
+	diff    ContractDiff
+	pattern []byte
+	now     func() time.Time
+
+	mu     sync.Mutex
+	last   int // the number of the last slice ID given out; IDs are never reused
+	slices map[string]*record
+}
+
+// record is a stored slice and what the service keeps beside it.
+type record struct {
+	slice Slice
+	// baseline is the contract last approved, which a changed contract is compared with; "" until
+	// a contract is approved. It outlives the approval a change withdraws (FR-004).
+	baseline string
+	// compat is the latest compatibility result, kept until the contract changes.
+	compat []Check
+}
+
+// New returns a service. Schemas, Analyst and Diff are required.
+func New(cfg Config) (*Service, error) {
+	switch {
+	case cfg.Schemas == nil:
+		return nil, errors.New("slices: no contract schemas")
+	case cfg.Analyst == nil:
+		return nil, errors.New("slices: no analyst")
+	case cfg.Diff == nil:
+		return nil, errors.New("slices: no contract diff")
+	}
+	now := cfg.Now
+	if now == nil {
+		now = time.Now
+	}
+	return &Service{schemas: cfg.Schemas, analyst: cfg.Analyst, diff: cfg.Diff, pattern: cfg.Pattern,
+		now: now, slices: map[string]*record{}}, nil
+}
+
+// Create proposes a slice from a description (createSlice). An approved slice of the same
+// description is offered instead, without running the analyst. An empty description, or one the
+// analyst finds covers more than one use case, gives NarrowDescription. Failing checks are stored
+// with the slice, not returned as an error.
+func (s *Service) Create(ctx context.Context, description string) (Result, error) {
+	if strings.TrimSpace(description) == "" {
+		return Result{}, &Error{Code: "NarrowDescription", Detail: "the description is empty; describe one use case"}
+	}
+	if sl, ok := s.approvedFor(description); ok {
+		return Result{Slice: sl, Reused: true}, nil
+	}
+
+	p, err := s.analyst.Propose(ctx, AnalystInput{Description: description})
+	if errors.Is(err, ErrMultipleUseCases) {
+		return Result{}, &Error{Code: "NarrowDescription", Detail: "the description covers more than one use case; describe one"}
+	}
+	if err != nil {
+		return Result{}, fmt.Errorf("slices: the analyst failed: %w", err)
+	}
+	sl := clone(Slice{ // own the analyst's lists
+		Description: description, Contract: p.Contract, Examples: p.Examples,
+		Goals: p.Goals, Terms: p.Terms, Rules: p.Rules,
+	})
+	normalise(&sl)
+	if len(p.Questions) > maxQuestions {
+		return Result{}, &Error{Code: "TooManyQuestions",
+			Detail: fmt.Sprintf("the slice would need %d questions, more than %d; narrow the description", len(p.Questions), maxQuestions)}
+	}
+	if err := s.checkProposal(&sl, p.Questions); err != nil {
+		return Result{}, err
+	}
+	for i, q := range p.Questions {
+		sl.Questions = append(sl.Questions, Question{ID: "Q-" + strconv.Itoa(i+1), About: q.About, Text: q.Text,
+			Options: slices.Clone(q.Options)})
+	}
+	rec := &record{slice: sl}
+	if err := s.recheck(ctx, rec, true); err != nil {
+		return Result{}, err
+	}
+	rec.slice.History = []HistoryEntry{{Kind: "proposed", At: s.now(), Model: p.Model, AgentDigest: p.AgentDigest,
+		Refs: []string{string(PartGoals), string(PartRules), string(PartContract)}}}
+	rec.slice.State = state(&rec.slice)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.last++
+	rec.slice.ID = "S-" + strconv.Itoa(s.last)
+	s.slices[rec.slice.ID] = rec
+	return Result{Slice: clone(rec.slice)}, nil
+}
+
+// maxQuestions is the most questions a slice may have (FR-006; slice.schema.json questions
+// maxItems, which the proposal schema also gives).
+const maxQuestions = 10
+
+// checkProposal refuses analyst output, as the slice sl built from it and its questions, that
+// does not match slice-proposal.schema.json: model output is parsed against its schema, never
+// trusted. A nil list counts as the empty list.
+func (s *Service) checkProposal(sl *Slice, questions []QuestionDraft) error {
+	doc, err := json.Marshal(struct {
+		partsDoc
+		Questions []QuestionDraft `json:"questions,omitempty"`
+	}{partsDoc{Goals: sl.Goals, Terms: sl.Terms, Rules: sl.Rules, Examples: sl.Examples, Contract: sl.Contract}, questions})
+	if err != nil {
+		return err
+	}
+	if err := s.schemas.CheckProposal(doc); err != nil {
+		return fmt.Errorf("slices: the analyst's proposal does not match the proposal schema: %w", err)
+	}
+	return nil
+}
+
+// approvedFor returns the approved slice of exactly this description, if there is one.
+func (s *Service) approvedFor(description string) (Slice, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, r := range s.slices {
+		if r.slice.Description == description && r.slice.State == "approved" {
+			return clone(r.slice), true
+		}
+	}
+	return Slice{}, false
+}
+
+// Get returns a slice, or NotFound.
+func (s *Service) Get(id string) (Slice, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, err := s.find(id)
+	if err != nil {
+		return Slice{}, err
+	}
+	return clone(r.slice), nil
+}
+
+// find returns the stored slice with id. The caller holds s.mu.
+func (s *Service) find(id string) (*record, error) {
+	if _, err := s.schemas.ParseID(id); err != nil {
+		return nil, &Error{Code: "InvalidRequest", Detail: err.Error()}
+	}
+	r, ok := s.slices[id]
+	if !ok {
+		return nil, &Error{Code: "NotFound", Detail: "slice " + id + " does not exist"}
+	}
+	return r, nil
+}
+
+// ReplaceGoals replaces the goals part.
+func (s *Service) ReplaceGoals(ctx context.Context, id string, goals []Goal) (Slice, error) {
+	return s.replace(ctx, id, PartGoals, func(sl *Slice) { sl.Goals = goals })
+}
+
+// ReplaceRules replaces the rules part: rules, examples and terms.
+func (s *Service) ReplaceRules(ctx context.Context, id string, p RulesPart) (Slice, error) {
+	return s.replace(ctx, id, PartRules, func(sl *Slice) { sl.Rules, sl.Examples, sl.Terms = p.Rules, p.Examples, p.Terms })
+}
+
+// ReplaceContract replaces the contract part.
+func (s *Service) ReplaceContract(ctx context.Context, id, contract string) (Slice, error) {
+	return s.replace(ctx, id, PartContract, func(sl *Slice) { sl.Contract = contract })
+}
+
+// replace changes one part. Content with the part's current hash is no change: the slice and its
+// approval stay as they are. Otherwise the checks run again, the part's approval is withdrawn
+// and the slice returns to checked (FR-007).
+//
+// The lock is held deliberately for the whole change, the oasdiff comparison included, so that
+// two changes to a slice cannot interleave between reading it and storing the result.
+func (s *Service) replace(ctx context.Context, id string, part Part, set func(*Slice)) (Slice, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, err := s.find(id)
+	if err != nil {
+		return Slice{}, err
+	}
+	next := &record{slice: clone(r.slice), baseline: r.baseline, compat: r.compat}
+	set(&next.slice)
+	next.slice = clone(next.slice) // own the caller's lists
+	normalise(&next.slice)
+	if err := setParts(&next.slice); err != nil {
+		return Slice{}, &Error{Code: "InvalidRequest", Detail: err.Error()}
+	}
+	if next.slice.Parts.of(part) == r.slice.Parts.of(part) {
+		return clone(r.slice), nil
+	}
+	if err := s.recheck(ctx, next, part == PartContract); err != nil {
+		return Slice{}, err
+	}
+	next.slice.Approvals = slices.DeleteFunc(next.slice.Approvals, func(a Approval) bool { return a.Part == part })
+	next.slice.History = append(next.slice.History, HistoryEntry{Kind: "changed", At: s.now(), Refs: []string{string(part)}})
+	next.slice.State = state(&next.slice)
+	*r = *next
+	return clone(r.slice), nil
+}
+
+// Approve records the developer's approval of a part at the hash they reviewed (approvePart). A
+// hash other than the part's current one gives StaleContentHash; an open question that concerns
+// the part gives ContradictionOpen; a failing check gives PartFailsChecks, or PatternDoesNotFit
+// for a contract whose only failures are pattern conditions, each listing the failures.
+func (s *Service) Approve(ctx context.Context, id string, part Part, contentHash string) (Slice, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, err := s.find(id)
+	if err != nil {
+		return Slice{}, err
+	}
+	if !slices.Contains(allParts, part) {
+		return Slice{}, &Error{Code: "InvalidRequest", Detail: fmt.Sprintf("%q is not a part", part)}
+	}
+	if _, err := s.schemas.ParseHash(contentHash); err != nil {
+		return Slice{}, &Error{Code: "InvalidRequest", Detail: err.Error()}
+	}
+	if contentHash != r.slice.Parts.of(part) {
+		return Slice{}, &Error{Code: "StaleContentHash",
+			Detail: fmt.Sprintf("the %s part changed since it was shown; review it at its current hash", part)}
+	}
+	for _, q := range r.slice.Questions {
+		if open(q) && concerns(q.About, part) {
+			return Slice{}, &Error{Code: "ContradictionOpen",
+				Detail: fmt.Sprintf("question %s about %s is open and concerns the %s part; answer it first", q.ID, q.About, part)}
+		}
+	}
+	var fails []Check
+	onlyPattern := true
+	for _, c := range r.slice.Checks {
+		if c.Part == string(part) && !c.Passed {
+			fails = append(fails, c)
+			onlyPattern = onlyPattern && c.fromPattern
+		}
+	}
+	if len(fails) > 0 {
+		// The contract names PatternDoesNotFit for the contract part only; any other failing part,
+		// pattern condition or not, fails its checks.
+		code := "PartFailsChecks"
+		if part == PartContract && onlyPattern {
+			code = "PatternDoesNotFit"
+		}
+		return Slice{}, &Error{Code: code, Detail: fmt.Sprintf("the %s part fails its checks", part), Failures: fails}
+	}
+	for _, a := range r.slice.Approvals {
+		if a.Part == part && a.ContentHash == contentHash {
+			return clone(r.slice), nil // already approved at this hash
+		}
+	}
+
+	now := s.now()
+	r.slice.Approvals = append(slices.DeleteFunc(r.slice.Approvals, func(a Approval) bool { return a.Part == part }),
+		Approval{Part: part, ContentHash: contentHash, At: now})
+	if part == PartContract {
+		r.baseline = r.slice.Contract
+	}
+	r.slice.History = append(r.slice.History, HistoryEntry{Kind: "approved", At: now, Refs: []string{string(part)}})
+	r.slice.State = state(&r.slice)
+	return clone(r.slice), nil
+}
+
+// open reports whether a question is open. No question is answered in this version (answers are
+// a later task), so every question is open.
+func open(Question) bool { return true }
+
+// concerns reports whether a question's subject (question_about: G-<n>, R-<n>, T-<n>,
+// R-<n>/E-<n> or contract/<operationId>, or a part's name) lies in part. A subject of no known
+// form concerns every part, so it blocks rather than slips through.
+func concerns(about string, part Part) bool {
+	switch {
+	case about == string(PartGoals), strings.HasPrefix(about, "G-"):
+		return part == PartGoals
+	case about == string(PartRules), strings.HasPrefix(about, "R-"), strings.HasPrefix(about, "T-"), strings.HasPrefix(about, "E-"):
+		return part == PartRules
+	case about == string(PartContract), strings.HasPrefix(about, "contract/"):
+		return part == PartContract
+	default:
+		return true
+	}
+}
+
+// recheck sets the part hashes and runs the checks again; the compatibility check runs only when
+// contractChanged, otherwise its last result is kept.
+func (s *Service) recheck(ctx context.Context, r *record, contractChanged bool) error {
+	if err := setParts(&r.slice); err != nil {
+		return &Error{Code: "InvalidRequest", Detail: err.Error()}
+	}
+	cs, err := s.partChecks(&r.slice)
+	if err != nil {
+		return err
+	}
+	if contractChanged {
+		r.compat = s.compatibility(ctx, r.baseline, r.slice.Contract)
+	}
+	r.slice.Checks = append(cs, r.compat...)
+	return nil
+}
+
+func setParts(sl *Slice) error {
+	g, err := goalsHash(sl.Goals)
+	if err != nil {
+		return fmt.Errorf("goals: %w", err)
+	}
+	r, err := rulesHash(RulesPart{Rules: sl.Rules, Examples: sl.Examples, Terms: sl.Terms})
+	if err != nil {
+		return fmt.Errorf("rules: %w", err)
+	}
+	c, err := contractHash(sl.Contract)
+	if err != nil {
+		return fmt.Errorf("contract: %w", err)
+	}
+	sl.Parts = Parts{Goals: g, Rules: r, Contract: c}
+	return nil
+}
+
+// state is the slice's lifecycle state: questions-open while a question is open (none is
+// answered yet in this version), approved when all three parts hold an approval, else checked.
+func state(sl *Slice) string {
+	switch {
+	case len(sl.Questions) > 0:
+		return "questions-open"
+	case len(sl.Approvals) == len(allParts):
+		return "approved"
+	default:
+		return "checked"
+	}
+}
+
+// normalise makes every nil list empty, so that the stored slice, its JSON and its hashes agree.
+func normalise(sl *Slice) {
+	sl.Goals, sl.Terms, sl.Rules = orEmpty(sl.Goals), orEmpty(sl.Terms), orEmpty(sl.Rules)
+	for i := range sl.Rules {
+		sl.Rules[i].Terms = orEmpty(sl.Rules[i].Terms)
+	}
+}
+
+func orEmpty[T any](v []T) []T {
+	if v == nil {
+		return []T{}
+	}
+	return v
+}
+
+// clone copies a slice deeply, so neither the caller nor the store sees the other's changes.
+func clone(sl Slice) Slice {
+	c := sl
+	c.Goals = slices.Clone(sl.Goals)
+	c.Terms = slices.Clone(sl.Terms)
+	c.Rules = slices.Clone(sl.Rules)
+	for i := range c.Rules {
+		c.Rules[i].Terms = slices.Clone(c.Rules[i].Terms)
+	}
+	c.Questions = slices.Clone(sl.Questions)
+	for i := range c.Questions {
+		c.Questions[i].Options = slices.Clone(c.Questions[i].Options)
+	}
+	c.Approvals = slices.Clone(sl.Approvals)
+	c.Checks = slices.Clone(sl.Checks)
+	c.History = slices.Clone(sl.History)
+	for i := range c.History {
+		c.History[i].Refs = slices.Clone(c.History[i].Refs)
+	}
+	return c
+}

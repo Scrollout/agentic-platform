@@ -1,0 +1,6 @@
+# A pattern with one condition on the contract, which the notes fixture's contract meets.
+id: contract-only
+version: 1.0.0
+status: approved
+conditions:
+  - ContractIsOpenApi31
