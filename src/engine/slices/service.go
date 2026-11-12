@@ -323,7 +323,8 @@ func (s *Service) ReplaceContract(ctx context.Context, id, contract string) (Sli
 
 // replace changes one part. Content with the part's current hash is no change: the slice and its
 // approval stay as they are. Otherwise the checks run again, the part's approval is withdrawn
-// and the slice returns to checked (FR-007).
+// and the slice returns to checked (FR-007); every other part that now fails a check loses its
+// approval too, recorded as withdrawn (FR-004).
 //
 // The lock is held deliberately for the whole change, the oasdiff comparison included, so that
 // two changes to a slice cannot interleave between reading it and storing the result.
@@ -348,7 +349,9 @@ func (s *Service) replace(ctx context.Context, id string, part Part, set func(*S
 		return Slice{}, err
 	}
 	next.slice.Approvals = slices.DeleteFunc(next.slice.Approvals, func(a Approval) bool { return a.Part == part })
-	next.slice.History = append(next.slice.History, HistoryEntry{Kind: "changed", At: s.now(), Refs: []string{string(part)}})
+	now := s.now()
+	next.slice.History = append(next.slice.History, HistoryEntry{Kind: "changed", At: now, Refs: []string{string(part)}})
+	withdrawFailing(&next.slice, now)
 	next.slice.State = state(&next.slice)
 	*r = *next
 	return clone(r.slice), nil
@@ -435,7 +438,7 @@ func (s *Service) approvable(id string, part Part, contentHash string) (*record,
 
 // Buildable reports whether a build of the slice may start: NotFound for an unknown slice,
 // PatternDoesNotFit listing the failing pattern conditions, then NotApproved while a part holds
-// no approval at its current hash.
+// no approval at its current hash or any check fails.
 func (s *Service) Buildable(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -459,7 +462,38 @@ func (s *Service) Buildable(id string) error {
 			return &Error{Code: "NotApproved", Detail: fmt.Sprintf("the %s part is not approved at its current hash", part)}
 		}
 	}
+	if fails := failing(&r.slice); len(fails) > 0 {
+		return &Error{Code: "NotApproved", Detail: "the slice fails a check", Failures: fails}
+	}
 	return nil
+}
+
+// failing returns the slice's failing checks.
+func failing(sl *Slice) []Check {
+	var out []Check
+	for _, c := range sl.Checks {
+		if !c.Passed {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// withdrawFailing withdraws the approval of every part that fails a check and, when it withdraws
+// any, appends a withdrawn entry naming those parts. A slice never holds an approval of a part
+// that fails a check (FR-004, FR-005).
+func withdrawFailing(sl *Slice, at time.Time) {
+	var refs []string
+	sl.Approvals = slices.DeleteFunc(sl.Approvals, func(a Approval) bool {
+		if slices.ContainsFunc(sl.Checks, func(c Check) bool { return c.Part == string(a.Part) && !c.Passed }) {
+			refs = append(refs, string(a.Part))
+			return true
+		}
+		return false
+	})
+	if len(refs) > 0 {
+		sl.History = append(sl.History, HistoryEntry{Kind: "withdrawn", At: at, Refs: refs})
+	}
 }
 
 // open reports whether a question is open: it has no answer yet.
@@ -517,12 +551,12 @@ func setParts(sl *Slice) error {
 }
 
 // state is the slice's lifecycle state: questions-open while a question is open, approved when
-// all three parts hold an approval, else checked.
+// all three parts hold an approval and no check fails, else checked.
 func state(sl *Slice) string {
 	switch {
 	case slices.ContainsFunc(sl.Questions, open):
 		return "questions-open"
-	case len(sl.Approvals) == len(allParts):
+	case len(sl.Approvals) == len(allParts) && len(failing(sl)) == 0:
 		return "approved"
 	default:
 		return "checked"

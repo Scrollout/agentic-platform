@@ -14,7 +14,8 @@ import (
 // all its questions, the answered ones with their answers; its revision replaces the parts, its
 // questions are new ones with the next Q-<n> IDs, and an unusable revision is sent back as in
 // Create, up to the pattern's limits.attempts. The checks run again, a part whose hash changed
-// loses its approval, and the history gains "answered" then "revised".
+// loses its approval, and the history gains "answered" then "revised"; any other part that now
+// fails a check loses its approval too, recorded as "withdrawn".
 //
 // No answers, an answer with neither or both of an option and a text, an option out of range or
 // a text longer than 200 characters give InvalidRequest; an answer to a question that is
@@ -84,6 +85,7 @@ func (s *Service) Answer(ctx context.Context, id string, answers []Answer) (Slic
 	rec.slice.History = append(slices.Clone(cur.History),
 		HistoryEntry{Kind: "answered", At: now, Refs: answered},
 		HistoryEntry{Kind: "revised", At: s.now(), Model: p.Model, AgentDigest: p.AgentDigest, Refs: orEmpty(changed)})
+	withdrawFailing(&rec.slice, s.now())
 	rec.slice.State = state(&rec.slice)
 
 	s.mu.Lock()

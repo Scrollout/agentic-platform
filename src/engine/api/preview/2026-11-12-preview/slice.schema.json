@@ -167,12 +167,14 @@
         "properties": {
           "kind": {
             "type": "string",
+            "description": "proposed: the analyst's first proposal; revised: its revision after answers; answered: questions answered; changed: a part replaced, which withdraws that part's approval; approved: a part approved; withdrawn: approvals of the parts in refs withdrawn because a change elsewhere made those parts fail a check.",
             "enum": [
               "proposed",
               "revised",
               "answered",
               "changed",
-              "approved"
+              "approved",
+              "withdrawn"
             ]
           },
           "at": {

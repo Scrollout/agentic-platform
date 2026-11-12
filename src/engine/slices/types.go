@@ -185,8 +185,8 @@ type ContractLint interface {
 	Lint(ctx context.Context, contract string) ([]LintFinding, error)
 }
 
-// HistoryEntry is one change to the slice. Kind is proposed, revised, answered, changed or
-// approved; a proposal or revision names its model and agent digest; Refs are the parts it
+// HistoryEntry is one change to the slice. Kind is proposed, revised, answered, changed,
+// approved or withdrawn (approvals of the parts in Refs withdrawn because they now fail a check); a proposal or revision names its model and agent digest; Refs are the parts it
 // concerns, or for answered the questions answered.
 type HistoryEntry struct {
 	Kind        string

@@ -24,14 +24,14 @@ operation at all.
 | `parts` | current hash of `goals`, `rules` and `contract` | SHA-256 of the RFC 8785 canonical JSON of `{goals}`, `{rules, examples, terms}` and `{contract}` |
 | `approvals[]` | Approval records | one each for goals, rules and contract |
 | `checks[]` | latest check results | each names the part or item, the check, whether it passed and the reason |
-| `history[]` | every change in order: `proposed`, `revised`, `answered`, `changed`, `approved` | time and the IDs concerned; a proposal or revision names the model and agent definition digest |
+| `history[]` | every change in order: `proposed`, `revised`, `answered`, `changed`, `approved`, `withdrawn` | time and the IDs concerned; a proposal or revision names the model and agent definition digest |
 | `state` | see lifecycle | set by the platform |
 | `latest_run` | the slice's latest run ID | the run owns its status and outcome |
 | `title` | a short name | derived from the first goal |
 
 **Lifecycle**: `proposed` → `questions-open` → `checked` → `approved`. Whether the slice is
 building, done, handed over or expired is the status and outcome of its latest run. Any change to
-an approved part returns the slice to `checked` and withdraws that part's approval (FR-007). A slice the pattern does not fit stays
+an approved part returns the slice to `checked` and withdraws that part's approval (FR-007); any other part that the change makes fail a check, such as a rule that names a removed goal, loses its approval too, recorded as `withdrawn` with those parts as `refs`. A slice is never `approved` while a check fails. A slice the pattern does not fit stays
 `checked` with a `PatternFit` check failed and cannot be built (FR-009).
 
 The analyst's output is a **slice proposal**: goals, terms, rules, examples, contract and new
