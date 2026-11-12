@@ -1,8 +1,10 @@
 // Package store keeps each run's events and the artifacts runs produce, durably and grouped by
 // slice, so that a run can be read back in order and a slice's data can be erased.
 //
-// Limits: slice IDs are "S-<n>" and run IDs "RUN-<n>"; a run belongs to the slice of its first
-// event. One Store at a time may use a directory.
+// Slice IDs, run IDs and artifact hashes follow the rules of the contract the store is opened
+// with (slice-defs.schema.json, through package slice); every string a method takes is parsed
+// against them first. A run belongs to the slice of its first event. One Store at a time may use
+// a directory.
 package store
 
 import (
@@ -15,8 +17,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sync"
+
+	"github.com/agentic-platform/slice"
 )
 
 // ErrNotFound is returned (wrapped) for an artifact the store does not hold.
@@ -30,12 +33,6 @@ type Event struct {
 	Step string `json:"step,omitempty"`
 }
 
-var (
-	sliceID = regexp.MustCompile(`^S-[0-9]+$`)
-	runID   = regexp.MustCompile(`^RUN-[0-9]+$`)
-	hashID  = regexp.MustCompile(`^[0-9a-f]{64}$`)
-)
-
 // On disk: artifacts/<sha256> holds each artifact once; slices/<slice>/events.jsonl holds the
 // slice's events and slices/<slice>/artifacts the hashes the slice stored, one per line. Both
 // files only grow; erasure removes the slice's folder and every artifact no other slice holds.
@@ -47,21 +44,27 @@ const (
 // Store is a run store in one directory. It is safe for concurrent use.
 type Store struct {
 	mu        sync.Mutex
+	ids       *slice.Schemas // the contract's rules for slice IDs, run IDs and hashes
 	artifacts string
 	slices    string
-	events    map[string][]Event         // run -> events in Seq order
-	runSlice  map[string]string          // run -> slice
-	owned     map[string]map[string]bool // slice -> hashes it stored
+	events    map[slice.RunID][]Event          // run -> events in Seq order
+	runSlice  map[slice.RunID]slice.ID         // run -> slice
+	owned     map[slice.ID]map[slice.Hash]bool // slice -> hashes it stored
 }
 
 // Open opens the store in dir, creating it if needed, and continues any records already there.
-func Open(dir string) (*Store, error) {
+// IDs and hashes are parsed with ids, the schemas of the contract version the engine serves.
+func Open(dir string, ids *slice.Schemas) (*Store, error) {
+	if ids == nil {
+		return nil, errors.New("store: no contract schemas to parse IDs with")
+	}
 	s := &Store{
+		ids:       ids,
 		artifacts: filepath.Join(dir, "artifacts"),
 		slices:    filepath.Join(dir, "slices"),
-		events:    map[string][]Event{},
-		runSlice:  map[string]string{},
-		owned:     map[string]map[string]bool{},
+		events:    map[slice.RunID][]Event{},
+		runSlice:  map[slice.RunID]slice.ID{},
+		owned:     map[slice.ID]map[slice.Hash]bool{},
 	}
 	for _, d := range []string{s.artifacts, s.slices} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
@@ -80,31 +83,36 @@ func Open(dir string) (*Store, error) {
 		return nil, err
 	}
 	for _, d := range entries {
-		slice := d.Name()
-		if !sliceID.MatchString(slice) {
-			return nil, fmt.Errorf("store: unexpected entry %q in %s", slice, s.slices)
+		sl, err := ids.ParseID(d.Name())
+		if err != nil {
+			return nil, fmt.Errorf("store: unexpected entry in %s: %w", s.slices, err)
 		}
-		lines, err := readLines(filepath.Join(s.slices, slice, eventsFile))
+		lines, err := readLines(filepath.Join(s.slices, sl.String(), eventsFile))
 		if err != nil {
 			return nil, err
 		}
 		for _, l := range lines {
 			var e Event
 			if err := json.Unmarshal(l, &e); err != nil {
-				return nil, fmt.Errorf("store: slice %s: bad event: %w", slice, err)
+				return nil, fmt.Errorf("store: slice %s: bad event: %w", sl, err)
 			}
-			s.events[e.Run] = append(s.events[e.Run], e)
-			s.runSlice[e.Run] = slice
+			run, err := ids.ParseRunID(e.Run)
+			if err != nil {
+				return nil, fmt.Errorf("store: slice %s: bad event: %w", sl, err)
+			}
+			s.events[run] = append(s.events[run], e)
+			s.runSlice[run] = sl
 		}
-		lines, err = readLines(filepath.Join(s.slices, slice, ownedFile))
+		lines, err = readLines(filepath.Join(s.slices, sl.String(), ownedFile))
 		if err != nil {
 			return nil, err
 		}
 		for _, l := range lines {
-			if !hashID.Match(l) {
-				return nil, fmt.Errorf("store: slice %s: bad artifact hash %q", slice, l)
+			h, err := ids.ParseHash(string(l))
+			if err != nil {
+				return nil, fmt.Errorf("store: slice %s: bad artifact hash: %w", sl, err)
 			}
-			s.own(slice, string(l))
+			s.own(sl, h)
 		}
 	}
 	return s, nil
@@ -118,30 +126,43 @@ func (s *Store) Close() error { return nil }
 // It returns only after the event is durably recorded; on error nothing was acknowledged and the
 // call may be retried. The first Append for a run ties the run to slice; appending that run under
 // another slice is an error.
-func (s *Store) Append(slice string, e Event) (Event, error) {
-	if !sliceID.MatchString(slice) || !runID.MatchString(e.Run) || e.Kind == "" {
-		return Event{}, fmt.Errorf("store: invalid event %+v for slice %q", e, slice)
+func (s *Store) Append(sliceID string, e Event) (Event, error) {
+	sl, err := s.ids.ParseID(sliceID)
+	if err != nil {
+		return Event{}, fmt.Errorf("store: %w", err)
+	}
+	run, err := s.ids.ParseRunID(e.Run)
+	if err != nil {
+		return Event{}, fmt.Errorf("store: %w", err)
+	}
+	if e.Kind == "" {
+		return Event{}, fmt.Errorf("store: event of run %s has no kind", run)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if owner, ok := s.runSlice[e.Run]; ok && owner != slice {
-		return Event{}, fmt.Errorf("store: run %s belongs to slice %s, not %s", e.Run, owner, slice)
+	if owner, ok := s.runSlice[run]; ok && owner != sl {
+		return Event{}, fmt.Errorf("store: run %s belongs to slice %s, not %s", run, owner, sl)
 	}
-	e.Seq = len(s.events[e.Run]) + 1
+	e.Seq = len(s.events[run]) + 1
 	line, err := json.Marshal(e)
 	if err != nil {
 		return Event{}, err
 	}
-	if err := s.appendLine(slice, eventsFile, line); err != nil {
+	if err := s.appendLine(sl, eventsFile, line); err != nil {
 		return Event{}, err
 	}
-	s.events[e.Run] = append(s.events[e.Run], e)
-	s.runSlice[e.Run] = slice
+	s.events[run] = append(s.events[run], e)
+	s.runSlice[run] = sl
 	return e, nil
 }
 
-// Events returns every event of run in Seq order; an unknown run gives none.
-func (s *Store) Events(run string) ([]Event, error) {
+// Events returns every event of run in Seq order; an unknown run gives none, an invalid run ID
+// an error.
+func (s *Store) Events(runID string) ([]Event, error) {
+	run, err := s.ids.ParseRunID(runID)
+	if err != nil {
+		return nil, fmt.Errorf("store: %w", err)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]Event(nil), s.events[run]...), nil
@@ -149,25 +170,29 @@ func (s *Store) Events(run string) ([]Event, error) {
 
 // PutArtifact stores data for slice and returns its lowercase hex SHA-256. It returns only after
 // the artifact is durably stored. The same bytes are stored once, however many slices store them.
-func (s *Store) PutArtifact(slice string, data []byte) (string, error) {
-	if !sliceID.MatchString(slice) {
-		return "", fmt.Errorf("store: invalid slice %q", slice)
+func (s *Store) PutArtifact(sliceID string, data []byte) (string, error) {
+	sl, err := s.ids.ParseID(sliceID)
+	if err != nil {
+		return "", fmt.Errorf("store: %w", err)
 	}
 	sum := sha256.Sum256(data)
-	hash := hex.EncodeToString(sum[:])
+	hash, err := s.ids.ParseHash(hex.EncodeToString(sum[:]))
+	if err != nil {
+		return "", fmt.Errorf("store: the contract's hash rule refuses a SHA-256: %w", err)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.owned[slice][hash] {
-		return hash, nil
+	if s.owned[sl][hash] {
+		return hash.String(), nil
 	}
 	// Ownership first: an artifact on disk is then always one some slice's erasure removes.
-	if err := s.appendLine(slice, ownedFile, []byte(hash)); err != nil {
+	if err := s.appendLine(sl, ownedFile, []byte(hash.String())); err != nil {
 		return "", err
 	}
-	s.own(slice, hash)
-	path := filepath.Join(s.artifacts, hash)
+	s.own(sl, hash)
+	path := filepath.Join(s.artifacts, hash.String())
 	if _, err := os.Stat(path); err == nil {
-		return hash, nil
+		return hash.String(), nil
 	}
 	tmp, err := os.CreateTemp(s.artifacts, ".tmp-")
 	if err != nil {
@@ -188,16 +213,20 @@ func (s *Store) PutArtifact(slice string, data []byte) (string, error) {
 	if err := os.Rename(tmp.Name(), path); err != nil {
 		return "", err
 	}
-	return hash, syncDir(s.artifacts)
+	if err := syncDir(s.artifacts); err != nil {
+		return "", err
+	}
+	return hash.String(), nil
 }
 
-// Artifact returns the exact bytes stored under hash, or ErrNotFound. A hash that is not 64
-// lowercase hex digits is an error.
-func (s *Store) Artifact(hash string) ([]byte, error) {
-	if !hashID.MatchString(hash) {
-		return nil, fmt.Errorf("store: invalid hash %q", hash)
+// Artifact returns the exact bytes stored under hash, or ErrNotFound. A hash that breaks the
+// contract's hash rule is an error and never reaches the file system as a path.
+func (s *Store) Artifact(hashID string) ([]byte, error) {
+	hash, err := s.ids.ParseHash(hashID)
+	if err != nil {
+		return nil, fmt.Errorf("store: %w", err)
 	}
-	b, err := os.ReadFile(filepath.Join(s.artifacts, hash))
+	b, err := os.ReadFile(filepath.Join(s.artifacts, hash.String()))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("artifact %s: %w", hash, ErrNotFound)
 	}
@@ -207,33 +236,34 @@ func (s *Store) Artifact(hash string) ([]byte, error) {
 // EraseSlice removes every event of the slice's runs and every artifact stored for the slice,
 // from disk. An artifact another slice also stored stays readable for it. Erasing an unknown
 // slice does nothing; an interrupted erasure is completed by calling it again.
-func (s *Store) EraseSlice(slice string) error {
-	if !sliceID.MatchString(slice) {
-		return fmt.Errorf("store: invalid slice %q", slice)
+func (s *Store) EraseSlice(sliceID string) error {
+	sl, err := s.ids.ParseID(sliceID)
+	if err != nil {
+		return fmt.Errorf("store: %w", err)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	// Artifacts first, so a crash part way leaves the ownership list that finds them again.
-	for hash := range s.owned[slice] {
-		if s.heldElsewhere(slice, hash) {
+	for hash := range s.owned[sl] {
+		if s.heldElsewhere(sl, hash) {
 			continue
 		}
-		if err := os.Remove(filepath.Join(s.artifacts, hash)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		if err := os.Remove(filepath.Join(s.artifacts, hash.String())); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return err
 		}
 	}
 	if err := syncDir(s.artifacts); err != nil {
 		return err
 	}
-	if err := os.RemoveAll(filepath.Join(s.slices, slice)); err != nil {
+	if err := os.RemoveAll(filepath.Join(s.slices, sl.String())); err != nil {
 		return err
 	}
 	if err := syncDir(s.slices); err != nil {
 		return err
 	}
-	delete(s.owned, slice)
+	delete(s.owned, sl)
 	for run, owner := range s.runSlice {
-		if owner == slice {
+		if owner == sl {
 			delete(s.runSlice, run)
 			delete(s.events, run)
 		}
@@ -241,16 +271,16 @@ func (s *Store) EraseSlice(slice string) error {
 	return nil
 }
 
-func (s *Store) own(slice, hash string) {
-	if s.owned[slice] == nil {
-		s.owned[slice] = map[string]bool{}
+func (s *Store) own(sl slice.ID, hash slice.Hash) {
+	if s.owned[sl] == nil {
+		s.owned[sl] = map[slice.Hash]bool{}
 	}
-	s.owned[slice][hash] = true
+	s.owned[sl][hash] = true
 }
 
-func (s *Store) heldElsewhere(slice, hash string) bool {
+func (s *Store) heldElsewhere(sl slice.ID, hash slice.Hash) bool {
 	for other, hashes := range s.owned {
-		if other != slice && hashes[hash] {
+		if other != sl && hashes[hash] {
 			return true
 		}
 	}
@@ -258,8 +288,8 @@ func (s *Store) heldElsewhere(slice, hash string) bool {
 }
 
 // appendLine appends line to the slice's file name and syncs it, and on creation its folders.
-func (s *Store) appendLine(slice, name string, line []byte) error {
-	dir := filepath.Join(s.slices, slice)
+func (s *Store) appendLine(sl slice.ID, name string, line []byte) error {
+	dir := filepath.Join(s.slices, sl.String())
 	if _, err := os.Stat(dir); errors.Is(err, fs.ErrNotExist) {
 		if err := os.Mkdir(dir, 0o700); err != nil {
 			return err

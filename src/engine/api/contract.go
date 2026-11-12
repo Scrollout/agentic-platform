@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -63,11 +64,11 @@ type (
 		Info struct {
 			Version string `yaml:"version"`
 		} `yaml:"info"`
-		Limits struct {
-			PerSecond  int   `yaml:"requests-per-second-per-token"`
-			PerAddress int   `yaml:"requests-per-second-per-address-without-token"`
-			KeepHours  int   `yaml:"idempotency-key-retention-hours"`
-			MaxBody    int64 `yaml:"request-body-max-bytes"`
+		Limits struct { // yaml.Node, so a fraction or a string is refused, not truncated or converted
+			PerSecond  yaml.Node `yaml:"requests-per-second-per-token"`
+			PerAddress yaml.Node `yaml:"requests-per-second-per-address-without-token"`
+			KeepHours  yaml.Node `yaml:"idempotency-key-retention-hours"`
+			MaxBody    yaml.Node `yaml:"request-body-max-bytes"`
 		} `yaml:"x-limits"`
 		Security   *[]map[string][]string `yaml:"security"`
 		Paths      yaml.Node              `yaml:"paths"`
@@ -119,6 +120,25 @@ func loadContract(files fs.FS) (contract, error) {
 	return c, nil
 }
 
+// positiveInt returns the value of n, which must be a plain YAML integer (tag !!int) of at least
+// 1. A fraction, a quoted number, a boolean or a collection is refused.
+func positiveInt(n *yaml.Node) (int64, error) {
+	if n.Kind == 0 {
+		return 0, fmt.Errorf("missing; a positive integer is required")
+	}
+	if n.Kind != yaml.ScalarNode || n.ShortTag() != "!!int" {
+		return 0, fmt.Errorf("%q (line %d) is not an integer; a positive integer is required", n.Value, n.Line)
+	}
+	var v int64
+	if err := n.Decode(&v); err != nil {
+		return 0, fmt.Errorf("%q (line %d): %w", n.Value, n.Line, err)
+	}
+	if v < 1 {
+		return 0, fmt.Errorf("%d (line %d) is not positive; a positive integer is required", v, n.Line)
+	}
+	return v, nil
+}
+
 // versionOf returns the version folder of a contract path, "preview/2026-11-12-preview/openapi.yaml".
 func versionOf(path string) string { return strings.Split(path, "/")[1] }
 
@@ -135,12 +155,27 @@ func parseContract(raw []byte, version string) (contract, error) {
 	if d.Security != nil {
 		return contract{}, fmt.Errorf("a top-level security is not supported; state it per operation")
 	}
-	l := d.Limits
-	if l.PerSecond < 1 || l.PerAddress < 1 || l.KeepHours < 1 || l.MaxBody < 1 {
-		return contract{}, fmt.Errorf("x-limits lacks a positive requests-per-second-per-token, requests-per-second-per-address-without-token, idempotency-key-retention-hours or request-body-max-bytes")
+	var limits [4]int64
+	for i, l := range []struct {
+		key  string
+		node *yaml.Node
+	}{
+		{"requests-per-second-per-token", &d.Limits.PerSecond},
+		{"requests-per-second-per-address-without-token", &d.Limits.PerAddress},
+		{"idempotency-key-retention-hours", &d.Limits.KeepHours},
+		{"request-body-max-bytes", &d.Limits.MaxBody},
+	} {
+		n, err := positiveInt(l.node)
+		if err != nil {
+			return contract{}, fmt.Errorf("x-limits.%s: %w", l.key, err)
+		}
+		limits[i] = n
 	}
-	c := contract{version: version, ops: map[string]contractOp{}, perSecond: l.PerSecond, perAddress: l.PerAddress,
-		keepKeys: time.Duration(l.KeepHours) * time.Hour, maxBody: l.MaxBody}
+	if limits[2] > math.MaxInt64/int64(time.Hour) {
+		return contract{}, fmt.Errorf("x-limits.idempotency-key-retention-hours: %d hours is too long", limits[2])
+	}
+	c := contract{version: version, ops: map[string]contractOp{}, perSecond: int(limits[0]), perAddress: int(limits[1]),
+		keepKeys: time.Duration(limits[2]) * time.Hour, maxBody: limits[3]}
 
 	paths, err := pairs(&d.Paths, "paths")
 	if err != nil {

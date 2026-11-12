@@ -17,7 +17,7 @@
 //		Step string // optional
 //	}
 //
-//	func Open(dir string) (*Store, error) // creates dir contents; reopening continues the records
+//	func Open(dir string, ids *slice.Schemas) (*Store, error) // (T017a: ids is the contract rules; the tests load them with testIDs) // creates dir contents; reopening continues the records
 //	func (s *Store) Close() error
 //
 //	// Append records e under slice, assigns the next Seq of e.Run, and returns
@@ -60,7 +60,7 @@ import (
 
 func open(t *testing.T, dir string) *Store {
 	t.Helper()
-	s, err := Open(dir)
+	s, err := Open(dir, testIDs(t))
 	if err != nil {
 		t.Fatalf("Open(%q): %v", dir, err)
 	}
