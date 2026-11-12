@@ -1,14 +1,18 @@
 // Package api serves the engine API, through which the terminal client, the run page and step
 // workers manage slices and runs and follow the work they start, as the engine contract defines.
 //
-// Every request passes the same checks, in this order: its token (401), the rate limit of that
-// token (429), its api-version (400, except on the operations list), whether the token may call
-// the operation (403), then the operation itself. A state-changing call returns 202 with an
-// operation to follow; its work runs on its own, is retried when it fails for a passing reason,
-// and ends `succeeded`, `failed` (with the reason) or `cancelled`. The limits a client sees
-// (requests per second, how long idempotency keys are kept, the largest body) are the
-// contract's `x-limits`. Limit: the engine keeps its operations and idempotency keys in memory,
-// so a restart forgets them.
+// Every request passes the same checks, in this order: its token, then the rate limit, then its
+// api-version (400, except on the operations list), whether the token may call the operation
+// (403), then the operation itself. A request with an accepted token is counted against that
+// token's limit alone (429 beyond it). A request with no token, or one the engine does not
+// accept, is counted against the limit of its source address, the host part of the
+// connection's peer address (never a header the client sends): 401 up to that limit, 429 beyond
+// it. A state-changing call returns 202 with an operation to follow; its work runs on its own,
+// is retried when it fails for a passing reason, and ends `succeeded`, `failed` (with the
+// reason) or `cancelled`. The limits a client sees (requests per second per token and per
+// address, how long idempotency keys are kept, the largest body) are the contract's
+// `x-limits`. Limit: the engine keeps its operations and idempotency keys in memory, so a
+// restart forgets them.
 package api
 
 import (
@@ -20,8 +24,10 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"regexp"
 	"strconv"
 	"strings"
@@ -82,8 +88,9 @@ func NewHandler(cfg Config) http.Handler {
 		tokens: []struct{ token, scheme string }{
 			{cfg.Tokens.Client, clientScheme}, {cfg.Tokens.Page, pageScheme}, {cfg.Tokens.Worker, workerScheme},
 		},
-		limit: &limiter{now: now, perSecond: c.perSecond, windows: map[string]*window{}},
-		keys:  &keyStore{now: now, keep: c.keepKeys, entries: map[string]*keyEntry{}},
+		limit:     newLimiter(now, c.perSecond),
+		anonymous: newLimiter(now, c.perAddress),
+		keys:      &keyStore{now: now, keep: c.keepKeys, entries: map[string]*keyEntry{}},
 	}
 }
 
@@ -104,8 +111,10 @@ type front struct {
 	contract contract
 	mux      *http.ServeMux
 	tokens   []struct{ token, scheme string }
-	limit    *limiter
-	keys     *keyStore
+	limit    *limiter // per accepted token
+	// anonymous counts requests without an accepted token, per source address.
+	anonymous *limiter
+	keys      *keyStore
 }
 
 type rawBodyKey struct{}
@@ -113,6 +122,12 @@ type rawBodyKey struct{}
 func (f *front) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	caller := f.authenticate(r)
 	if caller == "" {
+		if wait, ok := f.anonymous.allow(sourceAddress(r)); !ok {
+			w.Header().Set("Retry-After", strconv.Itoa(wait))
+			writeProblem(w, newProblem(http.StatusTooManyRequests, gen.ErrorCodeRateLimited,
+				fmt.Sprintf("more than %d requests in one second without an accepted token from this address", f.contract.perAddress)))
+			return
+		}
 		writeProblem(w, newProblem(http.StatusUnauthorized, gen.ErrorCodeUnauthorized, "send this session's token as `Authorization: Bearer <token>`"))
 		return
 	}
@@ -180,33 +195,72 @@ func (f *front) authenticate(r *http.Request) string {
 	return ""
 }
 
-// limiter allows each caller at most perSecond requests in any one-second window.
+// sourceAddress returns the host part of the connection's peer address, with an IPv4-mapped
+// IPv6 address written as IPv4, so one peer has one key. It never reads a header the client
+// sends. A peer address without a port is used whole.
+func sourceAddress(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	if a, err := netip.ParseAddr(host); err == nil {
+		return a.Unmap().String()
+	}
+	return host
+}
+
+// limiter allows each key (a token's scheme or a source address) at most perSecond requests
+// in any one-second sliding window.
+//
+// Its memory is bounded: a window whose latest request is a second old or more holds no time
+// still in the window, so it is the same as no window and may be dropped. When a new key would
+// make the map hold sweepAt windows, allow first drops all such windows and sets sweepAt to
+// twice what is left, at least minSweep. What is left are keys seen in the last second, so the
+// map never holds more than max(minSweep, 2*A) windows of at most perSecond times each, where
+// A is the most distinct keys seen in any one second. A sweep is one pass over the map and
+// comes only after the map has doubled since the last one: amortized constant work per new key.
 type limiter struct {
 	now       func() time.Time
 	perSecond int
 
 	mu      sync.Mutex
 	windows map[string]*window
+	sweepAt int
 }
 
-// window holds the times of the caller's last perSecond allowed requests, oldest at next.
+// minSweep is the fewest windows a limiter holds before it sweeps.
+const minSweep = 64
+
+func newLimiter(now func() time.Time, perSecond int) *limiter {
+	return &limiter{now: now, perSecond: perSecond, windows: map[string]*window{}, sweepAt: minSweep}
+}
+
+// window holds the times of the key's last perSecond allowed requests, oldest at next.
 type window struct {
 	times []time.Time
 	next  int
 	last  time.Time
 }
 
-// allow counts one request for the caller, or says how many seconds to wait. A clock that
+// allow counts one request for the key, or says how many seconds to wait. A clock that
 // moves backwards is held at the latest time seen.
-func (l *limiter) allow(caller string) (wait int, ok bool) {
+func (l *limiter) allow(key string) (wait int, ok bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	w, has := l.windows[caller]
-	if !has {
-		w = &window{}
-		l.windows[caller] = w
-	}
 	now := l.now()
+	w, has := l.windows[key]
+	if !has {
+		if len(l.windows) >= l.sweepAt {
+			for k, old := range l.windows {
+				if !now.Before(old.last.Add(time.Second)) {
+					delete(l.windows, k)
+				}
+			}
+			l.sweepAt = max(minSweep, 2*len(l.windows))
+		}
+		w = &window{}
+		l.windows[key] = w
+	}
 	if now.Before(w.last) {
 		now = w.last
 	}

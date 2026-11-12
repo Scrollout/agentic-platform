@@ -41,6 +41,7 @@ type contract struct {
 	version        string                // the api-version served
 	ops            map[string]contractOp // by route, "GET /slices/{sliceId}"
 	perSecond      int                   // requests in any one-second window per token
+	perAddress     int                   // requests without an accepted token in any one-second window per source address
 	keepKeys       time.Duration         // how long an idempotency key is kept
 	maxBody        int64                 // largest request body, in bytes
 	keyMin, keyMax int                   // Idempotency-Key length
@@ -63,9 +64,10 @@ type (
 			Version string `yaml:"version"`
 		} `yaml:"info"`
 		Limits struct {
-			PerSecond int   `yaml:"requests-per-second-per-token"`
-			KeepHours int   `yaml:"idempotency-key-retention-hours"`
-			MaxBody   int64 `yaml:"request-body-max-bytes"`
+			PerSecond  int   `yaml:"requests-per-second-per-token"`
+			PerAddress int   `yaml:"requests-per-second-per-address-without-token"`
+			KeepHours  int   `yaml:"idempotency-key-retention-hours"`
+			MaxBody    int64 `yaml:"request-body-max-bytes"`
 		} `yaml:"x-limits"`
 		Security   *[]map[string][]string `yaml:"security"`
 		Paths      yaml.Node              `yaml:"paths"`
@@ -134,10 +136,10 @@ func parseContract(raw []byte, version string) (contract, error) {
 		return contract{}, fmt.Errorf("a top-level security is not supported; state it per operation")
 	}
 	l := d.Limits
-	if l.PerSecond < 1 || l.KeepHours < 1 || l.MaxBody < 1 {
-		return contract{}, fmt.Errorf("x-limits lacks a positive requests-per-second-per-token, idempotency-key-retention-hours or request-body-max-bytes")
+	if l.PerSecond < 1 || l.PerAddress < 1 || l.KeepHours < 1 || l.MaxBody < 1 {
+		return contract{}, fmt.Errorf("x-limits lacks a positive requests-per-second-per-token, requests-per-second-per-address-without-token, idempotency-key-retention-hours or request-body-max-bytes")
 	}
-	c := contract{version: version, ops: map[string]contractOp{}, perSecond: l.PerSecond,
+	c := contract{version: version, ops: map[string]contractOp{}, perSecond: l.PerSecond, perAddress: l.PerAddress,
 		keepKeys: time.Duration(l.KeepHours) * time.Hour, maxBody: l.MaxBody}
 
 	paths, err := pairs(&d.Paths, "paths")
