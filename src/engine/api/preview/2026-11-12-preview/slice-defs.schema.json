@@ -6,11 +6,13 @@
   "$defs": {
     "slice_id": {
       "type": "string",
-      "pattern": "^S-[0-9]+$"
+      "pattern": "^S-[0-9]+$",
+      "description": "A slice ID, `S-<n>`."
     },
     "run_id": {
       "type": "string",
-      "pattern": "^RUN-[0-9]+$"
+      "pattern": "^RUN-[0-9]+$",
+      "description": "A run ID, `RUN-<n>`."
     },
     "hash": {
       "type": "string",
@@ -19,62 +21,77 @@
     },
     "slice_or_run_id": {
       "type": "string",
-      "pattern": "^(S|RUN)-[0-9]+$"
+      "pattern": "^(S|RUN)-[0-9]+$",
+      "description": "The ID of a slice or of a run, `S-<n>` or `RUN-<n>`."
     },
     "operation_id": {
       "type": "string",
-      "pattern": "^OP-[0-9]+$"
+      "pattern": "^OP-[0-9]+$",
+      "description": "An operation ID, `OP-<n>`."
     },
     "goal_id": {
       "type": "string",
-      "pattern": "^G-[0-9]+$"
+      "pattern": "^G-[0-9]+$",
+      "description": "A goal ID, `G-<n>`."
     },
     "term_id": {
       "type": "string",
-      "pattern": "^T-[0-9]+$"
+      "pattern": "^T-[0-9]+$",
+      "description": "A term ID, `T-<n>`."
     },
     "rule_id": {
       "type": "string",
-      "pattern": "^R-[0-9]+$"
+      "pattern": "^R-[0-9]+$",
+      "description": "A rule ID, `R-<n>`."
     },
     "question_id": {
       "type": "string",
-      "pattern": "^Q-[0-9]+$"
+      "pattern": "^Q-[0-9]+$",
+      "description": "A question ID, `Q-<n>`."
     },
     "pattern_id": {
       "type": "string",
-      "pattern": "^[a-z0-9-]+$"
+      "pattern": "^[a-z0-9-]+$",
+      "description": "A pattern's name: lowercase letters, digits and hyphens. A separate rule from `step_name`, though the same today, because a pattern and a step are named for different things and either rule may change alone."
     },
     "pattern_ref": {
       "type": "string",
-      "pattern": "^[a-z0-9-]+@[0-9]+\\.[0-9]+\\.[0-9]+$"
+      "pattern": "^[a-z0-9-]+@[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "One version of a pattern, `<pattern_id>@<major>.<minor>.<patch>`."
     },
     "step_name": {
       "type": "string",
-      "pattern": "^[a-z0-9-]+$"
+      "pattern": "^[a-z0-9-]+$",
+      "description": "A step's name within a pattern: lowercase letters, digits and hyphens. A separate rule from `pattern_id`, though the same today, because a step and a pattern are named for different things and either rule may change alone."
     },
     "worker_ref": {
       "type": "string",
-      "pattern": "^(agent|procedure):[a-z0-9-]+$"
+      "pattern": "^(agent|procedure):[a-z0-9-]+$",
+      "description": "The worker a step runs on: `agent:<name>` for an agent, `procedure:<name>` for a fixed procedure."
     },
-    "agent_worker": {
-      "pattern": "^agent:"
+    "worker_ref_agent_prefix": {
+      "pattern": "^agent:",
+      "description": "True when a `worker_ref` names an agent: a test on its `agent:` prefix for use in `if`, not a value type."
     },
     "check_name": {
       "type": "string",
-      "pattern": "^[A-Z][A-Za-z0-9]*$"
+      "pattern": "^[A-Z][A-Za-z0-9]*$",
+      "description": "A check's name in PascalCase, for example ExampleTagged."
     },
     "project_name": {
       "type": "string",
-      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+      "description": "A project's name, which is also its folder name: lowercase letters, digits and hyphens, starting with a letter or digit, at most 63 characters."
     },
     "worker_endpoint": {
       "type": "string",
-      "pattern": "^http://[a-z0-9-]+:[0-9]{1,5}/?$"
+      "pattern": "^http://[a-z0-9-]+:[0-9]{1,5}/?$",
+      "description": "A worker's address on the internal network, `http://<service>:<port>`."
     },
     "api_version": {
       "type": "string",
-      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}(-preview)?$"
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}(-preview)?$",
+      "description": "An API version, a date `YYYY-MM-DD`, with `-preview` for a preview version."
     },
     "ref": {
       "type": "string",

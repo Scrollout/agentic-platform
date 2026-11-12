@@ -6,6 +6,11 @@ info:
   license:
     name: Apache-2.0
     identifier: Apache-2.0
+x-limits:
+  requests-per-second-per-token: 20
+  requests-per-second-per-address-without-token: 20
+  idempotency-key-retention-hours: 24
+  request-body-max-bytes: 1048576
 servers:
   - url: https://example.com
 tags:

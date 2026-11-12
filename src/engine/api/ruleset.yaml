@@ -2,7 +2,7 @@
 extends: ["spectral:oas"]
 
 functionsDir: ./ruleset-functions
-functions: [requiresApiVersion, listHasPageToken]
+functions: [requiresApiVersion, listHasPageToken, declaresLimits]
 
 rules:
   operation-operationId: error
@@ -36,3 +36,17 @@ rules:
           type: array
           contains:
             const: code
+
+  ap-limits-declared:
+    description: Every service contract declares the limits every client sees in a root x-limits object, each a positive integer.
+    message: "{{error}}"
+    severity: error
+    given: "$"
+    then:
+      function: declaresLimits
+      functionOptions:
+        keys:
+          - requests-per-second-per-token
+          - requests-per-second-per-address-without-token
+          - idempotency-key-retention-hours
+          - request-body-max-bytes

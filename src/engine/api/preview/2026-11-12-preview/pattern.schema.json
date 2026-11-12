@@ -154,7 +154,7 @@
         "if": {
           "properties": {
             "worker": {
-              "$ref": "slice-defs.schema.json#/$defs/agent_worker"
+              "$ref": "slice-defs.schema.json#/$defs/worker_ref_agent_prefix"
             }
           }
         },
