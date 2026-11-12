@@ -3,12 +3,20 @@
 
 STUB_EXIT is the exit code of every call; STUB_EXIT_CLI overrides it for `... run ... cli ...`
 calls. `port` calls print a loopback address. STUB_* variables are not recorded.
+STUB_VERIFY_FAIL makes a `run ... verify ...` call (the signature check) exit 1 with a cosign-like
+message when it is "*" or any argument contains it, e.g. STUB_VERIFY_FAIL=/ap-engine@ fails the
+engine image's check only.
 """
 import json, os, sys
 argv = sys.argv[1:]
 env = {k: v for k, v in os.environ.items() if not k.startswith("STUB_")}
 with open(os.environ["STUB_LOG"], "a") as f:
     f.write(json.dumps({"argv": argv, "env": env}) + "\n")
+if argv[:1] == ["run"] and "verify" in argv:
+    pat = os.environ.get("STUB_VERIFY_FAIL")
+    if pat and (pat == "*" or any(pat in a for a in argv)):
+        sys.stderr.write("Error: no signatures found\n")
+        sys.exit(1)
 if "port" in argv:
     print("127.0.0.1:49999")
 code = int(os.environ.get("STUB_EXIT", "0"))

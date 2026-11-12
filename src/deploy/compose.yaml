@@ -11,8 +11,12 @@
 #   AP_HOST_USER         the developer's numeric uid:gid; the gateway runs as it to read the key
 #                        file (mode 600), and step workers run as it to write the projects folder
 #   AP_GATEWAY_IMAGE     the nginx pin from images.lock (its one home); the launcher reads it
+#   AP_IMAGE_ENGINE, AP_IMAGE_PAGE, AP_IMAGE_CLI, AP_IMAGE_AGENT, AP_IMAGE_CHECK, AP_IMAGE_TESTS
+#                        each image's signed digest reference, recorded by build.sh and verified by
+#                        the launcher before start (ADR 0028)
 #
-# Images named ap-*:dev are built locally by build.sh and never pulled (pull_policy: never).
+# Our images are built locally by build.sh, started by digest from the local image store and
+# never pulled (pull_policy: never).
 #
 # Profiles: no profile is what `ap up` starts (gateway, engine, page). `client` and `tests` are run
 # on demand with `docker compose run --rm`; `workers` are started by `ap build-workers`.
@@ -72,7 +76,7 @@ services:
   # Workflow engine (src/engine). It holds all three tokens to tell callers apart (research D12).
   engine:
     <<: *hardened
-    image: ap-engine:dev
+    image: ${AP_IMAGE_ENGINE:?set AP_IMAGE_ENGINE to the signed ap-engine image (ap up does this; build it with src/deploy/build.sh engine)}
     pull_policy: never
     user: "65532:65532"
     environment:
@@ -91,7 +95,7 @@ services:
   # accepts (DNS rebinding guard, plan threat model).
   page:
     <<: *hardened
-    image: ap-page:dev
+    image: ${AP_IMAGE_PAGE:?set AP_IMAGE_PAGE to the signed ap-page image (ap up does this; build it with src/deploy/build.sh page)}
     pull_policy: never
     user: "65532:65532"
     environment:
@@ -109,7 +113,7 @@ services:
   # Terminal client (src/cli/contract.md), run per command by the launcher.
   cli:
     <<: *hardened
-    image: ap-cli:dev
+    image: ${AP_IMAGE_CLI:?set AP_IMAGE_CLI to the signed ap-cli image (ap up does this; build it with src/deploy/build.sh cli)}
     pull_policy: never
     profiles: [client]
     user: "65532:65532"
@@ -126,7 +130,7 @@ services:
   # Test harness (src/tests), run by `ap test <suite>` as a client of the engine.
   tests:
     <<: *hardened
-    image: ap-tests:dev
+    image: ${AP_IMAGE_TESTS:?set AP_IMAGE_TESTS to the signed ap-tests image (ap up does this; build it with src/deploy/build.sh tests)}
     pull_policy: never
     profiles: [tests]
     user: "65532:65532"
@@ -145,7 +149,7 @@ services:
   # folder is read-only.
   step-agent:
     <<: *sandboxed
-    image: ap-agent:dev
+    image: ${AP_IMAGE_AGENT:?set AP_IMAGE_AGENT to the signed ap-agent image (ap up does this; build it with src/deploy/build.sh agent)}
     pull_policy: never
     user: ${AP_HOST_USER:?set AP_HOST_USER to the developer's uid:gid (ap up does this)}
     environment:
@@ -160,7 +164,7 @@ services:
   # model: no network beyond the engine).
   check:
     <<: *sandboxed
-    image: ap-check:dev
+    image: ${AP_IMAGE_CHECK:?set AP_IMAGE_CHECK to the signed ap-check image (ap up does this; build it with src/deploy/build.sh check)}
     pull_policy: never
     user: "65532:65532"
     environment:

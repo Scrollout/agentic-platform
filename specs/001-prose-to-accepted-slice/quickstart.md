@@ -10,7 +10,11 @@ launcher `src/deploy/ap`, which only calls `docker compose` ([terminal contract]
 - A model credentials file outside the repository that holds only the provider key (no variable
   name), owned by you and readable only by you (`chmod 600`), for example
   `~/.config/agentic-platform/anthropic_api_key`. Only the gateway container reads it.
-- The images built with `src/deploy/build.sh` (`engine`, `page`, `cli`, `agent`, `check`).
+- The images built and signed with `src/deploy/build.sh <name>` (`engine`, `page`, `cli`, `agent`,
+  `check`), after `scripts/generate.sh`. The first build makes an encrypted signing key in
+  `~/.config/agentic-platform/signing/`; set `COSIGN_PASSWORD` or type the password when cosign asks.
+  `up` verifies each image's signature and starts nothing if one fails
+  ([ADR 0028](../../docs/decisions/0028-sign-platform-images-locally.md)).
 - An empty folder for new projects, for example `~/projects`.
 
 ## 1. Start the platform

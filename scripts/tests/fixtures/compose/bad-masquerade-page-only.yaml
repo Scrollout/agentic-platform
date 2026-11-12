@@ -39,7 +39,7 @@
       "tmpfs": [
         "/tmp"
       ],
-      "image": "ap-engine:dev",
+      "image": "${AP_IMAGE_ENGINE}",
       "environment": {
         "ENGINE_CLIENT_TOKEN": "${AP_CLIENT_TOKEN}",
         "ENGINE_PAGE_TOKEN": "${AP_PAGE_TOKEN}",
@@ -69,7 +69,7 @@
       "tmpfs": [
         "/tmp"
       ],
-      "image": "ap-page:dev",
+      "image": "${AP_IMAGE_PAGE}",
       "environment": {
         "TOKEN": "${AP_PAGE_TOKEN}"
       },
@@ -99,7 +99,7 @@
       "tmpfs": [
         "/tmp"
       ],
-      "image": "ap-cli:dev",
+      "image": "${AP_IMAGE_CLI}",
       "environment": {
         "TOKEN": "${AP_CLIENT_TOKEN}"
       }
@@ -119,7 +119,7 @@
       "tmpfs": [
         "/tmp"
       ],
-      "image": "ap-tests:dev",
+      "image": "${AP_IMAGE_TESTS}",
       "environment": {
         "TOKEN": "${AP_CLIENT_TOKEN}"
       }
@@ -143,7 +143,7 @@
       "cpus": 1.0,
       "mem_limit": "512m",
       "pids_limit": 256,
-      "image": "ap-agent:dev",
+      "image": "${AP_IMAGE_AGENT}",
       "environment": {
         "TOKEN": "${AP_WORKER_TOKEN}"
       }
@@ -167,7 +167,7 @@
       "cpus": 1.0,
       "mem_limit": "512m",
       "pids_limit": 256,
-      "image": "ap-check:dev",
+      "image": "${AP_IMAGE_CHECK}",
       "environment": {
         "TOKEN": "${AP_WORKER_TOKEN}"
       }

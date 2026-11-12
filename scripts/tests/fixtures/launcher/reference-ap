@@ -6,8 +6,22 @@ here=$(cd "$(dirname "$0")" && pwd)
 state=${XDG_STATE_HOME:-$HOME/.local/state}/agentic-platform
 sess=$state/session.env
 usage() { echo "usage: ap up|down|build-workers|page|test|<client command>" >&2; exit 3; }
+needed="engine page cli"
+names="$needed agent check tests"
+reg=${AP_REGISTRY_NAME:-ap-registry}
+if [ -n "${AP_REGISTRY_NAME:-}" ]; then net=$AP_REGISTRY_NAME-net; else net=ap-signing; fi
+cfg=${XDG_CONFIG_HOME:-$HOME/.config}/agentic-platform/signing
+imgs=$state/images.env
 compose() { docker compose -f "$here/compose.yaml" --profile '*' "$@"; }
-load() { [ -f "$sess" ] || { echo "ap: not up" >&2; exit 3; }; set -a; . "$sess"; set +a; }
+# images not built are placeholders that name no image
+load() {
+  [ -f "$sess" ] || { echo "ap: not up" >&2; exit 3; }
+  set -a; . "$sess"
+  for n in $names; do N=$(echo "$n" | tr a-z A-Z); eval "unset AP_IMAGE_$N"; done
+  [ ! -f "$imgs" ] || . "$imgs"
+  for n in $names; do N=$(echo "$n" | tr a-z A-Z); eval "[ -n \"\${AP_IMAGE_$N:-}\" ] || AP_IMAGE_$N=ap-$n:not-built"; done
+  set +a
+}
 rand() { od -An -N24 -tx1 /dev/urandom | tr -d ' \n'; }
 build_workers() { echo "build-workers: not available yet" >&2; return 1; }
 [ $# -ge 1 ] || usage
@@ -42,12 +56,34 @@ up)
       echo "AP_PAGE_PORT=$port"; echo "AP_GATEWAY_IMAGE='$img'"; echo "AP_HOST_USER=$uid:$gid"
       echo "AP_CLIENT_TOKEN=$tc"; echo "AP_PAGE_TOKEN=$tp"; echo "AP_WORKER_TOKEN=$tw"; } > "$sess" )
   chmod 600 "$sess"
+  # images: those recorded are verified before anything starts; engine, page and cli must be
+  # recorded; agent, check and tests not built are passed as placeholders and not verified
+  cosign=$(awk '$1=="cosign"{print $2}' "$lock")
+  [ -f "$imgs" ] || { echo "ap: no images recorded; run: src/deploy/build.sh engine" >&2; exit 1; }
+  if grep -Evx 'AP_IMAGE_[A-Z]+=127\.0\.0\.1:[0-9]{1,5}/ap-[a-z]+@sha256:[0-9a-f]{64}' "$imgs" >/dev/null; then
+    echo "ap: $imgs has a line build.sh does not write" >&2; exit 1
+  fi
+  [ -f "$cfg/cosign.pub" ] || { echo "ap: no public key at $cfg/cosign.pub; run: src/deploy/build.sh engine" >&2; exit 1; }
+  for n in $names; do
+    N=$(echo "$n" | tr a-z A-Z)
+    v=$(sed -n "s/^AP_IMAGE_$N=//p" "$imgs" 2>/dev/null | tail -n 1)
+    if [ -z "$v" ]; then
+      case " $needed " in *" $n "*) echo "ap: no image for $n; run: src/deploy/build.sh $n" >&2; exit 1 ;; esac
+      continue
+    fi
+    case $v in */ap-"$n"@sha256:*) ;; *) echo "ap: $imgs: AP_IMAGE_$N names another image" >&2; exit 1 ;; esac
+    ref=$reg:5000/${v#*/}
+    docker run --rm --network "$net" -v "$cfg/cosign.pub:/cosign.pub:ro" "$cosign" verify --key /cosign.pub --insecure-ignore-tlog --allow-http-registry "$ref" >/dev/null ||
+      { echo "ap: signature check failed for ap-$n ($v); nothing started" >&2; exit 1; }
+  done
   load
   compose up -d ;;
 down) load; compose down; rm -f "$sess" ;;
 build-workers) [ $# -eq 1 ] || usage; load; build_workers "$1" ;;
 page) load; echo "http://127.0.0.1:$AP_PAGE_PORT" ;;
-test) load; compose run --rm test "$@" ;;
+test) load
+  case $AP_IMAGE_TESTS in *@sha256:*) ;; *) echo "ap: test: not available yet" >&2; exit 3 ;; esac
+  compose run --rm tests "$@" ;;
 build) load; build_workers "${1:-}" || exit 1; compose run --rm cli build "$@" ;;
 *) load; compose run --rm cli "$cmd" "$@" ;;
 esac

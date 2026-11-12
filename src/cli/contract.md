@@ -4,7 +4,8 @@ Two names, two jobs:
 
 - **The launcher** `src/deploy/ap` runs on the host and only calls `docker compose` (research D6).
   Its own commands are `up --credentials <file> --projects <folder>`, `down`, `build-workers
-  <slice>`, `page` and `test <suite>` (runs the test harness in its own container). It intercepts
+  <slice>`, `page`, `test <suite>` (runs the test harness in its own container) and `registry`
+  (starts the local image registry if it isn't running; `src/deploy/build.sh` calls it). It intercepts
   `build`, `resume` and `replay`: it runs `build-workers` for the slice (for a run, the run's slice)
   first, then passes the command on. Every other command is passed unchanged to the terminal
   client, which never calls the launcher.
@@ -18,13 +19,28 @@ Two names, two jobs:
   `AP_PAGE_PORT`, or the session's port, or 7878, and `page` prints its address. `down` works with
   a missing or broken session file. The session is kept, readable only by the developer,
   in `${XDG_STATE_HOME:-~/.local/state}/agentic-platform/session.env` until `down`. Every command
-  but `up` and `down` needs a started session (exit 3 without one). A command whose parts do not exist yet
+  but `up`, `down` and `registry` needs a started session (exit 3 without one). A command whose parts do not exist yet
   exits 3 with `not available yet: <task>`.
+
+  `up` starts only images it has verified ([ADR 0028](../../docs/decisions/0028-sign-platform-images-locally.md)).
+  It reads the images `src/deploy/build.sh <name>` recorded in
+  `${XDG_STATE_HOME:-~/.local/state}/agentic-platform/images.env` and exits 1, naming the
+  `build.sh <name>` to run, when the `engine`, `page` or `cli` image or the public key
+  `${XDG_CONFIG_HOME:-~/.config}/agentic-platform/signing/cosign.pub` is missing. It verifies the
+  signature of every image it passes to Compose, including a built `agent`, `check` or `tests`
+  image, and exits 1 naming the first image that fails, before anything starts and without changing
+  the session. Later commands start the images the session's `up` verified; after a rebuild, run
+  `up` again. The local image registry listens on `127.0.0.1:${AP_REGISTRY_PORT:-5005}` only.
+  `AP_REGISTRY_NAME` (default `ap-registry`) is for running a second, independent registry (for
+  example in tests); its container, volume and network are named after it (`<name>`,
+  `<name>-data`, `<name>-net`; by default `ap-registry`, `ap-registry-data`, `ap-signing`), and a
+  name that is not `[a-z0-9][a-z0-9_.-]*` is a usage error (exit 3).
 - **The terminal client** runs in its own container and is a client of the engine API
   ([openapi.yaml](../engine/api/preview/2026-11-12-preview/openapi.yaml)) with the client token. It adds no behaviour
   of its own.
 
-Exit codes: `0` success, `1` a check or approval failed (for `up` and `down`: Compose failed), `2` the run waits for the developer or was
+Exit codes: `0` success, `1` a check or approval failed (for `up`: an image is missing or failed
+verification, or Compose failed; for `down` and `registry`: Docker failed), `2` the run waits for the developer or was
 handed over, `3` usage error, `4` refused by the engine (the problem's `code` is printed), `5` the
 run expired, `6` the run or operation was cancelled.
 

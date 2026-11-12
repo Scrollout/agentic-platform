@@ -18,7 +18,9 @@ REPO = Path(__file__).resolve().parent.parent.parent
 COMPOSE = REPO / "src/deploy/compose.yaml"
 FIXTURES = Path(__file__).resolve().parent / "fixtures/compose"
 VARS = ["AP_CREDENTIALS_FILE", "AP_PROJECTS_DIR", "AP_PAGE_PORT",
-        "AP_CLIENT_TOKEN", "AP_PAGE_TOKEN", "AP_WORKER_TOKEN", "AP_GATEWAY_IMAGE", "AP_HOST_USER"]
+        "AP_CLIENT_TOKEN", "AP_PAGE_TOKEN", "AP_WORKER_TOKEN", "AP_GATEWAY_IMAGE", "AP_HOST_USER",
+        "AP_IMAGE_ENGINE", "AP_IMAGE_PAGE", "AP_IMAGE_CLI", "AP_IMAGE_AGENT", "AP_IMAGE_CHECK",
+        "AP_IMAGE_TESTS"]
 MASQ = "com.docker.network.bridge.enable_ip_masquerade"
 
 
@@ -37,10 +39,19 @@ RULES = ["name", "read_only", "cap_drop", "no_new_privileges", "privileged", "no
          "engine_socket", "var_run_bind", "network_egress", "gateway_networks", "runtime",
          "masquerade_page_only", "limit_cpu", "limit_memory", "limit_pids", "credentials_gateway",
          "credentials_only_gateway", "key_in_env", "page_port_loopback", "other_ports",
-         "token_engine", "token_page", "token_cli", "token_worker", "token_gateway"]
+         "token_engine", "token_page", "token_cli", "token_worker", "token_gateway", "image_digest"]
 SOCKETS = ("docker.sock", "containerd.sock", "podman.sock")
-ROLE_BY_IMAGE = {"ap-engine:dev": "engine", "ap-page:dev": "page", "ap-cli:dev": "cli",
-                 "ap-agent:dev": "worker", "ap-check:dev": "worker", "ap-tests:dev": "client"}
+# Services are identified by the role of the variable their image comes from (ADR 0028: the image
+# is a signed digest reference the launcher passes in), not by an image name.
+IMAGE_VARS = {"AP_IMAGE_ENGINE": ("engine", "engine"), "AP_IMAGE_PAGE": ("page", "page"),
+              "AP_IMAGE_CLI": ("cli", "cli"), "AP_IMAGE_AGENT": ("agent", "worker"),
+              "AP_IMAGE_CHECK": ("check", "worker"), "AP_IMAGE_TESTS": ("tests", "client")}
+REGISTRY = "127.0.0.1:5005"
+# One distinct digest reference per variable, so a resolved image maps back to its variable.
+IMAGE_ENV = {v: "%s/ap-%s@sha256:%064x" % (REGISTRY, n, i + 1)
+             for i, (v, (n, _)) in enumerate(IMAGE_VARS.items())}
+BY_REF = {ref: IMAGE_VARS[v] for v, ref in IMAGE_ENV.items()}
+SANDBOXED = ("agent", "check")
 
 # fixture file -> the one rule it violates
 PLANTED = {
@@ -60,19 +71,31 @@ PLANTED = {
     "bad-page-port-loopback-unset": "page_port_loopback", "bad-other-ports": "other_ports",
     "bad-token-engine": "token_engine", "bad-token-page": "token_page",
     "bad-token-cli": "token_cli", "bad-token-worker": "token_worker",
-    "bad-token-gateway": "token_gateway",
+    "bad-token-gateway": "token_gateway", "bad-image-tag-only": "image_digest",
 }
 
 
 def image_ref(svc):
-    return (svc.get("image") or "").split("@")[0]
+    return svc.get("image") or ""
+
+
+def image_kind(svc):
+    """(image name, role) of a service: by the variable its image came from, else by repository name
+    (a tag-only image is still judged by every other rule, and fails image_digest)."""
+    ref = image_ref(svc)
+    if ref in BY_REF:
+        return BY_REF[ref]
+    repo = ref.split("@")[0].rsplit("/", 1)[-1].split(":")[0]
+    if repo == "nginx":
+        return ("nginx", "gateway")
+    for n, role in IMAGE_VARS.values():
+        if repo == "ap-" + n:
+            return (n, role)
+    return ("", "other")
 
 
 def role_of(svc):
-    ref = image_ref(svc)
-    if ref.rsplit("/", 1)[-1].split(":")[0] == "nginx":
-        return "gateway"
-    return ROLE_BY_IMAGE.get(ref, "other")
+    return image_kind(svc)[1]
 
 
 def _num(v):
@@ -175,7 +198,7 @@ def check_config(cfg, env):
             if "internal" not in kinds or "egress" not in kinds or svc.get("network_mode"):
                 fail("gateway_networks", name)
         # sandbox
-        if image_ref(svc) in ("ap-agent:dev", "ap-check:dev"):
+        if image_kind(svc)[0] in SANDBOXED:
             if svc.get("runtime") != "runsc":
                 fail("runtime", name)
             if not _limit(svc, "cpus", "cpus"):
@@ -184,6 +207,9 @@ def check_config(cfg, env):
                 fail("limit_memory", name)
             if not _limit(svc, "pids_limit", "pids"):
                 fail("limit_pids", name)
+        # images: ours are digest references; the gateway's upstream pin is its own variable
+        if role != "gateway" and not re.search(r"@sha256:[0-9a-f]{64}$", image_ref(svc)):
+            fail("image_digest", name)
         # credentials
         reaches = any(cred == s or cred.startswith(s.rstrip("/") + "/") for s in _sources(cfg, svc))
         if role == "gateway" and not reaches:
@@ -238,7 +264,7 @@ class ComposeTest(unittest.TestCase):
         projects.mkdir()
         cls.env = {"AP_CREDENTIALS_FILE": str(key), "AP_PROJECTS_DIR": str(projects),
                    "AP_PAGE_PORT": "18081", **TOKENS,
-                   "AP_GATEWAY_IMAGE": gateway_pin(), "AP_HOST_USER": "1234:1234"}
+                   "AP_GATEWAY_IMAGE": gateway_pin(), "AP_HOST_USER": "1234:1234", **IMAGE_ENV}
 
     def checker_input(self, file):
         r = compose_config(file, self.env)
@@ -294,6 +320,17 @@ class ComposeTest(unittest.TestCase):
         self.assertLessEqual(roles.count("client"), 1)
         self.assertEqual(roles.count("other"), 0, "service with an unknown image: %s" % {
             n: s.get("image") for n, s in cfg["services"].items() if role_of(s) == "other"})
+
+    def test_real_file_images_are_exactly_the_variables_by_role(self):
+        """Each non-gateway service's image is one AP_IMAGE_* variable's value, each variable is used,
+        and nothing is a tag (the launcher verified these digests; ADR 0028)."""
+        cfg = self.checker_input(COMPOSE) if COMPOSE.is_file() else self.fail("no compose.yaml")
+        refs = [s.get("image") for s in cfg["services"].values() if role_of(s) != "gateway"]
+        self.assertEqual(sorted(set(refs)), sorted(IMAGE_ENV.values()), refs)
+        for ref in refs:
+            self.assertRegex(ref, r"@sha256:[0-9a-f]{64}$")
+        gw = [s for s in cfg["services"].values() if role_of(s) == "gateway"]
+        self.assertEqual([s["image"] for s in gw], [gateway_pin()])
 
     def test_real_file_fails_when_any_variable_is_unset(self):
         if not COMPOSE.is_file():

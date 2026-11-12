@@ -5,7 +5,7 @@ description: The platform on one developer's machine, started by the ap launcher
 tags: [operations, deployment, local]
 status: draft
 resource: /src/deploy/compose.yaml
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-12T05:10:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-12T10:00:00Z }
 ---
 
 # Purpose
@@ -15,7 +15,8 @@ installed on the host beyond a container runtime with Compose and the gVisor run
 
 # Topology
 
-Seven services, declared once in `src/deploy/compose.yaml`:
+Seven services, declared once in `src/deploy/compose.yaml`, plus the local image registry
+`ap-registry`, which `build.sh` and `ap up` start when it isn't running:
 
 - The model gateway, the only container with egress and the only one that can read the provider key.
 - The engine, which holds the session's three tokens.
@@ -39,8 +40,14 @@ session tokens, or keeps those of a started session, so running it twice changes
 `ap down` stops everything and keeps run records and projects. The launcher's commands are in the
 terminal contract, `src/cli/contract.md`. The variables and services are in `src/deploy/README.md`.
 
-Images are built locally with `src/deploy/build.sh` and never pulled. They are not signed yet, so
-the launcher does not verify signatures yet.
+Images are built locally with `src/deploy/build.sh <name>`, which pushes each one with an SBOM and
+build provenance to a local registry on `127.0.0.1`, signs its digest with a key pair kept in
+`~/.config/agentic-platform/signing/`, and records the digest. `ap up` verifies every image's
+signature before it starts anything and starts images by digest, never pulling them
+([ADR 0028](/decisions/0028-sign-platform-images-locally.md); [cosign](/components/cosign.md);
+[Distribution registry](/components/distribution-registry.md)). The signature proves that `up`
+starts exactly what `build.sh` built, not who built it, because the key is on the same machine.
+Upstream images (nginx, Docker Agent, Go) are pinned by digest only; their publishers sign none.
 
 # Observability
 

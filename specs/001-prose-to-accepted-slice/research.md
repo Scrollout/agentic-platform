@@ -213,7 +213,10 @@ fresh review round 1.
   replaced by a replay server returning recorded responses), so CI needs no key. Live evals run the
   example slice and the planted failures, plus prompt-injection cases in the description and in
   earlier artifacts, 3 times each (pass^3), with a test-scoped API key that has a provider spending
-  limit.
+  limit. That key (owner, 2026-11-12) belongs to its own Claude Console workspace with a $50 monthly
+  spend limit, lives outside the repository in a file holding only the key, and is read only by the
+  gateway. Recording the model's responses and every live eval of the MVP use Claude Haiku
+  (`claude-haiku-5-5`, D9), never a larger model.
 - **Rationale**: Principle XIX; the constitution's test rules.
 
 ### D20. End to end, locally
@@ -249,6 +252,9 @@ fresh review round 1.
 | Schemathesis | MIT | 6.2 | |
 | nginx | BSD-2 | 7.9 | |
 | gVisor | Apache-2.0 | 6.2 | |
+| cosign | Apache-2.0 | 8.5 (2026-11-11) | signs and verifies our images (ADR 0028) |
+| CNCF Distribution (`registry`) | Apache-2.0 | 7.6 (2026-11-11) | local registry for signed images (ADR 0028) |
+| buildkit-syft-scanner | Apache-2.0 | not published | BuildKit's SBOM generator, a wrapper of syft (8.5, 2026-11-09); run locally (T063) |
 
 Custom code is limited to the engine, its checks, the slice model, the terminal client and the run
 page, none of which an existing project provides.

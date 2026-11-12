@@ -27,11 +27,40 @@ REFERENCE = HERE / "fixtures/launcher/reference-ap"
 TMP_BASE = os.environ.get("XDG_RUNTIME_DIR") or None
 SECRET = "fake-model-key-LAUNCHERSECRET-9f8e7d6c5b4a"  # the credentials file holds only the key
 TOKEN_VARS = ("AP_CLIENT_TOKEN", "AP_PAGE_TOKEN", "AP_WORKER_TOKEN")
+REAL_LOCK = REPO / "src/deploy/images.lock"
+REFERENCE_LOCK = HERE / "fixtures/launcher/reference-images.lock"
+IMAGE_NAMES = ("engine", "page", "cli", "agent", "check", "tests")
+PRIVATE_KEY = "FAKE-PRIVATE-KEY-MATERIAL-NOT-A-REAL-KEY"  # in the fake cosign.key; must never reach docker
+
+
+def lock_pin(lock, name):
+    for line in Path(lock).read_text().splitlines():
+        f = line.split()
+        if len(f) >= 2 and f[0] == name:
+            return f[1]
+    raise AssertionError("no %s pin in %s" % (name, lock))
+
+
+def image_value(name):
+    """A distinct digest reference per image, in the form build.sh records (ADR 0028)."""
+    digest = ("%02x" % (IMAGE_NAMES.index(name) + 1)) * 32
+    return "127.0.0.1:5005/ap-%s@sha256:%s" % (name, digest)
 
 
 class LauncherContract:
     """Behaviour every launcher must show. Subclasses set AP (a path) and are TestCases."""
     AP = None
+    LOCK = REAL_LOCK  # the pins the launcher under test reads; the reference reads its own fixture
+    REG_ENV = {}  # {"AP_REGISTRY_NAME": ...} for a run with a named registry; empty means the defaults
+
+    @property
+    def reg(self):
+        """The registry's container name, and its name on the internal network, as ap uses them."""
+        return self.REG_ENV.get("AP_REGISTRY_NAME", "ap-registry")
+
+    @property
+    def net(self):
+        return self.REG_ENV["AP_REGISTRY_NAME"] + "-net" if self.REG_ENV else "ap-signing"
 
     def setUp(self):
         self.base = Path(tempfile.mkdtemp(prefix="test-launcher-", dir=TMP_BASE))
@@ -50,12 +79,43 @@ class LauncherContract:
         self.proj = self.base / "projects"
         self.proj.mkdir()
         self.session = self.state / "agentic-platform" / "session.env"
+        # signing material and the images build.sh recorded (ADR 0028)
+        self.config = self.base / "config"
+        self.signing = self.config / "agentic-platform" / "signing"
+        self.signing.mkdir(parents=True)
+        (self.signing / "cosign.pub").write_text("-----BEGIN PUBLIC KEY-----\nfake\n-----END PUBLIC KEY-----\n")
+        (self.signing / "cosign.key").write_text(PRIVATE_KEY + "\n")
+        (self.signing / "cosign.key").chmod(0o600)
+        self.images_env = self.state / "agentic-platform" / "images.env"
+        self.write_images()
 
+    def write_images(self, names=IMAGE_NAMES):
+        self.images_env.parent.mkdir(parents=True, exist_ok=True)
+        self.images_env.write_text("".join("AP_IMAGE_%s=%s\n" % (n.upper(), image_value(n)) for n in names))
+        self.images_env.chmod(0o600)
+
+    def recorded(self):
+        """AP_IMAGE_* of images.env as a dict."""
+        out = {}
+        for line in self.images_env.read_text().splitlines():
+            k, _, v = line.partition("=")
+            if k.startswith("AP_IMAGE_"):
+                out[k] = v.strip("'\"")
+        return out
+
+    def verify_calls(self):
+        return [(i, c) for i, c in enumerate(self.calls())
+                if c["argv"][:1] == ["run"] and "verify" in c["argv"]]
+
+    def up_index(self):
+        return [i for i, c in enumerate(self.calls()) if c["argv"][:1] == ["compose"] and "up" in c["argv"]]
     # helpers
     def ap(self, *args, **env):
         e = {k: v for k, v in os.environ.items() if not k.startswith(("AP_", "STUB_"))}
-        e.update(REFERENCE_IMAGES_LOCK=str(REPO / "src/deploy/images.lock"), HOME=str(self.home), XDG_STATE_HOME=str(self.state), STUB_LOG=str(self.log),
+        e.update(REFERENCE_IMAGES_LOCK=str(self.LOCK), HOME=str(self.home), XDG_STATE_HOME=str(self.state),
+                 XDG_CONFIG_HOME=str(self.config), STUB_LOG=str(self.log),
                  PATH=str(self.bin) + os.pathsep + os.environ.get("PATH", ""))
+        e.update(self.REG_ENV)
         e.update({k: str(v) for k, v in env.items()})
         return subprocess.run(["sh", str(self.AP), *args], env=e, capture_output=True, text=True,
                               timeout=60, stdin=subprocess.DEVNULL)
@@ -141,8 +201,7 @@ class LauncherContract:
         self.assertEqual(os.path.realpath(env["AP_PROJECTS_DIR"]), os.path.realpath(self.proj))
         self.assertRegex(env["AP_PAGE_PORT"], r"^[0-9]+$")
         self.assertRegex(env.get("AP_HOST_USER", ""), r"^[1-9][0-9]*:[0-9]+$")
-        pin = [ln.split()[1] for ln in (REPO / "src/deploy/images.lock").read_text().splitlines()
-               if ln.split()[:1] == ["nginx"]][0]
+        pin = lock_pin(self.LOCK, "nginx")
         self.assertEqual(env.get("AP_GATEWAY_IMAGE"), pin)
         toks = [env.get(v, "") for v in TOKEN_VARS]
         for t in toks:
@@ -274,6 +333,195 @@ class LauncherContract:
         self.assertTrue(any(c["argv"][:1] == ["compose"] and "run" in c["argv"] and "planted" in c["argv"]
                             for c in self.calls()))
 
+    # image signatures (ADR 0028, research D24): verified before anything starts; fail closed
+    def test_up_verifies_every_image_it_passes_to_compose_before_compose_up(self):
+        r = self.up()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        (up_i,) = self.up_index()
+        passed = {k: v for k, v in self.calls()[up_i]["env"].items() if k.startswith("AP_IMAGE_")}
+        self.assertTrue({"AP_IMAGE_ENGINE", "AP_IMAGE_PAGE"} <= set(passed), passed)
+        vcalls = self.verify_calls()
+        self.assertEqual(len(vcalls), len(passed), "one verification per image: %s" % [c["argv"] for _, c in vcalls])
+        for k, v in passed.items():
+            want = "%s:5000/" % self.reg + v.split("/", 1)[1]  # same repository and digest, by the registry's internal name
+            self.assertEqual(sum(want in c["argv"] for _, c in vcalls), 1, "%s not verified once as %s" % (k, want))
+        for i, c in vcalls:
+            self.assertLess(i, up_i, "verification after compose up: %s" % c["argv"])
+
+    def test_verify_call_shape(self):
+        self.assertEqual(self.up().returncode, 0)
+        vcalls = self.verify_calls()
+        self.assertTrue(vcalls)
+        pin = lock_pin(self.LOCK, "cosign")
+        for _, c in vcalls:
+            a = c["argv"]
+            self.assertIn(pin, a, "cosign must run from its pin")
+            self.assertLess(a.index(pin), a.index("verify"))
+            self.assertIn("--rm", a)
+            for o in a[:a.index(pin)]:
+                self.assertNotIn(o, ("--privileged", "--pid=host", "--ipc=host"))
+            nets = [a[i + 1] for i, x in enumerate(a) if x in ("--network", "--net") and i + 1 < len(a)] + \
+                   [x.split("=", 1)[1] for x in a if x.startswith(("--network=", "--net="))]
+            self.assertEqual(nets, [self.net], "verify must run on the internal %s network only" % self.net)
+            self.assertFalse(any(x == "host" or "host" in x.split(":") for x in nets))
+            self.assertNotIn("host", [x for x in a if x.startswith("--network") or x == "host"])
+            k = a.index("--key")
+            self.assertTrue(a[k + 1].endswith("cosign.pub"), "--key must be the public key: %s" % a[k + 1])
+            self.assertIn("--insecure-ignore-tlog", a)
+            self.assertIn("--allow-http-registry", a)
+
+    def test_private_key_never_reaches_docker(self):
+        self.up()
+        self.ap("describe")
+        self.ap("down")
+        key = self.signing / "cosign.key"
+        for c in self.calls():
+            for x in c["argv"]:
+                self.assertNotIn("cosign.key", x)
+                self.assertNotIn(PRIVATE_KEY, x)
+            for k, v in c["env"].items():
+                self.assertNotIn(PRIVATE_KEY, v)
+        for _, c in self.verify_calls():
+            a = c["argv"]
+            mounts = []
+            for i, x in enumerate(a):
+                if x in ("-v", "--volume") and i + 1 < len(a):
+                    mounts.append(a[i + 1].split(":")[0])
+                elif x.startswith("--volume="):
+                    mounts.append(x.split("=", 1)[1].split(":")[0])
+                elif x in ("--mount",) and i + 1 < len(a) or x.startswith("--mount="):
+                    spec = a[i + 1] if x == "--mount" else x.split("=", 1)[1]
+                    for kv in spec.split(","):
+                        if kv.split("=")[0] in ("src", "source"):
+                            mounts.append(kv.split("=", 1)[1])
+            for m in mounts:
+                m = os.path.realpath(m)
+                self.assertFalse(str(key) == m or str(key).startswith(m.rstrip("/") + "/"),
+                                 "mount %s exposes the private key" % m)
+
+    def test_a_failing_verification_stops_up_and_names_the_image(self):
+        for n in IMAGE_NAMES:
+            with self.subTest(image=n):
+                self.setUp()
+                r = self.up(STUB_VERIFY_FAIL="/ap-%s@" % n)
+                self.assertEqual(r.returncode, 1, r.stderr)
+                self.assertIn("ap-%s" % n, r.stderr)
+                self.assertEqual(self.up_calls(), [], "compose up ran after a failed verification")
+                self.assertEqual([c for c in self.calls() if c["argv"][:1] == ["compose"]], [],
+                                 "nothing may be started or run through Compose")
+
+    def test_every_verification_failing_stops_up(self):
+        r = self.up(STUB_VERIFY_FAIL="*")
+        self.assertEqual(r.returncode, 1, r.stderr)
+        self.assertEqual(self.up_calls(), [])
+
+    def test_up_without_recorded_images_stops_and_names_build_sh(self):
+        for label, mutate in (("no images.env", lambda: self.images_env.unlink()),
+                              ("images.env without engine", lambda: self.write_images([n for n in IMAGE_NAMES if n != "engine"])),
+                              ("empty images.env", lambda: self.images_env.write_text(""))):
+            with self.subTest(label):
+                self.setUp()
+                mutate()
+                r = self.up()
+                self.assertEqual(r.returncode, 1, r.stderr)
+                self.assertIn("build.sh engine", r.stderr)
+                self.assertEqual(self.up_calls(), [])
+
+    def test_up_without_the_public_key_stops(self):
+        """Inferred from fail-closed (XIV): no key to verify with is a failure, not a skip."""
+        (self.signing / "cosign.pub").unlink()
+        r = self.up()
+        self.assertNotEqual(r.returncode, 0)
+        self.assertEqual(self.up_calls(), [])
+
+    def test_compose_gets_the_recorded_images_through_the_environment_only(self):
+        evil = "127.0.0.1:5005/ap-engine@sha256:" + "ee" * 32
+        r = self.up(AP_IMAGE_ENGINE=evil, AP_IMAGE_PAGE="ap-page:dev")  # a caller's values must not win
+        self.assertEqual(r.returncode, 0, r.stderr)
+        (c,) = self.up_calls()
+        rec = self.recorded()
+        self.assertEqual(len(rec), len(IMAGE_NAMES))
+        for k, v in rec.items():
+            self.assertEqual(c["env"].get(k), v, k)
+        for c in self.calls():
+            if c["argv"][:1] == ["compose"]:
+                for x in c["argv"]:
+                    self.assertNotIn("@sha256:", x, "an image reached Compose on a command line")
+                    self.assertNotIn("AP_IMAGE", x)
+
+    def test_client_and_test_commands_run_the_recorded_images(self):
+        self.up()
+        self.clear()
+        self.ap("describe")
+        self.ap("test", "planted")
+        env_by_service = {}
+        for c in self.calls():
+            if c["argv"][:1] == ["compose"] and "run" in c["argv"]:
+                env_by_service[tuple(c["argv"])] = c["env"]
+        self.assertEqual(len(env_by_service), 2)
+        rec = self.recorded()
+        for env in env_by_service.values():
+            self.assertEqual(env.get("AP_IMAGE_CLI"), rec["AP_IMAGE_CLI"])
+            self.assertEqual(env.get("AP_IMAGE_TESTS"), rec["AP_IMAGE_TESTS"])
+
+    # images not built (agent, check, tests) and images.env that is not what build.sh writes
+    def test_images_not_built_are_placeholders_and_not_verified(self):
+        self.write_images(["engine", "page", "cli"])
+        r = self.up()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        (c,) = self.up_calls()
+        rec = self.recorded()
+        for n in ("engine", "page", "cli"):
+            self.assertEqual(c["env"]["AP_IMAGE_" + n.upper()], rec["AP_IMAGE_" + n.upper()])
+        for n in ("agent", "check", "tests"):
+            self.assertEqual(c["env"].get("AP_IMAGE_" + n.upper()), "ap-%s:not-built" % n)
+        vcalls = self.verify_calls()
+        self.assertEqual(len(vcalls), 3, [x["argv"] for _, x in vcalls])
+        for _, x in vcalls:
+            self.assertFalse(any("not-built" in a for a in x["argv"]))
+
+    def test_test_command_with_a_placeholder_tests_image_is_not_available(self):
+        self.write_images(["engine", "page", "cli"])
+        self.assertEqual(self.up().returncode, 0)
+        self.clear()
+        r = self.ap("test", "planted")
+        self.assertEqual(r.returncode, 3, r.stderr)
+        self.assertEqual([x for x in self.calls() if x["argv"][:1] == ["compose"] and "run" in x["argv"]], [])
+
+    def test_each_of_engine_page_cli_is_required(self):
+        for n in ("engine", "page", "cli"):
+            with self.subTest(missing=n):
+                self.setUp()
+                self.write_images([m for m in IMAGE_NAMES if m != n])
+                r = self.up()
+                self.assertEqual(r.returncode, 1, r.stderr)
+                self.assertIn("build.sh %s" % n, r.stderr)
+                self.assertEqual(self.up_calls(), [])
+
+    def test_images_env_that_is_not_what_build_sh_writes_stops_up(self):
+        good = "".join("AP_IMAGE_%s=%s\n" % (n.upper(), image_value(n)) for n in IMAGE_NAMES)
+        cases = {"empty": "", "garbage": "this is not an env file\n\x00\xff\n",
+                 "a tag, not a digest": good.replace(image_value("engine"), "127.0.0.1:5005/ap-engine:dev"),
+                 "another image's digest": good.replace(image_value("page"), image_value("cli")),
+                 "a foreign registry": good.replace("127.0.0.1:5005", "example.invalid"),
+                 "a truncated digest": good.replace(image_value("cli"), image_value("cli")[:-5]),
+                 "shell code in a line": good + "AP_IMAGE_X=$(touch /tmp/pwned)\n"}
+        for label, text in cases.items():
+            with self.subTest(label):
+                self.setUp()
+                self.images_env.write_bytes(text.encode("latin-1"))
+                r = self.up()
+                self.assertEqual(r.returncode, 1, r.stderr)
+                self.assertEqual(self.up_calls(), [])
+                if label != "another image's digest":  # images before the bad line may be verified first
+                    self.assertEqual(self.verify_calls(), [], "verified something from a file that is not build.sh's")
+
+    def test_second_up_verifies_again(self):
+        self.up()
+        self.up()
+        self.assertEqual(len(self.up_calls()), 2)
+        self.assertEqual(len(self.verify_calls()), 2 * len(IMAGE_NAMES))
+
 
 class RealLauncherTest(LauncherContract, unittest.TestCase):
     AP = REAL_AP
@@ -286,16 +534,46 @@ class RealLauncherTest(LauncherContract, unittest.TestCase):
 
 class ReferenceLauncherTest(LauncherContract, unittest.TestCase):
     AP = REFERENCE
+    LOCK = REFERENCE_LOCK
 
 
-def run_contract(ap_path):
-    """Run LauncherContract against ap_path; return the set of failing test method names."""
-    cls = type("Mutant", (LauncherContract, unittest.TestCase), {"AP": ap_path})
-    result = unittest.TextTestRunner(stream=io.StringIO()).run(
-        unittest.defaultTestLoader.loadTestsFromTestCase(cls))
+NAMED = {"AP_REGISTRY_NAME": "ap-test-0123abcd"}  # a registry of its own: derived container, volume and network
+
+
+class NamedRegistryChecks:
+    """Only for the classes that run with AP_REGISTRY_NAME set (no skips elsewhere)."""
+    REG_ENV = NAMED
+
+    def test_a_named_registry_leaves_the_default_objects_alone(self):
+        self.up()
+        self.ap("registry")
+        self.ap("down")
+        for c in self.calls():
+            for x in c["argv"]:
+                for default in ("ap-registry", "ap-registry-data", "ap-signing"):
+                    self.assertNotIn(default, x, "default-named object used with AP_REGISTRY_NAME set: %s" % c["argv"])
+
+
+class RealLauncherNamedRegistryTest(NamedRegistryChecks, RealLauncherTest):
+    pass
+
+
+class ReferenceLauncherNamedRegistryTest(NamedRegistryChecks, ReferenceLauncherTest):
+    pass
+
+
+def run_contract(ap_path, only=None, reg_env=None):
+    """Run LauncherContract (or only the named tests) against ap_path; return the failing test names."""
+    bases = (NamedRegistryChecks,) if reg_env else ()
+    cls = type("Mutant", (*bases, LauncherContract, unittest.TestCase), {"AP": ap_path, "LOCK": REFERENCE_LOCK, "REG_ENV": reg_env or {}})
+    loader = unittest.defaultTestLoader
+    suite = loader.loadTestsFromTestCase(cls) if only is None else unittest.TestSuite(map(cls, sorted(only)))
+    result = unittest.TextTestRunner(stream=io.StringIO()).run(suite)
     return {re.search(r"\.(test_\w+)(?: |$)", t.id()).group(1) for t, _ in result.failures + result.errors}
 
 
+VERIFY_TESTS = {"test_up_verifies_every_image_it_passes_to_compose_before_compose_up",
+                "test_verify_call_shape"}
 # (name, old text, new text, test methods that must fail); old text must occur in reference-ap once
 MUTANTS = [
     ("no_mode_check", '  [ "$m" = 600 ] || [ "$m" = 400 ] || { echo "ap: credentials file must be mode 600" >&2; exit 3; }\n', "",
@@ -340,6 +618,46 @@ MUTANTS = [
     ("docker_socket_mounted", "compose run --rm cli \"$cmd\" \"$@\" ;;",
      "compose run --rm -v /var/run/docker.sock:/var/run/docker.sock cli \"$cmd\" \"$@\" ;;",
      {"test_client_commands_are_passed_with_arguments_intact"}),
+    ("verify_skipped", 'docker run --rm --network "$net"', 'true --rm --network "$net"',
+     VERIFY_TESTS),
+    ("verify_after_up", "  load\n  compose up -d ;;", "  load\n  compose up -d\n  for n in $names; do docker run --rm --network \"$net\" -v \"$cfg/cosign.pub:/cosign.pub:ro\" \"$cosign\" verify --key /cosign.pub --insecure-ignore-tlog --allow-http-registry \"$reg:5000/$(sed -n \"s/^AP_IMAGE_$(echo $n | tr a-z A-Z)=//p\" \"$imgs\" | sed 's|[^/]*/||')\" >/dev/null; done ;;",
+     {"test_up_verifies_every_image_it_passes_to_compose_before_compose_up"}),
+    ("verify_failure_ignored", '>/dev/null ||\n      { echo "ap: signature check failed', '>/dev/null || true ||\n      { echo "ap: signature check failed',
+     {"test_a_failing_verification_stops_up_and_names_the_image", "test_every_verification_failing_stops_up"}),
+    ("verify_failure_not_named", 'signature check failed for ap-$n ($v)', 'signature check failed',
+     {"test_a_failing_verification_stops_up_and_names_the_image"}),
+    ("private_key_mounted", '-v "$cfg/cosign.pub:/cosign.pub:ro"', '-v "$cfg/cosign.key:/cosign.key:ro" -v "$cfg/cosign.pub:/cosign.pub:ro"',
+     {"test_private_key_never_reaches_docker"}),
+    ("signing_dir_mounted", '-v "$cfg/cosign.pub:/cosign.pub:ro"', '-v "$cfg:/cosign:ro"',
+     {"test_private_key_never_reaches_docker"}),
+    ("verify_on_host_network", '--network "$net"', '--network host',
+     {"test_verify_call_shape"}),
+    ("verify_without_network_flag", '--network "$net" ', '',
+     {"test_verify_call_shape"}),
+    ("verify_needs_tlog", ' --insecure-ignore-tlog', '',
+     {"test_verify_call_shape"}),
+    ("verify_with_wrong_pin", '"$cosign" verify', 'alpine verify',
+     {"test_verify_call_shape"}),
+    ("missing_images_not_reported", 'build.sh $n" >&2; exit 1 ;; esac', 'build.sh $n" >&2; exit 0 ;; esac',
+     {"test_up_without_recorded_images_stops_and_names_build_sh"}),
+    ("missing_images_not_named", 'run: src/deploy/build.sh $n', 'run the build',
+     {"test_up_without_recorded_images_stops_and_names_build_sh"}),
+    ("images_not_in_environment", '  [ ! -f "$imgs" ] || . "$imgs"\n', '',
+     {"test_client_and_test_commands_run_the_recorded_images",
+      "test_compose_gets_the_recorded_images_through_the_environment_only"}),
+    ("placeholders_verified_too", '      continue\n', '      v=ap-$n:not-built\n',
+     {"test_images_not_built_are_placeholders_and_not_verified"}),
+    ("missing_needed_image_tolerated", 'case " $needed " in *" $n "*) echo "ap: no image for $n; run: src/deploy/build.sh $n" >&2; exit 1 ;; esac',
+     'case " $needed " in *" nothing "*) exit 1 ;; esac',
+     {"test_each_of_engine_page_cli_is_required", "test_up_without_recorded_images_stops_and_names_build_sh"}),
+    ("garbage_images_env_accepted", "grep -Evx", "grep -Ex",
+     {"test_images_env_that_is_not_what_build_sh_writes_stops_up"}),
+    ("test_runs_with_placeholder", '*@sha256:*) ;; *) echo "ap: test: not available yet" >&2; exit 3 ;; esac', '*) ;; esac',
+     {"test_test_command_with_a_placeholder_tests_image_is_not_available"}),
+    ("no_placeholders", 'eval "[ -n \\"\\${AP_IMAGE_$N:-}\\" ] || AP_IMAGE_$N=ap-$n:not-built"', ':',
+     {"test_images_not_built_are_placeholders_and_not_verified"}),
+    ("verifies_only_engine", 'for n in $names; do\n    N=$(echo "$n" | tr a-z A-Z)\n    v=', 'for n in engine; do\n    N=$(echo "$n" | tr a-z A-Z)\n    v=',
+     {"test_up_verifies_every_image_it_passes_to_compose_before_compose_up"}),
 ]
 # A variant whose build-workers works: every assertion must still hold (the other branch of the build test).
 WORKING_BUILD_WORKERS = (
@@ -347,8 +665,11 @@ WORKING_BUILD_WORKERS = (
     'build_workers() { compose build agent check; }')
 
 
-@unittest.skipUnless(shutil.which("python3"), "python3 needed by the stub")
 class LauncherChecksCanFailTest(unittest.TestCase):
+    def setUp(self):
+        # the stub is a python3 script: without python3 this must fail, not skip
+        self.assertTrue(shutil.which("python3"), "python3 is required by the docker stub")
+
     def mutate(self, old, new):
         text = REFERENCE.read_text()
         self.assertEqual(text.count(old), 1, "mutation target not found once: %r" % old)
@@ -362,8 +683,17 @@ class LauncherChecksCanFailTest(unittest.TestCase):
     def test_each_mutant_fails_its_tests(self):
         for name, old, new, expected in MUTANTS:
             with self.subTest(mutant=name):
-                failed = run_contract(self.mutate(old, new))
+                failed = run_contract(self.mutate(old, new), only=expected)
                 self.assertTrue(expected <= failed, "expected %s to fail, failed: %s" % (sorted(expected), sorted(failed)))
+
+    def test_default_registry_names_mutant_is_caught_when_a_name_is_set(self):
+        failed = run_contract(self.mutate("reg=${AP_REGISTRY_NAME:-ap-registry}", "reg=ap-registry"),
+                              only={"test_up_verifies_every_image_it_passes_to_compose_before_compose_up",
+                                    "test_a_named_registry_leaves_the_default_objects_alone"}, reg_env=NAMED)
+        self.assertTrue(failed, "ignoring AP_REGISTRY_NAME went unnoticed")
+        failed = run_contract(self.mutate('net=$AP_REGISTRY_NAME-net', 'net=ap-signing'),
+                              only={"test_verify_call_shape"}, reg_env=NAMED)
+        self.assertEqual(failed, {"test_verify_call_shape"})
 
     def test_working_build_workers_variant_passes_everything(self):
         self.assertEqual(run_contract(self.mutate(*WORKING_BUILD_WORKERS)), set())

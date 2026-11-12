@@ -1,0 +1,3 @@
+# Pins for the reference launcher only (fake digests); the real launcher reads src/deploy/images.lock.
+nginx    nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de
+cosign   example.invalid/cosign/cosign:v0.0.0-test@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
