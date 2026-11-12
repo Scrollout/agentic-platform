@@ -102,6 +102,17 @@ func (s *Service) Answer(ctx context.Context, id string, answers []Answer) (Slic
 	return clone(r.slice), nil
 }
 
+// CheckAnswers refuses exactly as Answer would before it calls the analyst, and changes nothing.
+func (s *Service) CheckAnswers(id string, answers []Answer) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, err := s.find(id)
+	if err != nil {
+		return err
+	}
+	return answerable(r.slice.Questions, answers)
+}
+
 // answerable checks answers against the slice's questions: the shape of each answer first
 // (InvalidRequest), then that its question is open (QuestionNotOpen), then that a chosen option
 // exists (InvalidRequest).

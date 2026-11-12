@@ -208,6 +208,9 @@ type Slice struct {
 	Approvals                                  []Approval // only those that hold
 	Checks                                     []Check
 	History                                    []HistoryEntry
+	// ArtifactCount is the number of distinct artifacts stored for the slice's runs. The service
+	// does not keep runs; whoever serves the slice fills it from the run store.
+	ArtifactCount int `json:"artifact_count"`
 }
 
 // Result is what Create returns. Reused is true when Slice is an approved slice of the same

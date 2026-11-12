@@ -233,6 +233,19 @@ func (s *Store) Artifact(hashID string) ([]byte, error) {
 	return b, err
 }
 
+// ArtifactCount returns the number of distinct artifacts stored for the slice's runs: the same
+// bytes stored twice count once. An unknown or erased slice has none; a slice ID that breaks the
+// contract's rule is an error.
+func (s *Store) ArtifactCount(sliceID string) (int, error) {
+	sl, err := s.ids.ParseID(sliceID)
+	if err != nil {
+		return 0, fmt.Errorf("store: %w", err)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.owned[sl]), nil
+}
+
 // EraseSlice removes every event of the slice's runs and every artifact stored for the slice,
 // from disk. An artifact another slice also stored stays readable for it. Erasing an unknown
 // slice does nothing; an interrupted erasure is completed by calling it again.

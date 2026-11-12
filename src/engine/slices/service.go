@@ -27,9 +27,11 @@ type Service struct {
 	attempts int
 	now      func() time.Time
 
-	mu     sync.Mutex
-	last   int // the number of the last slice ID given out; IDs are never reused
-	slices map[string]*record
+	mu   sync.Mutex
+	last int // the number of the last slice ID given out; IDs are never reused
+	// reserved holds the IDs Reserve gave out that no slice holds yet; CreateAs takes one.
+	reserved map[string]bool
+	slices   map[string]*record
 }
 
 // record is a stored slice and what the service keeps beside it.
@@ -58,7 +60,7 @@ func New(cfg Config) (*Service, error) {
 		now = time.Now
 	}
 	return &Service{schemas: cfg.Schemas, analyst: cfg.Analyst, diff: cfg.Diff, lint: cfg.Lint, pattern: cfg.Pattern,
-		attempts: attemptsOf(cfg.Pattern), now: now, slices: map[string]*record{}}, nil
+		attempts: attemptsOf(cfg.Pattern), now: now, reserved: map[string]bool{}, slices: map[string]*record{}}, nil
 }
 
 // attemptsOf reads limits.attempts from a pattern.yaml, its one home. A missing pattern, an
@@ -83,16 +85,83 @@ func attemptsOf(pattern []byte) int {
 // Create gives OperationFailed naming the faults, and stores nothing. Other failing checks are
 // stored with the slice, not returned as an error.
 func (s *Service) Create(ctx context.Context, description string) (Result, error) {
+	res, rec, err := s.build(ctx, description)
+	if err != nil || rec == nil {
+		return res, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.last++
+	rec.slice.ID = "S-" + strconv.Itoa(s.last)
+	s.slices[rec.slice.ID] = rec
+	return Result{Slice: clone(rec.slice)}, nil
+}
+
+// Reserve gives out the next slice ID from the sequence Create also draws from, without creating
+// a slice; CreateAs then creates the slice under it. An ID given out is never given out again,
+// whether or not a slice is created under it, and not after the slice is deleted.
+func (s *Service) Reserve() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.last++
+	id := "S-" + strconv.Itoa(s.last)
+	s.reserved[id] = true
+	return id
+}
+
+// CreateAs is Create under an ID Reserve gave out, with Create's refusals. A malformed ID, one
+// Reserve did not give out, or one a slice already holds gives InvalidRequest before the analyst
+// runs. A refused CreateAs leaves the ID reserved, so it may be retried; an approved slice of the
+// same description is offered as in Create, and the ID stays reserved.
+func (s *Service) CreateAs(ctx context.Context, id, description string) (Result, error) {
+	if err := s.reservable(id); err != nil {
+		return Result{}, err
+	}
+	res, rec, err := s.build(ctx, description)
+	if err != nil || rec == nil {
+		return res, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.reservableLocked(id); err != nil { // another CreateAs took it meanwhile
+		return Result{}, err
+	}
+	delete(s.reserved, id)
+	rec.slice.ID = id
+	s.slices[id] = rec
+	return Result{Slice: clone(rec.slice)}, nil
+}
+
+func (s *Service) reservable(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.reservableLocked(id)
+}
+
+// reservableLocked reports whether CreateAs may create a slice under id. The caller holds s.mu.
+func (s *Service) reservableLocked(id string) error {
+	if _, err := s.schemas.ParseID(id); err != nil {
+		return &Error{Code: "InvalidRequest", Detail: err.Error()}
+	}
+	if _, ok := s.slices[id]; ok || !s.reserved[id] {
+		return &Error{Code: "InvalidRequest", Detail: "slice ID " + id + " was not reserved or is in use"}
+	}
+	return nil
+}
+
+// build makes the slice Create stores, without an ID. It returns no record and Result.Reused
+// when an approved slice of the same description is offered instead.
+func (s *Service) build(ctx context.Context, description string) (Result, *record, error) {
 	if strings.TrimSpace(description) == "" {
-		return Result{}, &Error{Code: "NarrowDescription", Detail: "the description is empty; describe one use case"}
+		return Result{}, nil, &Error{Code: "NarrowDescription", Detail: "the description is empty; describe one use case"}
 	}
 	if sl, ok := s.approvedFor(description); ok {
-		return Result{Slice: sl, Reused: true}, nil
+		return Result{Slice: sl, Reused: true}, nil, nil
 	}
 
 	p, sl, err := s.propose(ctx, AnalystInput{Description: description}, 0)
 	if err != nil {
-		return Result{}, err
+		return Result{}, nil, err
 	}
 	for i, q := range p.Questions {
 		sl.Questions = append(sl.Questions, Question{ID: "Q-" + strconv.Itoa(i+1), About: q.About, Text: q.Text,
@@ -100,18 +169,12 @@ func (s *Service) Create(ctx context.Context, description string) (Result, error
 	}
 	rec := &record{slice: sl}
 	if err := s.recheck(ctx, rec, true); err != nil {
-		return Result{}, err
+		return Result{}, nil, err
 	}
 	rec.slice.History = []HistoryEntry{{Kind: "proposed", At: s.now(), Model: p.Model, AgentDigest: p.AgentDigest,
 		Refs: []string{string(PartGoals), string(PartRules), string(PartContract)}}}
 	rec.slice.State = state(&rec.slice)
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.last++
-	rec.slice.ID = "S-" + strconv.Itoa(s.last)
-	s.slices[rec.slice.ID] = rec
-	return Result{Slice: clone(rec.slice)}, nil
+	return Result{}, rec, nil
 }
 
 // maxQuestions is the most questions a slice may have (FR-006; slice.schema.json questions
@@ -218,6 +281,19 @@ func (s *Service) Get(id string) (Slice, error) {
 	return clone(r.slice), nil
 }
 
+// List returns every slice, newest first (by the number of its ID).
+func (s *Service) List() []Slice {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]Slice, 0, len(s.slices))
+	for _, r := range s.slices {
+		out = append(out, clone(r.slice))
+	}
+	n := func(id string) int { v, _ := strconv.Atoi(strings.TrimPrefix(id, "S-")); return v }
+	slices.SortFunc(out, func(a, b Slice) int { return n(b.ID) - n(a.ID) })
+	return out
+}
+
 // find returns the stored slice with id. The caller holds s.mu.
 func (s *Service) find(id string) (*record, error) {
 	if _, err := s.schemas.ParseID(id); err != nil {
@@ -285,23 +361,55 @@ func (s *Service) replace(ctx context.Context, id string, part Part, set func(*S
 func (s *Service) Approve(ctx context.Context, id string, part Part, contentHash string) (Slice, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	r, err := s.find(id)
+	r, err := s.approvable(id, part, contentHash)
 	if err != nil {
 		return Slice{}, err
 	}
+	for _, a := range r.slice.Approvals {
+		if a.Part == part && a.ContentHash == contentHash {
+			return clone(r.slice), nil // already approved at this hash
+		}
+	}
+
+	now := s.now()
+	r.slice.Approvals = append(slices.DeleteFunc(r.slice.Approvals, func(a Approval) bool { return a.Part == part }),
+		Approval{Part: part, ContentHash: contentHash, At: now})
+	if part == PartContract {
+		r.baseline = r.slice.Contract
+	}
+	r.slice.History = append(r.slice.History, HistoryEntry{Kind: "approved", At: now, Refs: []string{string(part)}})
+	r.slice.State = state(&r.slice)
+	return clone(r.slice), nil
+}
+
+// CheckApprove refuses exactly as Approve would, and approves nothing.
+func (s *Service) CheckApprove(id string, part Part, contentHash string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.approvable(id, part, contentHash)
+	return err
+}
+
+// approvable returns the slice whose part Approve may approve at contentHash, or Approve's
+// refusal. The caller holds s.mu.
+func (s *Service) approvable(id string, part Part, contentHash string) (*record, error) {
+	r, err := s.find(id)
+	if err != nil {
+		return nil, err
+	}
 	if !slices.Contains(allParts, part) {
-		return Slice{}, &Error{Code: "InvalidRequest", Detail: fmt.Sprintf("%q is not a part", part)}
+		return nil, &Error{Code: "InvalidRequest", Detail: fmt.Sprintf("%q is not a part", part)}
 	}
 	if _, err := s.schemas.ParseHash(contentHash); err != nil {
-		return Slice{}, &Error{Code: "InvalidRequest", Detail: err.Error()}
+		return nil, &Error{Code: "InvalidRequest", Detail: err.Error()}
 	}
 	if contentHash != r.slice.Parts.of(part) {
-		return Slice{}, &Error{Code: "StaleContentHash",
+		return nil, &Error{Code: "StaleContentHash",
 			Detail: fmt.Sprintf("the %s part changed since it was shown; review it at its current hash", part)}
 	}
 	for _, q := range r.slice.Questions {
 		if open(q) && concerns(q.About, part) {
-			return Slice{}, &Error{Code: "ContradictionOpen",
+			return nil, &Error{Code: "ContradictionOpen",
 				Detail: fmt.Sprintf("question %s about %s is open and concerns the %s part; answer it first", q.ID, q.About, part)}
 		}
 	}
@@ -320,23 +428,38 @@ func (s *Service) Approve(ctx context.Context, id string, part Part, contentHash
 		if part == PartContract && onlyPattern {
 			code = "PatternDoesNotFit"
 		}
-		return Slice{}, &Error{Code: code, Detail: fmt.Sprintf("the %s part fails its checks", part), Failures: fails}
+		return nil, &Error{Code: code, Detail: fmt.Sprintf("the %s part fails its checks", part), Failures: fails}
 	}
-	for _, a := range r.slice.Approvals {
-		if a.Part == part && a.ContentHash == contentHash {
-			return clone(r.slice), nil // already approved at this hash
+	return r, nil
+}
+
+// Buildable reports whether a build of the slice may start: NotFound for an unknown slice,
+// PatternDoesNotFit listing the failing pattern conditions, then NotApproved while a part holds
+// no approval at its current hash.
+func (s *Service) Buildable(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, err := s.find(id)
+	if err != nil {
+		return err
+	}
+	var fails []Check
+	for _, c := range r.slice.Checks {
+		if c.fromPattern && !c.Passed {
+			fails = append(fails, c)
 		}
 	}
-
-	now := s.now()
-	r.slice.Approvals = append(slices.DeleteFunc(r.slice.Approvals, func(a Approval) bool { return a.Part == part }),
-		Approval{Part: part, ContentHash: contentHash, At: now})
-	if part == PartContract {
-		r.baseline = r.slice.Contract
+	if len(fails) > 0 {
+		return &Error{Code: "PatternDoesNotFit", Detail: "the slice fails a condition of the pattern", Failures: fails}
 	}
-	r.slice.History = append(r.slice.History, HistoryEntry{Kind: "approved", At: now, Refs: []string{string(part)}})
-	r.slice.State = state(&r.slice)
-	return clone(r.slice), nil
+	for _, part := range allParts {
+		if !slices.ContainsFunc(r.slice.Approvals, func(a Approval) bool {
+			return a.Part == part && a.ContentHash == r.slice.Parts.of(part)
+		}) {
+			return &Error{Code: "NotApproved", Detail: fmt.Sprintf("the %s part is not approved at its current hash", part)}
+		}
+	}
+	return nil
 }
 
 // open reports whether a question is open: it has no answer yet.

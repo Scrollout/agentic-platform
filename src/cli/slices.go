@@ -613,8 +613,10 @@ func parseDelete(args []string) (func(context.Context, *session) error, error) {
 			}
 			token = r.JSON200.NextPageToken
 		}
-		// The contract also asks for the number of stored artifacts; no operation reports it yet.
 		fmt.Fprintf(s.out, "This erases slice %s %q and its records:\n", sl.Id, sl.Title)
+		if sl.ArtifactCount != nil {
+			fmt.Fprintf(s.out, "  stored artifacts: %d\n", *sl.ArtifactCount)
+		}
 		if len(runs) == 0 {
 			fmt.Fprintln(s.out, "  runs: none")
 		}
