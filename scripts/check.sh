@@ -47,40 +47,128 @@ go_checks() {
 }
 if [ "${1:-}" = "--go-only" ]; then go_checks; exit 0; fi
 
-echo "== check tests (layout, ruleset), each with planted violations"
-python3 -m unittest discover -s scripts/tests -p 'test_*.py'
-echo "== root layout"
-python3 scripts/layout-check.py
-echo "== knowledge bundle"
-python3 scripts/okf.py check
-echo "== markdown"
-scripts/npm-tool.sh markdownlint-cli2 --config scripts/repo.markdownlint-cli2.jsonc "docs/**/*.md" "specs/**/*.md" "src/**/*.md" AGENTS.md README.md
-echo "== contracts"
-for f in $(find src -path '*/api/preview/*' -name 'openapi.yaml'); do
-  scripts/npm-tool.sh spectral lint "$f" --ruleset src/engine/api/ruleset.yaml --fail-severity error
+# Steps, in the order a full run takes them: one line each, name and title; the step's code is
+# the function s_<name> below (dashes become underscores). Usage:
+#   scripts/check.sh                       every step: the full run a change is accepted on
+#   scripts/check.sh --only go,docker      only those steps (a partial run, said so)
+#   scripts/check.sh --only py-tests --py test_hooks test_launcher.LauncherTest
+#                                          only those check tests (scripts/testrun.py)
+#   scripts/check.sh --list                the step names
+# An unknown step or check test is refused before anything runs. Each step is timed in setup,
+# test and teardown; the run ends with the times and the slowest step.
+STEP_TABLE='py-tests check tests (layout, ruleset), each with planted violations
+layout root layout
+knowledge knowledge bundle
+markdown markdown
+contracts contracts
+contract-diff contract breaking changes: each service'"'"'s newest version against the previous one
+gateway model gateway
+go go vet and tests
+docker recorded model and contract-lint service (Docker, no key)
+deps dependencies and licences
+secrets secrets'
+STEPS=$(echo "$STEP_TABLE" | cut -d' ' -f1)
+only=; py=
+while [ $# -gt 0 ]; do
+  case $1 in
+    --list) echo "$STEPS"; exit 0 ;;
+    --only) [ $# -ge 2 ] || { echo "check: --only needs step names" >&2; exit 2; }
+      only=$(echo "$2" | tr ',' ' '); shift 2 ;;
+    --py) shift; while [ $# -gt 0 ] && [ "${1#--}" = "$1" ]; do py="$py $1"; shift; done
+      only=${only:-py-tests} ;;
+    *) echo "check: unknown argument '$1' (use --only, --py or --list)" >&2; exit 2 ;;
+  esac
 done
-echo "== contract breaking changes: each service's newest version against the previous one"
-scripts/contract-diff.sh
-echo "== model gateway"
-sh src/deploy/gateway/test_gateway.sh >/dev/null && echo "gateway checks passed"
-echo "== go vet and tests"
-go_checks
-echo "== recorded model and contract-lint service (Docker, no key)"
-# Built in the pinned Go container, run on the host, where Docker is; each in its package folder.
-for p in recorded lint; do
-  go_run none "cd tests && GOPROXY=off GOFLAGS=-mod=readonly CGO_ENABLED=0 go test -c -tags docker -o /gopath/$p.test ./$p/"
-  (cd "src/tests/$p" && "$GO_CACHE/$p.test" -test.count=1) && rm -f "$GO_CACHE/$p.test"
+for s in $only; do
+  echo "$STEPS" | grep -qx -- "$s" || { echo "check: unknown step '$s'; nothing was run (steps: $(echo $STEPS))" >&2; exit 2; }
 done
-echo "== dependencies and licences"
-# Our own modules are MIT by the root LICENSE, which is outside the mounted src/, so they are ignored.
-go_run bridge "
-  if [ -z \"\$(find . -name '*.go' -print -quit)\" ]; then echo 'skip: no Go files yet'; exit 0; fi
-  go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
-  go install github.com/google/go-licenses/v2@v2.0.1
-  for m in $GO_MODULES; do
-    [ -z \"\$(find \"\$m\" -name '*.go' -print -quit)\" ] && continue
-    (cd \"\$m\" && /gopath/bin/govulncheck ./... && /gopath/bin/go-licenses check ./... --disallowed_types=forbidden,unknown --ignore github.com/agentic-platform)
-  done"
-echo "== secrets"
-if git grep -nE 'sk-ant-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{30,}' -- . ; then echo "secret found"; exit 1; fi
-echo "all checks passed"
+# testrun.py refuses an unknown check test; ask it before anything runs.
+# shellcheck disable=SC2086
+[ -z "$py" ] || python3 scripts/testrun.py --list $py >/dev/null || exit 2
+[ -n "$only" ] && echo "== PARTIAL RUN: steps $only${py:+, check tests$py}"
+
+times=$(mktemp); trap 'rm -f "$times"' EXIT
+now() { date +%s.%N; }
+cur=; t0=
+phase() {  # phase <setup|test|teardown|end>: close the running phase of the step, start the next
+  t=$(now)
+  [ -z "$cur" ] || awk -v s="$cur" -v a="$t" -v b="$t0" 'BEGIN { print s, a - b }' >>"$times"
+  cur="$step $1"; t0=$t
+  [ "$1" != end ] || cur=
+}
+
+s_py_tests() {
+  # 6 test classes at a time: measured 26 minutes one at a time, 10 by module (4 at a time), 9 by
+  # class (6 at a time), every test passing each time.
+  # shellcheck disable=SC2086
+  python3 scripts/testrun.py --jobs 6 $py
+}
+s_layout() { python3 scripts/layout-check.py; }
+s_knowledge() { python3 scripts/okf.py check; }
+s_markdown() {
+  scripts/npm-tool.sh markdownlint-cli2 --config scripts/repo.markdownlint-cli2.jsonc "docs/**/*.md" "specs/**/*.md" "src/**/*.md" AGENTS.md README.md
+}
+s_contracts() {
+  for f in $(find src -path '*/api/preview/*' -name 'openapi.yaml'); do
+    scripts/npm-tool.sh spectral lint "$f" --ruleset src/engine/api/ruleset.yaml --fail-severity error
+  done
+}
+s_contract_diff() { scripts/contract-diff.sh; }
+s_gateway() { sh src/deploy/gateway/test_gateway.sh >/dev/null && echo "gateway checks passed"; }
+s_go() { go_checks; }
+s_docker() {
+  # Built in the pinned Go container (setup), run on the host, where Docker is (test); each in its
+  # package folder.
+  for p in recorded lint; do
+    phase setup
+    go_run none "cd tests && GOPROXY=off GOFLAGS=-mod=readonly CGO_ENABLED=0 go test -c -tags docker -o /gopath/$p.test ./$p/"
+    phase test
+    (cd "src/tests/$p" && "$GO_CACHE/$p.test" -test.count=1)
+    phase teardown
+    rm -f "$GO_CACHE/$p.test"
+  done
+}
+s_deps() {
+  # Our own modules are MIT by the root LICENSE, which is outside the mounted src/, so they are ignored.
+  phase setup
+  go_run bridge "go install golang.org/x/vuln/cmd/govulncheck@v1.9.0 && go install github.com/google/go-licenses/v2@v2.0.1"
+  phase test
+  go_run bridge "
+    if [ -z \"\$(find . -name '*.go' -print -quit)\" ]; then echo 'skip: no Go files yet'; exit 0; fi
+    for m in $GO_MODULES; do
+      [ -z \"\$(find \"\$m\" -name '*.go' -print -quit)\" ] && continue
+      (cd \"\$m\" && /gopath/bin/govulncheck ./... && /gopath/bin/go-licenses check ./... --disallowed_types=forbidden,unknown --ignore github.com/agentic-platform)
+    done"
+}
+s_secrets() {
+  if git grep -nE 'sk-ant-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{30,}' -- . ; then echo "secret found"; exit 1; fi
+}
+
+start=$(now)
+# The table is read on descriptor 3, so a step's own commands keep the caller's input.
+while read -r step title <&3; do
+  [ -z "$only" ] || echo " $only " | grep -q " $step " || continue
+  echo "== $title"
+  phase test
+  "s_$(echo "$step" | tr - _)"
+  phase end
+done 3<<STEPS_END
+$STEP_TABLE
+STEPS_END
+total=$(awk -v a="$(now)" -v b="$start" 'BEGIN { print a - b }')
+echo "== time per step (setup / test / teardown, seconds):"
+awk -v total="$total" '
+  { t[$1, $2] += $3; if (!($1 in seen)) { seen[$1] = 1; order[++n] = $1 } }
+  END {
+    for (i = 1; i <= n; i++) {
+      s = order[i]; sum = t[s, "setup"] + t[s, "test"] + t[s, "teardown"]
+      printf "  %-14s %7.1f  (%.1f / %.1f / %.1f)\n", s, sum, t[s, "setup"], t[s, "test"], t[s, "teardown"]
+      if (sum > max) { max = sum; slow = s }
+    }
+    printf "  %-14s %7.1f\n  slowest step: %s\n", "all", total, slow
+  }' "$times"
+if [ -n "$only" ]; then
+  echo "== PARTIAL RUN: a change is accepted only after a full run (scripts/check.sh with no arguments)"
+else
+  echo "all checks passed"
+fi
