@@ -1,12 +1,8 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/json"
-	"errors"
-	"io"
 	"net/http"
 	"sort"
 	"strconv"
@@ -27,38 +23,16 @@ type server struct {
 
 var _ gen.StrictServerInterface = (*server)(nil)
 
-// pageSize is the most operations per page of the operations list. The contract states it
-// only in the operation's description; it has no machine-readable home there yet.
+// pageSize is the most items per page of a list (operations, slices). The contract states it
+// only in each list operation's description; it has no machine-readable home there yet.
 const pageSize = 50
 
 func notFound(what string) gen.NotFoundApplicationProblemPlusJSONResponse {
 	return gen.NotFoundApplicationProblemPlusJSONResponse(newProblem(http.StatusNotFound, gen.ErrorCodeNotFound, what+" does not exist"))
 }
 
-// parseCreateSlice reads a createSlice body as the contract defines it: an object with a
-// non-empty `description` and nothing else.
-func parseCreateSlice(raw []byte) (gen.CreateSliceRequest, error) {
-	var req gen.CreateSliceRequest
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		return req, err
-	}
-	if _, err := dec.Token(); err != io.EOF {
-		return req, errors.New("the body holds more than one JSON value")
-	}
-	if req.Description == "" {
-		return req, errors.New("description must not be empty")
-	}
-	return req, nil
-}
-
 func (s *server) CreateSlice(ctx context.Context, _ gen.CreateSliceRequestObject) (gen.CreateSliceResponseObject, error) {
-	raw, _ := ctx.Value(rawBodyKey{}).([]byte)
-	if _, err := parseCreateSlice(raw); err != nil {
-		return gen.CreateSlice400ApplicationProblemPlusJSONResponse{BadRequestApplicationProblemPlusJSONResponse: gen.BadRequestApplicationProblemPlusJSONResponse(
-			newProblem(http.StatusBadRequest, gen.ErrorCodeInvalidRequest, err.Error()))}, nil
-	}
+	raw, _ := ctx.Value(rawBodyKey{}).([]byte) // the front checked it against the contract
 	target := "S-" + strconv.FormatInt(s.lastSlice.Add(1), 10)
 	op := s.ops.start(Job{Kind: gen.OperationKindProposeSlice, Target: target, Body: raw})
 	return gen.CreateSlice202JSONResponse{AcceptedJSONResponse: gen.AcceptedJSONResponse{Body: op}}, nil
@@ -103,23 +77,36 @@ func (s *server) ListProviderOperations(_ context.Context, req gen.ListProviderO
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].Name < all[j].Name })
 
-	from := 0
-	if req.Params.PageToken != nil {
-		raw, err := base64.RawURLEncoding.DecodeString(*req.Params.PageToken)
+	from, to, next, ok := page(req.Params.PageToken, len(all))
+	if !ok {
+		return gen.ListProviderOperations400ApplicationProblemPlusJSONResponse{BadRequestApplicationProblemPlusJSONResponse: badPageToken()}, nil
+	}
+	list := gen.ProviderOperationList{Items: all[from:to], NextPageToken: next}
+	return gen.ListProviderOperations200JSONResponse{ProviderOperationListJSONResponse: gen.ProviderOperationListJSONResponse(list)}, nil
+}
+
+// page returns the bounds of the page a token asks for among total items, in order, and the
+// token of the page after it (nil on the last page). A page token is the offset of its page; ok
+// is false for one this service did not issue, or one past the end.
+func page(token *string, total int) (from, to int, next *string, ok bool) {
+	if token != nil {
+		raw, err := base64.RawURLEncoding.DecodeString(*token)
 		n, err2 := strconv.Atoi(string(raw))
-		if err != nil || err2 != nil || n <= 0 || n%pageSize != 0 || n >= len(all) || issuedPageToken(n) != *req.Params.PageToken {
-			return gen.ListProviderOperations400ApplicationProblemPlusJSONResponse{BadRequestApplicationProblemPlusJSONResponse: gen.BadRequestApplicationProblemPlusJSONResponse(
-				newProblem(http.StatusBadRequest, gen.ErrorCodeInvalidRequest, "page_token was not issued by this service"))}, nil
+		if err != nil || err2 != nil || n <= 0 || n%pageSize != 0 || n >= total || issuedPageToken(n) != *token {
+			return 0, 0, nil, false
 		}
 		from = n
 	}
-	to := min(from+pageSize, len(all))
-	list := gen.ProviderOperationList{Items: all[from:to]}
-	if to < len(all) {
-		next := issuedPageToken(to)
-		list.NextPageToken = &next
+	to = min(from+pageSize, total)
+	if to < total {
+		t := issuedPageToken(to)
+		next = &t
 	}
-	return gen.ListProviderOperations200JSONResponse{ProviderOperationListJSONResponse: gen.ProviderOperationListJSONResponse(list)}, nil
+	return from, to, next, true
+}
+
+func badPageToken() gen.BadRequestApplicationProblemPlusJSONResponse {
+	return gen.BadRequestApplicationProblemPlusJSONResponse(newProblem(http.StatusBadRequest, gen.ErrorCodeInvalidRequest, "page_token was not issued by this service"))
 }
 
 func issuedPageToken(offset int) string {

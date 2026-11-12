@@ -3,11 +3,14 @@
 //
 // Every request passes the same checks, in this order: its token, then the rate limit, then its
 // api-version (400, except on the operations list), whether the token may call the operation
-// (403), then the operation itself. A request with an accepted token is counted against that
+// (403), then the body against the operation's request schema in the contract (400
+// InvalidRequest, or InvalidProject for a project name alone that breaks the folder-name rule
+// where the operation lists that code), then the operation itself. A request with an accepted token is counted against that
 // token's limit alone (429 beyond it). A request with no token, or one the engine does not
 // accept, is counted against the limit of its source address, the host part of the
 // connection's peer address (never a header the client sends): 401 up to that limit, 429 beyond
-// it. A state-changing call returns 202 with an operation to follow; its work runs on its own,
+// it. A refusal the contract lists under a status code is answered at once; otherwise a
+// state-changing call returns 202 with an operation to follow; its work runs on its own,
 // is retried when it fails for a passing reason, and ends `succeeded`, `failed` (with the
 // reason) or `cancelled`. The limits a client sees (requests per second per token and per
 // address, how long idempotency keys are kept, the largest body) are the contract's
@@ -35,6 +38,7 @@ import (
 	"time"
 
 	"github.com/agentic-platform/engine/api/gen"
+	"github.com/agentic-platform/engine/slices"
 )
 
 // Tokens are the three bearer tokens of the session (research D12). Empty means "no token of
@@ -56,6 +60,12 @@ type Config struct {
 	// Context bounds every operation's work: when it is done, running operations are
 	// cancelled. nil means context.Background().
 	Context context.Context
+	// Slices holds the slices. With it the engine serves the slice operations itself and Work
+	// does only other kinds of operation; nil means no slices: lists are empty, a slice is never
+	// found, and createSlice's operation is Work's.
+	Slices *slices.Service
+	// Store is what the run store keeps about each slice; required with Slices.
+	Store SliceStore
 }
 
 // NewHandler returns the engine's whole HTTP handler.
@@ -74,8 +84,15 @@ func NewHandler(cfg Config) http.Handler {
 	}
 	c := engineContract
 	srv := &server{contract: c, ops: &operations{base: base, now: now, sleep: sleep, work: cfg.Work, ops: map[string]*operation{}}}
+	var impl gen.StrictServerInterface = srv
+	if cfg.Slices != nil {
+		if cfg.Store == nil {
+			panic("api: Config.Slices needs Config.Store")
+		}
+		impl = &sliceServer{server: srv, svc: cfg.Slices, store: cfg.Store}
+	}
 	mux := http.NewServeMux()
-	gen.HandlerWithOptions(gen.NewStrictHandlerWithOptions(srv, nil, gen.StrictHTTPServerOptions{
+	gen.HandlerWithOptions(gen.NewStrictHandlerWithOptions(impl, nil, gen.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc: invalidRequest,
 		ResponseErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, _ error) {
 			http.Error(w, "internal error", http.StatusInternalServerError)
@@ -163,6 +180,10 @@ func (f *front) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeProblem(w, newProblem(http.StatusBadRequest, gen.ErrorCodeInvalidRequest,
 			fmt.Sprintf("the body cannot be read or is larger than %d bytes", f.contract.maxBody)))
+		return
+	}
+	if code, detail := op.checkBody(body); code != "" {
+		writeProblem(w, newProblem(http.StatusBadRequest, gen.ErrorCode(code), detail))
 		return
 	}
 	r = r.WithContext(context.WithValue(r.Context(), rawBodyKey{}, body))

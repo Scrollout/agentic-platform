@@ -415,10 +415,14 @@ paths:
       operationId: startRun
       x-operation-name: Agentic.Engine/runs/write
       summary: Build an approved slice
-      description: Starts a run that builds the slice into a new project folder. Refused when a part is
-        not approved, the pattern does not fit, a step of the pattern has no ready worker, another run
-        has not ended, or the folder exists. The operation's target is the new run; it lasts until the
-        run ends.
+      description: Starts a run that builds the slice into a new project folder. Refusals come in this
+        order, the first that applies; each comes at once, and no operation is created. A body that
+        does not match RunRequest is InvalidRequest, or InvalidProject when only its project name
+        breaks the folder-name rule; then an unknown slice is NotFound; then PatternDoesNotFit while the slice fails a pattern condition, even when
+        no part is approved; then NotApproved while a part is not approved at its current hash; then
+        WorkersNotReady while a step of the pattern has no ready worker; then RunActive while another
+        run of the slice has not ended; then ProjectExists when the folder exists. The operation's
+        target is the new run; it lasts until the run ends.
       security:
       - clientToken: []
       x-error-codes:

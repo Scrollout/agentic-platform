@@ -1,25 +1,32 @@
 package api
 
 import (
+	"bytes"
 	"embed"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"math"
+	"path"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
+	"github.com/santhosh-tekuri/jsonschema/v6/kind"
 	"go.yaml.in/yaml/v3"
 )
 
 // The contract the generated code in gen/ comes from: scripts/generate.sh generates from the
 // newest contract version, and so does loadContract. The facts a client sees and the contract
 // states (the version served, which token may call which operation, which operations take an
-// api-version or an Idempotency-Key, the operations list and the limits in `x-limits`) are read
-// from it here, so they have one home. Add stable/*/openapi.yaml to the pattern when the first
-// stable version exists.
+// api-version or an Idempotency-Key, the schema of each request body, the error codes each
+// operation lists in `x-error-codes`, the operations list and the limits in `x-limits`) are read
+// from it here, so they have one home. Add stable/*/... to the patterns when the first stable
+// version exists.
 //
-//go:embed preview/*/openapi.yaml
+//go:embed preview/*/openapi.yaml preview/*/*.schema.json
 var contractFiles embed.FS
 
 // Security scheme names in the contract, one per kind of token (research D12).
@@ -36,11 +43,33 @@ type contractOp struct {
 	callers           map[string]bool // security schemes that may call it
 	versioned         bool            // takes the api-version parameter
 	idempotent        bool            // takes the Idempotency-Key parameter
+	// codes are the operation's `x-error-codes`: by status code ("409"), and "operation" for the
+	// codes its operation's `error` may carry.
+	codes map[string][]string
+	// bodyRef is the request body's schema reference ("#/components/schemas/GoalsPart"), "" for
+	// an operation without a body; body is that schema, compiled by loadContract.
+	bodyRef      string
+	bodyRequired bool
+	body         *jsonschema.Schema
+}
+
+// op returns the operation with operationId id.
+func (c contract) op(id string) contractOp { return c.ops[c.byID[id]] }
+
+// lists reports whether the operation's x-error-codes list code under key.
+func (op contractOp) lists(key, code string) bool {
+	for _, c := range op.codes[key] {
+		if c == code {
+			return true
+		}
+	}
+	return false
 }
 
 type contract struct {
 	version        string                // the api-version served
 	ops            map[string]contractOp // by route, "GET /slices/{sliceId}"
+	byID           map[string]string     // route by operationId
 	perSecond      int                   // requests in any one-second window per token
 	perAddress     int                   // requests without an accepted token in any one-second window per source address
 	keepKeys       time.Duration         // how long an idempotency key is kept
@@ -82,6 +111,15 @@ type (
 		Summary    string                 `yaml:"summary"`
 		Security   *[]map[string][]string `yaml:"security"`
 		Parameters []parameter            `yaml:"parameters"`
+		ErrorCodes map[string][]string    `yaml:"x-error-codes"`
+		Body       *struct {
+			Required bool `yaml:"required"`
+			Content  map[string]struct {
+				Schema struct {
+					Ref string `yaml:"$ref"`
+				} `yaml:"schema"`
+			} `yaml:"content"`
+		} `yaml:"requestBody"`
 	}
 	parameter struct {
 		Ref      string `yaml:"$ref"`
@@ -117,7 +155,116 @@ func loadContract(files fs.FS) (contract, error) {
 	if err != nil {
 		return contract{}, fmt.Errorf("%s: %w", newest, err)
 	}
+	if err := c.compileBodies(files, path.Dir(newest), raw); err != nil {
+		return contract{}, fmt.Errorf("%s: %w", newest, err)
+	}
 	return c, nil
+}
+
+// schemaBase is the URL the contract's files are read under when request bodies are checked; it
+// names no local path, so no fault a client sees carries one.
+const schemaBase = "file:///contract/"
+
+// compileBodies compiles each operation's request body schema from the contract in dir, with
+// references resolved to the schema files beside it and nothing else.
+func (c *contract) compileBodies(files fs.FS, dir string, openapi []byte) error {
+	var doc any
+	if err := yaml.Unmarshal(openapi, &doc); err != nil {
+		return err
+	}
+	asJSON, err := json.Marshal(doc)
+	if err != nil {
+		return fmt.Errorf("the contract cannot be read as JSON: %w", err)
+	}
+	root, err := jsonschema.UnmarshalJSON(bytes.NewReader(asJSON))
+	if err != nil {
+		return err
+	}
+	comp := jsonschema.NewCompiler()
+	comp.DefaultDraft(jsonschema.Draft2020)
+	comp.UseLoader(contractLoader{files: files, dir: dir})
+	if err := comp.AddResource(schemaBase+"openapi.yaml", root); err != nil {
+		return err
+	}
+	for route, op := range c.ops {
+		if op.bodyRef == "" {
+			continue
+		}
+		sch, err := comp.Compile(schemaBase + "openapi.yaml" + op.bodyRef)
+		if err != nil {
+			return fmt.Errorf("%s request body: %w", route, err)
+		}
+		op.body = sch
+		c.ops[route] = op
+	}
+	return nil
+}
+
+// contractLoader loads the JSON schema files of one contract version, and nothing else.
+type contractLoader struct {
+	files fs.FS
+	dir   string
+}
+
+func (l contractLoader) Load(u string) (any, error) {
+	name, ok := strings.CutPrefix(u, schemaBase)
+	if !ok || !strings.HasSuffix(name, ".schema.json") || strings.Contains(name, "/") {
+		return nil, fmt.Errorf("schema %s is outside the contract", u)
+	}
+	b, err := fs.ReadFile(l.files, l.dir+"/"+name)
+	if err != nil {
+		return nil, err
+	}
+	return jsonschema.UnmarshalJSON(bytes.NewReader(b))
+}
+
+// projectNameRule is the contract's rule for a project name. A body whose only faults are a
+// string that breaks it is refused with InvalidProject, as the contract's ErrorCode says, where
+// the operation lists that code; a value that is not a string is InvalidRequest.
+const projectNameRule = schemaBase + "slice-defs.schema.json#/$defs/project_name"
+
+// checkBody checks a request body against the operation's schema. It returns the problem code
+// and the faults, or "" for a body the schema accepts or an operation without one.
+func (op contractOp) checkBody(raw []byte) (code, detail string) {
+	if op.body == nil || (!op.bodyRequired && len(raw) == 0) {
+		return "", ""
+	}
+	v, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+	if err != nil {
+		return "InvalidRequest", "the body is not one JSON value: " + err.Error()
+	}
+	err = op.body.Validate(v)
+	if err == nil {
+		return "", ""
+	}
+	var ve *jsonschema.ValidationError
+	if !errors.As(err, &ve) {
+		return "InvalidRequest", err.Error()
+	}
+	project := true
+	var faults []string
+	var walk func(e *jsonschema.ValidationError)
+	walk = func(e *jsonschema.ValidationError) {
+		if len(e.Causes) > 0 {
+			for _, c := range e.Causes {
+				walk(c)
+			}
+			return
+		}
+		_, wrongType := e.ErrorKind.(*kind.Type)
+		project = project && !wrongType && strings.HasPrefix(e.SchemaURL, projectNameRule)
+		msg := "breaks the rule " + strings.Join(e.ErrorKind.KeywordPath(), "/")
+		if out := e.BasicOutput(); out != nil && out.Error != nil && !strings.Contains(out.Error.String(), "://") {
+			msg = out.Error.String()
+		}
+		faults = append(faults, "at /"+strings.Join(e.InstanceLocation, "/")+": "+msg)
+	}
+	walk(ve)
+	code = "InvalidRequest"
+	if project && op.lists("400", "InvalidProject") {
+		code = "InvalidProject"
+	}
+	return code, "the body does not match the contract: " + strings.Join(faults, "; ")
 }
 
 // positiveInt returns the value of n, which must be a plain YAML integer (tag !!int) of at least
@@ -174,7 +321,7 @@ func parseContract(raw []byte, version string) (contract, error) {
 	if limits[2] > math.MaxInt64/int64(time.Hour) {
 		return contract{}, fmt.Errorf("x-limits.idempotency-key-retention-hours: %d hours is too long", limits[2])
 	}
-	c := contract{version: version, ops: map[string]contractOp{}, perSecond: int(limits[0]), perAddress: int(limits[1]),
+	c := contract{version: version, ops: map[string]contractOp{}, byID: map[string]string{}, perSecond: int(limits[0]), perAddress: int(limits[1]),
 		keepKeys: time.Duration(limits[2]) * time.Hour, maxBody: limits[3]}
 
 	paths, err := pairs(&d.Paths, "paths")
@@ -213,6 +360,7 @@ func parseContract(raw []byte, version string) (contract, error) {
 			}
 			op.order = len(c.ops)
 			c.ops[route] = op
+			c.byID[op.id] = route
 		}
 	}
 	if len(c.ops) == 0 {
@@ -222,9 +370,16 @@ func parseContract(raw []byte, version string) (contract, error) {
 }
 
 func (c *contract) operation(o operationDoc, params []parameter, defs map[string]parameter) (contractOp, error) {
-	op := contractOp{id: o.ID, name: o.Name, summary: strings.TrimSpace(o.Summary), callers: map[string]bool{}}
+	op := contractOp{id: o.ID, name: o.Name, summary: strings.TrimSpace(o.Summary), callers: map[string]bool{}, codes: o.ErrorCodes}
 	if op.id == "" || op.name == "" || op.summary == "" {
 		return op, fmt.Errorf("lacks operationId, x-operation-name or summary")
+	}
+	if o.Body != nil {
+		media, ok := o.Body.Content["application/json"]
+		if len(o.Body.Content) != 1 || !ok || !strings.HasPrefix(media.Schema.Ref, "#/components/schemas/") {
+			return op, fmt.Errorf("a request body must be application/json alone, with a $ref to a component schema")
+		}
+		op.bodyRef, op.bodyRequired = media.Schema.Ref, o.Body.Required
 	}
 	if o.Security == nil || len(*o.Security) == 0 {
 		return op, fmt.Errorf("states no security")

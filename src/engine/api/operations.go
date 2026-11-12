@@ -73,20 +73,31 @@ func ended(s gen.OperationStatus) bool {
 	return s == gen.OperationStatusSucceeded || s == gen.OperationStatusFailed || s == gen.OperationStatusCancelled
 }
 
-// start records a new operation and runs its job in its own goroutine.
+// start records a new operation and runs its job with the host's Work in its own goroutine.
 func (s *operations) start(job Job) gen.Operation {
+	return s.startWith(job.Kind, job.Target, func(ctx context.Context) (WorkResult, error) {
+		if s.work == nil {
+			return WorkResult{}, errors.New("this engine has no worker for this kind of operation yet")
+		}
+		return s.work(ctx, job)
+	})
+}
+
+// startWith records a new operation of kind on target and runs work in its own goroutine, with
+// the same lifecycle, retries and cancellation as any other job.
+func (s *operations) startWith(kind gen.OperationKind, target string, work func(ctx context.Context) (WorkResult, error)) gen.Operation {
 	ctx, cancel := context.WithCancel(s.base)
 	s.mu.Lock()
 	s.last++
 	now := s.now()
 	op := &operation{cancel: cancel, view: gen.Operation{
-		Id: "OP-" + strconv.Itoa(s.last), Kind: job.Kind, Target: job.Target,
+		Id: "OP-" + strconv.Itoa(s.last), Kind: kind, Target: target,
 		Status: gen.OperationStatusAccepted, CreatedAt: now, UpdatedAt: now,
 	}}
 	s.ops[op.view.Id] = op
 	view := op.view
 	s.mu.Unlock()
-	go s.run(ctx, op, job)
+	go s.run(ctx, op, work)
 	return view
 }
 
@@ -123,7 +134,7 @@ func (s *operations) set(op *operation, change func(v *gen.Operation)) {
 	op.view.UpdatedAt = s.now()
 }
 
-func (s *operations) run(ctx context.Context, op *operation, job Job) {
+func (s *operations) run(ctx context.Context, op *operation, work func(ctx context.Context) (WorkResult, error)) {
 	defer op.cancel()
 	for attempt := 0; ; attempt++ {
 		if ctx.Err() != nil {
@@ -131,7 +142,7 @@ func (s *operations) run(ctx context.Context, op *operation, job Job) {
 			return
 		}
 		s.set(op, func(v *gen.Operation) { v.Status = gen.OperationStatusRunning })
-		res, err := s.attempt(ctx, job)
+		res, err := runOnce(ctx, work)
 		var werr *WorkError
 		var rerr *retryable
 		switch {
@@ -166,17 +177,14 @@ type opResult = struct {
 	Slice       *gen.SliceId `json:"slice,omitempty"`
 }
 
-// attempt runs the job once; a panic or a result without exactly one field is a failure.
-func (s *operations) attempt(ctx context.Context, job Job) (res *opResult, err error) {
+// runOnce runs the work once; a panic or a result without exactly one field is a failure.
+func runOnce(ctx context.Context, work func(ctx context.Context) (WorkResult, error)) (res *opResult, err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			res, err = nil, fmt.Errorf("the work stopped unexpectedly: %v", p)
 		}
 	}()
-	if s.work == nil {
-		return nil, errors.New("this engine has no worker for this kind of operation yet")
-	}
-	wr, err := s.work(ctx, job)
+	wr, err := work(ctx)
 	if err != nil {
 		return nil, err
 	}
