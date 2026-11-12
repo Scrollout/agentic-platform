@@ -334,7 +334,7 @@ func (s *Service) replace(ctx context.Context, id string, part Part, set func(*S
 	if err != nil {
 		return Slice{}, err
 	}
-	next := &record{slice: clone(r.slice), baseline: r.baseline, compat: r.compat}
+	next := &record{slice: clone(r.slice), baseline: r.baseline, compat: r.compat, lint: r.lint}
 	set(&next.slice)
 	next.slice = clone(next.slice) // own the caller's lists
 	normalise(&next.slice)

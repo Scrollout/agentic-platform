@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"math/big"
 	"net/http"
 	"strconv"
 
@@ -141,8 +143,8 @@ func (s *sliceServer) AnswerQuestions(_ context.Context, req gen.AnswerQuestions
 	for i, a := range req.Body.Answers {
 		raw, err := a.AnswerValue.MarshalJSON()
 		var v struct {
-			Option *int   `json:"option"`
-			Text   string `json:"text"`
+			Option *json.Number `json:"option"`
+			Text   string       `json:"text"`
 		}
 		if err == nil {
 			err = json.Unmarshal(raw, &v)
@@ -150,7 +152,16 @@ func (s *sliceServer) AnswerQuestions(_ context.Context, req gen.AnswerQuestions
 		if err != nil {
 			return nil, fmt.Errorf("answer %d: %w", i, err)
 		}
-		answers[i] = slices.Answer{Question: a.Question, Option: v.Option, Text: v.Text}
+		var option *int
+		if v.Option != nil {
+			n, ok := wholeNumber(*v.Option)
+			if !ok {
+				return s.refuse("answerQuestions", &slices.Error{Code: "InvalidRequest",
+					Detail: fmt.Sprintf("the answer to %s gives option %s, which is not a whole number", a.Question, *v.Option)})
+			}
+			option = &n
+		}
+		answers[i] = slices.Answer{Question: a.Question, Option: option, Text: v.Text}
 	}
 	if err := s.svc.CheckAnswers(id, answers); err != nil {
 		return s.refuse("answerQuestions", err)
@@ -159,6 +170,23 @@ func (s *sliceServer) AnswerQuestions(_ context.Context, req gen.AnswerQuestions
 		_, err := s.svc.Answer(ctx, id, answers)
 		return err
 	})}, nil
+}
+
+// wholeNumber reads a JSON number that is an integer as JSON Schema counts one, so 1.0 and 1e0 are
+// 1. A value beyond int's range becomes the nearest int, which no option index reaches either.
+func wholeNumber(n json.Number) (int, bool) {
+	r, ok := new(big.Rat).SetString(n.String())
+	if !ok || !r.IsInt() {
+		return 0, false
+	}
+	switch x := r.Num(); {
+	case x.Cmp(big.NewInt(math.MaxInt)) > 0:
+		return math.MaxInt, true
+	case x.Cmp(big.NewInt(math.MinInt)) < 0:
+		return math.MinInt, true
+	default:
+		return int(x.Int64()), true
+	}
 }
 
 func (s *sliceServer) ApprovePart(_ context.Context, req gen.ApprovePartRequestObject) (gen.ApprovePartResponseObject, error) {
