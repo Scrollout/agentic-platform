@@ -8,16 +8,27 @@ info:
     `api-version` query parameter, except `GET /providers/Agentic.Engine/operations`. Each operation
     states which tokens may call it: the client token may call every developer operation, the page
     token only GET operations, and a worker token only registerWorker; any other call returns 403
-    Forbidden. Each token may make 20 requests per second; more return 429 with `Retry-After`. Every
-    state change returns an operation to follow. A deprecated operation is marked `deprecated: true`
+    Forbidden. Each token may make at most `x-limits.requests-per-second-per-token` requests in any
+    one-second window; more return 429 with `Retry-After`. A request body larger than
+    `x-limits.request-body-max-bytes` (bytes) returns 400 InvalidRequest. Every state change
+    returns an operation to follow. Any operation may end with the error OperationFailed; being
+    universal, it is not repeated in each operation's `x-error-codes`. A deprecated operation is marked `deprecated: true`
     with `x-sunset`, and its responses carry `Deprecation`, `Sunset` and `Link: rel="deprecation"`.
     `x-operation-name` gives each operation's permission name, and `x-error-codes` lists the
-    problem codes each status code (and the operation's `error`) may carry.
+    problem codes each status code (and the operation's `error`) may carry. `x-limits` holds the
+    limits every client sees, once.
   contact:
     name: Agentic Platform maintainers
   license:
     name: MIT
     identifier: MIT
+x-limits:
+  # Requests one token may make in any one-second window (sliding); more get 429.
+  requests-per-second-per-token: 20
+  # Hours an Idempotency-Key and its first result are kept, from the first request.
+  idempotency-key-retention-hours: 24
+  # Largest request body accepted, in bytes; a larger one gets 400 InvalidRequest.
+  request-body-max-bytes: 1048576
 servers:
 - url: /
   description: The engine's address on the platform's internal network; not reachable from outside it.
@@ -850,11 +861,14 @@ paths:
       summary: List this service's operations
       description: Lists the operations this service offers, by permission name and display text, at
         most 50 per page. It takes no api-version; it holds the `x-operation-name` and `summary` of every
-        operation in every version this service serves.
+        operation in every version this service serves, as one entry per permission name, whose display
+        text is the `summary` of each operation with that name, in contract order, joined by "; ". A
+        `page_token` this service did not issue returns 400 InvalidRequest.
       security:
       - clientToken: []
       - pageToken: []
       x-error-codes:
+        '400': [InvalidRequest]
         '401': [Unauthorized]
         '403': [Forbidden]
         '429': [RateLimited]
@@ -863,6 +877,8 @@ paths:
       responses:
         '200':
           $ref: '#/components/responses/ProviderOperationList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -900,7 +916,7 @@ components:
       name: Idempotency-Key
       in: header
       required: false
-      description: Kept for 24 hours. Repeating a request with the same key returns the first result; a
+      description: Kept for `x-limits.idempotency-key-retention-hours`. Repeating a request with the same key returns the first result; a
         different body with the same key returns 409 IdempotencyKeyReused.
       schema:
         type: string
@@ -1132,7 +1148,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     TooManyRequests:
-      description: More than 20 requests in one second with this token; try again after `Retry-After`.
+      description: More than `x-limits.requests-per-second-per-token` requests in one second with this token; try again after `Retry-After`.
       headers:
         Retry-After:
           $ref: '#/components/headers/RetryAfter'
@@ -1147,7 +1163,7 @@ components:
         A stable problem code. InvalidRequest: the body or a parameter does not match this contract.
         MissingApiVersionParameter, UnsupportedApiVersionValue: the api-version is missing or not
         served. Unauthorized, Forbidden: see 401 and 403. NotFound: the resource does not exist.
-        RateLimited: more than 20 requests per second. IdempotencyKeyReused: the key was used with a
+        RateLimited: more requests in one second than `x-limits.requests-per-second-per-token`. IdempotencyKeyReused: the key was used with a
         different body. NarrowDescription: the description covers more than one use case; describe
         one. TooManyQuestions: the slice would need more than 10 questions; narrow the description.
         QuestionNotOpen: the question does not exist or is answered. ContradictionOpen: an open
@@ -1158,7 +1174,8 @@ components:
         the project folder exists. InvalidProject: the project name is not a valid folder name.
         RunNotInterrupted: the run is not interrupted. RunNotWaiting: the run is not waiting for the
         developer. RunNotEnded: the run has not ended. OperationEnded: the operation has finished.
-        BudgetExhausted: the work used its token, cost or time budget.
+        BudgetExhausted: the work used its token, cost or time budget. OperationFailed: the work
+        failed for a reason no other code names, after any retries; `detail` says why.
       enum:
       - InvalidRequest
       - MissingApiVersionParameter
@@ -1185,6 +1202,7 @@ components:
       - RunNotEnded
       - OperationEnded
       - BudgetExhausted
+      - OperationFailed
     Problem:
       type: object
       description: An RFC 9457 problem with a stable `code`.
@@ -1571,6 +1589,8 @@ components:
           description: The permission name, for example `Agentic.Engine/slices/read`.
         display:
           type: string
+          description: The `summary` of each operation with this permission name, in contract order,
+            joined by "; ".
     ProviderOperationList:
       type: object
       required:
