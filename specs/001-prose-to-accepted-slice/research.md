@@ -254,9 +254,9 @@ page, none of which an existing project provides.
   `RunExpired`, `RunCancelled`, `RunCompleted`.
 - **Rationale**: constitution, Names say what things do.
 
-### D24. Signing our images and verifying them at start (NEEDS CLARIFICATION: the owner decides)
+### D24. Signing our images and verifying them at start
 
-- **Recommendation**: `src/deploy/build.sh` builds each image with an SBOM and build provenance
+- **Decision** (accepted by the project owner on 2026-11-12; [ADR 0028](../../docs/decisions/0028-sign-platform-images-locally.md)): `src/deploy/build.sh` builds each image with an SBOM and build provenance
   (`docker buildx build --sbom=true --provenance=mode=max`, SBOM generator pinned by digest) and
   pushes it to a local registry (`registry:3`, pinned, published on 127.0.0.1 only, data in a
   volume). It signs each pushed digest with cosign, run from its pinned image, using a key pair

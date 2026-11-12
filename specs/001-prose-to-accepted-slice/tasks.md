@@ -168,7 +168,7 @@ All code under `src/`. Go modules: `src/engine`, `src/slice`, `src/cli`, `src/pa
 
 ## Phase 5: Polish & Cross-Cutting Concerns
 
-- [ ] T058 [P] Sign every built image with a local key and attach an SBOM and build provenance in `scripts/release.sh`; the launcher verifies them at start (T023); signing approach per the owner's decision on the 2026-11-12 recommendation (local registry, cosign key pair outside the repository, no transparency log); upstream images stay digest-pinned because they carry no signatures
+- [ ] T058 [P] Sign every built image with a local key and attach an SBOM and build provenance in `scripts/release.sh`; the launcher verifies them at start (T023); as ADR 0028 decides (local registry, cosign key pair outside the repository, no transparency log; research D24); upstream images stay digest-pinned because they carry no signatures
 - [ ] T059 [P] Run the evals (T025, T041) from `scripts/check.sh` on every change to a prompt, agent definition, model or Docker Agent version, with a test-scoped API key that has a provider spending limit
 - [ ] T060 [P] Record decision records in `docs/decisions/`: Go as the platform's stack, Docker Agent's `serve api` as the integration mode (ADR 0002 follow-up), the run store format, the slice format (structured EARS rules and Gherkin examples)
 - [ ] T061 [P] (closes, before T066, the component concepts for tools adopted in earlier tasks) Add `docs/components/` concepts for Docker Agent, godog, cucumber/gherkin, oapi-codegen (with its runtime library), Redocly CLI, go-yaml (`go.yaml.in/yaml/v3`), Spectral, oasdiff, jsonschema, Schemathesis, nginx and gVisor, and an engine API concept under `docs/apis/`
