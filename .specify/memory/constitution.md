@@ -443,12 +443,19 @@ the Core Principle wins and the conflict MUST be raised for an amendment.
   repository, including the working tree's uncommitted and untracked changes, and run the test
   command there. Parallel fresh reviewers MUST NOT share a copy. A fresh agent review MUST NOT
   replace the human approval that Principle XVI requires.
-- **Tests change only through a fresh agent**: The author of code MUST NOT change, skip, or remove
-  a test, eval case, grader, or threshold that judges it. A fresh agent or person MUST judge such a
-  change from the spec and the contract, never from the author's argument, and CI MUST reject a
-  change to both code and the tests that judge it without that recorded approval. A requirement
-  MUST change only through a recorded clarification. A test MAY be skipped only as a strict
-  expected failure that names an open task.
+- **Existing tests change only with the owner's approval**: An existing test, test helper,
+  fixture, test data, planted case, grader, threshold, or eval case MUST be modified, renamed,
+  skipped, or removed only after the project owner approves that specific change, recorded in the
+  commit that makes it with a `Tests-approved-by:` trailer naming the owner. No standing approval
+  covers it. An agent MUST refuse a brief, or the part of one, that would change an existing test,
+  and MUST report the requested change to the owner instead; a coordinating agent MUST NOT brief
+  such a change without that approval. The author of code MUST NOT change a test that judges it. A
+  fresh agent MAY propose such a change, judged from the spec and the contract, never from the
+  author's argument, but its judgement MUST NOT replace the owner's approval. Adding a new test
+  file does not change an existing test. The commit hook MUST reject a change to an existing test
+  file without that trailer. A requirement MUST change only through a recorded clarification. A
+  test MAY be skipped only as a strict expected failure that names an open task
+  ([ADR 0029](../../docs/decisions/0029-existing-tests-change-only-with-owner-approval.md)).
 - **Findings have a home**: Every review finding, and every case a fresh reviewer reports as left
   untested, MUST be fixed, or recorded as a task, or as a checked task ending `closed: <reason>`,
   before the work it concerns is reported done.
@@ -545,4 +552,4 @@ Rationale: [ADR 0025](../../docs/decisions/0025-engineering-principles.md).
   - PATCH for clarifications and wording that do not change meaning
 - Compliance is checked in every plan's Constitution Check and in `/speckit-analyze`.
 
-**Version**: 1.4.0 | **Ratified**: 2026-11-11 | **Last Amended**: 2026-11-11
+**Version**: 2.0.0 | **Ratified**: 2026-11-11 | **Last Amended**: 2026-11-12
