@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-11
 
-**Status**: Draft (revised 2026-11-12 after fresh review round 1)
+**Status**: In implementation (Story 1 done 2026-11-12; revised 2026-11-12 after fresh review round 1)
 
 **Input**: User description: "A developer describes what they want in their own words and receives working software for one use case. Every result is accepted by checks, and the developer is asked only about what checks cannot judge." (full description in the conversation that created this spec; summarised in the stories below)
 
@@ -27,6 +27,10 @@ state worker; *hand-over* is what ADR 0026 calls escalation.
 
 - Q: After fresh review round 1, is growing the catalogue (proposing a new pattern) part of this feature? → A: No; it moves to a later feature. This feature declines a description that no pattern fits.
 - Q: After the analyze review of 2026-11-12 found the contract adds a `cancelled` outcome, may the developer cancel a run, and how does it end? → A: Yes; a run whose operation the developer cancels ends as cancelled, a fourth outcome (constitution Principle X).
+
+### Session 2026-11-13
+
+- Q: After the analyze review of 2026-11-13, when is a description "the same" as one submitted before (edge cases)? → A: When its text is the same, character for character; the previously approved slice is then offered for reuse.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -125,7 +129,7 @@ Each failure is stopped by a check, and a replay of the same run gives byte-iden
 - The model is unavailable mid-run: the step fails as not accepted, is retried within its
   attempts, and the run can be resumed later (FR-020).
 - The same description is submitted again: the previously approved slice is offered for reuse
-  instead of being proposed again.
+  instead of being proposed again. "The same" means the same text, character for character.
 
 ## Requirements *(mandatory)*
 

@@ -4,25 +4,63 @@ title: Architecture overview
 description: System context, building blocks, and cross-cutting design of the platform.
 tags: [architecture]
 status: draft
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T16:37:58Z }
+sources:
+  - id: research
+    resource: ../../specs/001-prose-to-accepted-slice/research.md
+    title: Feature 001 research, D5 to D13, D24, D27, D28
+  - id: adr-0028
+    resource: /decisions/0028-sign-platform-images-locally.md
+    title: "ADR 0028: Sign the platform's images locally with cosign"
+generated: { by: claude-code/claude-sonnet-5-5, at: 2026-11-13T12:00:00Z }
 ---
 
 # Context
 
-Not yet designed. The users, external systems, and platform boundary come
-from the [platform purpose](/overview/platform.md).
+A developer on one machine describes a use case in prose and the platform takes it to approved,
+tested software; the model proposes, deterministic checks decide. The users and boundary come from
+the [platform purpose](/overview/platform.md).
 
 # Building blocks
 
-Agents are defined and executed with [Docker Agent](/references/docker-agent.md)
-([ADR 0002](/decisions/0002-build-on-docker-agent.md)). The platform's own building blocks
-wrap it with identity, tenancy, policy, durable runs, quotas and audit.
+Agents run on [Docker Agent](/references/docker-agent.md)
+([ADR 0002](/decisions/0002-build-on-docker-agent.md)); interactive clients will share sessions
+through the [Agent Host Protocol](/references/agent-host-protocol.md)
+([ADR 0003](/decisions/0003-ahp-client-session-protocol.md)). Feature 001 builds one slice of the
+platform on one machine ([ADR 0026](/decisions/0026-deterministic-workflow-engine.md)).
 
-Interactive clients share and steer live sessions through the
-[Agent Host Protocol](/references/agent-host-protocol.md), served by the platform's own AHP host
-([ADR 0003](/decisions/0003-ahp-client-session-protocol.md)).
+Shipped by Story 1:
 
-Each building block gets its own concept and is linked from here:
+- **Launcher `ap`** (`src/deploy/ap`): starts and stops the containers and passes each its token.
+  It verifies the cosign signature of every platform image against the local registry before
+  anything starts ([ADR 0028](/decisions/0028-sign-platform-images-locally.md),
+  [cosign](/components/cosign.md), [registry](/components/distribution-registry.md)).
+- **Engine** (`src/engine`): the slice service (proposes, changes and approves slices), the run store
+  (slices and runs on a volume only it mounts) and the contract checks (schema, traceability,
+  pattern fit, [oasdiff](/components/oasdiff.md) compatibility, lint). It serves the contract-first
+  engine API.
+- **Analyst service**: [Docker Agent](/components/docker-agent.md) running `serve api` on the
+  analyst agent; the engine calls it for each proposal (research D27).
+- **Contract-lint service**: a small [Spectral](/components/spectral.md) server that lints a slice's
+  contract; only the engine reaches it (research D28).
+- **Model gateway**: [nginx](/components/nginx.md), the only container with egress and the only one
+  that holds the provider key.
+- **Terminal client** (`src/cli`) and **run page** (`src/page`): both call the engine API.
+
+Planned for Story 2: per-step **step containers** and **check containers**, started by `ap` when a
+slice is approved and a build is asked for, each with only its step's paths writable
+(research D5). The engine runs the step, then the check decides; the check container cannot reach
+the gateway.
+
+Every container runs read-only with all capabilities dropped; the analyst, contract-lint and the
+workers run under [gVisor](/components/gvisor.md). Networks are internal and isolated: `clients`,
+`agents` (engine, gateway, step workers), `checks`, `lint` and `analyst` (engine, gateway). Only the
+gateway joins `egress`, and only the page's forwarder joins `page-host` to publish 127.0.0.1.
+See [Compose](../../src/deploy/compose.yaml) and the [component list](/components/index.md).
+
+Sources: [Feature 001 research](../../specs/001-prose-to-accepted-slice/research.md),
+[ADR 0028](/decisions/0028-sign-platform-images-locally.md).
+
+Each further building block gets its own concept:
 
 - Agents go in [agents/](/agents/conventions.md).
 - Components go in [components/](/components/conventions.md).

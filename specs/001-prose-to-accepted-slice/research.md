@@ -175,6 +175,12 @@ fresh review round 1.
   `expired` after 14 days. The engine API and page allow 20 requests per second
   per token; requests without an accepted token are limited to 20 per second per source address
   (T018a).
+- **The analyst's budget** (Principle XIV: every agent has token, cost and time budgets): the
+  analyst works before any run exists, so its budget is its own, declared once in
+  `src/agents/analyst.yaml` and enforced by Docker Agent per session, one session per proposal or
+  revision (D27): 200,000 tokens, $0.10 and 5 minutes. Its step-like bounds are the pattern's
+  `limits.attempts` (3) proposals per call, at most 4 analyst calls at once and a description of at
+  most 4,000 characters.
 - **Rationale**: Principles X and XIV; Docker Agent budgets (S5).
 
 ### D15. Idempotency keys

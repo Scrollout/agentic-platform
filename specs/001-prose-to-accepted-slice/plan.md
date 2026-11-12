@@ -20,8 +20,10 @@ replay is byte-identical. The approach is the ADR 0026 spike, made general and d
 **Language/Version**: Go 1.26 for all platform code; the built slices are Go (D1)
 
 **Primary Dependencies**: Docker Agent v1.160.0 (pinned image digest), godog, cucumber/gherkin,
-oapi-codegen, Redocly CLI (contract bundling), Spectral, oasdiff, santhosh-tekuri/jsonschema,
-Schemathesis, nginx (gateway), gVisor;
+oapi-codegen, Redocly CLI (contract bundling), Spectral (also as the contract-lint service, D28),
+oasdiff (as a Go library in the engine), santhosh-tekuri/jsonschema, Schemathesis, nginx (gateway),
+gVisor, WireMock (the recorded model, D26), cosign and the Distribution registry (local signing,
+D24); Docker Agent `serve api` runs the analyst (D27);
 Claude Haiku via the gateway (D2–D4, D9, D13)
 
 **Storage**: append-only JSON Lines run records and a content-addressed artifact store in a named
@@ -161,3 +163,4 @@ single-developer version only and are recorded in the commit that carries this p
 | Rule | Location | Reason |
 |------|----------|--------|
 | Test-first task split (tasks.md rules; Outside-in, test-first) | T005, T012 | Each task holds a check and its planted-violation tests. The tests were written by a separate test author (commits `c3bb1ff` and `66de0d3`), so authorship is separate; only the task split is not. Later tasks keep the split. |
+| Contract-first step 3 and Outside-in, test-first ("see them fail before writing the minimal code") | T030, T031 against T038, T038c, T039 (commits `65b82c8`, `044fe8d`, then `a0b5688`) | In Story 1 the API conformance and acceptance suites were written after the slice handlers and the terminal client they judge; the unit tests of each unit came first, by separate authors. The late suites found two engine defects, fixed with regression tests in `a0b5688`. Approved by the project owner on 2026-11-13. From Story 2 on, T045, T046 and T067 are committed and seen failing before T054 and T055. |
