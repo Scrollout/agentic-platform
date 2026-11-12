@@ -11,7 +11,7 @@ generated: { by: claude-code/claude-opus-5-5, at: 2026-11-12T05:10:00Z }
 # Purpose
 
 The only environment of feature 001: one developer, one machine, one active run. Nothing is
-installed on the host beyond a container runtime with Compose and the gVisor runtime (`runsc`).
+installed on the host beyond a container runtime with Compose and the gVisor runtime (`runsc`; see [Install the gVisor runtime for Docker](/guides/install-gvisor.md)).
 
 # Topology
 

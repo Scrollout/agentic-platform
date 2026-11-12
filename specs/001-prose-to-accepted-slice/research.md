@@ -22,6 +22,8 @@ fresh review round 1.
 | S12 | [gVisor Docker Quick Start](https://gvisor.dev/docs/user_guide/quick_start/docker/): `runsc install` adds a Docker runtime selected per container |
 | S13 | [ADR 0027: Contract-driven frontend](../../docs/decisions/0027-contract-driven-frontend.md) |
 | S14 | RFC 8785, JSON Canonicalization Scheme |
+| S15 | [Sigstore cosign `sign`](https://github.com/sigstore/cosign/blob/main/doc/cosign_sign.md) and [`verify`](https://github.com/sigstore/cosign/blob/main/doc/cosign_verify.md) references; [Docker: DCT retirement and migration guidance](https://www.docker.com/blog/docker-content-trust-retirement-and-migration-guidance/) ("Digest pinning verifies content integrity ... it does not by itself prove publisher identity"); [CNCF Distribution: deploying a registry](https://distribution.github.io/distribution/about/deploying/) |
+| S16 | Experiment, 2026-11-12, in the session scratchpad: `registry:3` on 127.0.0.1 plus `ghcr.io/sigstore/cosign/cosign:v3.1.4` (by digest) in containers; results in D24 |
 
 ## Decisions
 
@@ -251,3 +253,40 @@ page, none of which an existing project provides.
   `StepRejected`, `ResultReused`, `FindingRecorded`, `RunHandedOver`, `HandOverAccepted`,
   `RunExpired`, `RunCancelled`, `RunCompleted`.
 - **Rationale**: constitution, Names say what things do.
+
+### D24. Signing our images and verifying them at start (NEEDS CLARIFICATION: the owner decides)
+
+- **Recommendation**: `src/deploy/build.sh` builds each image with an SBOM and build provenance
+  (`docker buildx build --sbom=true --provenance=mode=max`, SBOM generator pinned by digest) and
+  pushes it to a local registry (`registry:3`, pinned, published on 127.0.0.1 only, data in a
+  volume). It signs each pushed digest with cosign, run from its pinned image, using a key pair
+  made once and kept outside the repository (`~/.config/agentic-platform/signing/`, private key
+  encrypted and mode 600) and a signing config with no transparency log, so no image name or
+  digest leaves the machine. `ap up` verifies every digest with the public key, from a container on
+  an internal network, before it starts anything; any failure stops `up` (XIV, fails closed), and
+  Compose starts images by digest. Upstream images (Docker Agent, nginx, Go) stay pinned by digest
+  only: neither the Docker Agent nor the nginx pin carries a cosign signature or attestation, and
+  Docker Content Trust is retired.
+- **Evidence** (S15, S16):
+  - Signing and verifying worked offline: a signed digest verified on an internal network with no
+    internet; an unsigned digest pushed under the same tag failed (`no signatures found`); a
+    different public key failed; a signature verified only with the matching key.
+  - cosign v3 rejects `--tlog-upload=false`; a signing config without transparency-log services
+    (`cosign signing-config create`) replaces it, and `verify` then needs `--insecure-ignore-tlog`.
+    Without that flag, verification tries to reach Sigstore's public TUF server.
+  - `docker buildx build --sbom=true --provenance=mode=max --push` attached both attestations on
+    this machine's Docker 29 (containerd image store) and pushed them to the local registry. It
+    pulls an SBOM scanner image, which must then be pinned.
+  - `cosign tree` found no signatures or attestations for the pinned `docker/docker-agent` and
+    `nginx` images.
+- **Limit**: the key sits on the same machine that builds and runs the images. A process running
+  as the developer could read the key and sign its own image. What signing proves locally is that
+  `ap up` starts exactly the images `build.sh` built, not who built them. Publisher identity
+  arrives with hosted CI and keyless signing.
+- **Alternatives rejected**: Docker Content Trust (retired; data deleted in 2028); Notation (also
+  registry-based, a second tool for the same result); a cosign bundle without a registry
+  (`--upload=false`) plus a local OCI layout, which Compose cannot start from; digest pins alone
+  for our images (they do not meet Principle VIII's "signed and verified at deploy time").
+- **Cost**: two more pins (`registry`, `cosign`, plus the SBOM scanner); a registry container
+  while building and starting; one decision record when adopted (hard to reverse), and component
+  concepts for cosign and Distribution.

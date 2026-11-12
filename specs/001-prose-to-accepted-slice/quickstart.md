@@ -5,8 +5,8 @@ launcher `src/deploy/ap`, which only calls `docker compose` ([terminal contract]
 
 ## Prerequisites
 
-- A container runtime with Compose, and the gVisor runtime installed once with `runsc install`
-  (research D13).
+- A container runtime with Compose, and the gVisor runtime installed once (research D13;
+  [install guide](../../docs/guides/install-gvisor.md)).
 - A model credentials file outside the repository that holds only the provider key (no variable
   name), owned by you and readable only by you (`chmod 600`), for example
   `~/.config/agentic-platform/anthropic_api_key`. Only the gateway container reads it.
