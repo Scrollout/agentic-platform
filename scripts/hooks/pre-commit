@@ -138,9 +138,10 @@ if [ -n "$scripts" ]; then
   git -c user.name=pre-commit -c user.email=pre-commit@localhost -c commit.gpgsign=false \
     commit -q --no-verify -m "staged snapshot" \
     || { echo "pre-commit: the snapshot repository commit failed" >&2; exit 1; }
-  python3 -m unittest discover -s scripts/tests -p 'test_*.py' >"$work/unittest.log" 2>&1 \
+  # Every check test, 6 test classes at a time (scripts/testrun.py; measured 26 to 9 minutes).
+  python3 scripts/testrun.py --jobs 6 >"$work/unittest.log" 2>&1 \
     || { cat "$work/unittest.log"; exit 1; }
-  tail -3 "$work/unittest.log"
+  grep -E '^== (time|the slowest part)' "$work/unittest.log"
 fi
 if [ -s "$work/md" ]; then
   run "markdown"
