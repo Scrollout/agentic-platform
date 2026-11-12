@@ -102,6 +102,7 @@ type (
 		Model       string    `json:"model"`
 		AgentDigest string    `json:"agent_digest"`
 		Refs        []string  `json:"refs"`
+		Attempts    int       `json:"attempts,omitempty"` // absent in records written before it was kept
 	}
 	diskSequence struct {
 		Last int `json:"last"` // the number of the last slice ID given out
@@ -120,7 +121,7 @@ func toDiskChecks(cs []Check) []diskCheck {
 	}
 	out := make([]diskCheck, len(cs))
 	for i, c := range cs {
-		out[i] = diskCheck{Part: c.Part, Check: c.Check, Passed: c.Passed, Reason: c.Reason, FromPattern: c.fromPattern}
+		out[i] = diskCheck{Part: c.Part, Check: c.Check, Passed: c.Passed, Reason: c.Reason, FromPattern: c.Pattern}
 	}
 	return out
 }
@@ -131,7 +132,7 @@ func fromDiskChecks(cs []diskCheck) []Check {
 	}
 	out := make([]Check, len(cs))
 	for i, c := range cs {
-		out[i] = Check{Part: c.Part, Check: c.Check, Passed: c.Passed, Reason: c.Reason, fromPattern: c.FromPattern}
+		out[i] = Check{Part: c.Part, Check: c.Check, Passed: c.Passed, Reason: c.Reason, Pattern: c.FromPattern}
 	}
 	return out
 }
@@ -162,7 +163,7 @@ func encodeRecord(r *record) ([]byte, error) {
 		d.Slice.History = make([]diskHistory, len(sl.History))
 	}
 	for i, h := range sl.History {
-		d.Slice.History[i] = diskHistory{Kind: h.Kind, At: h.At, Model: h.Model, AgentDigest: h.AgentDigest, Refs: h.Refs}
+		d.Slice.History[i] = diskHistory{Kind: h.Kind, At: h.At, Model: h.Model, AgentDigest: h.AgentDigest, Refs: h.Refs, Attempts: h.Attempts}
 	}
 	return json.MarshalIndent(d, "", "  ")
 }
@@ -218,7 +219,10 @@ func (s *Service) decodeRecord(id string, b []byte) (*record, error) {
 		sl.History = make([]HistoryEntry, len(d.Slice.History))
 	}
 	for i, h := range d.Slice.History {
-		sl.History[i] = HistoryEntry{Kind: h.Kind, At: h.At, Model: h.Model, AgentDigest: h.AgentDigest, Refs: h.Refs}
+		if h.Attempts < 0 {
+			return nil, fmt.Errorf("history entry %d has %d attempts", i, h.Attempts)
+		}
+		sl.History[i] = HistoryEntry{Kind: h.Kind, At: h.At, Model: h.Model, AgentDigest: h.AgentDigest, Refs: h.Refs, Attempts: h.Attempts}
 	}
 	want := Parts{Goals: d.Slice.Parts.Goals, Rules: d.Slice.Parts.Rules, Contract: d.Slice.Parts.Contract}
 	if err := setParts(&sl); err != nil {

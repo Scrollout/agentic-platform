@@ -23,8 +23,8 @@ operation at all.
 | `questions[]` | Question records | at most 10 in total per slice (FR-006) |
 | `parts` | current hash of `goals`, `rules` and `contract` | SHA-256 of the RFC 8785 canonical JSON of `{goals}`, `{rules, examples, terms}` and `{contract}` |
 | `approvals[]` | Approval records | one each for goals, rules and contract |
-| `checks[]` | latest check results | each names the part or item, the check, whether it passed and the reason |
-| `history[]` | every change in order: `proposed`, `revised`, `answered`, `changed`, `approved`, `withdrawn` | time and the IDs concerned; a proposal or revision names the model and agent definition digest |
+| `checks[]` | latest check results | each names the part or item, the check, whether it passed, the reason, and `pattern`: whether it is a condition of the catalogue pattern (`PatternFit` when no pattern can be read) or one of the engine's own checks |
+| `history[]` | every change in order: `proposed`, `revised`, `answered`, `changed`, `approved`, `withdrawn` | time and the IDs concerned; a proposal or revision names the model and agent definition digest, and `attempts`: how many times the analyst was asked before its output was usable (at most the pattern's `limits.attempts`; absent on entries recorded before it was kept) |
 | `state` | see lifecycle | set by the platform |
 | `latest_run` | the slice's latest run ID | the run owns its status and outcome |
 | `title` | a short name | derived from the first goal |

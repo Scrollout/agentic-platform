@@ -208,18 +208,13 @@ func failingChecks(sl *gen.Slice, only gen.Part) []gen.CheckResult {
 	return out
 }
 
-// patternConditions are the checks that decide whether the pattern fits a slice (the pattern's
-// conditions in src/catalogue/api-feature-go/pattern.yaml); any other failing check is not a misfit.
-var patternConditions = map[string]bool{
-	"ContractIsOpenApi31": true, "OnlyHttpOperations": true, "ContractRefsLocal": true, "RulesNameOneSystem": true,
-}
-
-// writeMisfit prints one plain line when the slice fails a pattern condition: the pattern does not
-// fit, and each failing condition with its reason. A fitting slice prints nothing.
+// writeMisfit prints one plain line when the slice fails a pattern condition, a check result the
+// engine marks with `pattern` (absent counts as false): the pattern does not fit, and each failing
+// condition with its reason. A fitting slice prints nothing.
 func writeMisfit(w io.Writer, sl *gen.Slice) {
 	var why []string
 	for _, c := range sl.Checks {
-		if !c.Passed && patternConditions[c.Check] {
+		if !c.Passed && c.Pattern {
 			why = append(why, fmt.Sprintf("%s: %s", c.Check, c.Reason))
 		}
 	}

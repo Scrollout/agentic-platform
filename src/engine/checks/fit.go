@@ -21,6 +21,10 @@ type CheckResult struct {
 	Check  string `json:"check"`
 	Passed bool   `json:"passed"`
 	Reason string `json:"reason"`
+	// Unreadable marks a failure because the slice's contract text cannot be read as exactly one
+	// YAML document without duplicate keys: the contract was not checked at all, so whoever wrote
+	// it may be asked for a readable one. It is not part of check_result.
+	Unreadable bool `json:"-"`
 }
 
 // Fit evaluates every condition the pattern lists, in the pattern's order, against the slice.
@@ -33,7 +37,8 @@ type CheckResult struct {
 // It fails closed: a condition it does not implement fails under its own name; a pattern whose
 // condition list cannot be read yields one failing PatternFit result; a slice that is not JSON
 // fails every condition; a contract that is not exactly one YAML document without duplicate keys
-// fails every contract condition. It reads no clock, network or model.
+// fails every contract condition, and those results are marked Unreadable. It reads no clock,
+// network or model.
 func Fit(pattern []byte, slice []byte) []CheckResult {
 	var p struct {
 		Conditions []string `yaml:"conditions"`
@@ -55,7 +60,8 @@ func Fit(pattern []byte, slice []byte) []CheckResult {
 			continue
 		}
 		passed, reason := c.eval(in)
-		out = append(out, CheckResult{Part: c.part, Check: name, Passed: passed, Reason: reason})
+		out = append(out, CheckResult{Part: c.part, Check: name, Passed: passed, Reason: reason,
+			Unreadable: c.part == "contract" && in.contractUnreadable})
 	}
 	return out
 }
@@ -65,8 +71,11 @@ func Fit(pattern []byte, slice []byte) []CheckResult {
 type fitInput struct {
 	contract    *yaml.Node // root node of the contract's one document
 	contractErr string
-	rules       []fitRule
-	rulesErr    string
+	// contractUnreadable is set when the contract text is there but is not exactly one YAML
+	// document without duplicate keys (readContract failed).
+	contractUnreadable bool
+	rules              []fitRule
+	rulesErr           string
 }
 
 type fitRule struct {
@@ -110,6 +119,7 @@ func readSlice(b []byte) fitInput {
 		in.contractErr = "the slice has no contract"
 	} else {
 		in.contract, in.contractErr = readContract(*s.Contract)
+		in.contractUnreadable = in.contractErr != ""
 	}
 	if len(s.Rules) == 0 || string(s.Rules) == "null" {
 		in.rulesErr = "the slice has no rules"

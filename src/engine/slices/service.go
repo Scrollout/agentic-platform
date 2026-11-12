@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/agentic-platform/engine/checks"
 	"github.com/agentic-platform/slice"
 	"go.yaml.in/yaml/v3"
 )
@@ -211,7 +212,7 @@ func (s *Service) build(ctx context.Context, description string) (Result, *recor
 		return Result{Slice: sl, Reused: true}, nil, nil
 	}
 
-	p, sl, err := s.propose(ctx, AnalystInput{Description: description}, 0)
+	p, sl, attempts, err := s.propose(ctx, AnalystInput{Description: description}, 0)
 	if err != nil {
 		return Result{}, nil, err
 	}
@@ -224,7 +225,7 @@ func (s *Service) build(ctx context.Context, description string) (Result, *recor
 		return Result{}, nil, err
 	}
 	rec.slice.History = []HistoryEntry{{Kind: "proposed", At: s.now(), Model: p.Model, AgentDigest: p.AgentDigest,
-		Refs: []string{string(PartGoals), string(PartRules), string(PartContract)}}}
+		Refs: []string{string(PartGoals), string(PartRules), string(PartContract)}, Attempts: attempts}}
 	rec.slice.State = state(&rec.slice)
 	return Result{}, rec, nil
 }
@@ -236,18 +237,19 @@ const maxQuestions = 10
 // propose asks the analyst for a proposal from base (a description, and when revising the
 // current proposal and the questions) and builds the slice from it; asked is the number of
 // questions the slice already has, which count against the limit with the new ones. An unusable
-// proposal is sent back with its faults until one is usable or s.attempts calls were made. An
-// analyst error is returned at once, not retried.
-func (s *Service) propose(ctx context.Context, base AnalystInput, asked int) (Proposal, Slice, error) {
+// proposal is sent back with its faults until one is usable or s.attempts calls were made; it
+// returns the number of calls made. An analyst error, a description of several use cases and too
+// many questions are returned at once, not retried.
+func (s *Service) propose(ctx context.Context, base AnalystInput, asked int) (Proposal, Slice, int, error) {
 	description := base.Description
 	in := base
 	for attempt := 1; ; attempt++ {
 		p, err := s.analyst.Propose(ctx, in)
 		if errors.Is(err, ErrMultipleUseCases) {
-			return Proposal{}, Slice{}, &Error{Code: "NarrowDescription", Detail: "the description covers more than one use case; describe one"}
+			return Proposal{}, Slice{}, 0, &Error{Code: "NarrowDescription", Detail: "the description covers more than one use case; describe one"}
 		}
 		if err != nil {
-			return Proposal{}, Slice{}, fmt.Errorf("slices: the analyst failed: %w", err)
+			return Proposal{}, Slice{}, 0, fmt.Errorf("slices: the analyst failed: %w", err)
 		}
 		sl := clone(Slice{ // own the analyst's lists
 			Description: description, Contract: p.Contract, Examples: p.Examples,
@@ -255,18 +257,18 @@ func (s *Service) propose(ctx context.Context, base AnalystInput, asked int) (Pr
 		})
 		normalise(&sl)
 		if asked+len(p.Questions) > maxQuestions {
-			return Proposal{}, Slice{}, &Error{Code: "TooManyQuestions",
+			return Proposal{}, Slice{}, 0, &Error{Code: "TooManyQuestions",
 				Detail: fmt.Sprintf("the slice would need %d questions, more than %d; narrow the description", asked+len(p.Questions), maxQuestions)}
 		}
 		faults, err := s.unusable(&sl, p.Questions)
 		if err != nil {
-			return Proposal{}, Slice{}, err
+			return Proposal{}, Slice{}, 0, err
 		}
 		if len(faults) == 0 {
-			return p, sl, nil
+			return p, sl, attempt, nil
 		}
 		if attempt >= s.attempts {
-			return Proposal{}, Slice{}, &Error{Code: "OperationFailed", Detail: fmt.Sprintf(
+			return Proposal{}, Slice{}, 0, &Error{Code: "OperationFailed", Detail: fmt.Sprintf(
 				"the analyst's proposal was unusable after %d attempts (limits.attempts): %s", attempt, strings.Join(faults, "; "))}
 		}
 		prev := p
@@ -278,7 +280,8 @@ func (s *Service) propose(ctx context.Context, base AnalystInput, asked int) (Pr
 // unusable returns what makes the analyst's output, as the slice sl built from it and its
 // questions, unusable: each way it breaks slice-proposal.schema.json (model output is parsed
 // against its schema, never trusted; a nil list counts as the empty list), and each syntax finding
-// of slice.Trace, examples that are not Gherkin or a contract that is not YAML. Other faults are
+// of slice.Trace (examples that are not Gherkin or a contract that is not YAML), and a contract
+// checks.Fit cannot read as one YAML document without duplicate keys. Other faults are
 // check results, stored with the slice.
 func (s *Service) unusable(sl *Slice, questions []QuestionDraft) ([]string, error) {
 	doc, err := json.Marshal(struct {
@@ -293,6 +296,7 @@ func (s *Service) unusable(sl *Slice, questions []QuestionDraft) ([]string, erro
 		return nil, err
 	}
 	var out []string
+	contractRead := true
 	for _, f := range fails { // a fault at the document's root is reported once per part
 		r := "the proposal breaks the proposal schema: " + f.Reason
 		if !slices.Contains(out, r) {
@@ -305,6 +309,17 @@ func (s *Service) unusable(sl *Slice, questions []QuestionDraft) ([]string, erro
 			return nil, fmt.Errorf("slices: traceability: %s", f.Reason)
 		case f.ID == "": // a syntax finding: the examples or the contract text does not parse
 			out = append(out, f.Reason)
+			contractRead = contractRead && f.Part != string(PartContract)
+		}
+	}
+	// A contract that YAML parses but checks.Fit cannot read (duplicate keys, several documents)
+	// was not checked at all; the analyst is asked for a readable one. An unreadable pattern is
+	// no fault of the proposal: it stays a stored failed check.
+	if s.pattern != nil && contractRead {
+		for _, r := range checks.Fit(s.pattern, doc) {
+			if r.Unreadable && !slices.Contains(out, r.Reason) {
+				out = append(out, r.Reason)
+			}
 		}
 	}
 	return out, nil
@@ -540,7 +555,7 @@ func (s *Service) approvable(id string, part Part, contentHash string) (*record,
 	for _, c := range r.slice.Checks {
 		if c.Part == string(part) && !c.Passed {
 			fails = append(fails, c)
-			onlyPattern = onlyPattern && c.fromPattern
+			onlyPattern = onlyPattern && c.Pattern
 		}
 	}
 	if len(fails) > 0 {
@@ -567,7 +582,7 @@ func (s *Service) Buildable(id string) error {
 	}
 	var fails []Check
 	for _, c := range r.slice.Checks {
-		if c.fromPattern && !c.Passed {
+		if c.Pattern && !c.Passed {
 			fails = append(fails, c)
 		}
 	}

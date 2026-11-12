@@ -120,7 +120,9 @@ type Check struct {
 	Passed bool
 	Reason string
 
-	fromPattern bool // a condition of the catalogue pattern (checks.Fit), not a check of this package
+	// Pattern is true for a condition of the catalogue pattern (checks.Fit, or PatternFit when no
+	// pattern can be read), false for a check of this package (check_result `pattern`).
+	Pattern bool
 }
 
 // The names of the checks this package runs besides the pattern's conditions.
@@ -195,6 +197,9 @@ type HistoryEntry struct {
 	Model       string
 	AgentDigest string
 	Refs        []string
+	// Attempts is, on a proposed or revised entry, how many times the analyst was asked before
+	// its output was usable; 0 on other entries and on entries recorded before it was kept.
+	Attempts int
 }
 
 // Slice is one use case and its state before a build. State is proposed, questions-open, checked

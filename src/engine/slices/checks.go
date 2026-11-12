@@ -61,11 +61,11 @@ func (s *Service) partChecks(sl *Slice, dropped map[string]string) ([]Check, err
 	out = append(out, exampleTagged(sl.Examples, dropped)...)
 
 	if s.pattern == nil { // fail closed: no pattern means nothing shows the slice fits
-		out = append(out, Check{Part: string(PartContract), Check: "PatternFit", fromPattern: true,
+		out = append(out, Check{Part: string(PartContract), Check: "PatternFit", Pattern: true,
 			Reason: "no catalogue pattern is configured, so nothing shows the slice fits"})
 	} else {
 		for _, r := range checks.Fit(s.pattern, doc) {
-			out = append(out, Check{Part: r.Part, Check: r.Check, Passed: r.Passed, Reason: r.Reason, fromPattern: true})
+			out = append(out, Check{Part: r.Part, Check: r.Check, Passed: r.Passed, Reason: r.Reason, Pattern: true})
 		}
 	}
 	return out, nil

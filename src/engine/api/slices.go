@@ -367,6 +367,10 @@ func sliceView(sl slices.Slice, artifactCount int) gen.Slice {
 	for i, h := range sl.History {
 		e := &v.History[i]
 		e.Kind, e.At, e.Model, e.AgentDigest = gen.SliceSchemaHistoryKind(h.Kind), h.At, opt(h.Model), opt(h.AgentDigest)
+		if h.Attempts > 0 {
+			n := h.Attempts
+			e.Attempts = &n
+		}
 		e.Refs = make([]gen.SliceSchema_History_Refs_Item, len(h.Refs))
 		for j, ref := range h.Refs {
 			if h.Kind == "answered" {
@@ -382,7 +386,7 @@ func sliceView(sl slices.Slice, artifactCount int) gen.Slice {
 func checkResults(checks []slices.Check) []gen.CheckResult {
 	out := make([]gen.CheckResult, len(checks))
 	for i, c := range checks {
-		out[i] = gen.CheckResult{Part: c.Part, Check: c.Check, Passed: c.Passed, Reason: c.Reason}
+		out[i] = gen.CheckResult{Part: c.Part, Check: c.Check, Passed: c.Passed, Reason: c.Reason, Pattern: c.Pattern}
 	}
 	return out
 }

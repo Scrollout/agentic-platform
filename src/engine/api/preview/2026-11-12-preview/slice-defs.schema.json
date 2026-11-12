@@ -379,7 +379,8 @@
         "part",
         "check",
         "passed",
-        "reason"
+        "reason",
+        "pattern"
       ],
       "additionalProperties": false,
       "properties": {
@@ -397,6 +398,10 @@
           "type": "string",
           "minLength": 1,
           "description": "Why the check failed, or what it confirmed."
+        },
+        "pattern": {
+          "type": "boolean",
+          "description": "True when the check is a condition of the catalogue pattern (pattern.yaml conditions, or PatternFit when no pattern can be read), false for the engine's own checks. A client names the failing checks with true when it says the pattern does not fit."
         }
       }
     },

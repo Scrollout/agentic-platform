@@ -19,7 +19,7 @@ const noHTTPReason = "the contract has no HTTP operation"
 func nonFittingSlice() map[string]any {
 	return slice(sliceOpts{state: "questions-open", checks: []map[string]any{
 		{"part": "goals", "check": "GoalsPresent", "passed": true, "reason": "one goal"},
-		failedCheck("contract", "OnlyHttpOperations", noHTTPReason),
+		{"part": "contract", "check": "OnlyHttpOperations", "passed": false, "reason": noHTTPReason, "pattern": true},
 		{"part": "contract", "check": "ContractIsOpenApi31", "passed": true, "reason": "the contract is OpenAPI 3.1.0"},
 	}})
 }

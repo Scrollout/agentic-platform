@@ -51,7 +51,7 @@ func (s *Service) Answer(ctx context.Context, id string, answers []Answer) (Slic
 	model, digest := lastProposal(cur.History)
 	current := Proposal{Goals: cur.Goals, Terms: cur.Terms, Rules: cur.Rules, Examples: cur.Examples,
 		Contract: cur.Contract, Model: model, AgentDigest: digest}
-	p, sl, err := s.propose(ctx, AnalystInput{Description: cur.Description, Current: &current, Questions: clone(Slice{Questions: qs}).Questions}, len(qs))
+	p, sl, attempts, err := s.propose(ctx, AnalystInput{Description: cur.Description, Current: &current, Questions: clone(Slice{Questions: qs}).Questions}, len(qs))
 	if err != nil {
 		return Slice{}, err
 	}
@@ -86,7 +86,7 @@ func (s *Service) Answer(ctx context.Context, id string, answers []Answer) (Slic
 	})
 	rec.slice.History = append(slices.Clone(cur.History),
 		HistoryEntry{Kind: "answered", At: now, Refs: answered},
-		HistoryEntry{Kind: "revised", At: s.now(), Model: p.Model, AgentDigest: p.AgentDigest, Refs: orEmpty(changed)})
+		HistoryEntry{Kind: "revised", At: s.now(), Model: p.Model, AgentDigest: p.AgentDigest, Refs: orEmpty(changed), Attempts: attempts})
 	withdrawFailing(&rec.slice, s.now())
 	rec.slice.State = state(&rec.slice)
 
