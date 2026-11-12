@@ -243,6 +243,9 @@ fresh review round 1.
 | Docker Agent | Apache-2.0 | not published | adopted by ADR 0002; run the scorecard locally (task) |
 | godog | MIT | 6.2 | |
 | cucumber/gherkin | MIT | 7.2 | |
+| cucumber/messages | MIT | 7.2 (2026-11-09) | required by cucumber/gherkin (v34.2.0); owner approved 2026-11-12 |
+| google/uuid | BSD-3-Clause | 6.9 (2026-10-26) | required by cucumber/messages (v1.6.0, indirect); stable, last change 2024-11 |
+| yaml/go-yaml (`go.yaml.in/yaml/v3`) | Apache-2.0 | not published | the engine's YAML reader since T018 and `src/slice`'s for contracts (v3.0.4); run the scorecard locally (T063) |
 | oapi-codegen | Apache-2.0 | 7.5 | |
 | oapi-codegen/runtime | Apache-2.0 | 7.2 (2026-10-26) | library imported by the generated code |
 | Redocly CLI | MIT | not published | bundles contracts only; run locally (T063) |

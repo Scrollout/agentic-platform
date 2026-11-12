@@ -1,0 +1,1 @@
+{"id":"R-7","goal":"G-1","pattern":"event","precondition":"the user is signed in","trigger":"a user creates a note","system":"the notes service","response":"shall return the new note","terms":[]}

@@ -1,0 +1,1 @@
+{"id":"R-5","goal":"G-1","pattern":"unwanted","trigger":"a note is larger than 64 KiB","system":"the notes service","response":"shall reject the note with a size error","terms":[]}

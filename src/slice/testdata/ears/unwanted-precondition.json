@@ -1,0 +1,1 @@
+{"id":"R-6","goal":"G-1","pattern":"unwanted","precondition":"the user is signed in","trigger":"the note is larger than 64 KiB","system":"the notes service","response":"shall reject the note","terms":[]}

@@ -1,0 +1,44 @@
+{
+  "goals": [
+    {
+      "id": "G-1",
+      "text": "Keep notes"
+    },
+    {
+      "id": "G-2",
+      "text": "Find notes"
+    }
+  ],
+  "terms": [
+    {
+      "id": "T-1",
+      "name": "note",
+      "definition": "A short text."
+    }
+  ],
+  "rules": [
+    {
+      "id": "R-1",
+      "goal": "G-1",
+      "pattern": "ubiquitous",
+      "system": "the notes service",
+      "response": "shall store a note",
+      "terms": [
+        "T-1"
+      ]
+    },
+    {
+      "id": "R-2",
+      "goal": "G-2",
+      "pattern": "ubiquitous",
+      "system": "the notes service",
+      "response": "shall list notes",
+      "terms": [
+        "T-1",
+        "T-7"
+      ]
+    }
+  ],
+  "examples": "Feature: Notes\n  Rule: R-1\n    @R-1 @E-1\n    Scenario: Create a note\n      When the user posts a note\n      Then the note is stored\n\n  Rule: R-2\n    @R-2 @E-2\n    Scenario: List notes\n      When the user lists notes\n      Then the notes are returned\n",
+  "contract": "openapi: 3.1.0\ninfo: {title: notes, version: '1'}\npaths:\n  /notes:\n    post:\n      operationId: createNote\n      x-rules: [R-1]\n      responses: {'201': {description: created}}\n    get:\n      operationId: listNotes\n      x-rules: [R-2]\n      responses: {'200': {description: ok}}\n"
+}
