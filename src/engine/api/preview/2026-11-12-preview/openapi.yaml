@@ -9,7 +9,12 @@ info:
     states which tokens may call it: the client token may call every developer operation, the page
     token only GET operations, and a worker token only registerWorker; any other call returns 403
     Forbidden. Each token may make at most `x-limits.requests-per-second-per-token` requests in any
-    one-second window; more return 429 with `Retry-After`. A request body larger than
+    one-second window; more return 429 with `Retry-After`. A request with no token, or with a token
+    the engine does not accept for this session, is counted instead by its source address (the
+    peer address of the connection, never a header the client sends): each address may make at
+    most `x-limits.requests-per-second-per-address-without-token` such requests in any one-second
+    window; up to that limit they get 401, and beyond it 429 with `Retry-After`. A request with an
+    accepted token is counted only per token, never per address. A request body larger than
     `x-limits.request-body-max-bytes` (bytes) returns 400 InvalidRequest. Every state change
     returns an operation to follow. Any operation may end with the error OperationFailed; being
     universal, it is not repeated in each operation's `x-error-codes`. A deprecated operation is marked `deprecated: true`
@@ -25,6 +30,9 @@ info:
 x-limits:
   # Requests one token may make in any one-second window (sliding); more get 429.
   requests-per-second-per-token: 20
+  # Requests without an accepted token one source address may make in any one-second window
+  # (sliding).
+  requests-per-second-per-address-without-token: 20
   # Hours an Idempotency-Key and its first result are kept, from the first request.
   idempotency-key-retention-hours: 24
   # Largest request body accepted, in bytes; a larger one gets 400 InvalidRequest.
@@ -1148,7 +1156,9 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     TooManyRequests:
-      description: More than `x-limits.requests-per-second-per-token` requests in one second with this token; try again after `Retry-After`.
+      description: More than `x-limits.requests-per-second-per-token` requests in one second with this token, or more than
+        `x-limits.requests-per-second-per-address-without-token` requests without an accepted token from this source address; try again
+        after `Retry-After`.
       headers:
         Retry-After:
           $ref: '#/components/headers/RetryAfter'
@@ -1163,7 +1173,8 @@ components:
         A stable problem code. InvalidRequest: the body or a parameter does not match this contract.
         MissingApiVersionParameter, UnsupportedApiVersionValue: the api-version is missing or not
         served. Unauthorized, Forbidden: see 401 and 403. NotFound: the resource does not exist.
-        RateLimited: more requests in one second than `x-limits.requests-per-second-per-token`. IdempotencyKeyReused: the key was used with a
+        RateLimited: more requests in one second than `x-limits.requests-per-second-per-token` with one token, or than
+        `x-limits.requests-per-second-per-address-without-token` without an accepted token from one source address. IdempotencyKeyReused: the key was used with a
         different body. NarrowDescription: the description covers more than one use case; describe
         one. TooManyQuestions: the slice would need more than 10 questions; narrow the description.
         QuestionNotOpen: the question does not exist or is answered. ContradictionOpen: an open

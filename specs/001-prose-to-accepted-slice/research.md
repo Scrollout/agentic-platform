@@ -164,7 +164,8 @@ fresh review round 1.
   30) and per-step budgets, enforced through Docker Agent budgets and the engine's clock. A run
   waiting for the developer ends `handed-over` when the developer accepts the hand-over, or
   `expired` after 14 days. The engine API and page allow 20 requests per second
-  per token.
+  per token; requests without an accepted token are limited to 20 per second per source address
+  (T018a).
 - **Rationale**: Principles X and XIV; Docker Agent budgets (S5).
 
 ### D15. Idempotency keys
