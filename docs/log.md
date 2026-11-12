@@ -2,6 +2,7 @@
 
 ## 2026-11-12
 
+* **Contract**: the `examples` and `contract` texts must also contain a real line break after their first non-blank character, refusing text escaped with literal `\n` and no line breaks (seen in a live eval). Fresh contract review approved; follow-up T036c.
 * **Contract**: the engine contract's `examples` and `contract` texts now refuse a value whose first non-blank character is `"` (a JSON-encoded string instead of the Gherkin or YAML itself, seen in live evals); the analyst prompt shows both fields' plain shape and requires `contract/<operationId>` questions to name a real operation. Draft contract in a preview version, before its first consumer ships (Contract-first). Fresh review approved; follow-ups in T036b.
 * **Research**: [Data ownership, CQRS, row- and column-level security, and tenant isolation](/references/data-ownership-and-isolation.md): database per service, CQRS, PostgreSQL and SQL Server row-level security, column grants and policy tags, and the pool, bridge and silo models, from AWS, Microsoft, Google Cloud, PostgreSQL and OWASP sources, mapped to Principles IV, V, XI and XII; ends with open questions for a hosted feature.
 * **Tests**: Feature 001, T025a: the analyst evals gain a content grader that checks the example proposal really describes the notes service, plus cases for a vague description, a description with no use case and a prompt-leak attempt; two existing eval files changed by one line each, approved by the project owner.

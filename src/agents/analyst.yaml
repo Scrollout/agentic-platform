@@ -249,14 +249,14 @@ agents:
             "examples": {
               "type": "string",
               "minLength": 1,
-              "pattern": "^\\s*[^\"\\s]",
-              "description": "Gherkin text with one `Rule:` block per rule. Every scenario is tagged `@R-<n>` with the rule of its block and `@E-<n>` with its own example ID, which is unique in the slice and never reused. The ExampleTagged check fails a scenario that lacks either tag, whose `@R-<n>` differs from its block's rule, or whose `@E-<n>` repeats another scenario's. The pattern refuses text whose first non-blank character is `\"`, which is a JSON-encoded string rather than the Gherkin itself."
+              "pattern": "^\\s*[^\"\\s][\\s\\S]*\\n",
+              "description": "Gherkin text with one `Rule:` block per rule. Every scenario is tagged `@R-<n>` with the rule of its block and `@E-<n>` with its own example ID, which is unique in the slice and never reused. The ExampleTagged check fails a scenario that lacks either tag, whose `@R-<n>` differs from its block's rule, or whose `@E-<n>` repeats another scenario's. The pattern refuses text whose first non-blank character is `\"` or that has no real line break after its first non-blank character, which is a JSON-encoded or once-more-escaped string rather than the Gherkin itself."
             },
             "contract": {
               "type": "string",
               "minLength": 1,
-              "pattern": "^\\s*[^\"\\s]",
-              "description": "An OpenAPI 3.1 document as YAML text. Every operation has an `operationId` and `x-rules: [R-<n>, ...]`. The pattern refuses text whose first non-blank character is `\"`, which is a JSON-encoded string rather than the YAML itself."
+              "pattern": "^\\s*[^\"\\s][\\s\\S]*\\n",
+              "description": "An OpenAPI 3.1 document as YAML text. Every operation has an `operationId` and `x-rules: [R-<n>, ...]`. The pattern refuses text whose first non-blank character is `\"` or that has no real line break after its first non-blank character, which is a JSON-encoded or once-more-escaped string rather than the YAML itself."
             },
             "questions": {
               "type": "array",

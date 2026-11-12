@@ -1,0 +1,21 @@
+{
+  "goals": [
+    {
+      "id": "G-1",
+      "text": "Browse products"
+    }
+  ],
+  "terms": [],
+  "rules": [
+    {
+      "id": "R-1",
+      "goal": "G-1",
+      "pattern": "ubiquitous",
+      "system": "the shop",
+      "response": "shall list products",
+      "terms": []
+    }
+  ],
+  "examples": "Feature: Browse",
+  "contract": "openapi: 3.1.0\ninfo: {title: t, version: '1'}\npaths: {}\n"
+}
