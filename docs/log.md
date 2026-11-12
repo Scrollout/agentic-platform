@@ -2,6 +2,7 @@
 
 ## 2026-11-12
 
+* **Evals**: Feature 001, T038f: with the analyst's new "Revising a proposal" instructions, the live eval suite passed again (6th run, 2026-11-12): 13 of 13 cases pass^3, 39 of 39 trials, on `claude-haiku-5-5`. The engine now calls the analyst as a Docker Agent `serve api` service (research D27).
 * **Implementation**: Feature 001, T038d: the engine judges a slice's contract with [oasdiff](/components/oasdiff.md) v1.37.0 as a Go library (`src/engine/contracts`, owner-approved dependency), as `oasdiff breaking` does in `scripts/contract-diff.sh`; it reads contracts from memory only, refuses external `$ref`s, inputs above 4 MiB and non-OpenAPI-3 documents, and fails closed.
 * **Tests**: Feature 001, T020: tests reach a recorded model, [WireMock](/components/wiremock.md) on an internal network standing in for the gateway (`src/tests/recorded/`, research D26). A request matches a recording only by equal method, path, query and JSON body; anything else gets 404 and is never forwarded. Recording from the provider is the owner's alone (`record.sh`). The first recording, the analyst on the example description, is synthesised from `good-notes.json` without a model call.
 * **Evals**: Feature 001: the analyst's live eval suite passed for the first time (5th run, 2026-11-12): 13 of 13 cases pass^3, 39 of 39 trials, on `claude-haiku-5-5` through the engine's retry (no retry was needed). Earlier runs: 19, 33, 38 and 37 of 39 trials, fixed by the prompt and the `examples`/`contract` text rules.

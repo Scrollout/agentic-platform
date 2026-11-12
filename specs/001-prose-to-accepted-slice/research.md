@@ -55,7 +55,7 @@ fresh review round 1.
 ### D4. Contracts: OpenAPI 3.1, linted with Spectral, diffed with oasdiff
 
 - **Decision**: the slice's contract and the engine's contract are OpenAPI 3.1, linted with Spectral
-  using the project ruleset, checked with oasdiff, and Go code is generated with oapi-codegen.
+  using the project ruleset (slice contracts use `spectral:oas` instead, D28), checked with oasdiff, and Go code is generated with oapi-codegen.
 - **Generation (T012)**: the engine contract is bundled into one document with Redocly CLI, then
   oapi-codegen generates the engine's strict `net/http` server and the client used by the terminal
   client and the run page. An OpenAPI Overlay with the provider (`src/engine/api/engine.overlay.yaml`)
@@ -361,3 +361,46 @@ page, none of which an existing project provides.
   synthesised from `src/tests/evals/analyst/testdata/proposals/good-notes.json`, not recorded
   from the provider.
 - **Cost**: one more pin (about 300 MB, a JVM); a component concept for WireMock.
+
+### D27. The analyst runs as a long-lived Docker Agent `serve api` service
+
+- **Decision** (owner-approved 2026-11-12): the engine has no Docker socket (D5, D6), so the analyst
+  runs as an `analyst` service started by `ap up`: the pinned Docker Agent running
+  `serve api /agents/analyst.yaml` with the agent definitions mounted read-only, under gVisor,
+  read-only root, user 65532, all capabilities dropped, a static bearer token from `ap up`, and the
+  session database on a tmpfs. It is on its own network, shared only with the engine and the
+  gateway. The engine calls it with the standard library: one session per analyst call
+  (`POST /api/sessions` with a title and `safety_policy: restricted`, then
+  `POST /api/sessions/{id}/agent/analyst`, reading the event stream until `stream_stopped`), the
+  proposal being the last `agent_choice` content and the model the `agent_info` model; the session
+  is deleted afterwards, and the call is never retried by the client (`slices.Service` retries).
+- **Evidence** (2026-11-12, pinned Docker Agent 1.160.0, recorded model, no key): it ran under
+  `runsc` read-only as 65532 (76 MiB, 48 processes); 8 concurrent sessions all returned the
+  proposal; its model request matched the `analyst-example-notes` recording unchanged, so tests
+  replay it. A session without a title makes a second model call to name it, so the engine
+  always sends one.
+- **Alternatives rejected**: the Docker Agent Go SDK inside the engine (its whole runtime in the
+  engine process, outside a sandbox); analysts started by the launcher per call (changes the
+  createSlice contract).
+- Sources: <https://docker.github.io/docker-agent/features/api-server/>;
+  <https://github.com/docker/docker-agent/blob/3c9f6d45b8682e02713e85330fc98b5157e4896d/pkg/server/session_manager.go>.
+
+### D28. Slice contracts are linted by a small Spectral service with `spectral:oas`
+
+- **Decision** (owner-approved 2026-11-12): a `contract-lint` service started by `ap up` runs a
+  Node server of about 30 lines (`node:http` and the Spectral packages already in
+  `scripts/tools/package-lock.json`, Apache-2.0) on the pinned Node image, under gVisor, reachable
+  only by the engine, with a bearer token, a 1 MiB body cap and a 30 s limit. It lints with
+  `spectral:oas` and a resolver with no file or network resolvers, so a `$ref` outside the
+  document is an error and nothing is fetched. This amends D4: the engine's own contracts use the
+  project ruleset; slice contracts use `spectral:oas`, because the project ruleset encodes the
+  engine API's conventions (api-version, `x-limits`, problem codes) and failed the example slice
+  contract with 5 errors, while `spectral:oas` gave none.
+- **Evidence** (2026-11-12): the prototype gave the same 7 warnings as `spectral lint` on the
+  example contract, ran under `runsc` read-only as 65532, and refused `file://`, relative and
+  `http://` references with `invalid-ref` without fetching them (the CLI's default resolver
+  would fetch them).
+- **Alternatives rejected**: Spectral has no server mode; adnanh/webhook (no Scorecard entry, no
+  pinned image, a Node process and a temp file per request); vacuum in the engine (contradicts
+  D4 and ADR 0004).
+- Sources: <https://github.com/stoplightio/spectral/blob/develop/docs/guides/3-javascript.md>.

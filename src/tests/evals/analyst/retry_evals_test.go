@@ -11,7 +11,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/agentic-platform/engine/slices"
 )
@@ -24,24 +23,8 @@ type dockerAnalyst struct {
 	last, lastStderr    []byte // raw output and stderr of the latest call
 }
 
-// message is the user message: the description, and on a retry the previous proposal and errors.
-func message(in slices.AnalystInput) (string, error) {
-	if in.Previous == nil && len(in.Errors) == 0 {
-		return in.Description, nil
-	}
-	prev, err := json.MarshalIndent(in.Previous, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%s\n\nYour previous proposal was unusable.\n\nPrevious proposal:\n%s\n\nErrors:\n- %s\n\n"+
-		"Output a corrected proposal as one JSON object.", in.Description, prev, strings.Join(in.Errors, "\n- ")), nil
-}
-
 func (a *dockerAnalyst) Propose(_ context.Context, in slices.AnalystInput) (slices.Proposal, error) {
-	msg, err := message(in)
-	if err != nil {
-		return slices.Proposal{}, err
-	}
+	msg := slices.AnalystMessage(in)
 	a.calls++
 	out, stderr, err := a.l.analyst(a.agentDir, a.agentFile, msg)
 	a.last, a.lastStderr = out, stderr
