@@ -63,14 +63,37 @@ trailer() {
   [ "$rc" -eq 0 ]
 }
 
-# Tests change only through a fresh agent: a commit that changes Go code and the tests that judge
-# it needs a 'Tests-approved-by:' trailer naming the fresh reviewer or the owner.
+# Code changed together with its tests: a commit that changes Go code and the tests that judge it
+# needs a 'Tests-approved-by:' trailer. Only the project owner approves a test change (ADR 0029);
+# the rule below also requires the owner's name and date when an existing test changes.
 if matches '^src/.*\.go$' '_test\.go$|/testdata/' && matches '^src/.*(_test\.go$|/testdata/)'; then
   if ! trailer Tests-approved-by; then
-    echo "commit-msg: code and the tests that judge it changed together; add 'Tests-approved-by: <reviewer>'" >&2
+    echo "commit-msg: code and the tests that judge it changed together; add 'Tests-approved-by: <owner name> (<YYYY-MM-DD>)' once the owner has approved the test change" >&2
     exit 1
   fi
 fi
+# ADR 0029: an existing test file changes only with the owner's approval of that change. Every
+# staged path that is not an addition, with renames split into a deletion of the old path and an
+# addition of the new one, so a renamed test counts by its old path. Adding test files needs
+# nothing. The approval is 'Tests-approved-by: <owner name> (<YYYY-MM-DD>)' in the final trailer
+# block; no standing approval covers it.
+git diff --cached --no-renames --diff-filter=a --name-only -z >"$names" \
+  || refuse "cannot list the staged changes to existing files"
+tests='(^|/)[^/]*_test\.go$|(^|/)testdata/|^scripts/tests/|^src/tests/|(^|/)test_[^/]*\.(sh|py)$'
+if matches "$tests"; then
+  git interpret-trailers --parse -- "$msg_file" >"$names.m" \
+    || refuse "cannot read the trailers of $msg_file"
+  rc=0
+  grep -qE '^Tests-approved-by: [^ (]([^(]*[^ (])? \([0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])\)$' \
+    -- "$names.m" || rc=$?
+  [ "$rc" -le 1 ] || refuse "grep failed (exit $rc)"
+  if [ "$rc" -ne 0 ]; then
+    echo "commit-msg: existing tests changed (modified, renamed or deleted); only the project owner approves that change: add 'Tests-approved-by: <owner name> (<YYYY-MM-DD>)' after the owner approves it" >&2
+    grep -zE -e "$tests" -- "$names" | tr '\0' '\n' >&2
+    exit 1
+  fi
+fi
+git diff --cached --name-only -z >"$names" || refuse "cannot list the staged files"
 protected='^(\.specify/memory/|scripts/|src/deploy/|src/tests/|.*_test\.go$|.*/testdata/|.*go\.(mod|sum)$|\.gitignore$)'
 if matches "$protected"; then
   if ! trailer Approved-by; then

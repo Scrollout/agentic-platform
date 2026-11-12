@@ -67,11 +67,22 @@ A fresh clone of the repository, or a change to the hooks.
    the commit is refused with a message.
 8. Only the project owner adds that trailer, or tells the agent to add it with their name and the
    date. Agents never add it on their own.
+9. A commit that modifies, renames or deletes an existing test file (`*_test.go`, anything under
+   a `testdata/` folder, `scripts/tests/` including fixtures, `src/tests/`, `test_*.sh`,
+   `test_*.py`) is refused unless its final trailer block holds
+   `Tests-approved-by: <owner name> (<YYYY-MM-DD>)`, as
+   [ADR 0029](/decisions/0029-existing-tests-change-only-with-owner-approval.md) requires. A
+   renamed test counts by its old path. The refusal lists every such file. `Approved-by` does not
+   cover it. The trailer is written only after the owner approves that specific change, never
+   under a standing approval, and a fresh agent's judgement does not replace it. A commit that
+   only adds test files needs no `Tests-approved-by` trailer.
 
 # Verification
 
 - `scripts/check.sh` ends with `all checks passed`.
 - A test commit to `scripts/` without the trailer is refused.
+- A commit that modifies an existing `*_test.go` with only `Approved-by` is refused and names
+  the file; one that only adds a test file is accepted.
 - `scripts/hooks/pre-commit` ends with `staged snapshot passed`; an untracked or unstaged file
   that would fail a check does not change that, and the same file staged does.
 - An unstaged edit that breaks `scripts/hooks/pre-commit` below its first block does not change
