@@ -1,0 +1,32 @@
+[
+  {
+    "id": "R-1",
+    "goal": "G-1",
+    "pattern": "ubiquitous",
+    "system": "the notes service",
+    "response": "shall store a note",
+    "terms": [
+      "T-1"
+    ]
+  },
+  {
+    "id": "R-2",
+    "goal": "G-1",
+    "pattern": "ubiquitous",
+    "system": "the billing service",
+    "response": "shall charge a fee",
+    "terms": [
+      "T-1"
+    ]
+  },
+  {
+    "id": "R-3",
+    "goal": "G-1",
+    "pattern": "ubiquitous",
+    "system": "the notes service",
+    "response": "shall list notes",
+    "terms": [
+      "T-1"
+    ]
+  }
+]

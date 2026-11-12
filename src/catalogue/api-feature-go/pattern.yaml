@@ -1,0 +1,161 @@
+# The catalogue's one pattern: an HTTP API feature of one Go service, built from an approved slice.
+# Schema: src/engine/api/preview/2026-11-12-preview/pattern.schema.json. What each condition, path
+# and dependency entry means, and how it is evaluated: README.md next to this file.
+id: api-feature-go
+version: 1.0.0
+status: approved
+scenario: >-
+  One use case of one service, served as an HTTP API: an approved OpenAPI 3.1 contract is
+  generated into a Go server, the slice's examples become godog tests that fail against the
+  generated stub, an implementation makes them pass, and a fresh review with evidence closes it.
+
+sources:
+  - url: https://spec.openapis.org/oas/v3.1.1.html
+    title: OpenAPI Specification v3.1.1 (paths, path items, operations, webhooks, callbacks)
+  - url: https://github.com/oapi-codegen/oapi-codegen
+    title: oapi-codegen, Go server and types generated from OpenAPI 3
+  - url: https://cucumber.io/docs/gherkin/reference/
+    title: Gherkin reference (Rule represents one business rule)
+  - url: https://github.com/cucumber/godog
+    title: godog, the Cucumber runner for Go (--strict fails undefined and pending steps)
+  - url: https://pkg.go.dev/cmd/go#hdr-Package_lists_and_patterns
+    title: "Go command: package lists and patterns (std, /...)"
+  - url: https://arxiv.org/abs/2403.11322
+    title: "StateFlow: Enhancing LLM Task-Solving through State-Driven Workflows (COLM 2024)"
+
+# A slice fits when every condition passes; each is a deterministic rule on the slice's contract
+# and rules (research D10). Evaluated at contract approval and again at startRun.
+conditions:
+  - ContractIsOpenApi31
+  - OnlyHttpOperations
+  - ContractRefsLocal
+  - RulesNameOneSystem
+
+limits:
+  attempts: 3
+  review_rounds: 3
+
+# Basis (Claude Haiku claude-haiku-5-5 at $0.10 input / $0.50 output per million tokens, prompts up
+# to 100K tokens): the ADR 0026 spike's happy path took 4.5 minutes and about $0.04 (19 agent
+# turns). The worst run allowed by the limits is about 3 agent steps x 3 attempts plus 3 review
+# rounds, roughly 3x the spike's agent sessions (~$0.12); the run cap is 4x that. 3,000,000 tokens
+# at a mostly-input mix (~$0.14 per million) is about the same $0.50, so whichever is reached first
+# hands the run over. 30 minutes is SC-007 (D14). The step budget applies to one attempt (one
+# review round) and is a third of the run's, so 3 attempts of one step fit inside the run.
+budgets:
+  run:
+    tokens: 3000000
+    cost_usd: 0.50
+    minutes: 30
+  step:
+    tokens: 1000000
+    cost_usd: 0.20
+    minutes: 10
+
+# Project layout written by the steps (paths relative to the new project's folder):
+#   api/openapi.yaml, features/slice.feature   contract-check (approved copies)
+#   gen/**, go.mod, go.sum, vendor/**           generate
+#   tests/**                                    tests
+#   internal/**, cmd/**                         code
+# Dependency entries are Go package patterns (`std`, a path, or a path ending in `/...`), matched
+# against every import outside the project's own module; forbidden wins over allowed.
+steps:
+  - name: contract-check
+    worker: procedure:contract-check
+    inputs: [slice/contract, slice/rules]
+    outputs: [contract, examples]
+    writable:
+      - api/openapi.yaml
+      - features/slice.feature
+    checks:
+      - ContractMatchesApproval
+      - ExamplesMatchApproval
+      - ContractLintPasses
+      - ScopeKept
+    dependencies:
+      allowed: []
+      forbidden: []
+
+  - name: generate
+    worker: procedure:generate
+    inputs: [contract]
+    outputs: [generated-code]
+    writable:
+      - gen/**
+      - go.mod
+      - go.sum
+      - vendor/**
+    checks:
+      - GenerationRepeatable
+      - GeneratedCodeBuilds
+      - DependenciesAllowed
+      - ScopeKept
+    dependencies:
+      allowed:
+        - std
+        - github.com/oapi-codegen/runtime/...
+      forbidden: &forbidden
+        - os/exec
+        - syscall
+        - unsafe
+        - plugin
+        - net/rpc/...
+
+  - name: tests
+    worker: agent:tests
+    # Not yet set: T049 writes src/agents/tests.yaml; this becomes its SHA-256. No definition
+    # hashes to all zeros, so a run fails closed until then.
+    agent_digest: "0000000000000000000000000000000000000000000000000000000000000000"
+    inputs: [contract, examples, generated-code, slice/rules]
+    outputs: [tests]
+    writable:
+      - tests/**
+    checks:
+      - ScopeKept
+      - DependenciesAllowed
+      - TestsBuild
+      - EveryExampleBound
+      - TestsFailAgainstStub
+    dependencies:
+      allowed:
+        - std
+        - github.com/oapi-codegen/runtime/...
+        - github.com/cucumber/godog/...
+      forbidden: *forbidden
+
+  - name: code
+    worker: agent:code
+    # Not yet set: T049 writes src/agents/code.yaml; this becomes its SHA-256 (fails closed until then).
+    agent_digest: "0000000000000000000000000000000000000000000000000000000000000000"
+    inputs: [contract, examples, generated-code, tests, slice/rules]
+    outputs: [code]
+    writable:
+      - internal/**
+      - cmd/**
+    checks:
+      - ScopeKept
+      - TestsUnchanged
+      - GeneratedCodeUnchanged
+      - ContractMatchesApproval
+      - DependenciesAllowed
+      - AllTestsPass
+    dependencies:
+      allowed:
+        - std
+        - github.com/oapi-codegen/runtime/...
+      forbidden: *forbidden
+
+  - name: review
+    worker: agent:review
+    # Not yet set: T049 writes src/agents/review.yaml; this becomes its SHA-256 (fails closed until then).
+    agent_digest: "0000000000000000000000000000000000000000000000000000000000000000"
+    inputs: [contract, examples, generated-code, tests, code, slice/rules]
+    outputs: [findings]
+    writable: []
+    checks:
+      - ScopeKept
+      - FindingsCarryEvidence
+      - NoBlockingFindingOpen
+    dependencies:
+      allowed: []
+      forbidden: []

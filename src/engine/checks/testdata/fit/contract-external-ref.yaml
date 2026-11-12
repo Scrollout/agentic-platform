@@ -1,0 +1,17 @@
+openapi: 3.1.0
+info: {title: notes, version: "1"}
+paths:
+  /notes:
+    post:
+      operationId: createNote
+      x-rules: [R-1]
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: {$ref: 'https://example.com/schemas/note.yaml'}
+    get:
+      operationId: listNotes
+      x-rules: [R-2]
+      responses: {"200": {description: ok}}

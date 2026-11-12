@@ -1,0 +1,12 @@
+openapi: 3.0.3
+info: {title: notes, version: "1"}
+paths:
+  /notes:
+    post:
+      operationId: createNote
+      x-rules: [R-1]
+      responses: {"201": {description: created}}
+    get:
+      operationId: listNotes
+      x-rules: [R-2]
+      responses: {"200": {description: ok}}
