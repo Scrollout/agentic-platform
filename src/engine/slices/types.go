@@ -81,11 +81,15 @@ type Proposal struct {
 }
 
 // AnalystInput is what the analyst proposes from. Current and Questions are set when revising a
-// slice after answers.
+// slice after answers. Previous and Errors are set when Create asks again: Previous is the
+// unusable proposal of the attempt before, and Errors says what was wrong with it, one entry per
+// finding; both are empty on the first call.
 type AnalystInput struct {
 	Description string
 	Current     *Proposal
 	Questions   []Question
+	Previous    *Proposal
+	Errors      []string
 }
 
 // Analyst is the model behind the analyst agent.
@@ -209,9 +213,10 @@ type Config struct {
 	Schemas *slice.Schemas // the contract's schemas: proposal, parts and IDs
 	Analyst Analyst
 	Diff    ContractDiff
-	// Pattern is the catalogue pattern's pattern.yaml, whose conditions run as checks.Fit. nil
+	// Pattern is the catalogue pattern's pattern.yaml, whose conditions run as checks.Fit and
+	// whose limits.attempts bounds how often Create asks the analyst for a usable proposal. nil
 	// fails closed: every slice carries a failed PatternFit result on its contract, which then
-	// cannot be approved.
+	// cannot be approved, and the analyst is asked once.
 	Pattern []byte
 	Now     func() time.Time // nil means time.Now
 }

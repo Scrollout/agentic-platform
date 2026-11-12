@@ -1,0 +1,9 @@
+# A pattern that allows one attempt, so the analyst is never asked again.
+id: one-attempt
+version: 1.0.0
+status: approved
+conditions:
+  - ContractIsOpenApi31
+limits:
+  attempts: 1
+  review_rounds: 3

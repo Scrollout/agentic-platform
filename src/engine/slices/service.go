@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/agentic-platform/slice"
+	"go.yaml.in/yaml/v3"
 )
 
 // Service holds the slices of one installation. It is safe for concurrent use.
@@ -20,7 +21,10 @@ type Service struct {
 	analyst Analyst
 	diff    ContractDiff
 	pattern []byte
-	now     func() time.Time
+	// attempts is the pattern's limits.attempts: how often Create asks the analyst for a usable
+	// proposal. 1 when there is no pattern or it gives no positive limit (fail closed on cost).
+	attempts int
+	now      func() time.Time
 
 	mu     sync.Mutex
 	last   int // the number of the last slice ID given out; IDs are never reused
@@ -52,13 +56,30 @@ func New(cfg Config) (*Service, error) {
 		now = time.Now
 	}
 	return &Service{schemas: cfg.Schemas, analyst: cfg.Analyst, diff: cfg.Diff, pattern: cfg.Pattern,
-		now: now, slices: map[string]*record{}}, nil
+		attempts: attemptsOf(cfg.Pattern), now: now, slices: map[string]*record{}}, nil
+}
+
+// attemptsOf reads limits.attempts from a pattern.yaml, its one home. A missing pattern, an
+// unreadable one, or one without a positive limit gives one attempt.
+func attemptsOf(pattern []byte) int {
+	var p struct {
+		Limits struct {
+			Attempts int `yaml:"attempts"`
+		} `yaml:"limits"`
+	}
+	if pattern == nil || yaml.Unmarshal(pattern, &p) != nil || p.Limits.Attempts < 1 {
+		return 1
+	}
+	return p.Limits.Attempts
 }
 
 // Create proposes a slice from a description (createSlice). An approved slice of the same
 // description is offered instead, without running the analyst. An empty description, or one the
-// analyst finds covers more than one use case, gives NarrowDescription. Failing checks are stored
-// with the slice, not returned as an error.
+// analyst finds covers more than one use case, gives NarrowDescription. A proposal that is
+// unusable (it breaks the proposal schema, or its examples or contract do not parse) is sent back
+// to the analyst with what was wrong, up to the pattern's limits.attempts; after the last attempt
+// Create gives OperationFailed naming the faults, and stores nothing. Other failing checks are
+// stored with the slice, not returned as an error.
 func (s *Service) Create(ctx context.Context, description string) (Result, error) {
 	if strings.TrimSpace(description) == "" {
 		return Result{}, &Error{Code: "NarrowDescription", Detail: "the description is empty; describe one use case"}
@@ -67,23 +88,8 @@ func (s *Service) Create(ctx context.Context, description string) (Result, error
 		return Result{Slice: sl, Reused: true}, nil
 	}
 
-	p, err := s.analyst.Propose(ctx, AnalystInput{Description: description})
-	if errors.Is(err, ErrMultipleUseCases) {
-		return Result{}, &Error{Code: "NarrowDescription", Detail: "the description covers more than one use case; describe one"}
-	}
+	p, sl, err := s.propose(ctx, description)
 	if err != nil {
-		return Result{}, fmt.Errorf("slices: the analyst failed: %w", err)
-	}
-	sl := clone(Slice{ // own the analyst's lists
-		Description: description, Contract: p.Contract, Examples: p.Examples,
-		Goals: p.Goals, Terms: p.Terms, Rules: p.Rules,
-	})
-	normalise(&sl)
-	if len(p.Questions) > maxQuestions {
-		return Result{}, &Error{Code: "TooManyQuestions",
-			Detail: fmt.Sprintf("the slice would need %d questions, more than %d; narrow the description", len(p.Questions), maxQuestions)}
-	}
-	if err := s.checkProposal(&sl, p.Questions); err != nil {
 		return Result{}, err
 	}
 	for i, q := range p.Questions {
@@ -110,21 +116,77 @@ func (s *Service) Create(ctx context.Context, description string) (Result, error
 // maxItems, which the proposal schema also gives).
 const maxQuestions = 10
 
-// checkProposal refuses analyst output, as the slice sl built from it and its questions, that
-// does not match slice-proposal.schema.json: model output is parsed against its schema, never
-// trusted. A nil list counts as the empty list.
-func (s *Service) checkProposal(sl *Slice, questions []QuestionDraft) error {
+// propose asks the analyst for a proposal of description and builds the slice from it. An
+// unusable proposal is sent back with its faults until one is usable or s.attempts calls were
+// made. An analyst error is returned at once, not retried.
+func (s *Service) propose(ctx context.Context, description string) (Proposal, Slice, error) {
+	in := AnalystInput{Description: description}
+	for attempt := 1; ; attempt++ {
+		p, err := s.analyst.Propose(ctx, in)
+		if errors.Is(err, ErrMultipleUseCases) {
+			return Proposal{}, Slice{}, &Error{Code: "NarrowDescription", Detail: "the description covers more than one use case; describe one"}
+		}
+		if err != nil {
+			return Proposal{}, Slice{}, fmt.Errorf("slices: the analyst failed: %w", err)
+		}
+		sl := clone(Slice{ // own the analyst's lists
+			Description: description, Contract: p.Contract, Examples: p.Examples,
+			Goals: p.Goals, Terms: p.Terms, Rules: p.Rules,
+		})
+		normalise(&sl)
+		if len(p.Questions) > maxQuestions {
+			return Proposal{}, Slice{}, &Error{Code: "TooManyQuestions",
+				Detail: fmt.Sprintf("the slice would need %d questions, more than %d; narrow the description", len(p.Questions), maxQuestions)}
+		}
+		faults, err := s.unusable(&sl, p.Questions)
+		if err != nil {
+			return Proposal{}, Slice{}, err
+		}
+		if len(faults) == 0 {
+			return p, sl, nil
+		}
+		if attempt >= s.attempts {
+			return Proposal{}, Slice{}, &Error{Code: "OperationFailed", Detail: fmt.Sprintf(
+				"the analyst's proposal was unusable after %d attempts (limits.attempts): %s", attempt, strings.Join(faults, "; "))}
+		}
+		prev := p
+		in = AnalystInput{Description: description, Previous: &prev, Errors: faults}
+	}
+}
+
+// unusable returns what makes the analyst's output, as the slice sl built from it and its
+// questions, unusable: each way it breaks slice-proposal.schema.json (model output is parsed
+// against its schema, never trusted; a nil list counts as the empty list), and each syntax finding
+// of slice.Trace, examples that are not Gherkin or a contract that is not YAML. Other faults are
+// check results, stored with the slice.
+func (s *Service) unusable(sl *Slice, questions []QuestionDraft) ([]string, error) {
 	doc, err := json.Marshal(struct {
 		partsDoc
 		Questions []QuestionDraft `json:"questions,omitempty"`
 	}{partsDoc{Goals: sl.Goals, Terms: sl.Terms, Rules: sl.Rules, Examples: sl.Examples, Contract: sl.Contract}, questions})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if err := s.schemas.CheckProposal(doc); err != nil {
-		return fmt.Errorf("slices: the analyst's proposal does not match the proposal schema: %w", err)
+	fails, err := schemaFailures(s.schemas.CheckProposal(doc))
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	var out []string
+	for _, f := range fails { // a fault at the document's root is reported once per part
+		r := "the proposal breaks slice-proposal.schema.json " + f.Reason
+		if !slices.Contains(out, r) {
+			out = append(out, r)
+		}
+	}
+	for _, f := range slice.Trace(doc) {
+		switch {
+		case f.Part == "": // the engine wrote the document, so this is a fault
+			return nil, fmt.Errorf("slices: traceability: %s", f.Reason)
+		case f.ID == "": // a syntax finding: the examples or the contract text does not parse
+			out = append(out, f.Reason)
+		}
+	}
+	return out, nil
 }
 
 // approvedFor returns the approved slice of exactly this description, if there is one.
