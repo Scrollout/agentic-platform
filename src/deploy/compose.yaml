@@ -1,0 +1,184 @@
+# The platform's containers on one machine (research D5, D6, D9, D12, D13). Started and stopped by
+# the launcher `ap` (src/deploy/ap), which sets every variable below; never edit values in here per
+# deployment. A missing variable stops Compose with the message after `:?`.
+#
+#   AP_CREDENTIALS_FILE  absolute path of the file holding only the model provider key
+#   AP_PROJECTS_DIR      absolute path of the folder new projects are built in
+#   AP_PAGE_PORT         host port of the run page, published on 127.0.0.1 only
+#   AP_CLIENT_TOKEN      this session's token for the terminal client and the test harness
+#   AP_PAGE_TOKEN        this session's token for the run page
+#   AP_WORKER_TOKEN      this session's token for step and check workers
+#   AP_HOST_USER         the developer's numeric uid:gid; the gateway runs as it to read the key
+#                        file (mode 600), and step workers run as it to write the projects folder
+#   AP_GATEWAY_IMAGE     the nginx pin from images.lock (its one home); the launcher reads it
+#
+# Images named ap-*:dev are built locally by build.sh and never pulled (pull_policy: never).
+#
+# Profiles: no profile is what `ap up` starts (gateway, engine, page). `client` and `tests` are run
+# on demand with `docker compose run --rm`; `workers` are started by `ap build-workers`.
+#
+# Networks: every one is internal (no route out) except `egress`, which only the gateway joins,
+# and `page-host`, which exists only so the page's port can be published on 127.0.0.1 (Docker does
+# not publish ports from internal networks). `page-host` has IP masquerading off: no NAT, but not
+# isolation (host services on the bridge address stay reachable; T022a).
+
+name: agentic-platform
+
+# Settings every service shares: Kubernetes Restricted profile equivalents (constitution VIII).
+x-hardened: &hardened
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  restart: "no"
+
+# Step and check workers: gVisor (research D13), an executable /tmp for the Go toolchain, and the
+# session's worker token. Nothing else is writable.
+x-sandboxed: &sandboxed
+  <<: *hardened
+  runtime: runsc
+  profiles: [workers]
+  tmpfs:
+    - /tmp:exec,mode=1777,size=1g
+  deploy:
+    resources:
+      limits: { cpus: "2", memory: 2g, pids: 512 }
+
+services:
+  # Model gateway (src/deploy/gateway/README.md): the only container with egress and the only one
+  # that can read the provider key.
+  gateway:
+    <<: *hardened
+    image: ${AP_GATEWAY_IMAGE:?set AP_GATEWAY_IMAGE to the nginx pin in src/deploy/images.lock (ap up does this)}
+    user: ${AP_HOST_USER:?set AP_HOST_USER to the uid:gid that owns the credentials file (ap up does this)}
+    environment:
+      GATEWAY_SERVER_NAME: gateway
+      NGINX_ENVSUBST_FILTER: ^(ANTHROPIC_API_KEY|GATEWAY_SERVER_NAME)$$
+    secrets:
+      - anthropic_api_key
+    volumes:
+      - { type: bind, source: ./gateway/default.conf.template, target: /etc/nginx/templates/default.conf.template, read_only: true }
+      - { type: bind, source: ./gateway/provider.inc.template, target: /etc/nginx/templates/provider.inc.template, read_only: true }
+      - { type: bind, source: ./gateway/credential.envsh, target: /docker-entrypoint.d/05-credential.envsh, read_only: true }
+    tmpfs:
+      - /etc/nginx/conf.d:mode=1777,size=1m
+      - /var/cache/nginx:mode=1777,size=16m
+      - /var/run:mode=1777,size=1m
+      - /tmp:mode=1777,size=16m
+    networks: [agents, egress]
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 128m, pids: 128 }
+
+  # Workflow engine (src/engine). It holds all three tokens to tell callers apart (research D12).
+  engine:
+    <<: *hardened
+    image: ap-engine:dev
+    pull_policy: never
+    user: "65532:65532"
+    environment:
+      ENGINE_LISTEN_ADDRESS: ":8080"
+      ENGINE_CLIENT_TOKEN: ${AP_CLIENT_TOKEN:?set AP_CLIENT_TOKEN (ap up does this)}
+      ENGINE_PAGE_TOKEN: ${AP_PAGE_TOKEN:?set AP_PAGE_TOKEN (ap up does this)}
+      ENGINE_WORKER_TOKEN: ${AP_WORKER_TOKEN:?set AP_WORKER_TOKEN (ap up does this)}
+    tmpfs:
+      - /tmp:mode=1777,size=16m
+    networks: [clients, agents, checks]
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 512m, pids: 256 }
+
+  # Read-only run page (research D18), on 127.0.0.1 only. PAGE_HOST is the one Host header it
+  # accepts (DNS rebinding guard, plan threat model).
+  page:
+    <<: *hardened
+    image: ap-page:dev
+    pull_policy: never
+    user: "65532:65532"
+    environment:
+      PAGE_LISTEN_ADDRESS: ":8080"
+      PAGE_HOST: 127.0.0.1:${AP_PAGE_PORT:?set AP_PAGE_PORT (ap up does this)}
+      ENGINE_URL: http://engine:8080
+      ENGINE_TOKEN: ${AP_PAGE_TOKEN:?set AP_PAGE_TOKEN (ap up does this)}
+    ports:
+      - { target: 8080, published: "${AP_PAGE_PORT:?set AP_PAGE_PORT (ap up does this)}", host_ip: 127.0.0.1, protocol: tcp }
+    networks: [clients, page-host]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 128m, pids: 64 }
+
+  # Terminal client (src/cli/contract.md), run per command by the launcher.
+  cli:
+    <<: *hardened
+    image: ap-cli:dev
+    pull_policy: never
+    profiles: [client]
+    user: "65532:65532"
+    environment:
+      ENGINE_URL: http://engine:8080
+      ENGINE_TOKEN: ${AP_CLIENT_TOKEN:?set AP_CLIENT_TOKEN (ap up does this)}
+    tmpfs:
+      - /tmp:mode=1777,size=16m
+    networks: [clients]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 128m, pids: 64 }
+
+  # Test harness (src/tests), run by `ap test <suite>` as a client of the engine.
+  tests:
+    <<: *hardened
+    image: ap-tests:dev
+    pull_policy: never
+    profiles: [tests]
+    user: "65532:65532"
+    environment:
+      ENGINE_URL: http://engine:8080
+      ENGINE_TOKEN: ${AP_CLIENT_TOKEN:?set AP_CLIENT_TOKEN (ap up does this)}
+    tmpfs:
+      - /tmp:exec,mode=1777,size=512m
+    networks: [clients]
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 1g, pids: 512 }
+
+  # Step agent worker (Docker Agent). The template `ap build-workers` starts per step of a slice,
+  # each with only that step's writable paths mounted writable (research D5); here the projects
+  # folder is read-only.
+  step-agent:
+    <<: *sandboxed
+    image: ap-agent:dev
+    pull_policy: never
+    user: ${AP_HOST_USER:?set AP_HOST_USER to the developer's uid:gid (ap up does this)}
+    environment:
+      ENGINE_URL: http://engine:8080
+      ENGINE_TOKEN: ${AP_WORKER_TOKEN:?set AP_WORKER_TOKEN (ap up does this)}
+      MODEL_GATEWAY_URL: http://gateway:8080
+    volumes:
+      - { type: bind, source: "${AP_PROJECTS_DIR:?set AP_PROJECTS_DIR to the projects folder (ap up does this)}", target: /projects, read_only: true }
+    networks: [agents]
+
+  # Check container: runs checks on generated code, with no route to the gateway (plan threat
+  # model: no network beyond the engine).
+  check:
+    <<: *sandboxed
+    image: ap-check:dev
+    pull_policy: never
+    user: "65532:65532"
+    environment:
+      ENGINE_URL: http://engine:8080
+      ENGINE_TOKEN: ${AP_WORKER_TOKEN:?set AP_WORKER_TOKEN (ap up does this)}
+    volumes:
+      - { type: bind, source: "${AP_PROJECTS_DIR:?set AP_PROJECTS_DIR to the projects folder (ap up does this)}", target: /projects, read_only: true }
+    networks: [checks]
+
+networks:
+  clients: { internal: true }
+  agents: { internal: true }
+  checks: { internal: true }
+  egress: {}
+  page-host:
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "false"
+
+secrets:
+  anthropic_api_key:
+    file: ${AP_CREDENTIALS_FILE:?set AP_CREDENTIALS_FILE to the file holding only the provider key (ap up does this)}

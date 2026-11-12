@@ -7,20 +7,23 @@ launcher `src/deploy/ap`, which only calls `docker compose` ([terminal contract]
 
 - A container runtime with Compose, and the gVisor runtime installed once with `runsc install`
   (research D13).
-- A model credentials file outside the repository, readable only by you, for example
-  `~/.config/agentic-platform/models.env`, containing `ANTHROPIC_API_KEY=...`. Only the gateway
-  container reads it.
+- A model credentials file outside the repository that holds only the provider key (no variable
+  name), owned by you and readable only by you (`chmod 600`), for example
+  `~/.config/agentic-platform/anthropic_api_key`. Only the gateway container reads it.
+- The images built with `src/deploy/build.sh` (`engine`, `page`, `cli`, `agent`, `check`).
 - An empty folder for new projects, for example `~/projects`.
 
 ## 1. Start the platform
 
 ```sh
-src/deploy/ap up --credentials ~/.config/agentic-platform/models.env --projects ~/projects
+src/deploy/ap up --credentials ~/.config/agentic-platform/anthropic_api_key --projects ~/projects
 src/deploy/ap page
 ```
 
-Expected: the gateway, engine, terminal client and run page start; `page` prints a
-`http://127.0.0.1:<port>` address. Only the gateway has internet access.
+Expected: the gateway, engine and run page start (the terminal client runs per command); `page`
+prints a `http://127.0.0.1:<port>` address (port 7878 unless `AP_PAGE_PORT` is set). Only the
+gateway has internet access. `src/deploy/ap down` stops everything and keeps run records and
+projects.
 
 ## 2. Describe and approve a slice (Story 1)
 

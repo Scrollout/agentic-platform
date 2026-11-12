@@ -1,0 +1,214 @@
+#!/bin/sh
+# ap: starts, stops and drives the platform on this machine (src/cli/contract.md, research D6).
+#
+# Runs on the host and calls nothing but `docker` (Compose) and POSIX utilities. Its own commands
+# are up, down, build-workers, page and test; build, resume and replay first make the slice's
+# workers ready; every other command goes unchanged to the terminal client container, and its exit
+# code is returned. Exit codes are the terminal contract's: 3 is a usage error or a command that is
+# not available yet; 1 is a failed start or stop.
+#
+# Values reach Compose only through the environment (never a command line, so `ps` does not show
+# them). `up` on a started session keeps its tokens, so running it twice changes nothing; only
+# `up` after `down` makes new ones. The session (tokens, paths, port) is kept for later commands in
+# ${XDG_STATE_HOME:-$HOME/.local/state}/agentic-platform/session.env, mode 600, removed by `down`.
+#
+# Not done yet: image signature verification before start (constitution VIII, plan threat model,
+# T023/T058). Images are built locally by build.sh and are unsigned; verification needs signed
+# images first (owner's decision pending).
+set -u
+
+here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+state_dir=${XDG_STATE_HOME:-$HOME/.local/state}/agentic-platform
+sess=$state_dir/session.env
+vars="AP_CREDENTIALS_FILE AP_PROJECTS_DIR AP_PAGE_PORT AP_CLIENT_TOKEN AP_PAGE_TOKEN AP_WORKER_TOKEN AP_HOST_USER AP_GATEWAY_IMAGE"
+default_page_port=7878
+
+say() { printf 'ap: %s\n' "$*" >&2; }
+die() { code=$1; shift; say "$*"; exit "$code"; }
+
+usage() {
+  cat >&2 <<'EOF'
+usage: ap up --credentials <file> --projects <folder>
+       ap down
+       ap page
+       ap build-workers <slice>
+       ap test <suite>
+       ap <terminal client command> [arguments]   (see src/cli/contract.md)
+
+The credentials file holds only the model provider key and is readable only by you.
+AP_PAGE_PORT, if set, chooses the run page's port (default 7878).
+EOF
+  exit "${1:-3}"
+}
+
+compose() { docker compose -f "$here/compose.yaml" "$@"; }
+
+# 64 hex characters from the kernel's random source.
+rand() { od -An -N32 -tx1 /dev/urandom | tr -d ' \n'; }
+
+# Single-quote a value for the session file, which is read back with `.`.
+quote() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+
+# Load the session, or stop if the platform was not started.
+load() {
+  [ -f "$sess" ] || die 3 "the platform is not started; run: ap up --credentials <file> --projects <folder>"
+  set -a
+  # shellcheck disable=SC1090
+  . "$sess"
+  set +a
+}
+
+# Absolute, symlink-free path of an existing file.
+abs_file() { d=$(CDPATH='' cd -- "$(dirname -- "$1")" && pwd -P) && printf '%s/%s' "$d" "$(basename -- "$1")"; }
+
+check_credentials() {
+  f=$1
+  [ -f "$f" ] || die 3 "credentials file '$f' does not exist or is not a file"
+  [ -r "$f" ] || die 3 "credentials file '$f' is not readable"
+  [ -s "$f" ] || die 3 "credentials file '$f' is empty"
+  set -f
+  # shellcheck disable=SC2046
+  set -- $(ls -lnL -- "$f")
+  set +f
+  case $1 in
+    -???------ | -???------.) ;;
+    *) die 3 "credentials file '$f' must be readable and writable only by you (chmod 600 '$f')" ;;
+  esac
+  [ "$3" = "$(id -u)" ] || die 3 "credentials file '$f' must be owned by you"
+}
+
+cmd_up() {
+  cred='' proj=''
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --credentials) [ $# -ge 2 ] || usage; cred=$2; shift 2 ;;
+      --projects) [ $# -ge 2 ] || usage; proj=$2; shift 2 ;;
+      *) usage ;;
+    esac
+  done
+  [ -n "$cred" ] && [ -n "$proj" ] || usage
+  [ "$(id -u)" != 0 ] || die 3 "do not run ap as root: the gateway runs as your user"
+
+  check_credentials "$cred"
+  cred=$(abs_file "$cred") || die 3 "credentials file '$cred' cannot be resolved"
+  [ -d "$proj" ] || die 3 "projects folder '$proj' does not exist"
+  [ -w "$proj" ] || die 3 "projects folder '$proj' is not writable"
+  proj=$(CDPATH='' cd -- "$proj" && pwd -P) || die 3 "projects folder '$proj' cannot be resolved"
+  case $cred in "$proj"/*) die 3 "the credentials file must not be inside the projects folder" ;; esac
+
+  # A started session is kept as it is (constitution XVII: a second `up` changes nothing): its
+  # tokens and, unless AP_PAGE_PORT is set, its port. Only after `down` does `up` make new tokens.
+  old_client='' old_page='' old_worker='' old_port=''
+  if [ -e "$sess" ] || [ -L "$sess" ]; then
+    broken="the session file $sess is unreadable or incomplete; run: ap down"
+    [ -f "$sess" ] && [ -r "$sess" ] || die 1 "$broken"
+    # shellcheck disable=SC1090,SC2086
+    old=$(unset $vars; . "$sess" >/dev/null 2>&1 &&
+      printf '%s %s %s %s' "${AP_CLIENT_TOKEN:-}" "${AP_PAGE_TOKEN:-}" "${AP_WORKER_TOKEN:-}" "${AP_PAGE_PORT:-}") ||
+      die 1 "$broken"
+    # shellcheck disable=SC2086
+    set -- $old
+    [ $# -eq 4 ] || die 1 "$broken"
+    old_client=$1 old_page=$2 old_worker=$3 old_port=$4
+    for t in "$old_client" "$old_page" "$old_worker"; do
+      [ "${#t}" -ge 32 ] || die 1 "$broken"
+      case $t in *[!0-9a-f]*) die 1 "$broken" ;; esac
+    done
+    [ "$old_client" != "$old_page" ] && [ "$old_client" != "$old_worker" ] && [ "$old_page" != "$old_worker" ] ||
+      die 1 "$broken"
+  fi
+
+  port=${AP_PAGE_PORT:-${old_port:-$default_page_port}}
+  case $port in '' | *[!0-9]*) die 3 "AP_PAGE_PORT '$port' is not a port number" ;; esac
+  [ "$port" -ge 1 ] && [ "$port" -le 65535 ] || die 3 "AP_PAGE_PORT '$port' is not a port number"
+
+  gateway_image=$(awk '$1 == "nginx" { print $2 }' "$here/images.lock")
+  [ -n "$gateway_image" ] || die 1 "no nginx pin in $here/images.lock"
+
+  if [ -n "$old_client" ]; then
+    client=$old_client page=$old_page worker=$old_worker
+    say "the platform's session is already started; keeping its tokens"
+  else
+    # A new session: fresh tokens, one per kind of caller (research D12).
+    client=$(rand) page=$(rand) worker=$(rand)
+    [ "${#client}" -ge 32 ] && [ "$client" != "$page" ] && [ "$client" != "$worker" ] && [ "$page" != "$worker" ] ||
+      die 1 "could not generate distinct session tokens"
+  fi
+
+  AP_CREDENTIALS_FILE=$cred AP_PROJECTS_DIR=$proj AP_PAGE_PORT=$port
+  AP_CLIENT_TOKEN=$client AP_PAGE_TOKEN=$page AP_WORKER_TOKEN=$worker
+  AP_HOST_USER=$(id -u):$(id -g) AP_GATEWAY_IMAGE=$gateway_image
+  # shellcheck disable=SC2086
+  export $vars
+
+  old_umask=$(umask)
+  umask 077
+  mkdir -p -- "$state_dir" || die 1 "cannot create $state_dir"
+  tmp=$sess.$$
+  {
+    echo "# agentic-platform session, written by ap up; removed by ap down"
+    for v in $vars; do eval "val=\$$v"; printf '%s=%s\n' "$v" "$(quote "$val")"; done
+  } >"$tmp" && chmod 600 "$tmp" && mv -f -- "$tmp" "$sess" || { rm -f -- "$tmp"; die 1 "cannot write $sess"; }
+  umask "$old_umask"
+
+  say "starting the platform (gateway, engine, page); run page on http://127.0.0.1:$port"
+  compose up -d || die 1 "docker compose up failed; see the messages above (ap down stops what started)"
+}
+
+cmd_down() {
+  [ $# -eq 0 ] || usage
+  # Compose needs every variable to read the file, though none is used to stop. A missing,
+  # unreadable or broken session falls back to placeholders, so `down` always recovers.
+  AP_CREDENTIALS_FILE=/nonexistent AP_PROJECTS_DIR=/nonexistent AP_PAGE_PORT=$default_page_port
+  AP_CLIENT_TOKEN=none AP_PAGE_TOKEN=none AP_WORKER_TOKEN=none AP_HOST_USER=65534:65534
+  AP_GATEWAY_IMAGE=none
+  # shellcheck disable=SC2086
+  export $vars
+  # shellcheck disable=SC1090
+  if [ -f "$sess" ] && [ -r "$sess" ] && (. "$sess") >/dev/null 2>&1; then load; fi
+  say "stopping the platform; run records and project folders are kept"
+  compose --profile '*' down --remove-orphans || die 1 "docker compose down failed; the session is kept"
+  rm -f -- "$sess"
+}
+
+cmd_page() {
+  [ $# -eq 0 ] || usage
+  load
+  echo "http://127.0.0.1:$AP_PAGE_PORT"
+}
+
+# Make the slice's step workers ready (research D5): one container per step of the slice's pattern,
+# each with only its step's writable paths writable, registered with the engine.
+build_workers() {
+  [ -n "${1:-}" ] || usage
+  die 3 "build-workers: not available yet: T053 (per-slice step containers; no agent definitions exist in src/agents)"
+}
+
+cmd_test() {
+  [ $# -ge 1 ] && [ -n "$1" ] || usage
+  load
+  docker image inspect ap-tests:dev >/dev/null 2>&1 ||
+    die 3 "test: not available yet: the test harness image ap-tests:dev (T024, T046)"
+  compose run --rm tests "$@"
+}
+
+[ $# -ge 1 ] || usage
+cmd=$1
+shift
+case $cmd in
+  -h | --help) usage 0 ;;
+  -*) usage ;;
+  up) cmd_up "$@" ;;
+  down) cmd_down "$@" ;;
+  page) cmd_page "$@" ;;
+  build-workers) [ $# -eq 1 ] || usage; load; build_workers "$1" ;;
+  test) cmd_test "$@" ;;
+  build) [ $# -ge 1 ] || usage; load; build_workers "$1" || exit $?; compose run --rm cli build "$@" ;;
+  resume | replay)
+    # The workers are those of the run's slice; finding it needs the run's record from the engine.
+    [ $# -ge 1 ] || usage
+    load
+    die 3 "$cmd: not available yet: T053 (workers for the run's slice)"
+    ;;
+  *) load; compose run --rm cli "$cmd" "$@" ;;
+esac

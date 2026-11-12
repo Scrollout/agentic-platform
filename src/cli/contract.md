@@ -8,11 +8,23 @@ Two names, two jobs:
   `build`, `resume` and `replay`: it runs `build-workers` for the slice (for a run, the run's slice)
   first, then passes the command on. Every other command is passed unchanged to the terminal
   client, which never calls the launcher.
+
+  `up` refuses (exit 3) a credentials file that is missing, empty, not owned by the developer or
+  readable or writable by anyone else, a projects folder that does not exist or is not writable,
+  and a credentials file inside the projects folder. The file holds only the provider key. `up`
+  after `down` starts a new session with new tokens; `up` on a started session keeps its tokens and
+  port, so running it twice changes nothing, and refuses (exit 1, telling the developer to run
+  `down`) when the session file is unreadable or incomplete. The run page's port is
+  `AP_PAGE_PORT`, or the session's port, or 7878, and `page` prints its address. `down` works with
+  a missing or broken session file. The session is kept, readable only by the developer,
+  in `${XDG_STATE_HOME:-~/.local/state}/agentic-platform/session.env` until `down`. Every command
+  but `up` and `down` needs a started session (exit 3 without one). A command whose parts do not exist yet
+  exits 3 with `not available yet: <task>`.
 - **The terminal client** runs in its own container and is a client of the engine API
   ([openapi.yaml](../engine/api/preview/2026-11-12-preview/openapi.yaml)) with the client token. It adds no behaviour
   of its own.
 
-Exit codes: `0` success, `1` a check or approval failed, `2` the run waits for the developer or was
+Exit codes: `0` success, `1` a check or approval failed (for `up` and `down`: Compose failed), `2` the run waits for the developer or was
 handed over, `3` usage error, `4` refused by the engine (the problem's `code` is printed), `5` the
 run expired, `6` the run or operation was cancelled.
 

@@ -1,0 +1,53 @@
+#!/bin/sh
+# Minimal correct launcher used only to prove the assertions in test_launcher.py pass
+# (and, when mutated, fail). Not the product launcher.
+set -eu
+here=$(cd "$(dirname "$0")" && pwd)
+state=${XDG_STATE_HOME:-$HOME/.local/state}/agentic-platform
+sess=$state/session.env
+usage() { echo "usage: ap up|down|build-workers|page|test|<client command>" >&2; exit 3; }
+compose() { docker compose -f "$here/compose.yaml" --profile '*' "$@"; }
+load() { [ -f "$sess" ] || { echo "ap: not up" >&2; exit 3; }; set -a; . "$sess"; set +a; }
+rand() { od -An -N24 -tx1 /dev/urandom | tr -d ' \n'; }
+build_workers() { echo "build-workers: not available yet" >&2; return 1; }
+[ $# -ge 1 ] || usage
+cmd=$1; shift
+case $cmd in
+-*) usage ;;
+up)
+  cred= proj=
+  while [ $# -gt 0 ]; do
+    case $1 in
+    --credentials) [ $# -ge 2 ] || usage; cred=$2; shift 2 ;;
+    --projects) [ $# -ge 2 ] || usage; proj=$2; shift 2 ;;
+    *) usage ;;
+    esac
+  done
+  [ -n "$cred" ] && [ -n "$proj" ] || usage
+  [ -f "$cred" ] && [ -s "$cred" ] || { echo "ap: credentials file missing or empty" >&2; exit 3; }
+  m=$(stat -c %a "$cred")
+  [ "$m" = 600 ] || [ "$m" = 400 ] || { echo "ap: credentials file must be mode 600" >&2; exit 3; }
+  uid=$(id -u); gid=$(id -g)
+  [ "$uid" != 0 ] || { echo "ap: refusing to run as root" >&2; exit 3; }
+  [ -d "$proj" ] || { echo "ap: projects folder missing" >&2; exit 3; }
+  mkdir -p "$state"; chmod 700 "$state"
+  # converge: a second up reuses the session's tokens and port
+  [ -f "$sess" ] && . "$sess" || true
+  tc=${AP_CLIENT_TOKEN:-$(rand)}; tp=${AP_PAGE_TOKEN:-$(rand)}; tw=${AP_WORKER_TOKEN:-$(rand)}
+  port=${AP_PAGE_PORT:-$(( 20000 + $(od -An -N2 -tu2 /dev/urandom) % 20000 ))}
+  lock=${REFERENCE_IMAGES_LOCK:-$here/images.lock}
+  img=$(awk '$1=="nginx"{print $2}' "$lock")
+  ( umask 077
+    { echo "AP_CREDENTIALS_FILE='$cred'"; echo "AP_PROJECTS_DIR='$proj'"
+      echo "AP_PAGE_PORT=$port"; echo "AP_GATEWAY_IMAGE='$img'"; echo "AP_HOST_USER=$uid:$gid"
+      echo "AP_CLIENT_TOKEN=$tc"; echo "AP_PAGE_TOKEN=$tp"; echo "AP_WORKER_TOKEN=$tw"; } > "$sess" )
+  chmod 600 "$sess"
+  load
+  compose up -d ;;
+down) load; compose down; rm -f "$sess" ;;
+build-workers) [ $# -eq 1 ] || usage; load; build_workers "$1" ;;
+page) load; echo "http://127.0.0.1:$AP_PAGE_PORT" ;;
+test) load; compose run --rm test "$@" ;;
+build) load; build_workers "${1:-}" || exit 1; compose run --rm cli build "$@" ;;
+*) load; compose run --rm cli "$cmd" "$@" ;;
+esac
