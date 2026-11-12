@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/agentic-platform/engine/checks"
@@ -31,7 +34,10 @@ func docOf(s *Slice) ([]byte, error) {
 // links between IDs, then the pattern's conditions. Each check reports on every part it covers:
 // one failed result per fault, or one passed result. It does not run the compatibility check,
 // whose result depends on the approved contract too.
-func (s *Service) partChecks(sl *Slice) ([]Check, error) {
+//
+// dropped holds the example IDs earlier revisions of the slice dropped; one that is back fails
+// ExampleTagged.
+func (s *Service) partChecks(sl *Slice, dropped map[string]string) ([]Check, error) {
 	doc, err := docOf(sl)
 	if err != nil {
 		return nil, err
@@ -52,7 +58,7 @@ func (s *Service) partChecks(sl *Slice) ([]Check, error) {
 		traceFails = append(traceFails, Check{Part: f.Part, Check: CheckTraceability, Reason: f.Reason})
 	}
 	out = append(out, perPart(CheckTraceability, traceFails, "every link between the part's IDs holds")...)
-	out = append(out, exampleTagged(sl.Examples)...)
+	out = append(out, exampleTagged(sl.Examples, dropped)...)
 
 	if s.pattern == nil { // fail closed: no pattern means nothing shows the slice fits
 		out = append(out, Check{Part: string(PartContract), Check: "PatternFit", fromPattern: true,
@@ -152,6 +158,61 @@ var partOfField = map[string]Part{
 	"goals": PartGoals, "rules": PartRules, "terms": PartRules, "examples": PartRules, "contract": PartContract,
 }
 
+// What scrub looks at: each token of a text, a run of characters between spaces, quotes,
+// backticks, parentheses, angle brackets, commas, semicolons and equals signs (square and curly
+// brackets stay, so an IPv6 host or a templated API path is one token), without its trailing
+// full stops and colons.
+var (
+	scrubToken = regexp.MustCompile("[^\\s\"'`()<>,;=]+")
+	hostPort   = regexp.MustCompile(`^(?:\[[0-9A-Fa-f:.%]+\]|(?:[A-Za-z0-9-]+\.)*[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*|[0-9]{1,3}(?:\.[0-9]{1,3}){3}):[0-9]{1,5}(?:/.*)?$`)
+	drivePath  = regexp.MustCompile(`^[A-Za-z]:[\\/]`)
+	fileName   = regexp.MustCompile(`^[^/\\]*[^./\\]\.[A-Za-z0-9]{1,10}$`)
+)
+
+// scrubFinding keeps locations out of a finding's text before it goes into a check reason, which
+// reaches the client (T037e). A finding's text comes from the contract, so an API path such as
+// GET /run/{id} stays; replaced are anything with a URL scheme (x://, file:), a host:port (a
+// single label and IPv6 too), a Windows drive or UNC path, a ~/ path, and an absolute path that
+// ends in a file name with an extension. A runner's error never goes into a reason: it goes to
+// the engine's log.
+func scrubFinding(text string) string {
+	text = uncPath.ReplaceAllString(text, "<path>")
+	return scrubToken.ReplaceAllStringFunc(text, func(tok string) string {
+		core := strings.TrimRight(tok, ".:")
+		tail := tok[len(core):]
+		lower := strings.ToLower(core)
+		switch {
+		case core == "":
+			return tok
+		case strings.Contains(lower, "://"), strings.Contains(lower, "file:"):
+			return "<url>" + tail
+		case hostPort.MatchString(core):
+			return "<host>" + tail
+		case drivePath.MatchString(core), strings.HasPrefix(core, "~/"), strings.HasPrefix(core, `~\`):
+			return "<path>" + tail
+		case strings.HasPrefix(core, "/") && endsInFile(core):
+			return "<path>" + tail
+		}
+		return tok
+	})
+}
+
+// uncPath is a UNC path, \\server\share\..., replaced before the text is split into tokens.
+var uncPath = regexp.MustCompile(`\\\\[^\s\\"'` + "`" + `]+\\[^\s"'` + "`" + `()<>,;]*`)
+
+// endsInFile reports whether an absolute path ends in a file name with an extension, after any
+// JSON pointer (#...), query (?...) or line suffix (:12) is cut off.
+func endsInFile(p string) bool {
+	if i := strings.IndexAny(p, "#?"); i >= 0 {
+		p = p[:i]
+	}
+	if i := strings.IndexByte(p, ':'); i >= 0 {
+		p = p[:i]
+	}
+	seg := p[strings.LastIndexAny(p, "/\\")+1:]
+	return fileName.MatchString(seg)
+}
+
 // compatibility runs oasdiff's comparison of the contract with base ("" before any contract of
 // the slice was approved). Each error-level finding fails the check and names the change; a
 // comparison that cannot run fails it too.
@@ -162,14 +223,15 @@ func (s *Service) compatibility(ctx context.Context, base, contract string) []Ch
 	}
 	findings, err := s.diff.Diff(ctx, base, contract)
 	if err != nil {
+		s.log.Error("the contract comparison could not run", "check", CheckContractCompatibility, "error", err.Error())
 		return []Check{{Part: string(PartContract), Check: CheckContractCompatibility,
-			Reason: fmt.Sprintf("the comparison with %s could not run, so the contract is not shown compatible: %v", against, err)}}
+			Reason: fmt.Sprintf("the comparison with %s could not run, so the contract is not shown compatible", against)}}
 	}
 	var out []Check
 	for _, f := range findings {
 		if f.Level == "error" {
 			out = append(out, Check{Part: string(PartContract), Check: CheckContractCompatibility,
-				Reason: fmt.Sprintf("breaking change against %s: %s (%s)", against, f.Text, f.ID)})
+				Reason: fmt.Sprintf("breaking change against %s: %s (%s)", against, scrubFinding(f.Text), f.ID)})
 		}
 	}
 	if len(out) == 0 {
@@ -189,14 +251,15 @@ func (s *Service) lintContract(ctx context.Context, contract string) []Check {
 	}
 	findings, err := s.lint.Lint(ctx, contract)
 	if err != nil {
+		s.log.Error("the contract lint could not run", "check", CheckContractLint, "error", err.Error())
 		return []Check{{Part: string(PartContract), Check: CheckContractLint,
-			Reason: fmt.Sprintf("the lint could not run, so the contract is not shown to follow OpenAPI's rules: %v", err)}}
+			Reason: "the lint could not run, so the contract is not shown to follow OpenAPI's rules"}}
 	}
 	var out []Check
 	for _, f := range findings {
 		if f.Level == "error" {
 			out = append(out, Check{Part: string(PartContract), Check: CheckContractLint,
-				Reason: fmt.Sprintf("lint rule %s: %s", f.Code, f.Text)})
+				Reason: fmt.Sprintf("lint rule %s: %s", f.Code, scrubFinding(f.Text))})
 		}
 	}
 	if len(out) == 0 {
@@ -206,22 +269,65 @@ func (s *Service) lintContract(ctx context.Context, contract string) []Check {
 	return out
 }
 
-// exampleTagged is the ExampleTagged check on the rules part: slice.ExampleTags's findings as
-// failed results, or one passed result. Examples that are not Gherkin fail it, as they fail
-// slice.Trace's check.
-func exampleTagged(examples string) []Check {
+// exampleTagged is the ExampleTagged check on the rules part: slice.ExampleTags's findings, and
+// each example ID that an earlier revision dropped and the examples now give to another scenario
+// (an E-<n> is never reused, data-model.md), as failed results, or one passed result. Bringing
+// back the scenario the ID was dropped with is no reuse. Examples that are not Gherkin fail it, as
+// they fail slice.Trace's check.
+func exampleTagged(examples string, dropped map[string]string) []Check {
 	fs, err := slice.ExampleTags(examples)
 	if err != nil {
 		return []Check{{Part: string(PartRules), Check: CheckExampleTagged,
 			Reason: "the examples are not valid Gherkin, so their tags cannot be read: " + err.Error()}}
 	}
-	if len(fs) == 0 {
+	var out []Check
+	for _, f := range fs {
+		out = append(out, Check{Part: f.Part, Check: CheckExampleTagged, Reason: f.Reason})
+	}
+	now, _ := slice.ExampleScenarios(examples) // the examples parsed above
+	for _, id := range slices.Sorted(maps.Keys(now)) {
+		if was, ok := dropped[id]; ok && was != now[id] {
+			out = append(out, Check{Part: string(PartRules), Check: CheckExampleTagged,
+				Reason: fmt.Sprintf("example ID %s was dropped by an earlier revision and is never reused for another scenario; give the scenario a new E-<n>", id)})
+		}
+	}
+	if len(out) == 0 {
 		return []Check{{Part: string(PartRules), Check: CheckExampleTagged, Passed: true,
 			Reason: "every scenario carries its rule's tag and a unique example tag"}}
 	}
-	out := make([]Check, len(fs))
-	for i, f := range fs {
-		out[i] = Check{Part: f.Part, Check: CheckExampleTagged, Reason: f.Reason}
-	}
 	return out
+}
+
+// dropExamples returns the example IDs dropped after the examples changed from base, the last
+// examples of the slice that parsed, to after, and the base for the next change. Dropped are
+// those of dropped that after does not bring back with the same scenario, and those base carries
+// and after does not, each with the scenario it was dropped with; an ID that after gives to
+// another scenario stays dropped with its first scenario. Examples after that are not Gherkin
+// change nothing and leave base as it is, so a drop across an invalid revision still counts.
+func dropExamples(dropped map[string]string, base, after string) (map[string]string, string) {
+	now, err := slice.ExampleScenarios(after)
+	if err != nil {
+		return maps.Clone(dropped), base
+	}
+	was, err := slice.ExampleScenarios(base)
+	if err != nil { // only a record from before the base was kept can hold such a base
+		was = nil
+	}
+	out := map[string]string{}
+	for id, d := range dropped {
+		if now[id] != d {
+			out[id] = d
+		}
+	}
+	for id, d := range was {
+		if _, ok := now[id]; !ok {
+			if _, ok := out[id]; !ok {
+				out[id] = d
+			}
+		}
+	}
+	if len(out) == 0 {
+		out = nil
+	}
+	return out, after
 }

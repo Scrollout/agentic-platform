@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strconv"
 	"strings"
@@ -26,6 +27,7 @@ type Service struct {
 	// proposal. 1 when there is no pattern or it gives no positive limit (fail closed on cost).
 	attempts int
 	now      func() time.Time
+	log      *slog.Logger
 
 	mu   sync.Mutex
 	last int // the number of the last slice ID given out; IDs are never reused
@@ -35,6 +37,9 @@ type Service struct {
 	// not reservations, so CreateAs refuses them and this service never gives them out again.
 	unsaved map[string]bool
 	slices  map[string]*record
+	// changing serialises the changes of one slice (replace), so two of them never interleave
+	// while oasdiff and the lint run without s.mu. Taken before s.mu, never while holding it.
+	changing map[string]*sync.Mutex
 	// records keeps the slices durably (nil: in memory only). seqPending is set while the ID
 	// sequence Reserve advanced is not yet stored; no slice is stored until it is.
 	records    Records
@@ -50,6 +55,13 @@ type record struct {
 	// compat and lint are the latest compatibility and lint results, kept until the contract
 	// changes.
 	compat, lint []Check
+	// dropped maps the example IDs (E-<n>) earlier revisions dropped from the slice to a digest of
+	// the scenario each was dropped with; an example ID is never reused, so one that comes back on
+	// another scenario fails ExampleTagged.
+	dropped map[string]string
+	// examplesBase is the slice's last examples that parsed, which the next change of the
+	// examples is compared with to find the IDs it drops.
+	examplesBase string
 }
 
 // New returns a service. Schemas, Analyst and Diff are required.
@@ -66,8 +78,12 @@ func New(cfg Config) (*Service, error) {
 	if now == nil {
 		now = time.Now
 	}
+	log := cfg.Log
+	if log == nil {
+		log = slog.New(slog.DiscardHandler)
+	}
 	s := &Service{schemas: cfg.Schemas, analyst: cfg.Analyst, diff: cfg.Diff, lint: cfg.Lint, pattern: cfg.Pattern,
-		attempts: attemptsOf(cfg.Pattern), now: now, reserved: map[string]bool{}, unsaved: map[string]bool{}, slices: map[string]*record{},
+		attempts: attemptsOf(cfg.Pattern), now: now, log: log, reserved: map[string]bool{}, unsaved: map[string]bool{}, slices: map[string]*record{}, changing: map[string]*sync.Mutex{},
 		records: cfg.Records}
 	if s.records != nil {
 		if err := s.load(); err != nil {
@@ -203,7 +219,7 @@ func (s *Service) build(ctx context.Context, description string) (Result, *recor
 		sl.Questions = append(sl.Questions, Question{ID: "Q-" + strconv.Itoa(i+1), About: q.About, Text: q.Text,
 			Options: slices.Clone(q.Options)})
 	}
-	rec := &record{slice: sl}
+	rec := &record{slice: sl, examplesBase: sl.Examples}
 	if err := s.recheck(ctx, rec, true); err != nil {
 		return Result{}, nil, err
 	}
@@ -362,26 +378,85 @@ func (s *Service) ReplaceContract(ctx context.Context, id, contract string) (Sli
 // and the slice returns to checked (FR-007); every other part that now fails a check loses its
 // approval too, recorded as withdrawn (FR-004).
 //
-// The lock is held deliberately for the whole change, the oasdiff comparison included, so that
-// two changes to a slice cannot interleave between reading it and storing the result.
+// The service's lock is not held across oasdiff and the lint call, so they hold up no other slice.
+// Changes of one slice wait for each other, so both land. A contract change reads the slice under
+// the lock, runs both without it, then takes the lock again and applies the change to the slice
+// as it is then (an approval or an answer may have changed it). Their results depend only on the new contract and the approved
+// baseline, so a change that landed meanwhile is kept and the change applies on top of it; only
+// when the baseline changed meanwhile do they run again, at most maxRechecks times, then the
+// change ends with OperationFailed. The change is stored under the lock before it is reported.
 func (s *Service) replace(ctx context.Context, id string, part Part, set func(*Slice)) (Slice, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	r, err := s.find(id)
-	if err != nil {
+	if _, err := s.find(id); err != nil {
+		s.mu.Unlock()
 		return Slice{}, err
 	}
-	next := &record{slice: clone(r.slice), baseline: r.baseline, compat: r.compat, lint: r.lint}
-	set(&next.slice)
-	next.slice = clone(next.slice) // own the caller's lists
-	normalise(&next.slice)
-	if err := setParts(&next.slice); err != nil {
-		return Slice{}, &Error{Code: "InvalidRequest", Detail: err.Error()}
+	m := s.changing[id]
+	if m == nil {
+		m = &sync.Mutex{}
+		s.changing[id] = m
 	}
-	if next.slice.Parts.of(part) == r.slice.Parts.of(part) {
-		return clone(r.slice), nil
+	s.mu.Unlock()
+	m.Lock()
+	defer m.Unlock()
+
+	var ran *contractRun
+	for runs := 0; ; {
+		s.mu.Lock()
+		r, err := s.find(id)
+		if err != nil {
+			s.mu.Unlock()
+			return Slice{}, err
+		}
+		next := &record{slice: clone(r.slice), baseline: r.baseline, compat: r.compat, lint: r.lint}
+		set(&next.slice)
+		next.slice = clone(next.slice) // own the caller's lists
+		normalise(&next.slice)
+		if err := setParts(&next.slice); err != nil {
+			s.mu.Unlock()
+			return Slice{}, &Error{Code: "InvalidRequest", Detail: err.Error()}
+		}
+		if next.slice.Parts.of(part) == r.slice.Parts.of(part) {
+			s.mu.Unlock()
+			return clone(r.slice), nil
+		}
+		if part == PartContract && (ran == nil || ran.baseline != next.baseline || ran.contract != next.slice.Contract) {
+			if runs >= maxRechecks {
+				s.mu.Unlock()
+				return Slice{}, &Error{Code: "OperationFailed", Detail: fmt.Sprintf(
+					"the approved contract changed %d times while the new contract was checked; change it again", runs)}
+			}
+			runs++
+			ran = &contractRun{baseline: next.baseline, contract: next.slice.Contract}
+			s.mu.Unlock()
+			ran.compat = s.compatibility(ctx, ran.baseline, ran.contract)
+			ran.lint = s.lintContract(ctx, ran.contract)
+			continue
+		}
+		if part == PartContract {
+			next.compat, next.lint = ran.compat, ran.lint
+		}
+		res, err := s.apply(r, next, part)
+		s.mu.Unlock()
+		return res, err
 	}
-	if err := s.recheck(ctx, next, part == PartContract); err != nil {
+}
+
+// maxRechecks is how often a contract change runs oasdiff and the lint before it gives up on a
+// baseline that keeps changing.
+const maxRechecks = 3
+
+// contractRun is the result of oasdiff and the lint for a contract against a baseline.
+type contractRun struct {
+	baseline, contract string
+	compat, lint       []Check
+}
+
+// apply finishes a change of part from r to next, whose compatibility and lint results are
+// current, stores it and reports it. The caller holds s.mu.
+func (s *Service) apply(r, next *record, part Part) (Slice, error) {
+	next.dropped, next.examplesBase = dropExamples(r.dropped, r.examplesBase, next.slice.Examples)
+	if err := s.recheck(context.Background(), next, false); err != nil {
 		return Slice{}, err
 	}
 	next.slice.Approvals = slices.DeleteFunc(next.slice.Approvals, func(a Approval) bool { return a.Part == part })
@@ -414,7 +489,7 @@ func (s *Service) Approve(ctx context.Context, id string, part Part, contentHash
 	}
 
 	now := s.now()
-	next := &record{slice: clone(r.slice), baseline: r.baseline, compat: r.compat, lint: r.lint}
+	next := &record{slice: clone(r.slice), baseline: r.baseline, compat: r.compat, lint: r.lint, dropped: r.dropped, examplesBase: r.examplesBase}
 	next.slice.Approvals = append(slices.DeleteFunc(next.slice.Approvals, func(a Approval) bool { return a.Part == part }),
 		Approval{Part: part, ContentHash: contentHash, At: now})
 	if part == PartContract {
@@ -565,7 +640,7 @@ func (s *Service) recheck(ctx context.Context, r *record, contractChanged bool) 
 	if err := setParts(&r.slice); err != nil {
 		return &Error{Code: "InvalidRequest", Detail: err.Error()}
 	}
-	cs, err := s.partChecks(&r.slice)
+	cs, err := s.partChecks(&r.slice, r.dropped)
 	if err != nil {
 		return err
 	}

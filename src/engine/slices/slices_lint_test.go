@@ -133,8 +133,8 @@ func TestLintThatCannotRunFailsTheCheck(t *testing.T) {
 			got = append(got, c)
 		}
 	}
-	if len(got) != 1 || !strings.Contains(got[0].Reason, "spectral: command not found") || !strings.Contains(got[0].Reason, "could not run") {
-		t.Fatalf("a lint that cannot run fails closed, saying why: %+v", got)
+	if len(got) != 1 || strings.Contains(got[0].Reason, "spectral: command not found") || !strings.Contains(got[0].Reason, "could not run") {
+		t.Fatalf("a lint that cannot run fails closed, saying only that it could not run, with no runner text: %+v", got)
 	}
 }
 

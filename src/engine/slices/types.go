@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -258,4 +259,7 @@ type Config struct {
 	// and fails, naming the slice, on a record it cannot read or check; every change is stored
 	// before it is reported. nil keeps slices in memory only, so a restart loses them.
 	Records Records
+	// Log receives what the service keeps out of the slices, such as a runner's full error when
+	// oasdiff or the lint cannot run (a check reason only says it could not run). nil discards it.
+	Log *slog.Logger
 }

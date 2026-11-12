@@ -3,6 +3,7 @@ package slices
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -32,7 +33,7 @@ func (s *Service) Answer(ctx context.Context, id string, answers []Answer) (Slic
 		return Slice{}, err
 	}
 	cur := clone(r.slice)
-	base := record{baseline: r.baseline, compat: slices.Clone(r.compat), lint: slices.Clone(r.lint)}
+	base := record{baseline: r.baseline, compat: slices.Clone(r.compat), lint: slices.Clone(r.lint), dropped: maps.Clone(r.dropped), examplesBase: r.examplesBase}
 	s.mu.Unlock()
 
 	if err := answerable(cur.Questions, answers); err != nil {
@@ -67,6 +68,7 @@ func (s *Service) Answer(ctx context.Context, id string, answers []Answer) (Slic
 	}
 	sl.ID, sl.Questions, sl.History = cur.ID, qs, cur.History
 	rec := &record{slice: sl, baseline: base.baseline, compat: base.compat, lint: base.lint}
+	rec.dropped, rec.examplesBase = dropExamples(base.dropped, base.examplesBase, sl.Examples)
 	if err := setParts(&rec.slice); err != nil {
 		return Slice{}, &Error{Code: "OperationFailed", Detail: "the analyst's revision cannot be hashed: " + err.Error()}
 	}
@@ -189,5 +191,6 @@ func (s *Service) Delete(_ context.Context, id string) error {
 		}
 	}
 	delete(s.slices, id)
+	delete(s.changing, id)
 	return nil
 }

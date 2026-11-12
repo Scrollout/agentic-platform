@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -96,6 +97,8 @@ func setup(getenv func(string) string) (http.Handler, func() error, error) {
 		Lint:    contracts.NewLint(env["AP_LINT_URL"], env["AP_LINT_TOKEN"]),
 		Pattern: pattern,
 		Records: st,
+		// Runner errors in full, for the operator; no token is ever logged.
+		Log: slog.New(slog.NewJSONHandler(os.Stderr, nil)),
 	})
 	if err != nil {
 		st.Close()

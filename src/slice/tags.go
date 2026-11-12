@@ -1,6 +1,8 @@
 package slice
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"regexp"
 	"strings"
@@ -81,4 +83,79 @@ func ExampleTags(text string) ([]Finding, error) {
 		}
 	}
 	return out, nil
+}
+
+// ExampleScenarios maps each E-<n> ID that a scenario of Gherkin examples carries as an @E-<n>
+// tag to a digest of that scenario: its rule, keyword, name, description, steps (with their doc
+// strings and tables) and examples tables, not its tags or layout. An ID carried twice maps to
+// its first scenario. An error means the text is not Gherkin.
+func ExampleScenarios(text string) (map[string]string, error) {
+	out := map[string]string{}
+	if strings.TrimSpace(text) == "" {
+		return out, nil
+	}
+	gd, err := gherkin.ParseGherkinDocument(strings.NewReader(text), (&messages.Incrementing{}).NewId)
+	if err != nil {
+		return nil, err
+	}
+	if gd.Feature == nil {
+		return out, nil
+	}
+	add := func(sc *messages.Scenario, rule string) {
+		for _, t := range sc.Tags {
+			if m := exampleTag.FindStringSubmatch(t.Name); m != nil {
+				if _, ok := out[m[1]]; !ok {
+					out[m[1]] = scenarioDigest(sc, rule)
+				}
+			}
+		}
+	}
+	for _, fc := range gd.Feature.Children {
+		switch {
+		case fc.Scenario != nil:
+			add(fc.Scenario, "")
+		case fc.Rule != nil:
+			for _, rc := range fc.Rule.Children {
+				if rc.Scenario != nil {
+					add(rc.Scenario, strings.TrimSpace(fc.Rule.Name))
+				}
+			}
+		}
+	}
+	return out, nil
+}
+
+func scenarioDigest(sc *messages.Scenario, rule string) string {
+	h := sha256.New()
+	w := func(v ...string) {
+		for _, s := range v {
+			fmt.Fprintf(h, "%d:%s", len(s), s)
+		}
+	}
+	table := func(rows []*messages.TableRow) {
+		for _, r := range rows {
+			w("row")
+			for _, c := range r.Cells {
+				w(c.Value)
+			}
+		}
+	}
+	w(rule, strings.TrimSpace(sc.Keyword), strings.TrimSpace(sc.Name), strings.TrimSpace(sc.Description))
+	for _, st := range sc.Steps {
+		w("step", strings.TrimSpace(st.Keyword), strings.TrimSpace(st.Text))
+		if st.DocString != nil {
+			w("doc", st.DocString.MediaType, st.DocString.Content)
+		}
+		if st.DataTable != nil {
+			table(st.DataTable.Rows)
+		}
+	}
+	for _, ex := range sc.Examples {
+		w("examples", strings.TrimSpace(ex.Name))
+		if ex.TableHeader != nil {
+			table([]*messages.TableRow{ex.TableHeader})
+		}
+		table(ex.TableBody)
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }

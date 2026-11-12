@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -31,7 +33,8 @@ type Records interface {
 const recordFormat = 1
 
 // The record of one slice on disk: the slice as the service holds it, and what it keeps beside it
-// (the compatibility baseline and the latest compatibility and lint results), so that a restart
+// (the compatibility baseline, the latest compatibility and lint results, and the example IDs
+// dropped earlier), so that a restart
 // neither loses the baseline nor calls the lint service or the analyst again.
 type (
 	diskRecord struct {
@@ -40,6 +43,13 @@ type (
 		Baseline string      `json:"baseline"`
 		Compat   []diskCheck `json:"compat"`
 		Lint     []diskCheck `json:"lint"`
+		// Dropped maps the example IDs earlier revisions dropped to a digest of their scenario. A
+		// record written before it was kept has none, so the IDs its examples carry now are the
+		// only ones known used.
+		Dropped map[string]string `json:"dropped_examples,omitempty"`
+		// ExamplesBase is the slice's last examples that parsed; a record without it takes the
+		// examples it holds.
+		ExamplesBase *string `json:"examples_base,omitempty"`
 	}
 	diskSlice struct {
 		ID          string         `json:"id"`
@@ -98,6 +108,12 @@ type (
 	}
 )
 
+// exampleID is the form of an example ID (data-model.md), scenarioDigest that of a scenario's digest (slice.ExampleScenarios).
+var (
+	exampleID      = regexp.MustCompile(`^E-[0-9]+$`)
+	scenarioDigest = regexp.MustCompile(`^[0-9a-f]{64}$`)
+)
+
 func toDiskChecks(cs []Check) []diskCheck {
 	if cs == nil {
 		return nil
@@ -123,6 +139,7 @@ func fromDiskChecks(cs []diskCheck) []Check {
 func encodeRecord(r *record) ([]byte, error) {
 	sl := clone(r.slice)
 	d := diskRecord{Format: recordFormat, Baseline: r.baseline, Compat: toDiskChecks(r.compat), Lint: toDiskChecks(r.lint),
+		Dropped: maps.Clone(r.dropped), ExamplesBase: &r.examplesBase,
 		Slice: diskSlice{ID: sl.ID, Description: sl.Description, State: sl.State, Goals: sl.Goals, Terms: sl.Terms,
 			Rules: sl.Rules, Examples: sl.Examples, Contract: sl.Contract, Checks: toDiskChecks(sl.Checks),
 			Parts: diskParts{Goals: sl.Parts.Goals, Rules: sl.Parts.Rules, Contract: sl.Parts.Contract}}}
@@ -210,7 +227,17 @@ func (s *Service) decodeRecord(id string, b []byte) (*record, error) {
 	if sl.Parts != want {
 		return nil, fmt.Errorf("the stored part hashes are not those of the stored parts")
 	}
-	return &record{slice: sl, baseline: d.Baseline, compat: fromDiskChecks(d.Compat), lint: fromDiskChecks(d.Lint)}, nil
+	base := sl.Examples
+	if d.ExamplesBase != nil {
+		base = *d.ExamplesBase
+	}
+	for e, digest := range d.Dropped {
+		if !exampleID.MatchString(e) || !scenarioDigest.MatchString(digest) {
+			return nil, fmt.Errorf("dropped example ID %q", e)
+		}
+	}
+	return &record{slice: sl, baseline: d.Baseline, compat: fromDiskChecks(d.Compat), lint: fromDiskChecks(d.Lint),
+		dropped: d.Dropped, examplesBase: base}, nil
 }
 
 // load reads every stored slice and the ID sequence. Any record that cannot be read or checked

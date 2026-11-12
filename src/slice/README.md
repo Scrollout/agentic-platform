@@ -29,4 +29,6 @@ that is not JSON one finding with an empty part.
 `ExampleTags(text)` parses Gherkin examples with the same parser and returns a `rules` finding for
 each scenario without exactly one `@R-<n>` tag matching its `Rule: R-<n>` block, or without exactly
 one `@E-<n>` tag no other scenario carries; each reason names the scenario. An error means the text
-is not Gherkin. The engine runs it as the `ExampleTagged` check.
+is not Gherkin. The engine runs it as the `ExampleTagged` check. `ExampleScenarios(text)` maps
+each `E-<n>` ID to a digest of its scenario (rule, name, steps; not tags or layout), which the
+engine keeps to refuse an ID a revision dropped coming back on another scenario.
