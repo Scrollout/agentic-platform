@@ -75,6 +75,12 @@ run expired, `6` the run or operation was cancelled.
 | `cancel <run\|operation>` | Cancels a run or other running work | `getRun` (for a run), `cancelOperation`, `getOperation` |
 | `delete <slice> [--yes]` | Erases a slice and its records after confirmation | `getSlice`, `listRuns`, `deleteSlice`, `getOperation` |
 
+When a slice fails a pattern condition (`ContractIsOpenApi31`, `OnlyHttpOperations`,
+`ContractRefsLocal` or `RulesNameOneSystem`), `describe` and `show` (without a part) also print one
+line: `The pattern does not fit this description: <condition>: <reason>; ...`, naming each failing
+condition and its reason. A slice that fails no pattern condition prints no such line, also when
+another check fails.
+
 `delete` first shows what it erases: the slice's ID and title, its runs and the number of stored
 artifacts, and that project folders are kept. It then asks the developer to type the slice ID, and
 erases nothing on any other answer. `--yes` skips the question, for scripts.

@@ -178,7 +178,7 @@ func onlyHttpOperations(root *yaml.Node) (bool, string) {
 		return false, "the contract's root is not a mapping, so it has no paths"
 	}
 	var bad []string
-	ops := 0
+	ops, noOps := 0, false
 	paths := lookup(root, "paths")
 	switch {
 	case paths == nil:
@@ -213,15 +213,18 @@ func onlyHttpOperations(root *yaml.Node) (bool, string) {
 				}
 			}
 		}
-		if ops == 0 {
-			bad = append(bad, "paths (no operation)")
-		}
+		noOps = ops == 0
 	}
 	bad = append(bad, nonEmptyEntries(lookup(root, "webhooks"), "webhooks")...)
 	if comp := lookup(root, "components"); comp != nil && deref(comp).Kind == yaml.MappingNode {
 		bad = append(bad, nonEmptyEntries(lookup(deref(comp), "pathItems"), "components/pathItems")...)
 	}
-	if len(bad) > 0 {
+	switch {
+	case noOps && len(bad) > 0:
+		return false, "the contract has no HTTP operation, and has more than HTTP operations a client calls: " + strings.Join(bad, ", ")
+	case noOps:
+		return false, "the contract has no HTTP operation (its paths are empty)"
+	case len(bad) > 0:
 		return false, "the contract has more than HTTP operations a client calls: " + strings.Join(bad, ", ")
 	}
 	return true, fmt.Sprintf("the contract has %d HTTP operations and no webhooks, callbacks or other path item keys", ops)

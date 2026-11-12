@@ -64,7 +64,7 @@ contracts contracts
 contract-diff contract breaking changes: each service'"'"'s newest version against the previous one
 gateway model gateway
 go go vet and tests
-docker recorded model and contract-lint service (Docker, no key)
+docker recorded model, contract-lint service, API conformance and Story 1 acceptance (Docker, no key)
 deps dependencies and licences
 secrets secrets'
 STEPS=$(echo "$STEP_TABLE" | cut -d' ' -f1)
@@ -118,8 +118,10 @@ s_gateway() { sh src/deploy/gateway/test_gateway.sh >/dev/null && echo "gateway 
 s_go() { go_checks; }
 s_docker() {
   # Built in the pinned Go container (setup), run on the host, where Docker is (test); each in its
-  # package folder.
-  for p in recorded lint; do
+  # package folder. The contract and acceptance suites build the engine they test in the pinned Go
+  # container too (src/tests/lab). analystsvc still builds its client with the host's Go, so it
+  # stays out until that changes (T040a).
+  for p in recorded lint acceptance contract; do
     phase setup
     go_run none "cd tests && GOPROXY=off GOFLAGS=-mod=readonly CGO_ENABLED=0 go test -c -tags docker -o /gopath/$p.test ./$p/"
     phase test

@@ -124,12 +124,29 @@ func ip(t testing.TB, container, network string) string {
 
 func build(t testing.TB, dir, out, pkg string) {
 	t.Helper()
-	cmd := exec.Command("go", "build", "-trimpath", "-ldflags=-s -w", "-o", filepath.Join(dir, out), pkg)
-	cmd.Dir = filepath.Join(Root(t), "src", "tests")
-	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux")
-	if b, err := cmd.CombinedOutput(); err != nil {
+	root := Root(t)
+	cache := filepath.Join(cacheHome(), "agentic-platform", "go") // shared with scripts/check.sh
+	if err := os.MkdirAll(cache, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// The pinned Go image, offline, as scripts/check.sh go_run runs it; dir is mounted at /out.
+	b, err := exec.Command("docker", "run", "--rm", "--network", "none",
+		"-v", filepath.Join(root, "src")+":/src", "-w", "/src/tests",
+		"-v", cache+":/gopath", "-v", dir+":/out",
+		"--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()),
+		"-e", "GOPATH=/gopath", "-e", "GOCACHE=/gopath/cache", "-e", "GOTOOLCHAIN=local",
+		"-e", "GOPROXY=off", "-e", "GOFLAGS=-mod=readonly", "-e", "CGO_ENABLED=0", "-e", "GOOS=linux",
+		Pin(t, "golang"), "go", "build", "-trimpath", "-ldflags=-s -w", "-o", "/out/"+out, pkg).CombinedOutput()
+	if err != nil {
 		t.Fatalf("go build %s: %v: %s", pkg, err, b)
 	}
+}
+
+func cacheHome() string {
+	if d := os.Getenv("XDG_CACHE_HOME"); d != "" {
+		return d
+	}
+	return filepath.Join(os.Getenv("HOME"), ".cache")
 }
 
 // toolsDir makes sure the pinned Node tools are installed and returns the folder holding node_modules.

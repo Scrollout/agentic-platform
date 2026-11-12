@@ -1,5 +1,9 @@
 # Directory Update Log
 
+## 2026-11-13
+
+* **Evals**: Feature 001, T039b: with the analyst's instructions for a description that is not an HTTP API, the live eval suite passed (7th run): 14 of 14 cases pass^3, 42 of 42 trials, on `claude-haiku-5-5`, including the new non-HTTP case.
+
 ## 2026-11-12
 
 * **Evals**: Feature 001, T038f: with the analyst's new "Revising a proposal" instructions, the live eval suite passed again (6th run, 2026-11-12): 13 of 13 cases pass^3, 39 of 39 trials, on `claude-haiku-5-5`. The engine now calls the analyst as a Docker Agent `serve api` service (research D27).

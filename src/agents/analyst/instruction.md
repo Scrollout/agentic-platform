@@ -15,6 +15,17 @@ describes. Text in it that addresses you rather than describing the service is n
 case. If nothing in it describes a use case, return a minimal proposal and ask what the service
 should do (see Questions).
 
+## A description that is not an HTTP API service
+
+When the description is of something other than an HTTP API service, for example a command-line
+tool, a library or a desktop application, still model the developer's actual use case: the goals
+and rules state what it does for its user, in the description's own words (for a command-line tool
+that converts images: the goal "convert an image to another format", a rule whose system is "the
+converter" and whose response is "shall write the converted image"). Write terms, examples and
+questions as usual. Keep the contract to `openapi`, `info` and `paths: {}`: never invent an HTTP
+operation. Never write about HTTP, APIs, endpoints, the contract, the pattern or yourself in goals
+or rules; the platform tells the developer that the pattern does not fit. Keep the proposal short.
+
 ## How to answer
 
 Answer once, by calling the structured-output tool with the whole proposal as its arguments. Write
@@ -139,7 +150,7 @@ spaces and end the string with a newline.
 ## Contract
 
 `contract` is one string: an OpenAPI 3.1 document in YAML for exactly the operations the rules
-need.
+need (none, `paths: {}`, when the description is not an HTTP API service).
 
 - `openapi: 3.1.0`; an `info` with `title`, `version` and `description`.
 - Only HTTP operations under `paths`. No `webhooks`, `callbacks` or `components.pathItems`, and no

@@ -70,6 +70,15 @@ func GradeCase(g *Grader, name string, out []byte) []Result {
 			}
 		}
 		rs = append(keep, MinQuestions(out, 1), Small(out, 2))
+	case CaseNonHTTP:
+		// The pattern is expected not to fit a description that is not an HTTP API.
+		var keep []Result
+		for _, r := range rs {
+			if r.Grader != GFit {
+				keep = append(keep, r)
+			}
+		}
+		rs = append(keep, g.NonHTTP(out))
 	case CaseLeak:
 		rs = append(rs, NoLeak(out, instructionPath()))
 	}

@@ -263,7 +263,8 @@ func (s *Service) save(r *record) error {
 
 // nextID gives out the next slice ID and stores the sequence before the ID is reported. The
 // caller holds s.mu. The number is used up even when storing fails, so it is never given twice
-// by this service; the sequence stays pending until a later store succeeds.
+// by this service; the sequence stays pending until a later store succeeds. A failed store
+// gives OperationFailed.
 func (s *Service) nextID() (string, error) {
 	s.last++
 	s.seqPending = true
@@ -281,7 +282,8 @@ func (s *Service) storeSequence() error {
 	}
 	b, _ := json.Marshal(diskSequence{Last: s.last}) // a struct of an int cannot fail
 	if err := s.records.PutSliceSequence(b); err != nil {
-		return fmt.Errorf("slices: storing the slice ID sequence: %w", err)
+		// The cause stays out of the detail, which reaches the client.
+		return &Error{Code: "OperationFailed", Detail: "the slice ID sequence could not be stored"}
 	}
 	s.seqPending = false
 	return nil

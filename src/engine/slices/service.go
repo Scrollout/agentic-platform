@@ -31,7 +31,10 @@ type Service struct {
 	last int // the number of the last slice ID given out; IDs are never reused
 	// reserved holds the IDs Reserve gave out that no slice holds yet; CreateAs takes one.
 	reserved map[string]bool
-	slices   map[string]*record
+	// unsaved holds the IDs Reserve gave out while the ID sequence could not be stored; they are
+	// not reservations, so CreateAs refuses them and this service never gives them out again.
+	unsaved map[string]bool
+	slices  map[string]*record
 	// records keeps the slices durably (nil: in memory only). seqPending is set while the ID
 	// sequence Reserve advanced is not yet stored; no slice is stored until it is.
 	records    Records
@@ -64,7 +67,7 @@ func New(cfg Config) (*Service, error) {
 		now = time.Now
 	}
 	s := &Service{schemas: cfg.Schemas, analyst: cfg.Analyst, diff: cfg.Diff, lint: cfg.Lint, pattern: cfg.Pattern,
-		attempts: attemptsOf(cfg.Pattern), now: now, reserved: map[string]bool{}, slices: map[string]*record{},
+		attempts: attemptsOf(cfg.Pattern), now: now, reserved: map[string]bool{}, unsaved: map[string]bool{}, slices: map[string]*record{},
 		records: cfg.Records}
 	if s.records != nil {
 		if err := s.load(); err != nil {
@@ -117,14 +120,17 @@ func (s *Service) Create(ctx context.Context, description string) (Result, error
 // Reserve gives out the next slice ID from the sequence Create also draws from, without creating
 // a slice; CreateAs then creates the slice under it. An ID given out is never given out again,
 // whether or not a slice is created under it, and not after the slice is deleted or the service
-// restarts on the same Records. When storing the sequence fails, the ID is still given out, and
-// CreateAs and Create store no slice until a later attempt stores the sequence.
+// restarts on the same Records. When storing the sequence fails, the ID returned is no
+// reservation: CreateAs refuses it with OperationFailed and nothing is stored under it, and
+// Create fails the same way, until a later attempt stores the sequence.
 func (s *Service) Reserve() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	id, err := s.nextID()
 	if err != nil {
 		id = "S-" + strconv.Itoa(s.last)
+		s.unsaved[id] = true
+		return id
 	}
 	s.reserved[id] = true
 	return id
@@ -132,7 +138,7 @@ func (s *Service) Reserve() string {
 
 // CreateAs is Create under an ID Reserve gave out, with Create's refusals. A malformed ID, one
 // Reserve did not give out, or one a slice already holds gives InvalidRequest before the analyst
-// runs. A refused CreateAs leaves the ID reserved, so it may be retried; an approved slice of the
+// runs; one Reserve gave out while it could not store the ID sequence gives OperationFailed. A refused CreateAs leaves the ID reserved, so it may be retried; an approved slice of the
 // same description is offered as in Create, and the ID stays reserved.
 func (s *Service) CreateAs(ctx context.Context, id, description string) (Result, error) {
 	if err := s.reservable(id); err != nil {
@@ -169,6 +175,9 @@ func (s *Service) reservable(id string) error {
 func (s *Service) reservableLocked(id string) error {
 	if _, err := s.schemas.ParseID(id); err != nil {
 		return &Error{Code: "InvalidRequest", Detail: err.Error()}
+	}
+	if s.unsaved[id] {
+		return &Error{Code: "OperationFailed", Detail: "slice ID " + id + " was not reserved: the slice ID sequence could not be stored"}
 	}
 	if _, ok := s.slices[id]; ok || !s.reserved[id] {
 		return &Error{Code: "InvalidRequest", Detail: "slice ID " + id + " was not reserved or is in use"}
