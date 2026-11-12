@@ -28,6 +28,11 @@ A fresh clone of the repository, or a change to the hooks.
    `scripts/check.sh` fails if the two images report different Go releases.
 4. Generated Go code is not committed. After a clone, or a change to a contract, run
    `scripts/generate.sh`; `scripts/check.sh` regenerates it and fails if it differs.
+
+   `scripts/check.sh` also runs `scripts/contract-diff.sh`, which compares each service's newest
+   contract version under `src/<service>/api/{stable,preview}/` with the previous one using the
+   pinned oasdiff image, without network, and fails on any breaking change (Principle XV). A
+   service with one version prints `one version, nothing to compare` and passes.
 5. A commit that changes a protected path (the constitution, `scripts/`, `src/deploy/`,
    `src/tests/`, test files, test data, Go module files, `.gitignore`) is refused by
    `scripts/hooks/commit-msg` unless its message carries an `Approved-by: <owner>` trailer.

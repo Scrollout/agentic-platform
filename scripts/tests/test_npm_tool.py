@@ -39,10 +39,12 @@ def make_tree(root):
     return root / "scripts/npm-tool.sh"
 
 
-@unittest.skipUnless(shutil.which("docker"), "docker not on PATH")
 class NpmToolTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # A missing prerequisite is a failure, never a skip (constitution; T010c).
+        if not shutil.which("docker"):
+            raise AssertionError("npm-tool.sh tests need docker on PATH; it is not installed")
         cls.base = tempfile.mkdtemp(prefix="test-npm-tool-", dir=TMP_BASE)
         cls.addClassCleanup(shutil.rmtree, cls.base, ignore_errors=True)
         # One tree and one cache shared by tests that only read.
@@ -146,7 +148,8 @@ class NpmToolTest(unittest.TestCase):
              "{{(index .IPAM.Config 0).Gateway}}"], capture_output=True, text=True)
         gateway = gw.stdout.strip()
         if gw.returncode != 0 or not gateway:
-            self.skipTest("cannot find the Docker bridge gateway")
+            self.fail("cannot find the Docker bridge gateway (docker network inspect bridge "
+                      "gave no gateway address): %s" % gw.stderr)
         hits = []
         served = Path(self.base) / "served"
         served.mkdir(exist_ok=True)
@@ -185,8 +188,9 @@ class NpmToolTest(unittest.TestCase):
              str(tools / "node_modules/.bin/redocly"), "bundle", "ref.yaml",
              "-o", str(out / "control.yaml")], capture_output=True, text=True, timeout=300)
         if control.returncode != 0 or not hits:
-            self.skipTest("control with networking could not fetch the $ref: %s%s"
-                          % (control.stdout, control.stderr))
+            self.fail("control with networking could not fetch the $ref (the test cannot prove "
+                      "the sandbox blocks it without this): hits=%s %s%s"
+                      % (hits, control.stdout, control.stderr))
         hits.clear()
         r = run(script, "redocly", "bundle", "ref.yaml", "-o", str(out / "blocked.yaml"),
                 env={**env, "NPM_TOOL_MOUNT": str(out)}, cwd=root)

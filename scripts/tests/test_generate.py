@@ -31,11 +31,13 @@ def snapshot(root):
     return out
 
 
-@unittest.skipIf(MISSING, "generate.sh needs docker on PATH; missing: %s"
-                 % ", ".join(MISSING))
 class GenerateScriptTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # A missing prerequisite is a failure, never a skip (constitution; T010c).
+        if MISSING:
+            raise AssertionError("generate.sh needs docker on PATH; missing: %s"
+                                 % ", ".join(MISSING))
         cls._root = tempfile.mkdtemp(prefix="test-generate-")
         cls.addClassCleanup(shutil.rmtree, cls._root, ignore_errors=True)
         cls.baseline = os.path.join(cls._root, "baseline")
