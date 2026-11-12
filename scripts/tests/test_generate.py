@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import unittest.mock
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 GEN_DIRS = ["src/engine/api/gen", "src/cli/api/gen", "src/page/api/gen"]
@@ -42,7 +43,10 @@ class GenerateScriptTest(unittest.TestCase):
         cls.addClassCleanup(shutil.rmtree, cls._root, ignore_errors=True)
         cls.baseline = os.path.join(cls._root, "baseline")
         os.makedirs(os.path.join(cls.baseline, "scripts"))
-        for f in ("generate.sh", "npm-tool.sh"):
+        helpers = ["generate.sh", "npm-tool.sh"]
+        if os.path.isfile(os.path.join(REPO, "scripts", "contract-versions.sh")):
+            helpers.append("contract-versions.sh")  # the shared ordering rule (T024b)
+        for f in helpers:
             shutil.copy2(os.path.join(REPO, "scripts", f),
                          os.path.join(cls.baseline, "scripts", f))
         shutil.copytree(os.path.join(REPO, "scripts", "tools"),
@@ -238,6 +242,28 @@ class GenerateScriptTest(unittest.TestCase):
         self.add_version("preview/2026-12-01-preview", "Older preview wording.")
         self.add_version("stable/2026-12-15", "Newer stable wording.")
         self.assert_generated_from("Newer stable wording.", "Older preview wording.")
+
+    def test_stable_wins_over_preview_of_the_same_date(self):
+        # Baseline preview/2026-11-12-preview exists; stable of the same date is newer.
+        # Run under LC_ALL=C too: the choice must not depend on the caller's collation.
+        self.add_version("stable/2026-11-12", "Same-date stable wording.")
+        with unittest.mock.patch.dict(os.environ, {"LC_ALL": "C", "LANG": "C"}):
+            self.assert_generated_from("Same-date stable wording.")
+
+    def test_same_date_preview_does_not_win_over_stable(self):
+        self.add_version("stable/2026-12-01", "Stable wording.")
+        self.add_version("preview/2026-12-01-preview", "Preview wording.")
+        self.assert_generated_from("Stable wording.", "Preview wording.")
+
+    def test_bad_version_folder_fails(self):
+        for folder in ("stable/latest", "stable/2026-13-01x", "stable/2027-01-01-preview",
+                       "preview/2027-01-01"):
+            with self.subTest(folder=folder):
+                self.reset()
+                self.add_version(folder, "Bad folder wording.")
+                r = self.run_in(self.work)
+                self.assertNotEqual(r.returncode, 0, r.stdout + r.stderr)
+                self.assertIn(folder.split("/")[1], r.stdout + r.stderr)
 
     def test_no_targets_exits_zero(self):
         for d in GEN_DIRS:

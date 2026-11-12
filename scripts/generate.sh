@@ -5,11 +5,18 @@
 #   scripts/generate.sh --check  show what differs and change nothing; exits 1 on any difference
 #
 # Each src/<module>/api/<service>.oapi-codegen.yaml declares one target: code generated from the
-# newest contract version under src/<service>/api/{stable,preview}/, bundled into one document
+# newest contract version under src/<service>/api/{stable,preview}/ (ordered by
+# scripts/contract-versions.sh, the rule scripts/contract-diff.sh also uses: by date, then preview
+# before stable on the same date; a misnamed version folder fails the run), bundled into one document
 # with Redocly CLI, then turned into src/<module>/api/gen/<service>.gen.go by oapi-codegen.
 # Generated code is never committed (constitution, Clean tree); builds and checks run this first.
 set -eu
+export LC_ALL=C
 cd "$(dirname "$0")/.."
+# Lists below hold one path per line; split on newlines only, so a name with spaces stays whole.
+IFS='
+'
+set -f
 mode=write
 [ "${1:-}" = "--check" ] && mode=check
 pin() { awk -v n="$1" '$1==n{print $2}' src/deploy/images.lock; }
@@ -29,8 +36,9 @@ for config in $targets; do
   service=$(basename "$config" .oapi-codegen.yaml)
   bundle="$tmp/contracts/$service.openapi.yaml"
   [ -f "$bundle" ] && continue
-  contract=$(find "src/$service/api/stable" "src/$service/api/preview" -mindepth 2 -maxdepth 2 \
-    -name openapi.yaml 2>/dev/null | awk -F/ '{print $(NF-1) "\t" $0}' | sort | tail -1 | cut -f2)
+  versions=$(sh scripts/contract-versions.sh . "$service") \
+    || { echo "generate: $config: version folders under src/$service/api/ cannot be ordered" >&2; exit 1; }
+  contract=$(printf '%s\n' "$versions" | tail -1 | cut -f2)
   [ -z "$contract" ] && { echo "generate: $config: no contract under src/$service/api/" >&2; exit 1; }
   echo "bundle   $contract"
   NPM_TOOL_MOUNT="$tmp" scripts/npm-tool.sh redocly bundle "$contract" -o "$bundle" >"$tmp/redocly.log" 2>&1 \
