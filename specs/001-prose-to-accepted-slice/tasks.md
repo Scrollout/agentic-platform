@@ -38,7 +38,7 @@ fresh review.
   `/speckit-implement` continues with US2. Implementation runs through `/speckit-implement` from
   US2 on (US1 was implemented task by task without it). Round 1 of the 2026-11-13 re-run (Opus,
   fresh, at `3601b34`) failed (K1 to K4); fixed in `bab854b` and `d5de8e1`; round 2 (Opus, fresh,
-  at `d5de8e1`) passed with 3 MEDIUM and 5 LOW, fixed or recorded in the next commit. Re-run on 2026-11-13 after T054a (Opus, fresh, at `0c9917d`): round 1 failed (C1 T054 before T046, D1 threat model, D2 pivot and compensation), fixed in `c9d96aa` with two owner-approved exceptions; round 2 (same reviewer, changed lines only) passed. The hook requires a `Tests-approved-by:` trailer when non-test Go code
+  at `d5de8e1`) passed with 3 MEDIUM and 5 LOW, fixed or recorded in the next commit. Re-run on 2026-11-13 after T054a (Opus, fresh, at `0c9917d`): round 1 failed (C1 T054 before T046, D1 threat model, D2 pivot and compensation), fixed in `c9d96aa` with two owner-approved exceptions; round 2 (same reviewer, changed lines only) passed. Re-run on 2026-11-13 after T054e and T054c (Opus, fresh, at `38e1f13`): round 1 failed (F1, T054c before T053a's token wiring and T054b), fixed in `1f68bdb` with an owner-approved exception; round 2 passed. The hook requires a `Tests-approved-by:` trailer when non-test Go code
   and test files are staged together, even when the tests are new; failing tests cannot be
   committed alone, so each unit's tests and code are committed together with the owner's trailer
   (playbook step 10, owner's choice 2026-11-13); Story 1's trailers naming "separate test author (Claude
