@@ -12,7 +12,7 @@ sources:
   - id: gvisor-docker
     resource: https://gvisor.dev/docs/user_guide/quick_start/docker/
     title: gVisor Docker Quick Start
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-13T18:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-13T20:00:00Z }
 ---
 
 # Responsibility
@@ -34,7 +34,7 @@ release-20261109.0 on Docker 29.
 
 # Configuration
 
-Step workers, the check service, the analyst and contract-lint use it, with read-only root, user 65532 (the step agent runs as the developer's uid:gid, `AP_HOST_USER`, so it can write the project), all
+Step workers, the check service, the analyst and contract-lint use it, and so will the project worker (T053c, research D30), with read-only root, user 65532 (the step agent and the project worker run as the developer's uid:gid, `AP_HOST_USER`, so they can write the project and the developer owns its files), all
 capabilities dropped and CPU, memory and process limits. A gVisor container cannot use Docker's
 embedded DNS, so the engine and gateway have fixed addresses reached through `extra_hosts` (research
 D13, T022c; `src/deploy/README.md`).

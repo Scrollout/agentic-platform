@@ -7,7 +7,7 @@ status: draft
 sources:
   - id: research
     resource: ../../specs/001-prose-to-accepted-slice/research.md
-    title: Feature 001 research, D5 to D13, D24, D27, D28, D29
+    title: Feature 001 research, D5 to D13, D24, D27, D28, D29, D30
   - id: adr-0028
     resource: /decisions/0028-sign-platform-images-locally.md
     title: "ADR 0028: Sign the platform's images locally with cosign"
@@ -17,7 +17,10 @@ sources:
   - id: adr-0031
     resource: /decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md
     title: "ADR 0031: A review finding blocks only when its rule's tests, rerun against the current code, fail at the file it names"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-13T18:00:00Z }
+  - id: adr-0032
+    resource: /decisions/0032-project-version-history-kept-by-a-project-worker.md
+    title: "ADR 0032: The new project's version history is a git repository kept by a project worker"
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-13T20:00:00Z }
 ---
 
 # Context
@@ -68,14 +71,25 @@ Shipped by Story 2 so far:
   sends every check to the check service, except ContractLintPasses, which goes to contract-lint.
   A review finding blocks only when its rule's tests, rerun by the check service, fail at the file
   it names ([ADR 0031](/decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md)).
-  Until T053a writes a replay's reused files into the new project, a reused result that left
+  Until T053e writes a replay's reused files into the new project, a reused result that left
   files is reused only in its own project.
 
-Planned for Story 2 (T053a): `ap build-workers` starts the per-slice **step containers** when a
-slice is approved and a build is asked for, each with only its step's writable paths writable
-(research D5), registers them with the engine, and wires each procedure step worker's token.
+Planned for Story 2 (T053a, split into T053c to T053e):
+
+- **Project worker** (T053c): a third deployment of the check program, which `ap up` starts
+  under gVisor with the projects folder writable and its own token. It keeps each new project's
+  version history as a git repository in the project folder, with [git](/components/git.md):
+  `commitStep` makes one deterministic commit per accepted step (and first writes a reused step's
+  stored files during a replay), and `restoreStep` restores the project to its last commit before
+  every attempt, which is the run's compensation. The engine calls both (T053e). It still runs
+  no git and mounts no project, and the check service stays read-only
+  ([ADR 0032](/decisions/0032-project-version-history-kept-by-a-project-worker.md)).
+- **Step containers** (T053d): `ap build-workers` starts the per-slice step containers when a
+  slice is approved and a build is asked for, each with only its step's writable paths writable
+  (research D5). It registers them with the engine and wires each procedure step worker's token.
+
 Until then no step container runs, so a run cannot yet build a slice end to end
-(research D29, [ADR 0030](/decisions/0030-agent-steps-on-docker-agent-checks-in-a-check-service.md)).
+(research D29 and D30, [ADR 0030](/decisions/0030-agent-steps-on-docker-agent-checks-in-a-check-service.md)).
 
 Every container runs read-only with all capabilities dropped; the analyst, contract-lint, the check
 service and the workers run under [gVisor](/components/gvisor.md). Networks are internal and isolated: `clients`,
@@ -86,7 +100,8 @@ See [Compose](../../src/deploy/compose.yaml) and the [component list](/component
 Sources: [Feature 001 research](../../specs/001-prose-to-accepted-slice/research.md),
 [ADR 0028](/decisions/0028-sign-platform-images-locally.md),
 [ADR 0030](/decisions/0030-agent-steps-on-docker-agent-checks-in-a-check-service.md),
-[ADR 0031](/decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md).
+[ADR 0031](/decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md),
+[ADR 0032](/decisions/0032-project-version-history-kept-by-a-project-worker.md).
 
 Each further building block gets its own concept:
 
@@ -110,4 +125,5 @@ Each further building block gets its own concept:
 - [ADR 0027: Contract-driven frontend](/decisions/0027-contract-driven-frontend.md)
 - [ADR 0030: Agent steps on Docker Agent's API server; checks and procedures in a check service](/decisions/0030-agent-steps-on-docker-agent-checks-in-a-check-service.md)
 - [ADR 0031: A review finding blocks only when its rule's tests fail at the file it names](/decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md)
+- [ADR 0032: The new project's version history is a git repository kept by a project worker](/decisions/0032-project-version-history-kept-by-a-project-worker.md)
 - ADRs 0005 to 0025: why each constitution principle exists, starting with [ADR 0005](/decisions/0005-principle-i-needs-before-solutions.md)

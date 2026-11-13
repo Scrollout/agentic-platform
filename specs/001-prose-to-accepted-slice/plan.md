@@ -64,7 +64,7 @@ per token on the API
 | XII. Tenant isolation | Not applicable | One developer by scope (FR-021); listed in Complexity Tracking for the record |
 | XIII. Secure supply chain | Exception (approved, partial) | Images pinned by version and digest; Go tools by version, verified by the Go checksum database; Node tools with their whole dependency tree in `scripts/tools/package-lock.json`; local scans in `scripts/check.sh`; signature verification at start; automated update pull requests deferred while there is no hosted forge |
 | XIV. Safe defaults and least agency | Pass | Default-deny egress; per-step writable paths and allowed dependencies; checks fail closed; budgets; rate limits |
-| XV. Compatible public APIs | Pass | Engine API: `api-version` query parameter, preview `2026-11-12-preview`, version errors, idempotency keys kept 24 hours, paginated lists. The check service (`2026-11-13-preview`, D29) is internal, called only by the engine with its own token, not a public API: `runProcedure` takes no idempotency key and is repeat-safe by contract (the same request over the same project leaves the same files) |
+| XV. Compatible public APIs | Pass | Engine API: `api-version` query parameter, preview `2026-11-12-preview`, version errors, idempotency keys kept 24 hours, paginated lists. The check service (`2026-11-13-preview`, D29) is internal, called only by the engine with its own token, not a public API: `runProcedure` takes no idempotency key and is repeat-safe by contract (the same request over the same project leaves the same files); so are the project worker's `restoreStep` and `commitStep`, which finds its own commit and makes no second one (D30) |
 | XVI. Human control of agents | Exception (approved, partial) | Feature branch; local hooks run every check and refuse protected-path changes without the owner's `Approved-by:` trailer; agent commits carry an attribution trailer. Hosted branch protection when a forge is used |
 | XVII. Declare, derive, converge | Pass | Slices and patterns are declarations; EARS text, code and tests are derived |
 | XVIII. Abstractions say what | Pass | The API and CLI describe outcomes, not mechanisms |
@@ -73,6 +73,16 @@ per token on the API
 | Contract-first | Pass | Contracts reviewed and versioned first, authoritative with their provider; failing tests before code |
 | Fresh review | Pass | A fresh reviewer per story and before done, on a model other than the author's |
 | Layout | Pass | All code under `src/`; layout check in `scripts/check.sh` |
+
+## Decisions
+
+Each decision that outlives this feature has a record in `docs/decisions/`, linked back here.
+
+| Decision | Research | Record |
+|----------|----------|--------|
+| Agent steps run on Docker Agent's API server; checks and procedures run in a check service with its own contract | D29 | [ADR 0030](../../docs/decisions/0030-agent-steps-on-docker-agent-checks-in-a-check-service.md) |
+| A review finding blocks only when its rule's tests, rerun against the current code, fail at the file it names | D29 (closed by T054e) | [ADR 0031](../../docs/decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md) |
+| The new project's version history is a git repository kept by a project worker; the check image on the Debian golang pin for git; only the generate worker has the project root writable, behind a history guard | D30 | [ADR 0032](../../docs/decisions/0032-project-version-history-kept-by-a-project-worker.md) |
 
 ## Threat model
 
@@ -90,7 +100,8 @@ artifacts passed from one step into the next agent's context (a trust boundary).
 | Step agents | | ✓ | | | ✓ | ✓ | ASI02 tool misuse, LLM06 excessive agency | gVisor, read-only outside scope, no capabilities, no egress, resource limits |
 | Check container running generated code | | ✓ | | ✓ | ✓ | ✓ | ASI05 code execution | gVisor, no network, time and resource limits, ephemeral file system |
 | Check service API (`runCheck`, `readStepFiles`) | ✓ | ✓ | ✓ | ✓ | ✓ | | ASI03 identity abuse, LLM10 unbounded consumption | Accepts only the bearer token issued to the engine (`engineToken`; any other gets 401), on a network shared only with the engine; per-token and per-address rate limits, request and response size caps, `calls-at-once` (503 Busy) and `time_limit_seconds` (504, the process tree stopped), all in the contract's `x-limits`; the project mounted read-only; every path a ProjectPath, nothing read through a symbolic link; input hashes checked (InputHashMismatch); the engine accepts an attempt only when every verdict's `project_files` equals the files it stored by hash; the service keeps no state and the engine records every verdict (D29, `src/check/api/preview/2026-11-13-preview/openapi.yaml`) |
-| Procedure step workers (`runProcedure`) | ✓ | ✓ | | | ✓ | ✓ | ASI02 tool misuse, LLM06 excessive agency, ASI03 identity abuse | One worker per procedure step, started by the launcher with a token it creates for that worker and gives only to the worker and the engine (T053a); only that step's writable paths mounted writable; gVisor, no capabilities, no egress, resource limits; a fixed procedure, no model; other procedures and steps answer 404; inputs by content checked against their hashes; writes only ProjectPaths, never through a symbolic link, converging on a repeat; the files it returns are stored by hash and judged by the check service's checks (scope among them); a rejected attempt's writes are undone before the next attempt (D29, T053a) |
+| Procedure step workers (`runProcedure`) | ✓ | ✓ | | | ✓ | ✓ | ASI02 tool misuse, LLM06 excessive agency, ASI03 identity abuse | One worker per procedure step, started by the launcher with a token it creates for that worker and gives only to the worker and the engine (T053a); only that step's writable paths mounted writable; gVisor, no capabilities, no egress, resource limits; a fixed procedure, no model; other procedures and steps answer 404; inputs by content checked against their hashes; writes only ProjectPaths, never through a symbolic link, converging on a repeat; the files it returns are stored by hash and judged by the check service's checks (scope among them); a rejected attempt's writes are undone before the next attempt (D29, D30). Stated limit (owner, 2026-11-13): the generate worker has the project root writable, because its `go.mod` and `go.sum` are in the root; it is fixed code, not an agent, and ScopeKept rejects its writes outside its globs; `.git` is bound read-only on top of it, as in every step container |
+| Project worker (`commitStep`, `restoreStep`) | ✓ | ✓ | ✓ | | ✓ | ✓ | ASI03 identity abuse, ASI02 tool misuse, LLM10 unbounded consumption | Accepts only its own token issued to the engine, on `checks` only; gVisor, no capabilities, no egress, resource limits; the contract's rate, size, `calls-at-once` and time limits; requests carry paths, hashes and stored artifacts, never commands, and every git option is fixed in code (no hooks, signing, outside configuration, attribute filters or line-ending conversion); commits only when the last commit holds `before` and the folder holds the accepted `project_files`, otherwise 409 and nothing committed; reused outputs checked against their stored hashes; nothing through a symbolic link; deterministic commits whose trailers name run, step, round and attempt; `.git` is created empty by the launcher and bound read-only into every step container, so only the project worker writes it; as a second layer, a history guard checks `.git` against the worker's own record (last commit, parent, trailers, config hash; atomically replaced, on a volume only it mounts) before any git command, refusing symbolic links, `commondir`, `gitdir`, alternates, `shallow`, grafts and a packed `main`, with 409 HistoryChanged; git runs only through filter-free plumbing with replace objects, fsmonitor, hooks and automatic gc off, and paths reach it only on standard input or after `--`; a path part `.git` in any letter case is not a ProjectPath (D30). Remaining: the developer and host processes can still change `.git`, and the guard then stops the run. Stated limit: it can write any project under the projects folder, and only the engine, naming its run's new project, calls it |
 | Gateway | ✓ | | | ✓ | ✓ | | LLM02 | Only holder of credentials; only the provider host; no header or body logging; budget caps |
 | Host-reachable bridges: page forwarder, gateway, image registry | | | | ✓ | | ✓ | — | Stated limit (T022d): only these three can reach the host's services, since Docker publishes no port from an `isolated` network and the gateway needs egress; each is a pinned, static component with a fixed configuration and nothing else on its network. Mitigation path: an optional host firewall rule, added by the owner with root and never by `ap`, drops new connections from the platform's subnets (`10.231.0.0/16`) to the host ([local environment](../../docs/operations/local.md#optional-host-firewall-rule)) |
 | Launcher | | ✓ | | | | ✓ | LLM03 supply chain | Verifies image signatures at start; pins by digest; never passes the socket to a container |
@@ -98,7 +109,7 @@ artifacts passed from one step into the next agent's context (a trust boundary).
 | Run store | | ✓ | ✓ | ✓ | | | — | Append-only records; content addressed by hash; erasure on delete |
 | Run page | ✓ | | | ✓ | ✓ | | — | Bound to `127.0.0.1`; own token; Host header checked against DNS rebinding; GET only; rate limit |
 | Terminal client | ✓ | | ✓ | | | | — | Own token; every action recorded by the engine |
-| New project | | ✓ | | | | | — | Written only by steps within scope; handed over with version history |
+| New project | | ✓ | | | | | — | Written only by steps within scope; restored to its last commit before every attempt; one commit per accepted step; handed over with its git version history (D30) |
 | Pinned images and tools | | ✓ | | | | | LLM03 | Digest pins and lock files; licence and Scorecard checks; dependency, licence and secret scans in `scripts/check.sh`; a monthly manual update review while there is no forge (XIII exception) |
 
 ## Project Structure
@@ -150,10 +161,11 @@ and `src/tests`; declarations in `src/catalogue` and `src/agents`; packaging in 
 engine's contract lives with the engine, as ADR 0004 requires. The check service's contract and
 its generated code live in `src/check`, a module that needs only `oapi-codegen/runtime`; its
 command `src/engine/cmd/check` is in the engine module so it reuses `engine/checks` and
-`engine/procedures` without copying them. It runs in two deployments: as the check service, with
-the project mounted read-only (checks, an agent step's files), and as each procedure step's
+`engine/procedures` without copying them. It runs in three deployments: as the check service, with
+the project mounted read-only (checks, an agent step's files); as each procedure step's
 worker, which is not read-only: its step's writable paths are mounted writable and the rest of
-the project read-only (its procedure). The engine's check client uses the same generated
+the project read-only (its procedure); and as the project worker, with the projects folder
+writable, which keeps each project's git version history (D30, [ADR 0032](../../docs/decisions/0032-project-version-history-kept-by-a-project-worker.md)). The engine's check client uses the same generated
 package (research D29, [ADR 0030](../../docs/decisions/0030-agent-steps-on-docker-agent-checks-in-a-check-service.md)).
 Agent steps run the pinned Docker Agent `serve api`, whose API is their contract (D29). Built
 images exclude `src/tests`,

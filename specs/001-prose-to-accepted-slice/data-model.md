@@ -130,11 +130,82 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
   belongs to the implementation.
 - **A failing worker or model**: a worker that errors, including an unavailable model, makes a
   rejected attempt, retried within the step's attempts; the run can then be resumed (edge case).
-- **Pivot, compensation and timeout** (constitution, Reliable events and side effects; research
-  D29): the pivot is the run's outcome recorded with the project handed over (`done` or
-  `handed-over`); before it, a rejected attempt's writes are undone by restoring the step's
-  writable paths to the last accepted state from the stored artifacts before the next attempt
-  (T053a); the timeout is the step and run time budgets (D14).
+- **The run as a process across components** (constitution, Reliable events and side effects;
+  research D29, D30). A run spans the engine, the step workers, the check service and the project
+  worker; the state-changing steps are an attempt's writes into the project and each accepted
+  step's commit.
+  - **Pivot**: the run's outcome recorded with the project handed over: `done`, or `handed-over`
+    when the developer takes the run over. After it nothing is undone. `done` is recorded only
+    after the last accepted step's commit is made, so a done project's working tree equals its
+    last commit. A run handed over, expired or cancelled keeps its folder as the last attempt
+    left it: the last commit holds the last accepted state, and a rejected last attempt's files,
+    if any, are uncommitted changes the developer sees against it (nothing restores after the
+    last attempt).
+  - **Compensation**: the project worker's `restoreStep` (check contract), called by the engine
+    before every attempt of every step, makes the project folder hold `before` (the files the
+    last accepted step left) from the last commit: files the commit holds are written back, every
+    other file outside `.git` is removed, no folder is removed. It undoes a rejected attempt's
+    and an interrupted attempt's writes alike, and changes nothing otherwise. Accepted steps are
+    not compensated: they are the state later steps and resume build on. Run-record events are
+    not undone (D8).
+  - **Commits**: after recording `StepAccepted` or `ResultReused`, the engine calls `commitStep`
+    and calls nothing for the next step, and records no outcome, until it answers 200; on
+    resume it calls it again for the last accepted step, which a repeat makes safe. One commit
+    per accepted step, a step that changed no file included, on the branch `main`; its tree is
+    exactly the accepted `project_files`, each file with its bytes as a non-executable regular
+    file. For a reused result (`reused_from`), `commitStep` first writes the reused outputs'
+    stored artifacts into the step's writable paths; this is how a replay's new project gets its
+    files, and it lifts the guard that reused a result with files only in its own project.
+  - **Who writes `.git`**: only the project worker. `ap build-workers` creates the project folder
+    with an empty `.git` folder and binds it read-only into every step container, including the
+    generate worker, whose project root is otherwise writable (a stated limit). The project
+    worker creates the repository in it at the run's first `commitStep`, after contract-check is
+    accepted and before generate runs.
+  - **History guard** (a second layer): the project worker keeps, per project, on a volume only
+    it mounts, the ID of the last commit it made, its parent ID, the trailers it names and the
+    SHA-256 of the `.git/config` it wrote, replaced atomically (temporary file, fsync, rename)
+    after making the commit and before moving `main` to it. Before any git command,
+    `commitStep` and `restoreStep` check `.git` as files. With no record, `commitStep` empties the
+    contents of `.git` (never the folder) and runs `git init --template=`, writing a provisional
+    record (the config hash, no commit yet), so a crash during the first call never blocks the
+    run; anything there can only be its own unfinished work. With a record, `.git` must hold no symbolic link and no `commondir`, `gitdir`,
+    `shallow`, `info/grafts` or `objects/info/alternates`, `.git/HEAD` must be exactly `ref:
+    refs/heads/main` and one line feed, the branch a loose ref with no `main` in `packed-refs`, `.git/config` must
+    match, and the branch must be at the recorded commit (or its recorded parent, or
+    missing for a first commit, only when the recorded commit is exactly the one the request
+    makes). With a provisional record (after `init`, before the first commit) the branch must
+    be missing, and with no record or a provisional one `restoreStep` requires `before` to be
+    empty. `.git` is emptied only in `commitStep`'s commit step, after its `before` check; then the recorded commit must exist
+    with its recorded parent and trailers. Otherwise 409 `HistoryChanged` and nothing changes:
+    the run is interrupted with the reason.
+  - **Restore clean-up**: `restoreStep` also removes entries the checks would not read where the
+    step could have made them: below each `dir/**` folder, subfolders included, every symbolic
+    link (never followed), every file and every folder whose name is not a ProjectPath; in the
+    folder of an exact entry (the project root, for generate's `go.mod` and `go.sum`), only such
+    an entry the step's writable entries match by name. Elsewhere such an entry is 422.
+  - **Repeats**: a `commitStep` whose last commit has the same trailers is a repeat; it answers
+    `created: false` when that commit is exactly the one the request makes, and 409
+    `ProjectStateDiffers` when the payload differs.
+  - **Commit identity and message**: author and committer `agentic-platform
+    <noreply@localhost>`; both dates are the `at` of the `StepAccepted` or `ResultReused` event,
+    in whole seconds, UTC. Message: the subject `Step <step> accepted in <run>` (`Step <step>
+    reused in <run>` for a reused result), an empty line, then the trailers `Run: <run>`,
+    `Step: <step>`, `Round: <n>` (review rounds and their fixes only), and `Attempt: <n>` or
+    `Reused-from: <run>`, one per line in that order. A repeated `commitStep` finds the last
+    commit's trailers equal and makes no second commit.
+  - **Timeout**: each attempt within the step budget and the run within the run budget (D14:
+    `budgets.step.minutes` 10, `budgets.run.minutes` 30); every call to a worker, the check
+    service or the project worker is bounded by `time_limit_seconds`, at most 600 s, what is left
+    of the step's budget (for `restoreStep` and `commitStep`, of the run's). When less than 1 s
+    of the run's budget is left for a `restoreStep` or `commitStep`, the engine does not call it:
+    the run is interrupted and can be resumed, and resume makes a pending commit first. A `restoreStep` or
+    `commitStep` that fails or times out is retried with backoff (D7); if it still fails, the run
+    is interrupted with the reason, not handed over, and resume repeats the call. A run waiting
+    for the developer expires 14 days after it stopped.
+  - **What a replay makes identical** (US2.8, SC-005): every step is reused, so the replay's
+    artifacts are the original's, hash for hash; each step's `project_files`, and so each
+    commit's tree and the final folder outside `.git`, are byte-identical to the original's.
+    Commit IDs differ, since each commit names its own run and its own run's times.
 
 ## Step checks
 

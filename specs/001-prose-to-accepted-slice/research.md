@@ -448,7 +448,8 @@ page, none of which an existing project provides.
     yet writes a reused step's files into a new project, so in a replay that step runs again
     rather than hand the next step a `before` the folder does not hold. Results without files
     (none today) may still be reused. T053a lifts this guard (`machine` `reusable`) once it writes
-    the reused files into the new project; US2.8's byte-identical replay depends on that.
+    the reused files into the new project; US2.8's byte-identical replay depends on that. How
+    they are written: D30 (`commitStep` with `reused_from`, T053e).
   - **Model for reuse keys**: the model each agent definition pins (Principle XV) is the model in
     the step's reuse key (D8). The engine checks it against the model the session reports in
     `agent_info`; a different model fails the attempt.
@@ -546,7 +547,7 @@ page, none of which an existing project provides.
     - **Compensation**: before the pivot, the state-changing steps are an attempt's writes into
       the project. For a rejected attempt, the step's writable paths are restored to the last
       accepted state, from the artifacts the engine stored by hash, before the next attempt; who
-      restores them, and how, is T053a's design, with the project's version history. An accepted
+      restores them, and how: the project worker's `restoreStep`, before every attempt (D30). An accepted
       attempt's files are kept: they are the state resume and later steps build on. Run-record
       events are not undone: they are the append-only record (D8).
     - **Timeout**: the step and run time budgets (D14), with each call bounded by
@@ -589,10 +590,10 @@ page, none of which an existing project provides.
   procedures in the read-only check service returning files for someone else to write (no
   component could write them, owner, 2026-11-13); agent step files inside every `runCheck`
   verdict (sent once per check instead of once per attempt).
-- **Open, for T053a**: how a replay's reused step files are written into the new project (the
-  engine has no project mount and the check service only reads it), and how the project's
-  version history is kept and the compensation above is carried out (which component restores
-  the writable paths after a rejected attempt). Not designed here. **Closed by T054e** (owner, 2026-11-13): no
+- **Closed for T053a by D30** (owner, 2026-11-13): the project's version history is a git
+  repository kept by a project worker, a third deployment of the check program; it commits each
+  accepted step, restores the project to the last commit before every attempt (the compensation
+  above), and writes a replay's reused step files into the new project (D30). **Closed by T054e** (owner, 2026-11-13): no
   other check confirms a review finding. FindingsCarryEvidence and NoBlockingFindingOpen rerun the
   tests of the rule the finding names (godog scenarios tagged `@R-<n>`, and Go tests whose name
   names the rule) against the current code, with `go test -json`, and a finding blocks only when
@@ -617,3 +618,141 @@ page, none of which an existing project provides.
   <https://google.aip.dev/193> (error model: status code mapping);
   <https://go.dev/ref/mod#workspaces>; `scripts/generate.sh` and `scripts/contract-versions.sh`
   (read 2026-11-13).
+
+### D30. The project's version history is a git repository kept by a project worker
+
+- **Decision** (owner, 2026-11-13; T053a):
+  - **Version history**: the new project's version history (FR-025) is a git repository in the
+    project folder, `.git` at its root, on the one branch `main`. The developer receives a plain
+    folder holding a normal git repository with one commit per accepted step.
+  - **The project worker**: a third deployment of the check program (D29), `project-worker`,
+    started by `ap up` with the check service, under gVisor (D13), running as the developer's
+    uid:gid (`AP_HOST_USER`, as the step agents) so the developer owns the files and the
+    repository, with the projects folder mounted read-write and no other network than `checks`.
+    It runs the git CLI, and no other component writes the version history (step containers
+    mount `.git` read-only). It serves two operations of the check
+    contract, `commitStep` and `restoreStep`, accepts only its own token issued to the engine
+    (`AP_PROJECT_TOKEN`, created by the launcher), and answers every other operation with 404,
+    while the check service and the procedure step workers answer these two with 404
+    `VersionHistoryNotServed`. The engine still has no git and no project mount, and the check
+    service stays read-only.
+  - **Its three jobs**:
+    1. `commitStep` commits each accepted step (`StepAccepted`) and each reused one
+       (`ResultReused`): one commit per accepted step, a step that changed no file included, with
+       the run, step, round and attempt (or the run it was reused from) as trailers. It commits
+       only when the last commit holds `before` and the folder holds the accepted
+       `project_files`, so the history holds exactly the files the checks judged (Principle XX).
+    2. `restoreStep`, before every attempt of every step, makes the folder hold `before` again
+       from the last commit: whatever a rejected or interrupted attempt wrote is undone. This is
+       the run's compensation (constitution, Reliable events and side effects).
+    3. `commitStep` with `reused_from` and the reused outputs' stored artifacts (their framed
+       form, checked against their hashes) first writes a replay's reused step files into the new
+       project, as `runProcedure` writes a completed result, then commits them.
+  - **Requests carry hashes, paths and stored artifacts, never commands.** Every git option the
+    worker uses is fixed in its code: git always runs with `GIT_NO_REPLACE_OBJECTS=1`,
+    `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`, `-c core.fsmonitor=false`,
+    `-c core.hooksPath=/dev/null`, `-c gc.auto=0` and `-c commit.gpgSign=false`, and only through
+    plumbing that applies no filter: `hash-object --no-filters` for blobs, `update-index
+    --index-info` for the index, `write-tree`, `commit-tree`, `update-ref` with the old value, and
+    `cat-file` to read files back. So `.gitattributes`, `.gitignore` and `info/exclude` change
+    nothing, and nothing is added to the repository's `config` or `info/`. Every file is
+    committed with its exact bytes as a non-executable regular file. A path reaches git only on
+    standard input or after `--`, so no path is read as an option.
+  - **Deterministic commits**: author and committer `agentic-platform <noreply@localhost>`,
+    dated the `at` of the run event that accepted the step, in whole seconds, UTC; message
+    `Step <step> accepted in <run>` (or `reused in`) with trailers `Run`, `Step`, `Round`,
+    `Attempt` or `Reused-from`. So a retried `commitStep` finds its commit (the last commit's
+    trailers) and makes no second one, and equal files give the same git tree in any run. A call
+    with the same trailers but another payload (a commit other than the one it would make) is
+    409 `ProjectStateDiffers`.
+  - **What US2.8 makes identical**: a replay reuses every step, so its artifacts are the
+    original's stored artifacts, hash for hash; each step's `project_files`, and so each
+    commit's tree and the final folder outside `.git`, are byte-identical to the original's.
+    The commit IDs differ, since each commit names its own run and is dated from its own run's
+    record; US2.8 and SC-005 judge artifacts, not commit IDs.
+  - **The version history is not part of the project**: no check-contract operation lists,
+    reads, judges or writes a path under `.git` except `commitStep` and `restoreStep`; a
+    path with any part equal to `.git` in any letter case is not a ProjectPath, so neither a
+    `writable` entry nor a project file can name one. This is a tightening within
+    `2026-11-13-preview` that affects no client: the engine is its only client and no project
+    holds such a path before T053c (plan, Constitution Check, XV). No operation removes or
+    replaces a folder, since step containers mount the project's folders.
+  - **Sizes**: a reused step's request carries up to 8 MiB of files in framed form, so
+    `commitStep` has its own body limit, `x-limits.commit-request-body-max-bytes` (24 MiB); every
+    other limit is the contract's existing one.
+  - **The git CLI in the check image** (owner, 2026-11-13): the check image is built on the
+    Debian pin already in images.lock, `golang:1.26.11-bookworm`, which holds git 2.39.5; the
+    larger image is accepted. Its Alpine base until now, `golang:1.26-alpine`, has no git:
+    `command -v git` exits 127 in it and in a built `ap-check` image (both reproduced
+    2026-11-13). T053c changes `src/deploy/Dockerfile.check`.
+  - **The generate step's mount** (owner, 2026-11-13): only the generate procedure worker gets
+    the project root writable, since its `writable` names `go.mod` and `go.sum` in the root and
+    Docker binds a file only when it exists (creating it empty before the run would put it in
+    the earlier step's folder). This is a stated limit: generate is fixed code, not an agent, and
+    ScopeKept still rejects any write outside its globs. Every other step's container gets only
+    its own writable paths.
+  - **`.git` is read-only in every step container** (owner, 2026-11-13, review F1):
+    `ap build-workers` creates the project folder with an empty `.git` folder in it and binds that
+    folder read-only into every step container, on top of the generate worker's writable root, so
+    no step container can write `.git`. The project worker creates the repository in that folder
+    at the run's first `commitStep`, after contract-check is accepted, before generate runs. A
+    bind mount needs its source to exist, which is why the launcher creates the empty folder.
+  - **History guard, a second layer** (owner, 2026-11-13): the project worker keeps a record per
+    project on a named volume only it mounts (`project-worker-state`). The record holds the ID of
+    the last commit it made, that commit's parent ID, the run, step, round and attempt or
+    `reused_from` its trailers name, and the SHA-256 of the `.git/config` it wrote. It is
+    replaced atomically (temporary file, fsync, rename): provisionally right after `git init`
+    (the config hash, no commit yet), then after each commit object is made and before
+    `update-ref` moves the branch to it. With no record, `commitStep` empties the contents of
+    `.git` (never the folder, a mount source) and runs `git init --template=` again: since no
+    step container can write `.git`, anything there can only be the worker's own unfinished
+    first call (a crash after `init` or after writing objects), so it never blocks a run for
+    good. With a record, before any other git command, `commitStep` and `restoreStep` inspect
+    `.git` as files:
+    - no symbolic link and no `commondir`, `gitdir`, `shallow`, `info/grafts` or
+      `objects/info/alternates`;
+    - `.git/HEAD` exactly `ref: refs/heads/main` and one line feed, and the branch a loose ref
+      with no `main` entry in `packed-refs`;
+    - `.git/config` with the recorded hash;
+    - the branch at the recorded commit, or at its recorded parent (missing, for a first commit,
+      and always missing with a provisional record) only when the recorded commit is exactly
+      the one the request makes (a call that stopped between the two writes).
+    Then git must find the recorded commit with the recorded parent and trailers. Anything else is
+    409 `HistoryChanged`, and nothing changes. The config check matters because a repository's
+    own configuration can name commands git runs. What remains after the read-only mount and
+    the guard: whoever can write the projects folder on the host (the developer, host processes)
+    and the project worker itself can still change `.git`, and the guard then stops the run
+    instead of trusting it; agents can read `.git`, which holds only this run's accepted files.
+- **Rationale**: git is the version history developers already use, so the developer receives a
+  normal repository with nothing to install. Putting it in the check program keeps one program
+  and one contract for every component that touches the project folder, with the engine as its
+  only caller; the engine needs no project mount and stays free of code an agent can influence
+  (D5). Restoring before every attempt, not only after a rejection, also undoes what an
+  interrupted attempt left before a resume (FR-020) with the same call, and makes every attempt
+  start from the files its checks compare with (`before`). Reused files travel as the stored
+  artifacts, so the replay's files are the artifacts by construction.
+- **Alternatives rejected**: the go-git library in the engine or the check program (a large new
+  dependency tree for what the git CLI already does, and the engine would need the project
+  mount); the host launcher running git (an engine-to-launcher call the platform does not have,
+  and the launcher would have to stay up during every run, while today it only drives Compose,
+  D6); restoring from the stored artifacts without git (a second copy of what the last commit
+  holds); restoring only after a rejected attempt (an interrupted attempt's files would need a
+  second path).
+- **Known limits**: the project worker can write any project under the projects folder; only the
+  engine can call it, and the engine names only its run's project, a new folder (FR-025). The
+  generate worker has the project root writable except `.git`, which is mounted read-only on top
+  of it; ScopeKept judges its files.
+- **Alternatives rejected by the owner** (2026-11-13): `apk add git` in the Alpine image (a
+  package not pinned by digest, Principle XIII); creating root-level writable files empty before
+  the run so they can be bound one by one (they would be in the earlier step's folder).
+- Sources: <https://git-scm.com/docs/git-commit> (author and committer identity and dates through
+  `GIT_AUTHOR_*` and `GIT_COMMITTER_*`); <https://git-scm.com/docs/git-hash-object>
+  (`--no-filters`); <https://git-scm.com/docs/git-update-index> (`--index-info`);
+  <https://git-scm.com/docs/git-update-ref> (old-value check);
+  <https://git-scm.com/docs/git-interpret-trailers>; <https://git-scm.com/docs/git>
+  (`GIT_NO_REPLACE_OBJECTS`); <https://git-scm.com/docs/gitrepository-layout> (`commondir`,
+  `objects/info/alternates`, `shallow`, `info/grafts`, `packed-refs`);
+  <https://git-scm.com/docs/git-config> (`GIT_CONFIG_NOSYSTEM`, `GIT_CONFIG_GLOBAL`,
+  `core.hooksPath`, `core.fsmonitor`, `gc.auto`); <https://docs.docker.com/engine/storage/bind-mounts/> (a bind source must
+  exist with `--mount`); experiment 2026-11-13 (git in the pinned golang images, above);
+  OpenSSF Scorecard API for github.com/git/git, 5.7 on 2026-11-09.
