@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync/atomic"
 
 	"github.com/agentic-platform/engine/api/gen"
 	"github.com/agentic-platform/engine/slices"
@@ -34,9 +33,10 @@ type sliceServer struct {
 	svc     *slices.Service
 	store   SliceStore
 	workers *workers
-	// projects is Config.Projects; lastRun is the number of the last run ID given out.
+	// projects is Config.Projects; runs are the slices' runs (runs.go), nil when Store keeps no
+	// run record.
 	projects string
-	lastRun  atomic.Int64
+	runs     *runs
 }
 
 var _ gen.StrictServerInterface = (*sliceServer)(nil)
@@ -95,14 +95,55 @@ func (s *sliceServer) DeleteSlice(_ context.Context, req gen.DeleteSliceRequestO
 	if _, err := s.svc.Get(id); err != nil {
 		return s.refuse("deleteSlice", err)
 	}
+	if err := s.noActiveRun(id); err != nil {
+		return s.refuse("deleteSlice", err)
+	}
 	// The stored records go first: erasing them again is harmless, so a retry after a failed
-	// erasure completes it, and the slice disappears only once its records are gone.
+	// erasure completes it, and the slice disappears only once its records are gone. The work
+	// holds the runs' lock and checks again, so no run starts, resumes or records between the
+	// check and the erasure.
 	return gen.DeleteSlice202JSONResponse{AcceptedJSONResponse: s.change("deleteSlice", gen.OperationKindDeleteSlice, id, func(ctx context.Context) error {
+		if s.runs != nil {
+			s.runs.mu.Lock()
+			defer s.runs.mu.Unlock()
+		}
+		if err := s.activeRun(id); err != nil {
+			return err
+		}
 		if err := s.store.EraseSlice(id); err != nil {
 			return Retryable(err)
 		}
+		if s.runs != nil {
+			s.runs.forget(id)
+		}
 		return s.svc.Delete(ctx, id)
 	})}, nil
+}
+
+// noActiveRun refuses RunActive while a run of the slice has not ended (running, interrupted or
+// waiting for the developer), under the runs' lock.
+func (s *sliceServer) noActiveRun(slice string) error {
+	if s.runs == nil {
+		return nil
+	}
+	s.runs.mu.Lock()
+	defer s.runs.mu.Unlock()
+	return s.activeRun(slice)
+}
+
+// activeRun is noActiveRun with the runs' lock held (or no runs kept).
+func (s *sliceServer) activeRun(slice string) error {
+	if s.runs == nil {
+		return nil
+	}
+	run, err := s.runs.active(slice)
+	switch {
+	case err != nil:
+		return err
+	case run != "":
+		return &slices.Error{Code: string(gen.ErrorCodeRunActive), Detail: fmt.Sprintf("run %s of slice %s has not ended", run, slice)}
+	}
+	return nil
 }
 
 func (s *sliceServer) ReplaceGoals(_ context.Context, req gen.ReplaceGoalsRequestObject) (gen.ReplaceGoalsResponseObject, error) {

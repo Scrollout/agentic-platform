@@ -32,6 +32,28 @@ type Event struct {
 	Run  string `json:"run"`
 	Kind string `json:"kind"`
 	Step string `json:"step,omitempty"`
+	// Data is the whole event as its writer encodes it (the engine: the run-event.schema.json
+	// form and what it records about the run); the store keeps it as given.
+	Data RawJSON `json:"data,omitempty"`
+}
+
+// RawJSON is one JSON value kept as its text: written as it is, read back as it was. Unlike
+// json.RawMessage it is comparable, so an Event is too.
+type RawJSON string
+
+func (r RawJSON) MarshalJSON() ([]byte, error) {
+	if r == "" {
+		return []byte("null"), nil
+	}
+	if !json.Valid([]byte(r)) {
+		return nil, errors.New("store: event data is not one JSON value")
+	}
+	return []byte(r), nil
+}
+
+func (r *RawJSON) UnmarshalJSON(b []byte) error {
+	*r = RawJSON(b)
+	return nil
 }
 
 // On disk: artifacts/<sha256> holds each artifact once; slices/<slice>/events.jsonl holds the

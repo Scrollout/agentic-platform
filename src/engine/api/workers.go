@@ -2,14 +2,9 @@ package api
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io/fs"
 	"net/http"
-	"os"
-	"path/filepath"
 	"slices"
-	"strconv"
 	"sync"
 
 	"github.com/agentic-platform/engine/api/gen"
@@ -102,41 +97,6 @@ func (s *sliceServer) RegisterWorker(ctx context.Context, req gen.RegisterWorker
 	s.workers.register(g.Slice, g.Step, req.Body.Endpoint)
 	return gen.RegisterWorker200JSONResponse{WorkerJSONResponse: gen.WorkerJSONResponse{
 		Body: gen.Worker{Slice: g.Slice, Step: g.Step, Endpoint: req.Body.Endpoint}}}, nil
-}
-
-// StartRun refuses in the contract's order, the first that applies, before any operation exists:
-// an unknown slice, a pattern condition that fails, a part not approved at its current hash
-// (Buildable); then WorkersNotReady while a step of the pattern has no registered worker for the
-// slice; then ProjectExists when the project's folder exists under the projects folder. RunActive
-// comes between those two once the engine keeps runs (T054); it keeps none yet. A run that passes
-// every refusal is an operation of kind run whose work is Config.Work's, as for any job the
-// engine does not do itself; the folder is not touched here.
-func (s *sliceServer) StartRun(ctx context.Context, req gen.StartRunRequestObject) (gen.StartRunResponseObject, error) {
-	id := req.SliceIdParameter
-	if err := s.svc.Buildable(id); err != nil {
-		return s.refuse("startRun", err)
-	}
-	steps := s.svc.Steps()
-	if len(steps) == 0 {
-		return s.refuse("startRun", &sl.Error{Code: string(gen.ErrorCodeWorkersNotReady), Detail: "the pattern declares no steps that a worker could run"})
-	}
-	if st := s.workers.missing(id, steps); st != "" {
-		return s.refuse("startRun", &sl.Error{Code: string(gen.ErrorCodeWorkersNotReady),
-			Detail: fmt.Sprintf("step %s of the pattern has no registered worker for slice %s", st, id)})
-	}
-	if s.projects != "" {
-		switch _, err := os.Lstat(filepath.Join(s.projects, req.Body.Project)); {
-		case err == nil:
-			return s.refuse("startRun", &sl.Error{Code: string(gen.ErrorCodeProjectExists),
-				Detail: fmt.Sprintf("the projects folder already holds %s", req.Body.Project)})
-		case !errors.Is(err, fs.ErrNotExist):
-			return nil, fmt.Errorf("whether project %s exists: %w", req.Body.Project, err)
-		}
-	}
-	raw, _ := ctx.Value(rawBodyKey{}).([]byte) // the front checked it against the contract
-	target := "RUN-" + strconv.FormatInt(s.lastRun.Add(1), 10)
-	op := s.ops.start(Job{Kind: gen.OperationKindRun, Target: target, Body: raw})
-	return gen.StartRun202JSONResponse{AcceptedJSONResponse: gen.AcceptedJSONResponse{Body: op}}, nil
 }
 
 func (p problemResponse) VisitRegisterWorkerResponse(w http.ResponseWriter) error { return p.write(w) }

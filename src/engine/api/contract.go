@@ -76,6 +76,9 @@ type contract struct {
 	keepKeys       time.Duration         // how long an idempotency key is kept
 	maxBody        int64                 // largest request body, in bytes
 	keyMin, keyMax int                   // Idempotency-Key length
+	// runID and hash are the contract's rules for a run ID and an artifact hash, which the run
+	// operations take as path and query parameters.
+	runID, hash *jsonschema.Schema
 }
 
 var engineContract = mustLoadContract()
@@ -210,8 +213,19 @@ func (c *contract) compileBodies(files fs.FS, dir string, openapi []byte) error 
 		op.body = sch
 		c.ops[route] = op
 	}
+	for _, r := range []struct {
+		dst **jsonschema.Schema
+		def string
+	}{{&c.runID, "run_id"}, {&c.hash, "hash"}} {
+		if *r.dst, err = comp.Compile(schemaBase + "slice-defs.schema.json#/$defs/" + r.def); err != nil {
+			return fmt.Errorf("the rule %s: %w", r.def, err)
+		}
+	}
 	return nil
 }
+
+// fits reports whether a parameter's value meets the rule sch.
+func fits(sch *jsonschema.Schema, value string) bool { return sch.Validate(value) == nil }
 
 // contractLoader loads the JSON schema files of one contract version, and nothing else.
 type contractLoader struct {

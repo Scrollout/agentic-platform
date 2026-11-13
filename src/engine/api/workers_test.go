@@ -12,10 +12,13 @@ package api
 //   - "ready worker" (startRun) is taken to mean "registered".
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/agentic-platform/engine/store"
 )
 
 // The steps api-feature-go declares, in order.
@@ -205,12 +208,21 @@ func TestWorkersRegisteredForAnotherSliceDoNotCount(t *testing.T) {
 }
 
 func TestStartRunWithEveryStepRegisteredIsNotWorkersNotReady(t *testing.T) {
-	sp := newNotes(t)
+	st, err := store.Open(t.TempDir(), spSchemas(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp := newSP(t, []spResult{{p: spNotes(t)}}, st)
 	sp.approveAfterSeed(t)
+	ctx, cancel := context.WithCancel(context.Background())
 	r := newRig(t, func(c *Config) {
-		c.Slices, c.Store, c.Projects = sp.svc, sp.store, t.TempDir()
+		c.Context = ctx
+		c.Slices, c.Store, c.Projects = sp.svc, st, t.TempDir()
 		c.WorkerGrants = stepGrants("S-1")
+		c.StepWorker = &fakeStepWorker{st: st, data: map[string][]byte{}}
+		c.StepChecker = &fakeStepChecker{}
 	})
+	stopEngineAtEnd(t, r, cancel)
 	registerAll(t, r, "S-1")
 	w := r.do("POST", spURL("S-1", "/runs"), clientToken, runBody, nil)
 	var p struct{ Code string }

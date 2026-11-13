@@ -375,6 +375,10 @@ func (m *Machine) lookup(id string) (*run, error) {
 	return r, nil
 }
 
+// SliceInputs are the inputs no step produces (the slice's parts, such as `slice/contract`),
+// sorted by name: the order of RunStarted's inputs.
+func (p Pattern) SliceInputs() []string { return p.sliceInputs() }
+
 // sliceInputs are the inputs no step produces (the slice's parts), sorted by name.
 func (p Pattern) sliceInputs() []string {
 	made := map[string]bool{}

@@ -40,6 +40,7 @@ import (
 	"time"
 
 	"github.com/agentic-platform/engine/api/gen"
+	"github.com/agentic-platform/engine/machine"
 	"github.com/agentic-platform/engine/slices"
 )
 
@@ -74,8 +75,16 @@ type Config struct {
 	WorkerGrants map[string]WorkerGrant
 	// Projects is the projects folder: a project is a folder in it, and startRun refuses a
 	// project whose folder exists (ProjectExists). Empty means no projects folder is known, so
-	// that refusal never applies.
+	// only a project a recorded run builds into is refused.
 	Projects string
+	// StepWorker runs one attempt of a step and StepChecker one check (machine.Worker and
+	// machine.Checker). Without both, a start that passes every refusal is WorkersNotReady: the
+	// engine cannot drive a run.
+	StepWorker  machine.Worker
+	StepChecker machine.Checker
+	// Model is the model the pattern's agent steps use, part of their reuse keys. Empty means no
+	// accepted result of an agent step is reused (a replay runs those steps again).
+	Model string
 }
 
 // NewHandler returns the engine's whole HTTP handler.
@@ -100,7 +109,7 @@ func NewHandler(cfg Config) http.Handler {
 		if cfg.Store == nil {
 			panic("api: Config.Slices needs Config.Store")
 		}
-		impl = &sliceServer{server: srv, svc: cfg.Slices, store: cfg.Store, workers: newWorkers(), projects: cfg.Projects}
+		impl = &sliceServer{server: srv, svc: cfg.Slices, store: cfg.Store, workers: newWorkers(), projects: cfg.Projects, runs: newRuns(cfg, cfg.Slices, now, base)}
 	}
 	mux := http.NewServeMux()
 	gen.HandlerWithOptions(gen.NewStrictHandlerWithOptions(impl, nil, gen.StrictHTTPServerOptions{

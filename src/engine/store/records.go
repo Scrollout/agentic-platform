@@ -1,11 +1,15 @@
 package store
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/agentic-platform/slice"
 )
@@ -141,4 +145,63 @@ func writeAtomic(dir, name string, data []byte) error {
 		return err
 	}
 	return syncDir(dir)
+}
+
+// runSequenceFile, at the store's root, holds the number of the last run ID given out, replaced
+// atomically like the slice ID sequence. It outlives every erasure, so a run ID is never reissued.
+const runSequenceFile = "run-sequence.json"
+
+// RunEntry is one run the store holds and the slice it belongs to.
+type RunEntry struct{ Run, Slice string }
+
+// Runs returns every run the store holds, by run number, lowest first.
+func (s *Store) Runs() []RunEntry {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]RunEntry, 0, len(s.runSlice))
+	for run, sl := range s.runSlice {
+		out = append(out, RunEntry{Run: run.String(), Slice: sl.String()})
+	}
+	sort.Slice(out, func(i, j int) bool { return runNumber(out[i].Run) < runNumber(out[j].Run) })
+	return out
+}
+
+// NextRunID gives out the next run ID, `RUN-<n>`, and returns it only once the sequence that gave
+// it is durable: one more than both the last ID given out and the highest run the store holds. An
+// ID is given out once, even when the run it was for is never recorded or is erased later.
+func (s *Store) NextRunID() (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var seq struct {
+		Last int64 `json:"last"`
+	}
+	b, err := os.ReadFile(filepath.Join(s.root, runSequenceFile))
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+	case err != nil:
+		return "", fmt.Errorf("store: the run ID sequence: %w", err)
+	default:
+		if err := json.Unmarshal(b, &seq); err != nil || seq.Last < 0 {
+			return "", fmt.Errorf("store: the run ID sequence is unreadable: %v", err)
+		}
+	}
+	for run := range s.runSlice {
+		seq.Last = max(seq.Last, runNumber(run.String()))
+	}
+	seq.Last++
+	id, err := s.ids.ParseRunID("RUN-" + strconv.FormatInt(seq.Last, 10))
+	if err != nil {
+		return "", fmt.Errorf("store: %w", err)
+	}
+	b, _ = json.Marshal(seq) // a struct of an int cannot fail
+	if err := writeAtomic(s.root, runSequenceFile, b); err != nil {
+		return "", err
+	}
+	return id.String(), nil
+}
+
+// runNumber is the number of a run ID the contract's rule accepted, `RUN-<n>`.
+func runNumber(id string) int64 {
+	n, _ := strconv.ParseInt(strings.TrimPrefix(id, "RUN-"), 10, 64)
+	return n
 }

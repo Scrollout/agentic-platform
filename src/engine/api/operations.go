@@ -89,14 +89,28 @@ func (s *operations) start(job Job) gen.Operation {
 // startWith records a new operation of kind on target and runs work in its own goroutine, with
 // the same lifecycle, retries and cancellation as any other job.
 func (s *operations) startWith(kind gen.OperationKind, target string, work func(ctx context.Context) (WorkResult, error)) gen.Operation {
-	ctx, cancel := context.WithCancel(s.base)
+	return s.launch(s.reserve(kind, target), work)
+}
+
+// reserve gives out the next operation ID for an operation of kind on target without recording
+// it: until launch, the operation does not exist for any caller. An operation reserved and never
+// launched leaves its ID unused.
+func (s *operations) reserve(kind gen.OperationKind, target string) *operation {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.last++
 	now := s.now()
-	op := &operation{cancel: cancel, view: gen.Operation{
+	return &operation{view: gen.Operation{
 		Id: "OP-" + strconv.Itoa(s.last), Kind: kind, Target: target,
 		Status: gen.OperationStatusAccepted, CreatedAt: now, UpdatedAt: now,
 	}}
+}
+
+// launch records a reserved operation and runs work in its own goroutine.
+func (s *operations) launch(op *operation, work func(ctx context.Context) (WorkResult, error)) gen.Operation {
+	ctx, cancel := context.WithCancel(s.base)
+	s.mu.Lock()
+	op.cancel = cancel
 	s.ops[op.view.Id] = op
 	view := op.view
 	s.mu.Unlock()
