@@ -169,9 +169,13 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
     `ProjectExists`, naming the first path found, and changes nothing. A first touch that passes
     writes a `claimed` record for the project on the worker's own volume, atomically, before
     `git init` or any file. With no record or a `claimed` one, every other call keeps the
-    existing no-record rules (empty the contents of `.git` and init again), so the first commit,
+    existing no-record rules (commitStep empties the contents of `.git` and inits again; restoreStep
+    never touches `.git`), so the first commit,
     the restore after a rejected attempt, a resume that repeats an attempt and recovery from a
-    crash in any window all work.
+    crash in any window all work. Stated limit (T053e review): with no record, a restoreStep for
+    attempt 2 or later and a commitStep without `reused_from` are no first touch, so only the
+    engine's order (every run starts with restoreStep for attempt 1, or a replay with a
+    `reused_from` commit) keeps an existing folder safe.
   - **Step worker grants** (owner, 2026-11-13; research D31): `ap build-workers` writes one file
     per grant into a folder only the engine mounts, read-only, named the lowercase hex SHA-256 of
     the worker's token and holding `{"slice","step","call_token"}`, mode 0600 and owned by the
