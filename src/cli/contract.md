@@ -7,7 +7,8 @@ Two names, two jobs:
   <slice> <project>`, `page`, `test <suite>` (runs the test harness in its own container) and `registry`
   (starts the local image registry if it isn't running; `src/deploy/build.sh` calls it). It intercepts
   `build`, `resume` and `replay`: it runs `build-workers` for the slice and project (for a run, the
-  run's slice) first, then passes the command on. `build-workers <slice> <project>` makes the
+  run's slice) first, then passes the command on (for `resume` and `replay` this waits on T053g:
+  `build-workers` refuses a project folder that already holds files). `build-workers <slice> <project>` makes the
   project folder with an empty `.git` and the folders the steps write, starts one step container per
   step of the pattern (each with only its step's paths writable), writes each container's grant
   for the engine and registers it; running it again changes nothing. It exits 3 for a slice or

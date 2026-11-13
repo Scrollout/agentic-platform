@@ -214,7 +214,7 @@ entries from `src/catalogue/api-feature-go/pattern.yaml` and the Compose project
 `compose.yaml`, then: writes the slice's grants and registers each step's endpoint
 `http://<compose project>-worker-<slice>-<step>:8080` with the engine (`registerWorker`, sent by a
 one-off busybox `nc` container on the `agents` network with the request on standard input, so no
-token is on a command line; a 404 stops it with exit 4 before anything else is made); makes the
+token is on a command line; a 404 stops it with exit 4 before any folder or container is made; the grant files are already written by then); makes the
 project folder, an empty `.git` and the folders of each step's entries (`dir/**` its folder, an
 exact path its folder); and starts one container per step with `docker compose run -d` from
 `step-agent` or `procedure-worker`. Each container mounts only its project, at

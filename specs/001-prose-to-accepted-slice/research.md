@@ -795,14 +795,14 @@ page, none of which an existing project provides.
 - **Rationale**: a file per grant needs no new engine operation and no restart, and the engine
   stays the only reader. Naming it by the token's hash keeps the token out of every file name,
   and reading it at each authentication makes revoking a removal.
+- **Refusals and defaults** (owner, 2026-11-13, after review): `build-workers` refuses a
+  project folder by the same rule as ProjectExists (a file or symbolic link at any depth, or a
+  non-empty `.git`), naming the folder and changing nothing; and the `step-agent` and
+  `procedure-worker` templates hold no token by default (`ENGINE_TOKEN` and `CHECK_TOKEN`
+  empty), so only `build-workers` gives a step container a token. The deployed engine has no projects folder, so its startRun does not see the folder; the project worker, with no record, refuses the run's first touch of an existing folder (restoreStep for attempt 1, or a commitStep with `reused_from`) with 409 `ProjectExists`; a first touch that passes writes a `claimed` record on the worker's volume before `git init` or any file, so a retry after a crash recovers by the no-record rules (owner, 2026-11-14; T053e).
 - **Alternatives rejected**: restarting the engine with a new `WorkerGrants` (drops in-memory
   registrations and running operations); a new engine operation to add grants (a management call
   the launcher would have to authenticate as something stronger than a worker).
-  - **Refusals and defaults** (owner, 2026-11-13, after review): `build-workers` refuses a
-    project folder by the same rule as ProjectExists (a file or symbolic link at any depth, or a
-    non-empty `.git`), naming the folder and changing nothing; and the `step-agent` and
-    `procedure-worker` templates hold no token by default (`ENGINE_TOKEN` and `CHECK_TOKEN`
-    empty), so only `build-workers` gives a step container a token.
 - **Known limits**: `compose.yaml` gives `AP_GRANTS_DIR` a default naming a folder that does not
   exist, rather than `:?`, so the Compose tests' variable list stays unchanged; without the
   variable the engine does not start (the bind source is missing). Docker Agent takes the call

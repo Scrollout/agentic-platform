@@ -160,6 +160,18 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
     `ProjectExists` when a recorded run builds into it, or when its folder holds a file (a regular
     file or a symbolic link, at any depth) or a `.git` that holds anything, even an empty folder. A
     folder holding only empty folders, such as the skeleton `ap build-workers` makes, is accepted.
+    The engine applies the folder rule only when it has a projects folder (`api.Config.Projects`),
+    which the deployed engine does not (ADR 0032). So the rule is enforced where the files are:
+    `ap build-workers` refuses such a folder, and the project worker guards it (owner,
+    2026-11-14; T053e). With no record for a project, the run's first touch of it (restoreStep
+    for attempt 1, and a commitStep with `reused_from`, a replay's first write) needs the folder
+    to hold no file or symbolic link and an empty or missing `.git`; otherwise it answers 409
+    `ProjectExists`, naming the first path found, and changes nothing. A first touch that passes
+    writes a `claimed` record for the project on the worker's own volume, atomically, before
+    `git init` or any file. With no record or a `claimed` one, every other call keeps the
+    existing no-record rules (empty the contents of `.git` and init again), so the first commit,
+    the restore after a rejected attempt, a resume that repeats an attempt and recovery from a
+    crash in any window all work.
   - **Step worker grants** (owner, 2026-11-13; research D31): `ap build-workers` writes one file
     per grant into a folder only the engine mounts, read-only, named the lowercase hex SHA-256 of
     the worker's token and holding `{"slice","step","call_token"}`, mode 0600 and owned by the
