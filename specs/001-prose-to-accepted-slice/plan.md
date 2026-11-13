@@ -70,6 +70,7 @@ per token on the API
 | XVIII. Abstractions say what | Pass | The API and CLI describe outcomes, not mechanisms |
 | XIX. Evals | Pass | Each agent's eval suite exists before the agent; adversarial cases; pass^3 (D19) |
 | XX. Deterministic acceptance | Pass | D2, D3, D5, D8, D10, D11; review findings confirmed by rerunning the named rule's tests ([ADR 0031](../../docs/decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md)) |
+| Development Workflow (2.1.0, [ADR 0035](../../docs/decisions/0035-spec-kit-during-implementation.md)) | Pass | Discoveries fixed at their source, intent committed before code, `/speckit-analyze` re-run after every artifact change, one validated unit at a time, `/speckit-converge` per story (T068a for Story 1, T069 for Story 2) and for the feature (T070) |
 | Contract-first | Pass | Contracts reviewed and versioned first, authoritative with their provider; failing tests before code |
 | Fresh review | Pass | A fresh reviewer per story and before done, on a model other than the author's |
 | Layout | Pass | All code under `src/`; layout check in `scripts/check.sh` |
