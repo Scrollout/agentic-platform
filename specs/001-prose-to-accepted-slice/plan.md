@@ -69,7 +69,7 @@ per token on the API
 | XVII. Declare, derive, converge | Pass | Slices and patterns are declarations; EARS text, code and tests are derived |
 | XVIII. Abstractions say what | Pass | The API and CLI describe outcomes, not mechanisms |
 | XIX. Evals | Pass | Each agent's eval suite exists before the agent; adversarial cases; pass^3 (D19) |
-| XX. Deterministic acceptance | Pass | D2, D3, D5, D8, D10, D11 |
+| XX. Deterministic acceptance | Pass | D2, D3, D5, D8, D10, D11; review findings confirmed by rerunning the named rule's tests ([ADR 0031](../../docs/decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md)) |
 | Contract-first | Pass | Contracts reviewed and versioned first, authoritative with their provider; failing tests before code |
 | Fresh review | Pass | A fresh reviewer per story and before done, on a model other than the author's |
 | Layout | Pass | All code under `src/`; layout check in `scripts/check.sh` |

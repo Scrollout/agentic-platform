@@ -5,7 +5,7 @@ description: The platform on one developer's machine, started by the ap launcher
 tags: [operations, deployment, local]
 status: draft
 resource: /src/deploy/compose.yaml
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-12T08:25:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-13T18:00:00Z }
 ---
 
 # Purpose
@@ -42,9 +42,9 @@ besides the provider it can reach host services, the local network and the whole
 only its fixed nginx configuration (one upstream, one path) limits what it asks for. The image
 registry's publishing network has the same exposure. These three are the only containers that can
 reach the host's services; the owner may close that with the optional host firewall rule under
-Access. Check workers share a network with the engine only, so they cannot reach the gateway.
+Access. The check service shares a network with the engine only, so it cannot reach the gateway.
 
-The step and check workers run under gVisor, which cannot use Docker's embedded DNS server: its own
+The step workers and the check service run under gVisor, which cannot use Docker's embedded DNS server: its own
 network stack never sees the rule that carries `127.0.0.11` to Docker's resolver. The runtime flag
 that would copy that rule (`--reproduce-nat`) belongs to the host's Docker configuration, so
 instead the engine and the gateway have fixed addresses on the networks they share with the
