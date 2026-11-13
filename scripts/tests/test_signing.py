@@ -557,8 +557,8 @@ class SigningHardeningTest(unittest.TestCase):
 
     # concurrent builds
     def test_two_builds_at_the_same_time_both_end_up_recorded(self):
-        """`check` and `agent` are the two images that build offline from the pins (the others need
-        generated code); both run at once, and a shim for chmod and mv holds each one at the moment it
+        """`check` and `agent` are the two images this test builds (`check` after build.sh generates its
+        code, and with the network for oapi-codegen and the template's modules); both run at once, and a shim for chmod and mv holds each one at the moment it
         replaces images.env until the other is there too, so a build with no lock loses a line."""
         self.folders()
         # the registry is made first: two builds both making it at once is another matter

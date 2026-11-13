@@ -29,7 +29,7 @@ func (m *Machine) load(events []Event) (*run, error) {
 	if len(first.Inputs) != len(names) {
 		return nil, fmt.Errorf("machine: run %s: RunStarted names %d inputs, the pattern %d", first.Run, len(first.Inputs), len(names))
 	}
-	r := &run{Run: Run{ID: first.Run, Slice: first.Slice, Pattern: first.Pattern}, refs: first.Refs, artifacts: map[string]string{},
+	r := &run{Run: Run{ID: first.Run, Slice: first.Slice, Project: first.Project, Pattern: first.Pattern}, refs: first.Refs, artifacts: map[string]string{},
 		since: first.At}
 	for i, n := range names {
 		r.artifacts[n] = first.Inputs[i]
@@ -85,6 +85,7 @@ func (m *Machine) load(events []Event) (*run, error) {
 			if !slices.Contains(r.Accepted, s.Name) {
 				r.Accepted = append(r.Accepted, s.Name)
 			}
+			r.before = slices.Clone(e.Files)
 			switch {
 			case review:
 				r.pos, r.round, r.fixing, r.open, r.changed = si+1, 0, false, nil, nil

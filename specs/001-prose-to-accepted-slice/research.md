@@ -431,6 +431,23 @@ page, none of which an existing project provides.
     the engine on its behalf (T053a), since `serve api` cannot call `registerWorker`. No new
     contract: Docker Agent's API is the adopted contract (Contract-first, "for an adopted
     protocol, its published schema is the contract").
+  - **An agent attempt's usage and changed lines** (owner, 2026-11-13; T054c): the usage is read
+    from the session's `token_usage` events. Each event's `usage` (`input_tokens`,
+    `output_tokens`, `cost` in USD) is its session's running total; the per-message figures are
+    only in `last_message`. A sub-session sends its own events under its own `session_id`, and
+    its cost is not folded into its parent's. No summary event exists, and `stream_stopped`
+    carries no usage. So the engine takes the last event of each `session_id` (the root's and
+    each sub-session's) and adds those up, never summing events of one session. The changed
+    lines are not taken from the agent's answer (Principle XX): they are a line diff of the
+    files `readStepFiles` returns against `before`, with each earlier file's content found in
+    the run's accepted outputs in the store, so the diff survives a restart.
+    Sources: <https://github.com/docker/docker-agent/blob/v1.160.0/pkg/runtime/event.go>.
+  - **Reuse until T053a writes reused files** (owner, 2026-11-13; T054c): an accepted result that
+    left project files is reused only within the project its files were written into. Nothing
+    yet writes a reused step's files into a new project, so in a replay that step runs again
+    rather than hand the next step a `before` the folder does not hold. Results without files
+    (none today) may still be reused. T053a lifts this guard (`machine` `reusable`) once it writes
+    the reused files into the new project; US2.8's byte-identical replay depends on that.
   - **Model for reuse keys**: the model each agent definition pins (Principle XV) is the model in
     the step's reuse key (D8). The engine checks it against the model the session reports in
     `agent_info`; a different model fails the attempt.

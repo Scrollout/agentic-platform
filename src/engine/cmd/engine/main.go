@@ -4,7 +4,8 @@
 // as ":8080"); the session's three tokens ENGINE_CLIENT_TOKEN, ENGINE_PAGE_TOKEN and
 // ENGINE_WORKER_TOKEN; AP_LINT_URL and AP_LINT_TOKEN for the contract-lint service;
 // AP_ANALYST_URL and AP_ANALYST_TOKEN for the analyst service; and ENGINE_STORE_DIR, the existing
-// directory of the run store. The five tokens must all differ. See setup.
+// directory of the run store; and AP_CHECK_URL and AP_CHECK_TOKEN for the check service. All tokens
+// must differ. See setup.
 package main
 
 import (

@@ -20,13 +20,13 @@ Ten services, declared once in `src/deploy/compose.yaml`, plus the local image r
 
 - The model gateway, the only container with egress and the only one that can read the provider key.
 - The engine, which holds the session's three caller tokens and the tokens it calls the two
-  services below with.
+  services below, and the check service, with.
 - The contract-lint service (Spectral) and the analyst (Docker Agent's `serve api`), under gVisor,
   each on its own internal network with the engine; the analyst's network also has the gateway, its
   only way out.
 - The read-only run page, and its forwarder, which publishes the page's port on `127.0.0.1` only.
 - The terminal client and the test harness, run per command.
-- The step agent and check workers, under gVisor with CPU, memory and process limits.
+- The step agent workers and the check service (the project folder read-only, the Go toolchain, the pinned oapi-codegen and the template's module cache in its image, so it runs offline), under gVisor with CPU, memory and process limits; the check service answers only the engine, with its own session token, and `ap up` starts it with the engine (the step workers are started per slice).
 
 Every service runs non-root, with a read-only root file system, all capabilities dropped and
 `no-new-privileges`. No service mounts a container-engine socket. Every network is internal except
@@ -81,6 +81,9 @@ image a rebuild dropped from the local store is taken back by digest from the lo
 [Distribution registry](/components/distribution-registry.md)). The signature proves that `up`
 starts exactly what `build.sh` built, not who built it, because the key is on the same machine.
 Upstream images (nginx, Docker Agent, Go) are pinned by digest only; their publishers sign none.
+`ap up` starts contract-lint and the check service, so build them first with
+`src/deploy/build.sh lint` and `src/deploy/build.sh check` (the check image fetches the pinned
+oapi-codegen and the template's modules while it is built, so that build needs the network).
 
 # Observability
 

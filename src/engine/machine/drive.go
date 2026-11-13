@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -18,7 +19,11 @@ type driver struct {
 
 func (x *driver) pattern() Pattern { return x.m.cfg.Pattern }
 
-func isReview(s Step) bool { return slices.Contains(s.Checks, noBlockingFindingOpen) }
+func isReview(s Step) bool { return s.Reviews() }
+
+// Reviews reports whether the step is the review step, the one run in rounds: its checks include
+// NoBlockingFindingOpen. Its output is its findings, not a set of files.
+func (s Step) Reviews() bool { return slices.Contains(s.Checks, noBlockingFindingOpen) }
 
 func isAgent(s Step) bool { return strings.HasPrefix(s.Worker, "agent:") }
 
@@ -153,10 +158,27 @@ func (x *driver) stepKey(s Step, inputs []string, open []Finding, changed []Line
 		AgentDigest: s.AgentDigest, Model: model})
 }
 
-// accept makes the step's artifacts the run's and counts it accepted.
-func (x *driver) accept(s Step, artifacts []string) {
+// artifacts copies the run's artifacts by name.
+func (x *driver) artifacts() map[string]string {
 	x.m.mu.Lock()
 	defer x.m.mu.Unlock()
+	return maps.Clone(x.r.artifacts)
+}
+
+// reusable says whether an accepted result can stand for the step in this run. One that left
+// project files is reused only in the project they were written into: nothing yet writes a reused
+// result's files into a new project (T053a), so a replay into one would start the next step from
+// files the folder does not hold. Until T053a lifts this, such a step runs again there.
+func (x *driver) reusable(a Accepted) bool {
+	return len(a.Files) == 0 || a.Project == x.r.Project
+}
+
+// accept makes the step's artifacts and the project's files after it the run's, and counts it
+// accepted.
+func (x *driver) accept(s Step, artifacts []string, files []File) {
+	x.m.mu.Lock()
+	defer x.m.mu.Unlock()
+	x.r.before = slices.Clone(files)
 	for i, name := range s.Outputs {
 		x.r.artifacts[name] = artifacts[i]
 	}
@@ -178,21 +200,22 @@ func (x *driver) step(ctx context.Context, s Step, round int, open []Finding, ch
 		inputs[i] = h
 	}
 	keyInputs, key := x.stepKey(s, inputs, open, changed)
-	if a, ok := x.m.cfg.Results.Get(key); ok && len(a.Artifacts) == len(s.Outputs) {
+	if a, ok := x.m.cfg.Results.Get(key); ok && len(a.Artifacts) == len(s.Outputs) && x.reusable(a) {
 		e := Event{Kind: "ResultReused", Step: s.Name, Round: round, Worker: s.Worker, Pattern: x.r.Pattern,
-			Inputs: keyInputs, Artifacts: a.Artifacts, ReuseKey: key, Refs: x.r.refs, ChangedLines: slices.Clone(a.Lines)}
+			Inputs: keyInputs, Artifacts: a.Artifacts, ReuseKey: key, Refs: x.r.refs, ChangedLines: slices.Clone(a.Lines),
+			Files: slices.Clone(a.Files)}
 		if isAgent(s) {
 			e.AgentDigest, e.Model = s.AgentDigest, x.m.cfg.Model
 		}
 		if err := x.record(e); err != nil {
 			return Result{}, rejected, err
 		}
-		x.accept(s, a.Artifacts)
+		x.accept(s, a.Artifacts, a.Files)
 		out := map[string]string{}
 		for i, name := range s.Outputs {
 			out[name] = a.Artifacts[i]
 		}
-		return Result{Outputs: out, ChangedLines: slices.Clone(a.Lines)}, accepted, nil
+		return Result{Outputs: out, ChangedLines: slices.Clone(a.Lines), ProjectFiles: slices.Clone(a.Files)}, accepted, nil
 	}
 
 	if err := x.record(Event{Kind: "StepStarted", Step: s.Name, Round: round, Refs: x.r.refs}); err != nil {
@@ -278,7 +301,8 @@ func (x *driver) attempt(ctx context.Context, s Step, at attemptOf) (Result, ver
 	clk := x.m.cfg.Clock
 	began := clk.Now()
 	res, werr := x.m.cfg.Worker.Run(ctx, Request{Run: x.r.ID, Step: s, Attempt: at.n, Round: at.round,
-		Open: slices.Clone(at.open), ChangedLines: slices.Clone(at.changed), Inputs: slices.Clone(at.inputs)})
+		Open: slices.Clone(at.open), ChangedLines: slices.Clone(at.changed), Inputs: slices.Clone(at.inputs),
+		Slice: x.r.Slice, Project: x.r.Project, Before: slices.Clone(x.r.before), Artifacts: x.artifacts()})
 	use := res.Usage.clamped()
 	x.r.used.Tokens += use.Tokens
 	x.r.used.CostUSD += use.CostUSD
@@ -323,7 +347,8 @@ func (x *driver) attempt(ctx context.Context, s Step, at attemptOf) (Result, ver
 
 	var failed []string
 	for _, name := range s.Checks {
-		cr, cerr := x.m.cfg.Checker.Check(ctx, CheckRequest{Run: x.r.ID, Step: s, Attempt: at.n, Name: name, Result: res})
+		cr, cerr := x.m.cfg.Checker.Check(ctx, CheckRequest{Run: x.r.ID, Step: s, Attempt: at.n, Name: name, Result: res,
+			Round: at.round, Inputs: slices.Clone(at.inputs), Slice: x.r.Slice, Project: x.r.Project})
 		if cerr != nil {
 			cr = CheckResult{Passed: false, Reason: "the check could not run: " + cerr.Error()}
 		}
@@ -357,11 +382,13 @@ func (x *driver) attempt(ctx context.Context, s Step, at attemptOf) (Result, ver
 	switch {
 	case len(failed) == 0:
 		made.Kind, made.Usage, made.ChangedLines = "StepAccepted", nil, slices.Clone(res.ChangedLines)
+		made.Files = slices.Clone(res.ProjectFiles)
 		if err := x.record(made); err != nil {
 			return res, rejected, "", err
 		}
-		x.m.cfg.Results.Put(Accepted{Key: at.key, Artifacts: artifacts, Run: x.r.ID, Lines: slices.Clone(res.ChangedLines)})
-		x.accept(s, artifacts)
+		x.m.cfg.Results.Put(Accepted{Key: at.key, Artifacts: artifacts, Run: x.r.ID, Lines: slices.Clone(res.ChangedLines),
+			Files: slices.Clone(res.ProjectFiles), Project: x.r.Project})
+		x.accept(s, artifacts, res.ProjectFiles)
 		return res, accepted, "", nil
 	case open:
 		why := fmt.Sprintf("review round %d left blocking findings open", at.round)

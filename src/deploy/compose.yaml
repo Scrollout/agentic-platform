@@ -10,6 +10,7 @@
 #   AP_WORKER_TOKEN      this session's token for step and check workers
 #   AP_LINT_TOKEN        this session's token the engine calls the contract-lint service with
 #   AP_ANALYST_TOKEN     this session's token the engine calls the analyst service with
+#   AP_CHECK_TOKEN       this session's token the engine calls the check service with (D29)
 #   AP_HOST_USER         the developer's numeric uid:gid; the gateway runs as it to read the key
 #                        file (mode 600), and step workers run as it to write the projects folder
 #   AP_GATEWAY_IMAGE     the nginx pin from images.lock (its one home); the launcher reads it
@@ -25,7 +26,7 @@
 # cannot read images.lock and the variables above are all the launcher's; test_services_lint_analyst
 # fails when the two differ.
 #
-# Profiles: no profile is what `ap up` starts (gateway, engine, page, contract-lint, analyst). `client` and `tests` are run
+# Profiles: no profile is what `ap up` starts (gateway, engine, page, contract-lint, analyst, check). `client` and `tests` are run
 # on demand with `docker compose run --rm`; `workers` are started by `ap build-workers`.
 #
 # Networks: every one is internal and isolated (no route out, and no address of the host's, so no
@@ -133,6 +134,8 @@ services:
       AP_LINT_TOKEN: ${AP_LINT_TOKEN:?set AP_LINT_TOKEN (ap up does this)}
       AP_ANALYST_URL: http://analyst:8080
       AP_ANALYST_TOKEN: ${AP_ANALYST_TOKEN:?set AP_ANALYST_TOKEN (ap up does this)}
+      AP_CHECK_URL: http://check:8080
+      AP_CHECK_TOKEN: ${AP_CHECK_TOKEN:?set AP_CHECK_TOKEN (ap up does this)}
       ENGINE_STORE_DIR: /var/lib/engine
     tmpfs:
       - /tmp:mode=1777,size=16m
@@ -287,16 +290,26 @@ services:
     extra_hosts: { engine: *engine-on-agents, gateway: *gateway-on-agents }
     networks: [agents]
 
-  # Check container: runs checks on generated code, with no route to the gateway (plan threat
-  # model: no network beyond the engine).
+  # The check service (src/engine/cmd/check, research D29): runs checks on generated code and reads
+  # a step's files, over the projects folder it only reads, with no route to the gateway (plan
+  # threat model: no network beyond the engine). It answers only the engine, which calls it with
+  # AP_CHECK_TOKEN; it calls no one, so it holds no worker token. The tools it needs (pinned
+  # oapi-codegen, the catalogue template and its module cache) are in the image (Dockerfile.check).
+  # Started by `ap up` like contract-lint, so it overrides the workers' profile.
   check:
     <<: *sandboxed
+    profiles: []
     image: ${AP_IMAGE_CHECK:?set AP_IMAGE_CHECK to the signed ap-check image (ap up does this; build it with src/deploy/build.sh check)}
     pull_policy: never
     user: "65532:65532"
+    command: ["/check"]
     environment:
-      ENGINE_URL: http://engine:8080
-      ENGINE_TOKEN: ${AP_WORKER_TOKEN:?set AP_WORKER_TOKEN (ap up does this)}
+      CHECK_LISTEN_ADDRESS: ":8080"
+      CHECK_TOKEN: ${AP_CHECK_TOKEN:?set AP_CHECK_TOKEN (ap up does this)}
+      CHECK_PROJECTS_DIR: /projects
+      CHECK_OAPI_CODEGEN: /usr/local/bin/oapi-codegen
+      CHECK_TEMPLATE_DIR: /opt/template
+      CHECK_DEPLOYMENT: check-service
     volumes:
       - { type: bind, source: "${AP_PROJECTS_DIR:?set AP_PROJECTS_DIR to the projects folder (ap up does this)}", target: /projects, read_only: true }
     extra_hosts: { engine: *engine-on-checks }

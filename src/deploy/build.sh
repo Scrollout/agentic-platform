@@ -29,6 +29,18 @@ case $name in '' | *[!a-z]*) usage ;; esac
 [ -f "$here/Dockerfile.$name" ] || die 3 "no image '$name': $here/Dockerfile.$name does not exist"
 NAME=$(printf '%s' "$name" | tr '[:lower:]' '[:upper:]')
 
+# The Go images build generated code that is never committed (scripts/generate.sh): make it match
+# the contracts first, so a fresh clone builds. generate.sh --check changes nothing; a second run
+# of generate.sh changes nothing either, so this converges.
+case $name in engine | cli | page | check)
+  gen="$here/../../scripts/generate.sh"
+  if ! "$gen" --check >/dev/null 2>&1; then
+    say "generated code is missing or stale; running scripts/generate.sh"
+    "$gen" >&2 || die 1 "scripts/generate.sh failed; see the messages above"
+  fi
+  ;;
+esac
+
 pin() {
   local p
   p=$(awk -v n="$1" '$1 == n { print $2 }' "$here/images.lock")
@@ -40,6 +52,7 @@ sbom_image=$(pin sbom-scanner)
 golang_image=$(pin golang)
 agent_image=$(pin docker-agent)
 node_image=$(pin node)
+oapi_codegen=$(pin oapi-codegen)
 
 port=${AP_REGISTRY_PORT:-5005}
 # The registry's names, as `ap` derives them (AP_REGISTRY_NAME runs a second, independent registry).
@@ -159,7 +172,7 @@ docker buildx build -f "$here/Dockerfile.$name" -t "$tag" \
   --sbom="generator=$sbom_image" --provenance=mode=max --push --metadata-file "$meta" \
   --build-arg "GOLANG_IMAGE=$golang_image" \
   --build-arg "DOCKER_AGENT_IMAGE=$agent_image" \
-  --build-arg "NODE_IMAGE=$node_image" "${contexts[@]}" \
+  --build-arg "NODE_IMAGE=$node_image" --build-arg "OAPI_CODEGEN=$oapi_codegen" "${contexts[@]}" \
   "$@" "$here/.." || die 1 "docker buildx build failed for $name"
 digest=$(grep -o '"containerimage.digest": *"sha256:[0-9a-f]\{64\}"' "$meta" | grep -o 'sha256:[0-9a-f]\{64\}' | head -n 1) ||
   die 1 "the build of $name reported no pushed digest"

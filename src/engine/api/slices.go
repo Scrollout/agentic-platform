@@ -32,7 +32,7 @@ type sliceServer struct {
 	*server
 	svc     *slices.Service
 	store   SliceStore
-	workers *workers
+	workers *Workers
 	// projects is Config.Projects; runs are the slices' runs (runs.go), nil when Store keeps no
 	// run record.
 	projects string

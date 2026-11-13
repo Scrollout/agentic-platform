@@ -269,6 +269,19 @@ func (s *Service) lintContract(ctx context.Context, contract string) []Check {
 	return out
 }
 
+// LintContract judges a contract as the ContractLint check judges a slice's (lintContract): it
+// passes without a lint error, and fails when the lint finds one, cannot run or is not configured.
+// The reason names each error, or says it passed. A run's ContractLintPasses uses it.
+func (s *Service) LintContract(ctx context.Context, contract string) (passed bool, reason string, err error) {
+	var reasons []string
+	passed = true
+	for _, c := range s.lintContract(ctx, contract) {
+		passed = passed && c.Passed
+		reasons = append(reasons, c.Reason)
+	}
+	return passed, strings.Join(reasons, "; "), nil
+}
+
 // exampleTagged is the ExampleTagged check on the rules part: slice.ExampleTags's findings, and
 // each example ID that an earlier revision dropped and the examples now give to another scenario
 // (an E-<n> is never reused, data-model.md), as failed results, or one passed result. Bringing

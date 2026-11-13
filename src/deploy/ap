@@ -30,15 +30,15 @@ sess=$state_dir/session.env
 images_env=$state_dir/images.env
 pub=${XDG_CONFIG_HOME:-$HOME/.config}/agentic-platform/signing/cosign.pub
 # Images `up` needs (it starts the engine; every client command runs cli) and images it passes
-# only when built (their profiles are started later, by build-workers and test). lint is started by
-# `up` too, but stays optional until its first signed build (T038g): without it, `compose up` stops
+# only when built (their profiles are started later, by build-workers and test). lint and check are
+# started by `up` too, but stay optional until their first signed build (T038g): without it, `compose up` stops
 # with "No such image ap-lint:not-built". page stays optional until the run page exists (T056):
 # without it, `up` starts neither page nor page-proxy (--scale ...=0) and says so.
 needed_images="engine cli"
 optional_images="page agent check tests lint"
 # shellcheck disable=SC2086
 image_vars=$(printf 'AP_IMAGE_%s ' $needed_images $optional_images | tr '[:lower:]' '[:upper:]')
-token_vars="AP_CLIENT_TOKEN AP_PAGE_TOKEN AP_WORKER_TOKEN AP_LINT_TOKEN AP_ANALYST_TOKEN"
+token_vars="AP_CLIENT_TOKEN AP_PAGE_TOKEN AP_WORKER_TOKEN AP_LINT_TOKEN AP_ANALYST_TOKEN AP_CHECK_TOKEN"
 vars="AP_CREDENTIALS_FILE AP_PROJECTS_DIR AP_PAGE_PORT $token_vars AP_HOST_USER AP_GATEWAY_IMAGE $image_vars"
 default_page_port=7878
 default_registry_port=5005
@@ -403,7 +403,7 @@ cmd_up() {
     say "the platform's session is already started; keeping its tokens"
   else
     # A new session: fresh tokens, one per kind of caller (research D12) and one per service the
-    # engine calls (contract-lint, the analyst; research D27, D28).
+    # engine calls (contract-lint, the analyst, the check service; research D27, D28, D29).
     tokens=''
     for v in $token_vars; do tokens="$tokens $(rand)"; done
     # shellcheck disable=SC2086
@@ -411,7 +411,7 @@ cmd_up() {
   fi
   # shellcheck disable=SC2086
   set -- $tokens
-  AP_CLIENT_TOKEN=$1 AP_PAGE_TOKEN=$2 AP_WORKER_TOKEN=$3 AP_LINT_TOKEN=$4 AP_ANALYST_TOKEN=$5
+  AP_CLIENT_TOKEN=$1 AP_PAGE_TOKEN=$2 AP_WORKER_TOKEN=$3 AP_LINT_TOKEN=$4 AP_ANALYST_TOKEN=$5 AP_CHECK_TOKEN=$6
 
   AP_CREDENTIALS_FILE=$cred AP_PROJECTS_DIR=$proj AP_PAGE_PORT=$port
   AP_HOST_USER=$(id -u):$(id -g) AP_GATEWAY_IMAGE=$gateway_image
@@ -430,10 +430,10 @@ cmd_up() {
 
   if [ "$AP_IMAGE_PAGE" = "$(placeholder page)" ]; then
     # No run page image yet (T056): start everything else; page and page-proxy stay at zero.
-    say "the run page is not built yet (T056); starting the platform without it (gateway, engine, contract-lint, analyst)"
+    say "the run page is not built yet (T056); starting the platform without it (gateway, engine, contract-lint, analyst, check)"
     set -- --scale page=0 --scale page-proxy=0
   else
-    say "starting the platform (gateway, engine, page, contract-lint, analyst); run page on http://127.0.0.1:$port"
+    say "starting the platform (gateway, engine, page, contract-lint, analyst, check); run page on http://127.0.0.1:$port"
     set --
   fi
   compose up -d "$@" || die 1 "docker compose up failed; see the messages above; the session is kept until: ap down"
@@ -444,7 +444,7 @@ cmd_down() {
   # Compose needs every variable to read the file, though none is used to stop. A missing,
   # unreadable or broken session falls back to placeholders, so `down` always recovers.
   AP_CREDENTIALS_FILE=/nonexistent AP_PROJECTS_DIR=/nonexistent AP_PAGE_PORT=$default_page_port
-  AP_CLIENT_TOKEN=none AP_PAGE_TOKEN=none AP_WORKER_TOKEN=none AP_LINT_TOKEN=none AP_ANALYST_TOKEN=none
+  AP_CLIENT_TOKEN=none AP_PAGE_TOKEN=none AP_WORKER_TOKEN=none AP_LINT_TOKEN=none AP_ANALYST_TOKEN=none AP_CHECK_TOKEN=none
   AP_HOST_USER=65534:65534
   AP_GATEWAY_IMAGE=none
   for n in $needed_images $optional_images; do eval "AP_IMAGE_$(upper "$n")=\$(placeholder \"\$n\")"; done

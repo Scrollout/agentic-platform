@@ -90,6 +90,19 @@ type Step struct {
 	Inputs      []string
 	Outputs     []string
 	Checks      []string
+	// Writable are the paths the step may write (the catalogue's glob dialect) and Dependencies
+	// the imports its files may and may not add, copied from the pattern for its worker and checks.
+	Writable     []string
+	Dependencies Dependencies
+}
+
+// Dependencies are a step's allowed and forbidden import patterns, as the pattern declares them.
+type Dependencies struct{ Allowed, Forbidden []string }
+
+// File is one regular file of the project folder, by path and the SHA-256 of its content.
+type File struct {
+	Path   string `json:"path"`
+	SHA256 string `json:"sha256"`
 }
 
 // Pattern is the part of a catalogue pattern the machine follows.
@@ -130,6 +143,14 @@ type Request struct {
 	Open         []Finding // the open blocking findings: for a fix of the code, and review rounds after the first
 	ChangedLines []Line    // review rounds after the first: the lines the fix changed
 	Inputs       []string  // hashes of the step's declared inputs, in order
+	Slice        string    // the slice the run builds
+	Project      string    // the project folder the run builds into
+	// Before are the project's files after the last accepted step, nil when no step was accepted
+	// in this run yet (or none is known after a restart): the files the attempt starts from.
+	Before []File
+	// Artifacts are the hashes of every input and accepted output the run holds, by name: where
+	// the content of a file in Before can be found (an accepted output's framed form).
+	Artifacts map[string]string
 }
 
 // Result is what a worker returns for one attempt. Done is the agent's claim and is ignored.
@@ -140,6 +161,12 @@ type Result struct {
 	Done         bool
 	Findings     []Finding
 	ChangedLines []Line
+	// Before and ProjectFiles are the project's files when the attempt started and after it
+	// (the worker reads them), so a check can judge the change and the next step start from it.
+	Before, ProjectFiles []File
+	// Content holds, by output name, the bytes stored under the output's hash, for a check that
+	// reads an output's content (in memory only: a check never outlives its attempt).
+	Content map[string][]byte
 }
 
 // Worker runs one attempt of a step. An error is a rejected attempt.
@@ -154,6 +181,10 @@ type CheckRequest struct {
 	Attempt int
 	Name    string
 	Result  Result
+	Round   int      // review rounds only, from 1
+	Inputs  []string // hashes of the step's declared inputs, in order
+	Slice   string   // the slice the run builds
+	Project string   // the project folder the run builds into
 }
 
 // CheckResult is a check's verdict; Refs are the slice items it concerns, if it names any.
@@ -206,6 +237,11 @@ type Event struct {
 	Check        *EventCheck `json:"check,omitempty"`
 	Finding      *Finding    `json:"finding,omitempty"`
 	Detail       string      `json:"detail,omitempty"`
+	// Project, on RunStarted, is the run's project folder, and Files, on StepAccepted and
+	// ResultReused, the project's files after the step. Neither is part of the run-event
+	// contract: an Events sink keeps them beside the event, so a run read back still has them.
+	Project string `json:"-"`
+	Files   []File `json:"-"`
 }
 
 // MarshalJSON keeps `inputs` and `artifacts` present, even empty, on the kinds that require them.
@@ -228,10 +264,10 @@ func (e Event) MarshalJSON() ([]byte, error) {
 }
 
 // Run is a run's state.
-// Run is a run's state.
 type Run struct {
 	ID        string
 	Slice     string
+	Project   string
 	Pattern   string
 	Status    Status
 	Outcome   Outcome
@@ -244,10 +280,11 @@ type Run struct {
 // StartParams starts a run: the slice's part hashes by input name (`slice/contract`, ...) and the
 // slice's refs, which every event without refs of its own names.
 type StartParams struct {
-	Run    string
-	Slice  string
-	Inputs map[string]string
-	Refs   []string
+	Run     string
+	Slice   string
+	Project string
+	Inputs  map[string]string
+	Refs    []string
 }
 
 // Config wires a Machine. Results (optional) is the accepted-result store; Model is the model the
@@ -322,6 +359,7 @@ type run struct {
 	fixing    bool          // the fix step runs before the next review round
 	open      []Finding     // blocking findings of the last review round
 	changed   []Line        // the lines the last fix changed
+	before    []File        // the project's files after the last accepted step
 }
 
 // New makes a Machine.
@@ -432,12 +470,12 @@ func (m *Machine) Start(ctx context.Context, p StartParams) (Run, error) {
 			return Run{}, ErrRunActive
 		}
 	}
-	r := &run{Run: Run{ID: p.Run, Slice: p.Slice, Pattern: m.cfg.Pattern.ref(), Status: StatusRunning},
+	r := &run{Run: Run{ID: p.Run, Slice: p.Slice, Project: p.Project, Pattern: m.cfg.Pattern.ref(), Status: StatusRunning},
 		refs: slices.Clone(p.Refs), since: m.cfg.Clock.Now(), artifacts: map[string]string{}}
 	for i, n := range names {
 		r.artifacts[n] = hashes[i]
 	}
-	if err := m.emit(r, Event{Kind: "RunStarted", Slice: r.Slice, Pattern: r.Pattern, Inputs: hashes, Refs: r.refs}); err != nil {
+	if err := m.emit(r, Event{Kind: "RunStarted", Slice: r.Slice, Project: r.Project, Pattern: r.Pattern, Inputs: hashes, Refs: r.refs}); err != nil {
 		m.mu.Unlock()
 		return Run{}, err
 	}

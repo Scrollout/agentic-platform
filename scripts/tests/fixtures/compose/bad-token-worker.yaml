@@ -163,7 +163,8 @@
       "pids_limit": 256,
       "image": "${AP_IMAGE_AGENT}",
       "environment": {
-        "TOKEN": "${AP_WORKER_TOKEN}"
+        "TOKEN": "${AP_WORKER_TOKEN}",
+        "EXTRA": "${AP_CLIENT_TOKEN}"
       },
       "pull_policy": "never"
     },
@@ -188,8 +189,7 @@
       "pids_limit": 256,
       "image": "${AP_IMAGE_CHECK}",
       "environment": {
-        "TOKEN": "${AP_WORKER_TOKEN}",
-        "EXTRA": "${AP_CLIENT_TOKEN}"
+        "TOKEN": "${AP_CHECK_TOKEN}"
       },
       "pull_policy": "never"
     }

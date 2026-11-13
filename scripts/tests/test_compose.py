@@ -24,7 +24,7 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures/compose"
 VARS = ["AP_CREDENTIALS_FILE", "AP_PROJECTS_DIR", "AP_PAGE_PORT",
         "AP_CLIENT_TOKEN", "AP_PAGE_TOKEN", "AP_WORKER_TOKEN", "AP_GATEWAY_IMAGE", "AP_HOST_USER",
         "AP_IMAGE_ENGINE", "AP_IMAGE_PAGE", "AP_IMAGE_CLI", "AP_IMAGE_AGENT", "AP_IMAGE_CHECK",
-        "AP_IMAGE_TESTS", "AP_IMAGE_LINT", "AP_LINT_TOKEN", "AP_ANALYST_TOKEN"]
+        "AP_IMAGE_TESTS", "AP_IMAGE_LINT", "AP_LINT_TOKEN", "AP_ANALYST_TOKEN", "AP_CHECK_TOKEN"]
 ISOLATED = "com.docker.network.bridge.gateway_mode_ipv4"
 MASQ = "com.docker.network.bridge.enable_ip_masquerade"
 
@@ -39,21 +39,22 @@ def gateway_pin():
 KEY = "fake-model-key-TESTKEY-0123456789abcdef"  # also written in fixtures/compose/bad-key-in-env.yaml
 TOKENS = {"AP_CLIENT_TOKEN": "c11e47" + "a" * 26, "AP_PAGE_TOKEN": "9a6e00" + "b" * 26,
           "AP_WORKER_TOKEN": "w0rke4" + "c" * 26,
-          "AP_LINT_TOKEN": "11a7e0" + "d" * 26, "AP_ANALYST_TOKEN": "a0a1y5" + "e" * 26}
+          "AP_LINT_TOKEN": "11a7e0" + "d" * 26, "AP_ANALYST_TOKEN": "a0a1y5" + "e" * 26,
+          "AP_CHECK_TOKEN": "c4ec4b" + "f" * 26}
 TMP_BASE = os.environ.get("XDG_RUNTIME_DIR") or None
 RULES = ["name", "read_only", "cap_drop", "no_new_privileges", "privileged", "non_root",
          "engine_socket", "var_run_bind", "network_egress", "gateway_networks", "runtime",
          "masquerade_page_only", "limit_cpu", "limit_memory", "limit_pids", "credentials_gateway",
          "credentials_only_gateway", "key_in_env", "page_port_loopback", "other_ports",
          "token_engine", "token_page", "token_cli", "token_worker", "token_gateway", "token_lint",
-         "token_analyst", "image_digest",
+         "token_analyst", "token_check", "image_digest",
          "pull_policy_never", "gateway_digest", "restart", "page_isolation", "internal_isolated"]
 SOCKETS = ("docker.sock", "containerd.sock", "podman.sock")
 # Services are identified by the role of the variable their image comes from (ADR 0028: the image
 # is a signed digest reference the launcher passes in), not by an image name.
 IMAGE_VARS = {"AP_IMAGE_ENGINE": ("engine", "engine"), "AP_IMAGE_PAGE": ("page", "page"),
               "AP_IMAGE_CLI": ("cli", "cli"), "AP_IMAGE_AGENT": ("agent", "worker"),
-              "AP_IMAGE_CHECK": ("check", "worker"), "AP_IMAGE_TESTS": ("tests", "client"),
+              "AP_IMAGE_CHECK": ("check", "check"), "AP_IMAGE_TESTS": ("tests", "client"),
               "AP_IMAGE_LINT": ("lint", "lint")}
 REGISTRY = "127.0.0.1:5005"
 # One distinct digest reference per variable, so a resolved image maps back to its variable.
@@ -81,7 +82,8 @@ PLANTED = {
     "bad-token-engine": "token_engine", "bad-token-page": "token_page",
     "bad-token-cli": "token_cli", "bad-token-worker": "token_worker",
     "bad-token-gateway": "token_gateway",
-    "bad-token-lint": "token_lint", "bad-token-analyst": "token_analyst", "bad-image-tag-only": "image_digest",
+    "bad-token-lint": "token_lint", "bad-token-analyst": "token_analyst",
+    "bad-token-check": "token_check", "bad-image-tag-only": "image_digest",
     # T022b: limits on every service, ours never pulled, the gateway pinned by digest, no restart
     "bad-limit-cpu-engine": "limit_cpu", "bad-limit-cpu-gateway": "limit_cpu",
     "bad-limit-cpu-zero-cli": "limit_cpu", "bad-limit-memory-page": "limit_memory",
@@ -300,14 +302,14 @@ def check_config(cfg, env):
         # the engine may also hold the lint and analyst tokens (it calls both) but need not; each of
         # those two services holds its own token only, and must hold it
         allowed = {"engine": {"AP_CLIENT_TOKEN", "AP_PAGE_TOKEN", "AP_WORKER_TOKEN", "AP_LINT_TOKEN",
-                              "AP_ANALYST_TOKEN"},
+                              "AP_ANALYST_TOKEN", "AP_CHECK_TOKEN"},
                    "page": {"AP_PAGE_TOKEN"}, "cli": {"AP_CLIENT_TOKEN"}, "client": {"AP_CLIENT_TOKEN"},
                    "worker": {"AP_WORKER_TOKEN"}, "lint": {"AP_LINT_TOKEN"},
-                   "analyst": {"AP_ANALYST_TOKEN"}}.get(role, set())
-        required = allowed - {"AP_LINT_TOKEN", "AP_ANALYST_TOKEN"} if role == "engine" else allowed
+                   "analyst": {"AP_ANALYST_TOKEN"}, "check": {"AP_CHECK_TOKEN"}}.get(role, set())
+        required = allowed - {"AP_LINT_TOKEN", "AP_ANALYST_TOKEN", "AP_CHECK_TOKEN"} if role == "engine" else allowed
         rule = {"engine": "token_engine", "page": "token_page", "cli": "token_cli", "client": "token_cli",
                 "worker": "token_worker", "gateway": "token_gateway", "lint": "token_lint",
-                "analyst": "token_analyst"}.get(role)
+                "analyst": "token_analyst", "check": "token_check"}.get(role)
         if rule:
             if any(k not in allowed and v in blob for k, v in tok.items()):
                 fail(rule, name)

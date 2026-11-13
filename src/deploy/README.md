@@ -68,7 +68,7 @@ server and its recorder in tests (`src/tests/recorded/`, research D26). It stand
 gateway on test networks only; no image is built from it and Compose does not start it.
 
 - `Dockerfile.agent`: the agent step image, with Docker Agent copied from its pinned image, the Go toolchain, and `TELEMETRY_ENABLED=false`.
-- `Dockerfile.check`: the check container, with the Go toolchain only, to run checks on generated code.
+- `Dockerfile.check`: the check service (`/check`, research D29) with the Go toolchain, the pinned oapi-codegen (`images.lock`, passed by `build.sh` as `OAPI_CODEGEN`), the catalogue's module template at `/opt/template` and the module cache of its `go.mod` at `/opt/gomodcache` (read-only), so checks and the generate procedure run with no network and a read-only root.
 - `Dockerfile.engine`: the workflow engine, a static Go binary on `scratch`; expects the main package `src/engine/cmd/engine`.
 - `Dockerfile.cli`: the terminal client, a static Go binary on `scratch`; expects `src/cli/cmd/cli`.
 - `Dockerfile.page`: the read-only run page, a static Go binary on `scratch`; expects `src/page/cmd/page`.
@@ -96,10 +96,10 @@ the [terminal contract](../cli/contract.md). It calls only `docker` and passes e
 | `AP_CREDENTIALS_FILE` | Absolute path of the file holding only the provider key; it reaches the gateway alone, as the Compose secret `anthropic_api_key` |
 | `AP_PROJECTS_DIR` | Absolute path of the projects folder |
 | `AP_PAGE_PORT` | Host port of the run page, published on `127.0.0.1` only (by `page-proxy`) |
-| `AP_CLIENT_TOKEN`, `AP_PAGE_TOKEN`, `AP_WORKER_TOKEN`, `AP_LINT_TOKEN`, `AP_ANALYST_TOKEN` | This session's tokens, 64 hex characters each and pairwise distinct; `ap up` on a started session keeps them, and only `ap up` after `ap down` makes new ones. The last two are what the engine calls `contract-lint` and `analyst` with; each reaches only the engine and its own service |
+| `AP_CLIENT_TOKEN`, `AP_PAGE_TOKEN`, `AP_WORKER_TOKEN`, `AP_LINT_TOKEN`, `AP_ANALYST_TOKEN`, `AP_CHECK_TOKEN` | This session's tokens, 64 hex characters each and pairwise distinct; `ap up` on a started session keeps them, and only `ap up` after `ap down` makes new ones. The last three are what the engine calls `contract-lint`, `analyst` and `check` with; each reaches only the engine and its own service |
 | `AP_HOST_USER` | The developer's `uid:gid`: the gateway runs as it to read the key file (mode 600; Compose cannot change a file secret's owner outside Swarm), and step workers run as it to write projects |
 | `AP_GATEWAY_IMAGE` | The `nginx` pin from `images.lock`, its one home; the gateway and `page-proxy` run it |
-| `AP_IMAGE_ENGINE`, `AP_IMAGE_PAGE`, `AP_IMAGE_CLI`, `AP_IMAGE_AGENT`, `AP_IMAGE_CHECK`, `AP_IMAGE_TESTS`, `AP_IMAGE_LINT` | Each image's digest reference from `images.env`, verified by `ap up` before anything starts and kept in the session; an image a profile `up` does not start (`agent`, `check`, `tests`), `page` until the run page exists (T056, `up` then starts neither `page` nor `page-proxy`), and `lint` until its first signed build (T038g), is verified when built and otherwise given the placeholder `ap-<name>:not-built`, so Compose can read the file. `up` does start `contract-lint`, so without `build.sh lint` its `docker compose up` fails with `No such image: ap-lint:not-built` |
+| `AP_IMAGE_ENGINE`, `AP_IMAGE_PAGE`, `AP_IMAGE_CLI`, `AP_IMAGE_AGENT`, `AP_IMAGE_CHECK`, `AP_IMAGE_TESTS`, `AP_IMAGE_LINT` | Each image's digest reference from `images.env`, verified by `ap up` before anything starts and kept in the session; an image a profile `up` does not start (`agent`, `tests`), `page` until the run page exists (T056, `up` then starts neither `page` nor `page-proxy`), and `lint` and `check` until their first signed build (T038g, T054c), is verified when built and otherwise given the placeholder `ap-<name>:not-built`, so Compose can read the file. `up` does start `contract-lint` and `check`, so without `build.sh lint` and `build.sh check` its `docker compose up` fails with `No such image: ap-<name>:not-built` |
 
 `AP_REGISTRY_PORT` (default 5005) and `AP_REGISTRY_NAME` (default `ap-registry`) are read by
 `build.sh` and `ap`, not by Compose. `AP_REGISTRY_NAME` is for running a second, independent
@@ -139,7 +139,7 @@ limits, and writable `tmpfs` only where it needs one; no service mounts a contai
 | Service | Started by | Networks | Notes |
 |---------|------------|----------|-------|
 | `gateway` | `ap up` | `agents`, `analyst`, `egress` | The only container with egress and the only one with the key |
-| `engine` | `ap up` | `clients`, `agents`, `checks`, `lint`, `analyst` | Holds the three caller tokens, and `AP_LINT_URL` (`http://contract-lint:8080`), `AP_LINT_TOKEN`, `AP_ANALYST_URL` (`http://analyst:8080`) and `AP_ANALYST_TOKEN`, which it reads from T038g; its store is the named volume `engine-store` at `/var/lib/engine` (`ENGINE_STORE_DIR`), the only writable path besides `/tmp` and mounted by no other service; the image makes that directory owned by 65532, which Docker gives a new volume; `ap down` keeps the volume |
+| `engine` | `ap up` | `clients`, `agents`, `checks`, `lint`, `analyst` | Holds the three caller tokens, and `AP_LINT_URL` (`http://contract-lint:8080`), `AP_LINT_TOKEN`, `AP_ANALYST_URL` (`http://analyst:8080`), `AP_ANALYST_TOKEN`, `AP_CHECK_URL` (`http://check:8080`) and `AP_CHECK_TOKEN`, which it reads from T038g and T054c; its store is the named volume `engine-store` at `/var/lib/engine` (`ENGINE_STORE_DIR`), the only writable path besides `/tmp` and mounted by no other service; the image makes that directory owned by 65532, which Docker gives a new volume; `ap down` keeps the volume |
 | `contract-lint` | `ap up` | `lint` | `AP_IMAGE_LINT`; gVisor; its token as `LINT_TOKEN`; reachable by the engine only; finds `engine` through `extra_hosts` (the gVisor rule; it calls no one) |
 | `analyst` | `ap up` | `analyst` | The `docker-agent` pin by digest (an upstream image like the gateway's, so no `AP_IMAGE_` variable; written out in `compose.yaml`, and a test fails when it differs from `images.lock`); gVisor; `/docker-agent serve api /agents/analyst.yaml` on port 8080 with `--session-db /tmp/session.db` on a tmpfs owned by UID 65532; `src/agents` mounted read-only at `/agents`; the token from its environment through `sh -c`, so not on its command line; `MODEL_GATEWAY_URL=http://gateway:8080`, a placeholder `ANTHROPIC_API_KEY` and `TELEMETRY_ENABLED=false`; finds `engine` and `gateway` through `extra_hosts`; its only way out is the gateway |
 | `page` | `ap up`, when its image is recorded (T056) | `clients`, `page` | Reached only through `page-proxy`; checks the Host header |
@@ -147,7 +147,7 @@ limits, and writable `tmpfs` only where it needs one; no service mounts a contai
 | `cli` | each client command (`run --rm`, profile `client`) | `clients` | Client token |
 | `tests` | `ap test <suite>` (profile `tests`) | `clients` | Client token; no `Dockerfile.tests` yet |
 | `step-agent` | `ap build-workers` (profile `workers`) | `agents` | gVisor, `/tmp` executable, projects read-only; finds `engine` and `gateway` through `extra_hosts`; the template for per-step workers |
-| `check` | `ap build-workers` (profile `workers`) | `checks` | gVisor, `/tmp` executable, projects read-only; finds `engine` through `extra_hosts`; cannot reach the gateway |
+| `check` | `ap up`, like `contract-lint` (no profile; its image stays optional until built) | `checks` | The check service (`CHECK_DEPLOYMENT=check-service`): runs `/check`, answers only the engine's `AP_CHECK_TOKEN` (`CHECK_TOKEN`), holds no worker token; gVisor, `/tmp` executable, projects read-only; finds `engine` through `extra_hosts`; cannot reach the gateway |
 
 All networks are internal except `egress` and `page-host`, and every internal one is `isolated`
 (`com.docker.network.bridge.gateway_mode_ipv4`, Docker 28 and later): its bridge has no address on

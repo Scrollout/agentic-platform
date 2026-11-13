@@ -25,7 +25,8 @@ import test_launcher as tl
 
 NEW_TOKENS = {"AP_CLIENT_TOKEN": tc.TOKENS["AP_CLIENT_TOKEN"], "AP_PAGE_TOKEN": tc.TOKENS["AP_PAGE_TOKEN"],
               "AP_WORKER_TOKEN": tc.TOKENS["AP_WORKER_TOKEN"],
-              "AP_LINT_TOKEN": "11a7e0" + "d" * 26, "AP_ANALYST_TOKEN": "a0a1y5" + "e" * 26}
+              "AP_LINT_TOKEN": "11a7e0" + "d" * 26, "AP_ANALYST_TOKEN": "a0a1y5" + "e" * 26,
+              "AP_CHECK_TOKEN": "c4ec4b" + "f" * 26}
 LINT_IMAGE = "%s/ap-lint@sha256:%064x" % (tc.REGISTRY, 7)
 LINT, ANALYST, ENGINE, GATEWAY = "contract-lint", "analyst", "engine", "gateway"
 
@@ -89,7 +90,7 @@ class ServicesInComposeTest(Base):
         self.assertEqual(self.svc(ANALYST)["image"], docker_agent_pin())
 
     def test_services_are_always_started_not_on_demand(self):
-        for name in (LINT, ANALYST):
+        for name in (LINT, ANALYST, "check"):
             self.assertFalse(self.svc(name).get("profiles"), "%s must start with `ap up`" % name)
 
     def test_contract_lint_is_on_an_internal_isolated_network_with_the_engine_only(self):
@@ -158,7 +159,8 @@ class ServicesInComposeTest(Base):
 
     def test_each_new_token_is_given_to_the_engine_and_its_own_service_only(self):
         services = self.cfg()["services"]
-        for var, owner in (("AP_LINT_TOKEN", LINT), ("AP_ANALYST_TOKEN", ANALYST)):
+        for var, owner in (("AP_LINT_TOKEN", LINT), ("AP_ANALYST_TOKEN", ANALYST),
+                           ("AP_CHECK_TOKEN", "check")):
             val = NEW_TOKENS[var]
             holders = sorted(n for n, s in services.items() if val in json.dumps(s))
             self.assertEqual(holders, sorted([ENGINE, owner]), "%s reaches %s" % (var, holders))
@@ -215,10 +217,10 @@ def _up_env(t):
 def _t_distinct_hex(self):
     env = _up_env(self)
     toks = [env.get(v, "") for v in ("AP_CLIENT_TOKEN", "AP_PAGE_TOKEN", "AP_WORKER_TOKEN",
-                                       "AP_LINT_TOKEN", "AP_ANALYST_TOKEN")]
+                                       "AP_LINT_TOKEN", "AP_ANALYST_TOKEN", "AP_CHECK_TOKEN")]
     for t in toks:
         self.assertRegex(t, r"^[0-9a-f]{32,}$")
-    self.assertEqual(len(set(toks)), 5, "five pairwise distinct tokens")
+    self.assertEqual(len(set(toks)), 6, "six pairwise distinct tokens")
 
 
 def _t_reused(self):
@@ -226,7 +228,7 @@ def _t_reused(self):
     self.up()
     ups = self.up_calls()
     self.assertEqual(len(ups), 2)
-    for v in ("AP_LINT_TOKEN", "AP_ANALYST_TOKEN"):
+    for v in ("AP_LINT_TOKEN", "AP_ANALYST_TOKEN", "AP_CHECK_TOKEN"):
         self.assertEqual(ups[0]["env"][v], ups[1]["env"][v], v)
 
 
@@ -235,7 +237,7 @@ def _t_new_after_down(self):
     self.ap("down")
     self.up()
     ups = self.up_calls()
-    for v in ("AP_LINT_TOKEN", "AP_ANALYST_TOKEN"):
+    for v in ("AP_LINT_TOKEN", "AP_ANALYST_TOKEN", "AP_CHECK_TOKEN"):
         self.assertNotEqual(ups[0]["env"][v], ups[1]["env"][v], v)
 
 
@@ -243,11 +245,11 @@ def _t_no_leak(self):
     """The new tokens are in compose's environment and the private session file only; never in an argv."""
     env = _up_env(self)
     for c in self.calls():
-        for v in ("AP_LINT_TOKEN", "AP_ANALYST_TOKEN"):
+        for v in ("AP_LINT_TOKEN", "AP_ANALYST_TOKEN", "AP_CHECK_TOKEN"):
             self.assertFalse(any(env[v] in a for a in c["argv"]), (v, c["argv"]))
     self.assertEqual(self.session.stat().st_mode & 0o777, 0o600)
     text = self.session.read_text()
-    for v in ("AP_LINT_TOKEN", "AP_ANALYST_TOKEN"):
+    for v in ("AP_LINT_TOKEN", "AP_ANALYST_TOKEN", "AP_CHECK_TOKEN"):
         self.assertIn(v + "=", text)
 
 

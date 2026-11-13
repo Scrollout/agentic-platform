@@ -13,7 +13,9 @@ import (
 
 // WorkerGrant is the slice and step a step worker's token was issued for. The token says which
 // worker is calling; registerWorker takes the slice and step from it, never from the body.
-type WorkerGrant struct{ Slice, Step string }
+// CallToken is the token the engine sends when it calls the worker that registers with this
+// grant (research D12); the launcher issues both (T053a). Empty means the engine sends none.
+type WorkerGrant struct{ Slice, Step, CallToken string }
 
 // acceptedToken is one bearer token the engine accepts: its security scheme in the contract, the
 // key its requests are counted and kept under, and for a step worker's token its grant.
@@ -47,27 +49,40 @@ func acceptedTokens(t Tokens, grants map[string]WorkerGrant) []acceptedToken {
 // grantKey holds the WorkerGrant of a request made with a granted worker token.
 type grantKey struct{}
 
-// workers holds the registered endpoint of each step of each slice, in memory: a restart
-// forgets them, and the workers register again.
-type workers struct {
+// Workers is where the engine finds the step worker of each step of each slice: the endpoint it
+// registered and the token to call it with. It is held in memory: a restart forgets it, and the
+// workers register again. It is safe for concurrent use.
+type Workers struct {
 	mu sync.Mutex
-	m  map[string]map[string]string // slice -> step -> endpoint
+	m  map[string]map[string]endpoint // slice -> step -> its worker
 }
 
-func newWorkers() *workers { return &workers{m: map[string]map[string]string{}} }
+type endpoint struct{ url, token string }
 
-func (w *workers) register(slice, step, endpoint string) {
+// NewWorkers returns an empty registry.
+func NewWorkers() *Workers { return &Workers{m: map[string]map[string]endpoint{}} }
+
+// Endpoint returns the URL and call token of the worker registered for the slice's step, or
+// ok false when none is.
+func (w *Workers) Endpoint(slice, step string) (url, token string, ok bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	e, ok := w.m[slice][step]
+	return e.url, e.token, ok
+}
+
+func (w *Workers) register(slice, step, url, token string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.m[slice] == nil {
-		w.m[slice] = map[string]string{}
+		w.m[slice] = map[string]endpoint{}
 	}
-	w.m[slice][step] = endpoint
+	w.m[slice][step] = endpoint{url, token}
 }
 
 // missing returns the first of steps with no registered worker for slice, or "" when every
 // step has one.
-func (w *workers) missing(slice string, steps []string) string {
+func (w *Workers) missing(slice string, steps []string) string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	for _, st := range steps {
@@ -94,7 +109,7 @@ func (s *sliceServer) RegisterWorker(ctx context.Context, req gen.RegisterWorker
 		return s.refuse("registerWorker", &sl.Error{Code: string(gen.ErrorCodeNotFound),
 			Detail: fmt.Sprintf("the pattern of slice %s has no step %s", g.Slice, g.Step)})
 	}
-	s.workers.register(g.Slice, g.Step, req.Body.Endpoint)
+	s.workers.register(g.Slice, g.Step, req.Body.Endpoint, g.CallToken)
 	return gen.RegisterWorker200JSONResponse{WorkerJSONResponse: gen.WorkerJSONResponse{
 		Body: gen.Worker{Slice: g.Slice, Step: g.Step, Endpoint: req.Body.Endpoint}}}, nil
 }

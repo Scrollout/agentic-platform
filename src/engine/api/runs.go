@@ -57,11 +57,13 @@ type runInfo struct {
 	ReplayOf  string `json:"replay_of,omitempty"`
 }
 
-// storedEvent is a store.Event's Data: the event in its run-event.schema.json form, and on
-// RunStarted the run's info.
+// storedEvent is a store.Event's Data: the event in its run-event.schema.json form, on
+// RunStarted the run's info, and on StepAccepted and ResultReused the project's files after the
+// step (machine.Event.Files, which the contract's event does not carry).
 type storedEvent struct {
-	Event machine.Event `json:"event"`
-	Info  *runInfo      `json:"info,omitempty"`
+	Event machine.Event  `json:"event"`
+	Info  *runInfo       `json:"info,omitempty"`
+	Files []machine.File `json:"files,omitempty"`
 }
 
 // runs drives and reads the runs: one machine per slice (a run is active per slice, as startRun's
@@ -105,7 +107,7 @@ func newRuns(cfg Config, svc *sl.Service, now func() time.Time, base context.Con
 	case err != nil:
 		r.noRun = "the pattern cannot be read: " + err.Error()
 	default:
-		r.pattern = machinePattern(p)
+		r.pattern = MachinePattern(p)
 	}
 	switch {
 	case r.worker == nil && r.checker == nil:
@@ -124,8 +126,8 @@ func newRuns(cfg Config, svc *sl.Service, now func() time.Time, base context.Con
 	return r
 }
 
-// machinePattern is the slices service's pattern as the machine follows it.
-func machinePattern(p sl.Pattern) machine.Pattern {
+// MachinePattern is the slices service's pattern as the machine follows it: its one translation.
+func MachinePattern(p sl.Pattern) machine.Pattern {
 	budget := func(b sl.PatternBudget) machine.Budget {
 		return machine.Budget{Tokens: b.Tokens, CostUSD: b.CostUSD, Duration: time.Duration(b.Minutes * float64(time.Minute))}
 	}
@@ -133,7 +135,9 @@ func machinePattern(p sl.Pattern) machine.Pattern {
 		RunBudget: budget(p.Budgets.Run), StepBudget: budget(p.Budgets.Step)}
 	for _, s := range p.Steps {
 		mp.Steps = append(mp.Steps, machine.Step{Name: s.Name, Worker: s.Worker, AgentDigest: s.AgentDigest,
-			Inputs: slices.Clone(s.Inputs), Outputs: slices.Clone(s.Outputs), Checks: slices.Clone(s.Checks)})
+			Inputs: slices.Clone(s.Inputs), Outputs: slices.Clone(s.Outputs), Checks: slices.Clone(s.Checks),
+			Writable: slices.Clone(s.Writable), Dependencies: machine.Dependencies{
+				Allowed: slices.Clone(s.Dependencies.Allowed), Forbidden: slices.Clone(s.Dependencies.Forbidden)}})
 	}
 	return mp
 }
@@ -142,13 +146,14 @@ func machinePattern(p sl.Pattern) machine.Pattern {
 // restarted engine still reuses them. A run that cannot be read adds nothing.
 func (r *runs) reloadResults() {
 	for _, e := range r.st.Runs() {
-		events, _, err := r.read(e.Run)
-		if err != nil {
+		events, info, err := r.read(e.Run)
+		if err != nil || info == nil {
 			continue
 		}
 		for _, ev := range events {
 			if (ev.Kind == "StepAccepted" || ev.Kind == "ResultReused") && ev.ReuseKey != "" {
-				r.results.Put(machine.Accepted{Key: ev.ReuseKey, Artifacts: slices.Clone(ev.Artifacts), Run: ev.Run, Lines: slices.Clone(ev.ChangedLines)})
+				r.results.Put(machine.Accepted{Key: ev.ReuseKey, Artifacts: slices.Clone(ev.Artifacts), Run: ev.Run, Lines: slices.Clone(ev.ChangedLines),
+					Files: slices.Clone(ev.Files), Project: info.Project})
 			}
 		}
 	}
@@ -174,7 +179,9 @@ func (r *runs) read(run string) ([]machine.Event, *runInfo, error) {
 		}
 		if d.Info != nil {
 			info = d.Info
+			d.Event.Project = d.Info.Project
 		}
+		d.Event.Files = d.Files
 		out = append(out, d.Event)
 	}
 	if len(out) > 0 && info == nil {
@@ -198,7 +205,7 @@ func (a runEvents) Append(e machine.Event) error {
 	} else if info == nil {
 		return fmt.Errorf("run %s: started without its project and operation", e.Run)
 	}
-	data, err := json.Marshal(storedEvent{Event: e, Info: info})
+	data, err := json.Marshal(storedEvent{Event: e, Info: info, Files: e.Files})
 	if err != nil {
 		return err
 	}
@@ -448,7 +455,7 @@ func (s *sliceServer) newRun(slice, project, replayOf string, inputs map[string]
 	s.runs.vmu.Unlock()
 	m := s.runs.machineFor(slice)
 	err = s.runs.begin(id, func(ctx context.Context) error {
-		_, err := m.Start(ctx, machine.StartParams{Run: id, Slice: slice, Inputs: inputs, Refs: refs})
+		_, err := m.Start(ctx, machine.StartParams{Run: id, Slice: slice, Project: project, Inputs: inputs, Refs: refs})
 		return err
 	})
 	if err != nil {

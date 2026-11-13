@@ -23,6 +23,13 @@ type PatternStep struct {
 	Inputs      []string `yaml:"inputs"`
 	Outputs     []string `yaml:"outputs"`
 	Checks      []string `yaml:"checks"`
+	// Writable are the paths the step may write, in the catalogue's glob dialect; Dependencies
+	// the imports its files may and may not add (catalogue README).
+	Writable     []string `yaml:"writable"`
+	Dependencies struct {
+		Allowed   []string `yaml:"allowed"`
+		Forbidden []string `yaml:"forbidden"`
+	} `yaml:"dependencies"`
 }
 
 // Pattern is what a run follows of the pattern the slices are checked against: its ID and

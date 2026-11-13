@@ -77,6 +77,9 @@ type Config struct {
 	// project whose folder exists (ProjectExists). Empty means no projects folder is known, so
 	// only a project a recorded run builds into is refused.
 	Projects string
+	// Workers is the registry registerWorker fills; the StepWorker finds each step's worker in
+	// it. nil means the handler keeps its own, which nothing else reads.
+	Workers *Workers
 	// StepWorker runs one attempt of a step and StepChecker one check (machine.Worker and
 	// machine.Checker). Without both, a start that passes every refusal is WorkersNotReady: the
 	// engine cannot drive a run.
@@ -109,7 +112,7 @@ func NewHandler(cfg Config) http.Handler {
 		if cfg.Store == nil {
 			panic("api: Config.Slices needs Config.Store")
 		}
-		impl = &sliceServer{server: srv, svc: cfg.Slices, store: cfg.Store, workers: newWorkers(), projects: cfg.Projects, runs: newRuns(cfg, cfg.Slices, now, base)}
+		impl = &sliceServer{server: srv, svc: cfg.Slices, store: cfg.Store, workers: workersOf(cfg), projects: cfg.Projects, runs: newRuns(cfg, cfg.Slices, now, base)}
 	}
 	mux := http.NewServeMux()
 	gen.HandlerWithOptions(gen.NewStrictHandlerWithOptions(impl, nil, gen.StrictHTTPServerOptions{
@@ -127,6 +130,13 @@ func NewHandler(cfg Config) http.Handler {
 		anonymous: newLimiter(now, c.perAddress),
 		keys:      &keyStore{now: now, keep: c.keepKeys, entries: map[string]*keyEntry{}},
 	}
+}
+
+func workersOf(cfg Config) *Workers {
+	if cfg.Workers != nil {
+		return cfg.Workers
+	}
+	return NewWorkers()
 }
 
 // mustRouteEveryOperation checks that the generated routes and the contract read by

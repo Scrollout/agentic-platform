@@ -1,9 +1,38 @@
-# Check container: the Go toolchain only, to run checks on generated code. Build context: src/.
+# Check service image (research D29): the check service program, the Go toolchain it runs checks
+# with, the pinned oapi-codegen, the catalogue's module template and the module cache of the
+# template's go.mod, so the checks run with no network. Build context: src/. Pins come from build
+# args that deploy/build.sh reads from images.lock (OAPI_CODEGEN is the oapi-codegen line, one home).
 ARG GOLANG_IMAGE
+FROM ${GOLANG_IMAGE} AS build
+ARG OAPI_CODEGEN
+WORKDIR /src
+COPY . .
+# src/tests is excluded from the context (src/.dockerignore), so the workspace must not use it.
+RUN go work edit -dropuse=./tests
+ENV CGO_ENABLED=0 GOFLAGS=-trimpath\ -buildvcs=false GOTOOLCHAIN=local GOTELEMETRY=off
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    cd engine && go build -ldflags="-s -w -buildid=" -o /out/check ./cmd/check
+# The pinned oapi-codegen (the Go checksum database verifies the module), built in its own module
+# cache so the image's cache holds only what the template needs.
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    GOBIN=/out GOFLAGS=-trimpath GOWORK=off go install "${OAPI_CODEGEN}"
+# The template's module cache: every module of its go.mod and go.sum (go.sum verifies each one), so
+# `go mod vendor -mod=mod` and the checks find them with GOPROXY=off. Made read-only by Go itself.
+RUN cd catalogue/api-feature-go/template && GOWORK=off GOMODCACHE=/out/modcache GOFLAGS=-mod=mod go mod download \
+    && GOWORK=off GOMODCACHE=/out/modcache GOFLAGS=-mod=mod go mod vendor -o /tmp/vendor-probe \
+    && rm -rf /tmp/vendor-probe
+
 FROM ${GOLANG_IMAGE}
 RUN adduser -D -u 65532 -h /tmp/home check
+COPY --from=build /out/check /check
+COPY --from=build /out/oapi-codegen /usr/local/bin/oapi-codegen
+COPY --from=build /src/catalogue/api-feature-go/template /opt/template
+COPY --from=build /out/modcache /opt/gomodcache
+# The module cache is read-only and in the image; only the build cache, HOME and GOPATH are under
+# /tmp, so the root file system can be read-only. The check service sets GOPROXY=off, GOWORK=off
+# and GOTOOLCHAIN=local on every command it runs.
 ENV GOTELEMETRY=off GOTOOLCHAIN=local GOFLAGS=-buildvcs=false \
-    HOME=/tmp/home GOPATH=/tmp/go GOCACHE=/tmp/go-cache CGO_ENABLED=0
+    HOME=/tmp/home GOPATH=/tmp/go GOCACHE=/tmp/go-cache GOMODCACHE=/opt/gomodcache CGO_ENABLED=0
 USER 65532:65532
 WORKDIR /work
-CMD ["go", "version"]
+CMD ["/check"]

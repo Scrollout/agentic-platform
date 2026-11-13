@@ -115,6 +115,14 @@ func loadContract() (contract, error) {
 	return c, nil
 }
 
+// The contract's facts its clients need, from the contract itself (their one home).
+
+// APIVersion is the api-version the contract serves.
+func APIVersion() string { return checkContract.version }
+
+// CallTimeLimitMax is the longest time_limit_seconds a call may give (x-limits).
+func CallTimeLimitMax() int { return checkContract.limits.CallTimeLimitMax }
+
 // contractLoader loads the embedded schema files, and nothing else.
 type contractLoader struct{}
 

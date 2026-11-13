@@ -13,11 +13,15 @@ import (
 	"strings"
 	"sync"
 
+	"go.yaml.in/yaml/v3"
+
 	"github.com/agentic-platform/engine/analyst"
 	"github.com/agentic-platform/engine/api"
 	"github.com/agentic-platform/engine/canonical"
 	"github.com/agentic-platform/engine/contracts"
+	"github.com/agentic-platform/engine/machine"
 	"github.com/agentic-platform/engine/slices"
+	"github.com/agentic-platform/engine/steps"
 	"github.com/agentic-platform/engine/store"
 	"github.com/agentic-platform/slice"
 )
@@ -40,11 +44,15 @@ const agentRoot = "gen/agents"
 // variables are the settings setup reads, all required.
 var variables = []string{
 	"ENGINE_LISTEN_ADDRESS", "ENGINE_CLIENT_TOKEN", "ENGINE_PAGE_TOKEN", "ENGINE_WORKER_TOKEN",
-	"AP_LINT_URL", "AP_LINT_TOKEN", "AP_ANALYST_URL", "AP_ANALYST_TOKEN", "ENGINE_STORE_DIR",
+	"AP_LINT_URL", "AP_LINT_TOKEN", "AP_ANALYST_URL", "AP_ANALYST_TOKEN", "AP_CHECK_URL", "AP_CHECK_TOKEN",
+	"ENGINE_STORE_DIR",
 }
 
 // tokenVariables must all differ from each other: each names one caller or one callee.
-var tokenVariables = []string{"ENGINE_CLIENT_TOKEN", "ENGINE_PAGE_TOKEN", "ENGINE_WORKER_TOKEN", "AP_LINT_TOKEN", "AP_ANALYST_TOKEN"}
+var tokenVariables = []string{"ENGINE_CLIENT_TOKEN", "ENGINE_PAGE_TOKEN", "ENGINE_WORKER_TOKEN", "AP_LINT_TOKEN", "AP_ANALYST_TOKEN", "AP_CHECK_TOKEN"}
+
+// projectsMount is where a step container sees the projects folder (src/deploy/compose.yaml).
+const projectsMount = "/projects"
 
 // setup builds the engine's handler from the environment (getenv) and what the binary embeds:
 // the contract's schemas, the catalogue pattern and the analyst definition's digest. It opens
@@ -65,7 +73,7 @@ func setup(getenv func(string) string) (http.Handler, func() error, error) {
 			}
 		}
 	}
-	for _, name := range []string{"AP_LINT_URL", "AP_ANALYST_URL"} {
+	for _, name := range []string{"AP_LINT_URL", "AP_ANALYST_URL", "AP_CHECK_URL"} {
 		if u, err := url.Parse(env[name]); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 			return nil, nil, fmt.Errorf("%s is not an http(s) URL with a host", name)
 		}
@@ -102,13 +110,19 @@ func setup(getenv func(string) string) (http.Handler, func() error, error) {
 		return nil, nil, fmt.Errorf("the slices in ENGINE_STORE_DIR: %w", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	h := api.NewHandler(api.Config{
+	cfg := api.Config{
 		Tokens:  api.Tokens{Client: env["ENGINE_CLIENT_TOKEN"], Page: env["ENGINE_PAGE_TOKEN"], Worker: env["ENGINE_WORKER_TOKEN"]},
-		Context: ctx,
 		Slices:  svc,
 		Store:   st,
-	})
+		Workers: api.NewWorkers(),
+	}
+	if err := wireSteps(&cfg, svc, st, env["AP_CHECK_URL"], env["AP_CHECK_TOKEN"]); err != nil {
+		st.Close()
+		return nil, nil, err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cfg.Context = ctx
+	h := api.NewHandler(cfg)
 	var once sync.Once
 	var closeErr error
 	closeFn := func() error {
@@ -119,6 +133,101 @@ func setup(getenv func(string) string) (http.Handler, func() error, error) {
 		return closeErr
 	}
 	return h, closeFn, nil
+}
+
+// wireSteps gives the engine its step worker and checker (package steps): agent and procedure
+// steps on the workers registered in cfg.Workers, checks on the check service at url. Each agent
+// step's model is the one its embedded definition pins; a step whose definition is not embedded has
+// none, so its attempts fail before anything is called, and cfg.Model stays empty, so no agent
+// step's result is reused. cfg.Model is set only when every agent step pins the same model.
+func wireSteps(cfg *api.Config, svc *slices.Service, st *store.Store, url, token string) error {
+	p, err := svc.Pattern()
+	if err != nil {
+		return nil // no pattern: the engine refuses every run (WorkersNotReady) and says why
+	}
+	mp := api.MachinePattern(p)
+	models := map[string]string{}
+	common, all := "", true
+	for _, s := range mp.Steps {
+		name, ok := strings.CutPrefix(s.Worker, "agent:")
+		if !ok {
+			continue
+		}
+		m, err := pinnedModel(agentFiles, agentRoot+"/"+name+".yaml")
+		switch {
+		case err != nil:
+			return fmt.Errorf("the embedded definition of agent %s: %w", name, err)
+		case m == "":
+			all = false
+		case common == "" || common == m:
+			models[s.Name], common = m, m
+		default:
+			models[s.Name], all = m, false
+		}
+	}
+	if all {
+		cfg.Model = common
+	}
+	base := steps.Config{
+		Pattern: mp, Endpoints: cfg.Workers, CheckURL: url, CheckToken: token,
+		Lint: svc.LintContract, Models: models, Projects: projectsMount,
+		Approved: svc.ApprovedParts, Load: st.Artifact,
+	}
+	cfg.StepWorker = &sliceWorkers{base: base, st: st, by: map[string]machine.Worker{}}
+	cfg.StepChecker = steps.NewChecker(base)
+	return nil
+}
+
+// sliceWorkers keeps one step worker per slice, so each stores its outputs as that slice's
+// artifacts (the store erases them with the slice).
+type sliceWorkers struct {
+	base steps.Config
+	st   *store.Store
+	mu   sync.Mutex
+	by   map[string]machine.Worker
+}
+
+func (w *sliceWorkers) Run(ctx context.Context, r machine.Request) (machine.Result, error) {
+	w.mu.Lock()
+	sw, ok := w.by[r.Slice]
+	if !ok {
+		c := w.base
+		slice := r.Slice
+		c.Store = func(b []byte) (string, error) { return w.st.PutArtifact(slice, b) }
+		sw = steps.NewWorker(c)
+		w.by[r.Slice] = sw
+	}
+	w.mu.Unlock()
+	return sw.Run(ctx, r)
+}
+
+// pinnedModel is the model an agent definition's root agent pins, as `<provider>/<model>`, the
+// form the service reports in agent_info; "" when files holds no such definition.
+func pinnedModel(files fs.FS, path string) (string, error) {
+	b, err := fs.ReadFile(files, path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	var def struct {
+		Models map[string]struct {
+			Provider string `yaml:"provider"`
+			Model    string `yaml:"model"`
+		} `yaml:"models"`
+		Agents map[string]struct {
+			Model string `yaml:"model"`
+		} `yaml:"agents"`
+	}
+	if err := yaml.Unmarshal(b, &def); err != nil {
+		return "", err
+	}
+	m, ok := def.Models[def.Agents["root"].Model]
+	if !ok || m.Provider == "" || m.Model == "" {
+		return "", errors.New("its root agent names no model with a provider and a model id")
+	}
+	return m.Provider + "/" + m.Model, nil
 }
 
 // agentDigest is the SHA-256, in lowercase hex, of the agent definition files under root in their

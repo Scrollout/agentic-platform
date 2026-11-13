@@ -45,12 +45,14 @@ func contextHash(open []Finding, changed []Line) string {
 }
 
 // Accepted is an accepted step result, found under its reuse key (FR-019). Lines are the lines a
-// fix changed, which the next review round is given.
+// fix changed, which the next review round is given; Files the project's files after the step.
 type Accepted struct {
 	Key       string
 	Artifacts []string
 	Run       string
 	Lines     []Line
+	Files     []File // the project's files after the step
+	Project   string // the project the step's files were written into
 }
 
 // Results is the accepted-result store, in memory. A nil *Results finds nothing and keeps nothing.

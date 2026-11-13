@@ -41,12 +41,21 @@ func ContractHash(text string) (string, error) {
 
 // Hash is the SHA-256, in lowercase hex, of v's RFC 8785 canonical form.
 func Hash(v any) (string, error) {
-	var b strings.Builder
-	if err := writeCanonical(&b, v); err != nil {
+	b, err := JSON(v)
+	if err != nil {
 		return "", err
 	}
-	h := sha256.Sum256([]byte(b.String()))
+	h := sha256.Sum256(b)
 	return hex.EncodeToString(h[:]), nil
+}
+
+// JSON is v's RFC 8785 canonical form, the bytes Hash hashes.
+func JSON(v any) ([]byte, error) {
+	var b strings.Builder
+	if err := writeCanonical(&b, v); err != nil {
+		return nil, err
+	}
+	return []byte(b.String()), nil
 }
 
 func writeCanonical(b *strings.Builder, v any) error {
