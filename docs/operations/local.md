@@ -5,7 +5,7 @@ description: The platform on one developer's machine, started by the ap launcher
 tags: [operations, deployment, local]
 status: draft
 resource: /src/deploy/compose.yaml
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-13T18:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-13T23:00:00Z }
 ---
 
 # Purpose
@@ -27,6 +27,7 @@ Ten services, declared once in `src/deploy/compose.yaml`, plus the local image r
 - The read-only run page, and its forwarder, which publishes the page's port on `127.0.0.1` only.
 - The terminal client and the test harness, run per command.
 - The step agent workers and the check service (the project folder read-only, the Go toolchain, the pinned oapi-codegen and the template's module cache in its image, so it runs offline), under gVisor with CPU, memory and process limits; the check service answers only the engine, with its own session token, and `ap up` starts it with the engine (the step workers are started per slice).
+- The project worker, the check program's third deployment, in its own small image with git (git pinned by exact Alpine package version), under gVisor and the only service with the projects folder writable: it keeps each new project's git version history and restores the project before each attempt, runs as the developer so they own the files and the repository, keeps its records on the volume `project-worker-state`, answers only the engine with its own session token, and `ap up` starts it with the check service.
 
 Every service runs non-root, with a read-only root file system, all capabilities dropped and
 `no-new-privileges`. No service mounts a container-engine socket. Every network is internal except
@@ -81,8 +82,8 @@ image a rebuild dropped from the local store is taken back by digest from the lo
 [Distribution registry](/components/distribution-registry.md)). The signature proves that `up`
 starts exactly what `build.sh` built, not who built it, because the key is on the same machine.
 Upstream images (nginx, Docker Agent, Go) are pinned by digest only; their publishers sign none.
-`ap up` starts contract-lint and the check service, so build them first with
-`src/deploy/build.sh lint` and `src/deploy/build.sh check` (the check image fetches the pinned
+`ap up` starts contract-lint, the check service and the project worker, so build them first with
+`src/deploy/build.sh lint`, `src/deploy/build.sh check` and `src/deploy/build.sh project` (the check image fetches the pinned
 oapi-codegen and the template's modules while it is built, so that build needs the network).
 
 # Observability

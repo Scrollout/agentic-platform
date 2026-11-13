@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build, sign and record one platform image (ADR 0028):
-#   src/deploy/build.sh <agent|check|engine|cli|page|lint|tests> [docker build options]
+#   src/deploy/build.sh <agent|check|project|engine|cli|page|lint|tests> [docker build options]
 #
 # Builds src/deploy/Dockerfile.<name> with an SBOM and build provenance, pushes it to the local
 # registry (started if it isn't running: `ap registry`; AP_REGISTRY_PORT, AP_REGISTRY_NAME),
@@ -20,7 +20,7 @@ here=$(cd "$(dirname "$0")" && pwd -P)
 
 say() { printf 'build: %s\n' "$*" >&2; }
 die() { local code=$1; shift; say "$*"; exit "$code"; }
-usage() { die 3 "usage: build.sh <agent|check|engine|cli|page|lint|tests> [docker build options] (a name with a Dockerfile.<name>)"; }
+usage() { die 3 "usage: build.sh <agent|check|project|engine|cli|page|lint|tests> [docker build options] (a name with a Dockerfile.<name>)"; }
 
 [ $# -ge 1 ] || usage
 name=$1
@@ -32,7 +32,7 @@ NAME=$(printf '%s' "$name" | tr '[:lower:]' '[:upper:]')
 # The Go images build generated code that is never committed (scripts/generate.sh): make it match
 # the contracts first, so a fresh clone builds. generate.sh --check changes nothing; a second run
 # of generate.sh changes nothing either, so this converges.
-case $name in engine | cli | page | check)
+case $name in engine | cli | page | check | project)
   gen="$here/../../scripts/generate.sh"
   if ! "$gen" --check >/dev/null 2>&1; then
     say "generated code is missing or stale; running scripts/generate.sh"
@@ -53,6 +53,8 @@ golang_image=$(pin golang)
 agent_image=$(pin docker-agent)
 node_image=$(pin node)
 oapi_codegen=$(pin oapi-codegen)
+alpine_image=$(pin alpine)
+alpine_git=$(pin alpine-git)
 
 port=${AP_REGISTRY_PORT:-5005}
 # The registry's names, as `ap` derives them (AP_REGISTRY_NAME runs a second, independent registry).
@@ -172,7 +174,8 @@ docker buildx build -f "$here/Dockerfile.$name" -t "$tag" \
   --sbom="generator=$sbom_image" --provenance=mode=max --push --metadata-file "$meta" \
   --build-arg "GOLANG_IMAGE=$golang_image" \
   --build-arg "DOCKER_AGENT_IMAGE=$agent_image" \
-  --build-arg "NODE_IMAGE=$node_image" --build-arg "OAPI_CODEGEN=$oapi_codegen" "${contexts[@]}" \
+  --build-arg "NODE_IMAGE=$node_image" --build-arg "OAPI_CODEGEN=$oapi_codegen" \
+  --build-arg "ALPINE_IMAGE=$alpine_image" --build-arg "ALPINE_GIT=$alpine_git" "${contexts[@]}" \
   "$@" "$here/.." || die 1 "docker buildx build failed for $name"
 digest=$(grep -o '"containerimage.digest": *"sha256:[0-9a-f]\{64\}"' "$meta" | grep -o 'sha256:[0-9a-f]\{64\}' | head -n 1) ||
   die 1 "the build of $name reported no pushed digest"

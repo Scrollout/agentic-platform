@@ -11,11 +11,13 @@
 #   AP_LINT_TOKEN        this session's token the engine calls the contract-lint service with
 #   AP_ANALYST_TOKEN     this session's token the engine calls the analyst service with
 #   AP_CHECK_TOKEN       this session's token the engine calls the check service with (D29)
+#   AP_PROJECT_TOKEN     this session's token the engine calls the project worker with (D30)
 #   AP_HOST_USER         the developer's numeric uid:gid; the gateway runs as it to read the key
-#                        file (mode 600), and step workers run as it to write the projects folder
+#                        file (mode 600), and step workers and the project worker run as it to
+#                        write the projects folder
 #   AP_GATEWAY_IMAGE     the nginx pin from images.lock (its one home); the launcher reads it
-#   AP_IMAGE_ENGINE, AP_IMAGE_PAGE, AP_IMAGE_CLI, AP_IMAGE_AGENT, AP_IMAGE_CHECK, AP_IMAGE_TESTS,
-#   AP_IMAGE_LINT
+#   AP_IMAGE_ENGINE, AP_IMAGE_PAGE, AP_IMAGE_CLI, AP_IMAGE_AGENT, AP_IMAGE_CHECK, AP_IMAGE_PROJECT,
+#   AP_IMAGE_TESTS, AP_IMAGE_LINT
 #                        each image's signed digest reference, recorded by build.sh and verified by
 #                        the launcher before start (ADR 0028)
 #
@@ -26,7 +28,8 @@
 # cannot read images.lock and the variables above are all the launcher's; test_services_lint_analyst
 # fails when the two differ.
 #
-# Profiles: no profile is what `ap up` starts (gateway, engine, page, contract-lint, analyst, check). `client` and `tests` are run
+# Profiles: no profile is what `ap up` starts (gateway, engine, page, contract-lint, analyst, check,
+# project-worker). `client` and `tests` are run
 # on demand with `docker compose run --rm`; `workers` are started by `ap build-workers`.
 #
 # Networks: every one is internal and isolated (no route out, and no address of the host's, so no
@@ -315,6 +318,35 @@ services:
     extra_hosts: { engine: *engine-on-checks }
     networks: [checks]
 
+  # The project worker (src/engine/cmd/check, research D30, ADR 0032): the check program's third
+  # deployment, in its own small image (Dockerfile.project: the binary and git, no Go toolchain),
+  # which keeps each new project's version history (one git commit per accepted step)
+  # and restores the project to its last commit before each attempt. It is the one service with the
+  # projects folder writable, and runs as the developer so they own the files and the repository.
+  # Its record of each project's last commit (the history guard) is on project-worker-state, a
+  # volume only it mounts. It answers only the engine, which calls it with AP_PROJECT_TOKEN, and
+  # calls no one; like the check service it has no route to the gateway. Started by `ap up`.
+  project-worker:
+    <<: *sandboxed
+    profiles: []
+    image: ${AP_IMAGE_PROJECT:?set AP_IMAGE_PROJECT to the signed ap-project image (ap up does this; build it with src/deploy/build.sh project)}
+    pull_policy: never
+    user: ${AP_HOST_USER:?set AP_HOST_USER to the developer's uid:gid (ap up does this)}
+    command: ["/check"]
+    environment:
+      CHECK_LISTEN_ADDRESS: ":8080"
+      CHECK_TOKEN: ${AP_PROJECT_TOKEN:?set AP_PROJECT_TOKEN (ap up does this)}
+      CHECK_PROJECTS_DIR: /projects
+      CHECK_HISTORY_DIR: /var/lib/project-worker
+      CHECK_DEPLOYMENT: project-worker
+    # A new volume takes the image folder's owner and mode; Dockerfile.project makes that folder
+    # writable by any user (mode 1777), since the developer's uid is known only at start.
+    volumes:
+      - { type: bind, source: "${AP_PROJECTS_DIR:?set AP_PROJECTS_DIR to the projects folder (ap up does this)}", target: /projects }
+      - { type: volume, source: project-worker-state, target: /var/lib/project-worker }
+    extra_hosts: { engine: *engine-on-checks }
+    networks: [checks]
+
 # `isolated` (Docker 28 and later) gives an internal network's bridge no address on the host, so a
 # container on it reaches only the other containers on it; a plain internal network still reaches
 # every host service listening on the bridge address.
@@ -345,9 +377,11 @@ networks:
       com.docker.network.bridge.enable_ip_masquerade: "false"
     ipam: { config: [{ subnet: *page-host-subnet }] }
 
-# The engine's store; a plain local volume, kept by `ap down` (it never passes -v).
+# The engine's store and the project worker's records; plain local volumes, kept by `ap down` (it
+# never passes -v).
 volumes:
   engine-store: {}
+  project-worker-state: {}
 
 secrets:
   anthropic_api_key:

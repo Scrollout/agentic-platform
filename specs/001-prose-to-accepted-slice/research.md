@@ -680,11 +680,18 @@ page, none of which an existing project provides.
   - **Sizes**: a reused step's request carries up to 8 MiB of files in framed form, so
     `commitStep` has its own body limit, `x-limits.commit-request-body-max-bytes` (24 MiB); every
     other limit is the contract's existing one.
-  - **The git CLI in the check image** (owner, 2026-11-13): the check image is built on the
-    Debian pin already in images.lock, `golang:1.26.11-bookworm`, which holds git 2.39.5; the
-    larger image is accepted. Its Alpine base until now, `golang:1.26-alpine`, has no git:
-    `command -v git` exits 127 in it and in a built `ap-check` image (both reproduced
-    2026-11-13). T053c changes `src/deploy/Dockerfile.check`.
+  - **The git CLI in the project worker's own image** (owner, 2026-11-13, changed the same day;
+    [ADR 0033](../../docs/decisions/0033-project-worker-in-its-own-small-image.md)):
+    the owner first chose to build the check image on the Debian pin `golang:1.26.11-bookworm`
+    (git 2.39.5), but the built `ap-check` grew from 365 MB to 1.29 GB, too large for the host.
+    So the check image stays on its Alpine base, `golang:1.26-alpine`, which has no git
+    (`command -v git` exits 127 in it and in a built `ap-check`, both reproduced 2026-11-13), and
+    the project worker runs the same check binary in its own image, `ap-project`
+    (`src/deploy/Dockerfile.project`): a static build on the golang pin, then the `alpine` pin by
+    digest with `apk add git=2.49.1-r0`, git's exact package version in Alpine 3.22, pinned in
+    images.lock as `alpine-git`. An Alpine package has no digest, so git is pinned by exact
+    version only, an owner-approved exception (plan.md, Exceptions). The image is 45.3 MB, and
+    the project worker's tests pass with its git 2.49.1 as with the host's (2026-11-13).
   - **The generate step's mount** (owner, 2026-11-13): only the generate procedure worker gets
     the project root writable, since its `writable` names `go.mod` and `go.sum` in the root and
     Docker binds a file only when it exists (creating it empty before the run would put it in
@@ -742,8 +749,9 @@ page, none of which an existing project provides.
   engine can call it, and the engine names only its run's project, a new folder (FR-025). The
   generate worker has the project root writable except `.git`, which is mounted read-only on top
   of it; ScopeKept judges its files.
-- **Alternatives rejected by the owner** (2026-11-13): `apk add git` in the Alpine image (a
-  package not pinned by digest, Principle XIII); creating root-level writable files empty before
+- **Alternatives rejected by the owner** (2026-11-13): the check image on the Debian pin (1.29 GB,
+  too large for the host; chosen first, then replaced the same day by the project worker's own
+  Alpine image with git pinned by exact package version); creating root-level writable files empty before
   the run so they can be bound one by one (they would be in the earlier step's folder).
 - Sources: <https://git-scm.com/docs/git-commit> (author and committer identity and dates through
   `GIT_AUTHOR_*` and `GIT_COMMITTER_*`); <https://git-scm.com/docs/git-hash-object>

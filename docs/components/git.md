@@ -12,6 +12,9 @@ sources:
   - id: adr-0032
     resource: /decisions/0032-project-version-history-kept-by-a-project-worker.md
     title: "ADR 0032: The new project's version history is a git repository kept by a project worker"
+  - id: adr-0033
+    resource: /decisions/0033-project-worker-in-its-own-small-image.md
+    title: "ADR 0033: The project worker runs in its own small image"
   - id: git-docs
     resource: https://git-scm.com/docs
     title: Git reference documentation
@@ -19,7 +22,7 @@ sources:
     resource: https://api.securityscorecards.dev/projects/github.com/git/git
     title: OpenSSF Scorecard for github.com/git/git
 stale_after: 2027-05-13T00:00:00Z
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-13T20:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-13T23:30:00Z }
 ---
 
 # Responsibility
@@ -41,9 +44,12 @@ Sources: [Feature 001 research, D30](../../specs/001-prose-to-accepted-slice/res
 
 # Dependencies
 
-The check image includes the git CLI because it is built on the Debian golang pin in
-`images.lock`, `golang:1.26.11-bookworm`, which has git 2.39.5 (owner, 2026-11-13; T053c). Its
-earlier Alpine base had no git.
+The project worker runs the check binary in its own image, `ap-project`
+(`src/deploy/Dockerfile.project`): the `alpine` pin by digest with `apk add git=2.49.1-r0`, git's
+exact package version in Alpine 3.22, pinned in `images.lock` as `alpine-git`. An Alpine package
+has no digest, so git is pinned by exact version, not by digest (owner, 2026-11-13;
+[ADR 0033](/decisions/0033-project-worker-in-its-own-small-image.md); plan.md, Exceptions). The check image, on the Alpine golang pin, has no git. The project worker's tests
+pass with git 2.49.1 and with the host's git.
 
 Sources: [Feature 001 research, D30](../../specs/001-prose-to-accepted-slice/research.md).
 

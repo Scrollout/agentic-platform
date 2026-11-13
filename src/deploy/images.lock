@@ -7,6 +7,10 @@ golang                     golang:1.26-alpine@sha256:30b1e546a9c7fa3b747c2bdba3a
 # golang-race: the same Go release on Debian, with the C compiler `go test -race` needs; tests only.
 golang-race                golang:1.26.11-bookworm@sha256:dc40a13b61304647ed7e5d581d246b86413dfc29d63c6d018310feb93cd98fc0
 alpine                     alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
+# alpine-git: git's exact apk package version in the alpine pin's release, for the project worker
+# image (Dockerfile.project). Alpine packages have no digest; pinned by version only (plan.md,
+# Exceptions; owner, 2026-11-13).
+alpine-git                 2.49.1-r0
 nginx                      nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de
 oasdiff                    tufin/oasdiff:v1.37.0@sha256:ff02af37a254b5199b9d72e7bba93dae5837a9119d59459168d1398893b47aea
 schemathesis               schemathesis/schemathesis:v4.33.2@sha256:b6521357a7262c725cf10c6237fdf075b6d027219c0aca93c9930497d1824c85

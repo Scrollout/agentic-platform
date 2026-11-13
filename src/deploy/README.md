@@ -63,12 +63,18 @@ The ignore rule for the Go stack is `src/.dockerignore`; it leaves out `*_test.g
 `golang`. It has the C compiler that `go test -race` needs and is used only by `scripts/check.sh`
 for the race run, never to build an image.
 
+`images.lock` also pins `alpine-git`, git's exact apk package version in the `alpine` pin's
+release, which `build.sh` passes as `ALPINE_GIT` to `Dockerfile.project`. An Alpine package has no
+digest, so it is pinned by version only (an owner-approved exception, ADR 0032); a new package
+release makes that build fail until the pin moves.
+
 `images.lock` also pins `wiremock`, the WireMock image that serves as the recorded-model replay
 server and its recorder in tests (`src/tests/recorded/`, research D26). It stands in for the
 gateway on test networks only; no image is built from it and Compose does not start it.
 
 - `Dockerfile.agent`: the agent step image, with Docker Agent copied from its pinned image, the Go toolchain, and `TELEMETRY_ENABLED=false`.
 - `Dockerfile.check`: the check service (`/check`, research D29) with the Go toolchain, the pinned oapi-codegen (`images.lock`, passed by `build.sh` as `OAPI_CODEGEN`), the catalogue's module template at `/opt/template` and the module cache of its `go.mod` at `/opt/gomodcache` (read-only), so checks and the generate procedure run with no network and a read-only root.
+- `Dockerfile.project`: the project worker (research D30, ADR 0032), built as `build.sh project` (`ap-project`, `AP_IMAGE_PROJECT`): the static check binary from the golang pin on the `alpine` pin, with `git=<alpine-git>` from apk and a folder `/var/lib/project-worker` of mode 1777, which a new `project-worker-state` volume takes its mode from; no Go toolchain (about 45 MB).
 - `Dockerfile.engine`: the workflow engine, a static Go binary on `scratch`; expects the main package `src/engine/cmd/engine`.
 - `Dockerfile.cli`: the terminal client, a static Go binary on `scratch`; expects `src/cli/cmd/cli`.
 - `Dockerfile.page`: the read-only run page, a static Go binary on `scratch`; expects `src/page/cmd/page`.
@@ -96,10 +102,10 @@ the [terminal contract](../cli/contract.md). It calls only `docker` and passes e
 | `AP_CREDENTIALS_FILE` | Absolute path of the file holding only the provider key; it reaches the gateway alone, as the Compose secret `anthropic_api_key` |
 | `AP_PROJECTS_DIR` | Absolute path of the projects folder |
 | `AP_PAGE_PORT` | Host port of the run page, published on `127.0.0.1` only (by `page-proxy`) |
-| `AP_CLIENT_TOKEN`, `AP_PAGE_TOKEN`, `AP_WORKER_TOKEN`, `AP_LINT_TOKEN`, `AP_ANALYST_TOKEN`, `AP_CHECK_TOKEN` | This session's tokens, 64 hex characters each and pairwise distinct; `ap up` on a started session keeps them, and only `ap up` after `ap down` makes new ones. The last three are what the engine calls `contract-lint`, `analyst` and `check` with; each reaches only the engine and its own service |
+| `AP_CLIENT_TOKEN`, `AP_PAGE_TOKEN`, `AP_WORKER_TOKEN`, `AP_LINT_TOKEN`, `AP_ANALYST_TOKEN`, `AP_CHECK_TOKEN`, `AP_PROJECT_TOKEN` | This session's tokens, 64 hex characters each and pairwise distinct; `ap up` on a started session keeps them, and only `ap up` after `ap down` makes new ones. The last four are what the engine calls `contract-lint`, `analyst`, `check` and `project-worker` with; each reaches only the engine and its own service (the engine gets `AP_PROJECT_TOKEN` in T053e). A session started before `AP_PROJECT_TOKEN` existed is refused as incomplete: run `ap down` |
 | `AP_HOST_USER` | The developer's `uid:gid`: the gateway runs as it to read the key file (mode 600; Compose cannot change a file secret's owner outside Swarm), and step workers run as it to write projects |
 | `AP_GATEWAY_IMAGE` | The `nginx` pin from `images.lock`, its one home; the gateway and `page-proxy` run it |
-| `AP_IMAGE_ENGINE`, `AP_IMAGE_PAGE`, `AP_IMAGE_CLI`, `AP_IMAGE_AGENT`, `AP_IMAGE_CHECK`, `AP_IMAGE_TESTS`, `AP_IMAGE_LINT` | Each image's digest reference from `images.env`, verified by `ap up` before anything starts and kept in the session; an image a profile `up` does not start (`agent`, `tests`), `page` until the run page exists (T056, `up` then starts neither `page` nor `page-proxy`), and `lint` and `check` until their first signed build (T038g, T054c), is verified when built and otherwise given the placeholder `ap-<name>:not-built`, so Compose can read the file. `up` does start `contract-lint` and `check`, so without `build.sh lint` and `build.sh check` its `docker compose up` fails with `No such image: ap-<name>:not-built` |
+| `AP_IMAGE_ENGINE`, `AP_IMAGE_PAGE`, `AP_IMAGE_CLI`, `AP_IMAGE_AGENT`, `AP_IMAGE_CHECK`, `AP_IMAGE_PROJECT`, `AP_IMAGE_TESTS`, `AP_IMAGE_LINT` | Each image's digest reference from `images.env`, verified by `ap up` before anything starts and kept in the session; an image a profile `up` does not start (`agent`, `tests`), `page` until the run page exists (T056, `up` then starts neither `page` nor `page-proxy`), and `lint`, `check` and `project` until their first signed build (T038g, T054c, T053c), is verified when built and otherwise given the placeholder `ap-<name>:not-built`, so Compose can read the file. `up` does start `contract-lint`, `check` and `project-worker`, so without `build.sh lint`, `build.sh check` and `build.sh project` its `docker compose up` fails with `No such image: ap-<name>:not-built` |
 
 `AP_REGISTRY_PORT` (default 5005) and `AP_REGISTRY_NAME` (default `ap-registry`) are read by
 `build.sh` and `ap`, not by Compose. `AP_REGISTRY_NAME` is for running a second, independent
@@ -148,6 +154,7 @@ limits, and writable `tmpfs` only where it needs one; no service mounts a contai
 | `tests` | `ap test <suite>` (profile `tests`) | `clients` | Client token; no `Dockerfile.tests` yet |
 | `step-agent` | `ap build-workers` (profile `workers`) | `agents` | gVisor, `/tmp` executable, projects read-only; finds `engine` and `gateway` through `extra_hosts`; the template for per-step workers |
 | `check` | `ap up`, like `contract-lint` (no profile; its image stays optional until built) | `checks` | The check service (`CHECK_DEPLOYMENT=check-service`): runs `/check`, answers only the engine's `AP_CHECK_TOKEN` (`CHECK_TOKEN`), holds no worker token; gVisor, `/tmp` executable, projects read-only; finds `engine` through `extra_hosts`; cannot reach the gateway |
+| `project-worker` | `ap up`, like `check` | `checks` | The project worker (`CHECK_DEPLOYMENT=project-worker`, research D30): runs `/check` from its own image (`AP_IMAGE_PROJECT`, `Dockerfile.project`) as `AP_HOST_USER`, answers only `AP_PROJECT_TOKEN` (`CHECK_TOKEN`); gVisor, `/tmp` executable, the projects folder read-write (the only service with it writable), its records on the named volume `project-worker-state` at `/var/lib/project-worker` (`CHECK_HISTORY_DIR`), mounted by no other service and kept by `ap down`; finds `engine` through `extra_hosts`; cannot reach the gateway |
 
 All networks are internal except `egress` and `page-host`, and every internal one is `isolated`
 (`com.docker.network.bridge.gateway_mode_ipv4`, Docker 28 and later): its bridge has no address on
@@ -181,7 +188,7 @@ through `/etc/hosts` (`extra_hosts`); so do `contract-lint` and `analyst`, also 
 | Network | Subnet | Fixed addresses | Who uses them |
 |---------|--------|-----------------|---------------|
 | `agents` | `10.231.1.0/24` (others from `10.231.1.128/25`) | `engine` `10.231.1.2`, `gateway` `10.231.1.3` | `step-agent` |
-| `checks` | `10.231.2.0/24` (others from `10.231.2.128/25`) | `engine` `10.231.2.2` | `check` |
+| `checks` | `10.231.2.0/24` (others from `10.231.2.128/25`) | `engine` `10.231.2.2` | `check`, `project-worker` |
 | `lint` | `10.231.6.0/24` (others from `10.231.6.128/25`) | `engine` `10.231.6.2` | `contract-lint` |
 | `analyst` | `10.231.7.0/24` (others from `10.231.7.128/25`) | `engine` `10.231.7.2`, `gateway` `10.231.7.3` | `analyst` |
 | `egress` | `10.231.3.0/24` | none | the host firewall rule |

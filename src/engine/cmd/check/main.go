@@ -1,15 +1,20 @@
-// Command check serves the check contract (src/check/api) in one of its two deployments
-// (research D29): the check service, which runs the pattern's step checks over the projects folder
-// it only reads and serves runCheck and readStepFiles, or one procedure step's worker, which runs
-// that step's fixed procedure and writes its files (runProcedure). See package checksvc.
+// Command check serves the check contract (src/check/api) in one of its three deployments
+// (research D29, D30): the check service, which runs the pattern's step checks over the projects
+// folder it only reads and serves runCheck and readStepFiles; one procedure step's worker, which
+// runs that step's fixed procedure and writes its files (runProcedure); or the project worker,
+// which keeps each project's version history (commitStep, restoreStep). See package checksvc.
 //
-// It reads its settings from the environment only, all required: CHECK_LISTEN_ADDRESS (such as
-// ":8080"); CHECK_TOKEN, the token this session issued to the engine for calling this deployment;
-// CHECK_PROJECTS_DIR, the existing projects folder; CHECK_OAPI_CODEGEN, the pinned oapi-codegen
-// binary; CHECK_TEMPLATE_DIR, the existing folder of the pattern's module template; and
-// CHECK_DEPLOYMENT, `check-service` or `procedure-worker`. A procedure worker also needs
-// CHECK_PROCEDURE, the procedure it serves (the step's worker is `procedure:<name>`), and
-// CHECK_STEP, the step it serves; the check service refuses both.
+// It reads its settings from the environment only. Every deployment needs CHECK_LISTEN_ADDRESS
+// (such as ":8080"); CHECK_TOKEN, the token this session issued to the engine for calling this
+// deployment; CHECK_PROJECTS_DIR, the existing projects folder; and CHECK_DEPLOYMENT,
+// `check-service`, `procedure-worker` or `project-worker`. The check service and a procedure
+// worker also need CHECK_OAPI_CODEGEN, the pinned oapi-codegen binary, and CHECK_TEMPLATE_DIR, the
+// existing folder of the pattern's module template. A procedure worker also needs CHECK_PROCEDURE,
+// the procedure it serves (the step's worker is `procedure:<name>`), and CHECK_STEP, the step it
+// serves; the other deployments refuse both. The project worker needs CHECK_HISTORY_DIR, the
+// existing folder, outside every project, where it keeps its record of each project's last
+// commit, and may name its git binary in CHECK_GIT (default: git on PATH); the other deployments
+// refuse both.
 package main
 
 import (
@@ -33,9 +38,7 @@ func main() {
 }
 
 // variables are the settings every deployment needs.
-var variables = []string{
-	"CHECK_LISTEN_ADDRESS", "CHECK_TOKEN", "CHECK_PROJECTS_DIR", "CHECK_OAPI_CODEGEN", "CHECK_TEMPLATE_DIR", "CHECK_DEPLOYMENT",
-}
+var variables = []string{"CHECK_LISTEN_ADDRESS", "CHECK_TOKEN", "CHECK_PROJECTS_DIR", "CHECK_DEPLOYMENT"}
 
 // config reads the deployment's settings from getenv and checks them.
 func config(getenv func(string) string) (checksvc.Config, string, error) {
@@ -45,33 +48,58 @@ func config(getenv func(string) string) (checksvc.Config, string, error) {
 			return checksvc.Config{}, "", fmt.Errorf("%s is not set", name)
 		}
 	}
-	c := checksvc.Config{
-		Token:       env["CHECK_TOKEN"],
-		Project:     env["CHECK_PROJECTS_DIR"],
-		OapiCodegen: env["CHECK_OAPI_CODEGEN"],
-		Template:    env["CHECK_TEMPLATE_DIR"],
-	}
+	c := checksvc.Config{Token: env["CHECK_TOKEN"], Project: env["CHECK_PROJECTS_DIR"]}
 	procedure, step := getenv("CHECK_PROCEDURE"), getenv("CHECK_STEP")
+	history, git := getenv("CHECK_HISTORY_DIR"), getenv("CHECK_GIT")
+	folders := []string{"CHECK_PROJECTS_DIR"}
+	tools := true
 	switch env["CHECK_DEPLOYMENT"] {
 	case "check-service":
-		if procedure != "" || step != "" {
-			return checksvc.Config{}, "", errors.New("the check service serves no procedure: unset CHECK_PROCEDURE and CHECK_STEP")
+		if procedure != "" || step != "" || history != "" || git != "" {
+			return checksvc.Config{}, "", errors.New("the check service serves no procedure and keeps no version history: unset CHECK_PROCEDURE, CHECK_STEP, CHECK_HISTORY_DIR and CHECK_GIT")
 		}
 	case "procedure-worker":
 		if procedure == "" || step == "" {
 			return checksvc.Config{}, "", errors.New("a procedure worker needs CHECK_PROCEDURE and CHECK_STEP")
 		}
+		if history != "" || git != "" {
+			return checksvc.Config{}, "", errors.New("a procedure worker keeps no version history: unset CHECK_HISTORY_DIR and CHECK_GIT")
+		}
 		c.Procedure, c.Step = procedure, step
+	case "project-worker":
+		if procedure != "" || step != "" {
+			return checksvc.Config{}, "", errors.New("the project worker serves no procedure: unset CHECK_PROCEDURE and CHECK_STEP")
+		}
+		if history == "" {
+			return checksvc.Config{}, "", errors.New("the project worker needs CHECK_HISTORY_DIR")
+		}
+		c.History, c.Git = history, git
+		env["CHECK_HISTORY_DIR"] = history
+		folders = append(folders, "CHECK_HISTORY_DIR")
+		tools = false
 	default:
-		return checksvc.Config{}, "", fmt.Errorf("CHECK_DEPLOYMENT is %q, not check-service or procedure-worker", env["CHECK_DEPLOYMENT"])
+		return checksvc.Config{}, "", fmt.Errorf("CHECK_DEPLOYMENT is %q, not check-service, procedure-worker or project-worker", env["CHECK_DEPLOYMENT"])
 	}
-	for _, name := range []string{"CHECK_PROJECTS_DIR", "CHECK_TEMPLATE_DIR"} {
+	if tools {
+		for _, name := range []string{"CHECK_OAPI_CODEGEN", "CHECK_TEMPLATE_DIR"} {
+			if env[name] = getenv(name); env[name] == "" {
+				return checksvc.Config{}, "", fmt.Errorf("%s is not set", name)
+			}
+		}
+		c.OapiCodegen, c.Template = env["CHECK_OAPI_CODEGEN"], env["CHECK_TEMPLATE_DIR"]
+		folders = append(folders, "CHECK_TEMPLATE_DIR")
+		if fi, err := os.Stat(c.OapiCodegen); err != nil || !fi.Mode().IsRegular() || fi.Mode().Perm()&0o111 == 0 {
+			return checksvc.Config{}, "", errors.New("CHECK_OAPI_CODEGEN is not an executable file")
+		}
+	} else if c.Git != "" {
+		if fi, err := os.Stat(c.Git); err != nil || !fi.Mode().IsRegular() || fi.Mode().Perm()&0o111 == 0 {
+			return checksvc.Config{}, "", errors.New("CHECK_GIT is not an executable file")
+		}
+	}
+	for _, name := range folders {
 		if fi, err := os.Stat(env[name]); err != nil || !fi.IsDir() {
 			return checksvc.Config{}, "", fmt.Errorf("%s is not an existing folder", name)
 		}
-	}
-	if fi, err := os.Stat(c.OapiCodegen); err != nil || !fi.Mode().IsRegular() || fi.Mode().Perm()&0o111 == 0 {
-		return checksvc.Config{}, "", errors.New("CHECK_OAPI_CODEGEN is not an executable file")
 	}
 	return c, env["CHECK_LISTEN_ADDRESS"], nil
 }

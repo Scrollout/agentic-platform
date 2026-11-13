@@ -93,14 +93,15 @@ func takeInputs(in []Input, want ...string) (map[string]Input, string, error) {
 }
 
 // IsProjectPath reports whether p is a ProjectPath of the check contract: parts of ASCII letters,
-// digits and . _ ~ + @ = , -, joined by single slashes, no part "." or "..", at most 256
-// characters. A file whose path is not one is never read, listed or written.
+// digits and . _ ~ + @ = , -, joined by single slashes, no part "." or "..", no part ".git" in any
+// letter case (the version history is not part of the project), at most 256 characters. A file
+// whose path is not one is never read, listed or written.
 func IsProjectPath(p string) bool {
 	if p == "" || len(p) > 256 {
 		return false
 	}
 	for _, part := range strings.Split(p, "/") {
-		if part == "" || part == "." || part == ".." {
+		if part == "" || part == "." || part == ".." || strings.EqualFold(part, ".git") {
 			return false
 		}
 		for _, c := range []byte(part) {

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unicode/utf8"
@@ -18,10 +19,14 @@ import (
 	"github.com/agentic-platform/engine/procedures"
 )
 
-// service implements the operations. It keeps nothing between calls.
+// service implements the operations. It keeps nothing between calls, except the project
+// worker's record of each project's last commit (history.go), on disk in Config.History.
 type service struct {
 	cfg    Config
 	limits limits
+	// locks holds one lock per project name, so two calls of the project worker never change one
+	// project at once.
+	locks sync.Map
 }
 
 var _ gen.StrictServerInterface = (*service)(nil)
@@ -101,7 +106,7 @@ func (s *service) scrub(reason, dir string) string {
 func (s *service) RunCheck(ctx context.Context, req gen.RunCheckRequestObject) (gen.RunCheckResponseObject, error) {
 	name := req.CheckName
 	impl, served := checkByName[name]
-	if s.cfg.Procedure != "" || !served {
+	if s.cfg.Procedure != "" || s.cfg.History != "" || !served {
 		why := "this deployment serves no check " + name
 		if name == contractLintPasses {
 			why += " (the engine judges it with its contract-lint service)"
@@ -215,8 +220,8 @@ func beforeTree(before gen.ProjectFiles) checks.Tree {
 // ---- readStepFiles ----
 
 func (s *service) ReadStepFiles(ctx context.Context, req gen.ReadStepFilesRequestObject) (gen.ReadStepFilesResponseObject, error) {
-	if s.cfg.Procedure != "" {
-		return nil, fault(404, gen.ErrorCodeUnknownStep, "a procedure step's worker does not serve readStepFiles")
+	if s.cfg.Procedure != "" || s.cfg.History != "" {
+		return nil, fault(404, gen.ErrorCodeUnknownStep, "this deployment does not serve readStepFiles")
 	}
 	body := *req.Body
 	return bounded(ctx, body.TimeLimitSeconds, func(ctx context.Context) (gen.ReadStepFilesResponseObject, error) {
@@ -263,7 +268,7 @@ func (s *service) RunProcedure(ctx context.Context, req gen.RunProcedureRequestO
 	body := *req.Body
 	switch {
 	case s.cfg.Procedure == "":
-		return nil, fault(404, gen.ErrorCodeUnknownProcedure, "the check service serves no procedure")
+		return nil, fault(404, gen.ErrorCodeUnknownProcedure, "this deployment serves no procedure")
 	case name != s.cfg.Procedure:
 		return nil, fault(404, gen.ErrorCodeUnknownProcedure, "this worker serves the procedure "+s.cfg.Procedure+" only, not "+name)
 	case body.Step.Name != s.cfg.Step:

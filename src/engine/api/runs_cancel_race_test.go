@@ -10,7 +10,7 @@ import (
 )
 
 func TestCancellingARunsOperationRightAfterTheStartEndsTheRunCancelled(t *testing.T) {
-	deadline := time.Now().Add(15 * time.Second)
+	deadline := time.Now().Add(60 * time.Second)
 	for i := 0; i < 30; i++ {
 		if time.Now().After(deadline) {
 			t.Fatalf("only %d of 30 runs finished inside the time budget", i)

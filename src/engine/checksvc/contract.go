@@ -31,6 +31,7 @@ type limits struct {
 	ProjectFileMax   int64 `yaml:"project-file-max-bytes"`
 	ResponseBodyMax  int64 `yaml:"response-body-max-bytes"`
 	RequestBodyMax   int64 `yaml:"request-body-max-bytes"`
+	CommitBodyMax    int64 `yaml:"commit-request-body-max-bytes"`
 	ProcedureOutMax  int64 `yaml:"procedure-output-max-bytes"`
 	StepFilesMax     int64 `yaml:"step-files-max-bytes"`
 	CallsAtOnce      int   `yaml:"calls-at-once"`
@@ -74,7 +75,7 @@ func loadContract() (contract, error) {
 	}
 	l := doc.Limits
 	for name, v := range map[string]int64{"requests-per-second-per-token": int64(l.PerToken), "requests-per-second-per-address-without-token": int64(l.PerAddress),
-		"project-files-max": int64(l.ProjectFilesMax), "project-file-max-bytes": l.ProjectFileMax, "response-body-max-bytes": l.ResponseBodyMax, "request-body-max-bytes": l.RequestBodyMax, "procedure-output-max-bytes": l.ProcedureOutMax,
+		"project-files-max": int64(l.ProjectFilesMax), "project-file-max-bytes": l.ProjectFileMax, "response-body-max-bytes": l.ResponseBodyMax, "request-body-max-bytes": l.RequestBodyMax, "commit-request-body-max-bytes": l.CommitBodyMax, "procedure-output-max-bytes": l.ProcedureOutMax,
 		"step-files-max-bytes": l.StepFilesMax, "calls-at-once": int64(l.CallsAtOnce), "call-time-limit-seconds-max": int64(l.CallTimeLimitMax)} {
 		if v < 1 {
 			return contract{}, fmt.Errorf("x-limits.%s must be a positive integer", name)
@@ -105,7 +106,8 @@ func loadContract() (contract, error) {
 		return contract{}, err
 	}
 	c := contract{version: doc.Info.Version, limits: l, bodies: map[string]*jsonschema.Schema{}}
-	for op, schema := range map[string]string{opRunCheck: "CheckRequest", opReadStepFiles: "StepFilesRequest", opRunProcedure: "ProcedureRequest"} {
+	for op, schema := range map[string]string{opRunCheck: "CheckRequest", opReadStepFiles: "StepFilesRequest", opRunProcedure: "ProcedureRequest",
+		opCommitStep: "CommitRequest", opRestoreStep: "RestoreRequest"} {
 		s, err := comp.Compile(self + "#/components/schemas/" + schema)
 		if err != nil {
 			return contract{}, fmt.Errorf("%s: %w", schema, err)
@@ -138,31 +140,36 @@ func (contractLoader) Load(u string) (any, error) {
 	return jsonschema.UnmarshalJSON(bytes.NewReader(b))
 }
 
-// noDotPart is the lookahead the contract's ProjectPath and Writable patterns start with: no part
-// of the path is `.` or `..`. Go's regexp has no lookahead, so regexpEngine checks it apart and
-// compiles the rest of the pattern.
-const noDotPart = `^(?!(.*/)?\.\.?(/|$))`
+// noDotPart and noGitPart are the lookaheads the contract's ProjectPath and Writable patterns start
+// with: no part of the path is `.` or `..`, and none is `.git` in any letter case. Go's regexp has
+// no lookahead, so regexpEngine checks them apart and compiles the rest of the pattern.
+const (
+	noDotPart = `^(?!(.*/)?\.\.?(/|$))`
+	noGitPart = `(?!(.*/)?\.[Gg][Ii][Tt](/|$))`
+)
 
 func regexpEngine(pattern string) (jsonschema.Regexp, error) {
 	rest, ok := strings.CutPrefix(pattern, noDotPart)
 	if !ok {
 		return regexp.Compile(pattern)
 	}
+	rest, noGit := strings.CutPrefix(rest, noGitPart)
 	re, err := regexp.Compile("^" + rest)
 	if err != nil {
 		return nil, err
 	}
-	return dotFree{re: re, pattern: pattern}, nil
+	return dotFree{re: re, pattern: pattern, noGit: noGit}, nil
 }
 
 type dotFree struct {
 	re      *regexp.Regexp
 	pattern string
+	noGit   bool
 }
 
 func (d dotFree) MatchString(s string) bool {
 	for _, part := range strings.Split(s, "/") {
-		if part == "." || part == ".." {
+		if part == "." || part == ".." || d.noGit && strings.EqualFold(part, ".git") {
 			return false
 		}
 	}
@@ -176,6 +183,8 @@ const (
 	opRunCheck      = "runCheck"
 	opReadStepFiles = "readStepFiles"
 	opRunProcedure  = "runProcedure"
+	opCommitStep    = "commitStep"
+	opRestoreStep   = "restoreStep"
 )
 
 // checkBody checks a request body against the operation's schema: exactly one JSON value the

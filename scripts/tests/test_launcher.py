@@ -31,7 +31,7 @@ SECRET = "fake-model-key-LAUNCHERSECRET-9f8e7d6c5b4a"  # the credentials file ho
 TOKEN_VARS = ("AP_CLIENT_TOKEN", "AP_PAGE_TOKEN", "AP_WORKER_TOKEN", "AP_LINT_TOKEN", "AP_ANALYST_TOKEN")
 REAL_LOCK = REPO / "src/deploy/images.lock"
 REFERENCE_LOCK = HERE / "fixtures/launcher/reference-images.lock"
-IMAGE_NAMES = ("engine", "page", "cli", "agent", "check", "tests", "lint")
+IMAGE_NAMES = ("engine", "page", "cli", "agent", "check", "tests", "lint", "project")
 PRIVATE_KEY = "FAKE-PRIVATE-KEY-MATERIAL-NOT-A-REAL-KEY"  # in the fake cosign.key; must never reach docker
 
 

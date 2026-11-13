@@ -26,7 +26,7 @@ import test_launcher as tl
 NEW_TOKENS = {"AP_CLIENT_TOKEN": tc.TOKENS["AP_CLIENT_TOKEN"], "AP_PAGE_TOKEN": tc.TOKENS["AP_PAGE_TOKEN"],
               "AP_WORKER_TOKEN": tc.TOKENS["AP_WORKER_TOKEN"],
               "AP_LINT_TOKEN": "11a7e0" + "d" * 26, "AP_ANALYST_TOKEN": "a0a1y5" + "e" * 26,
-              "AP_CHECK_TOKEN": "c4ec4b" + "f" * 26}
+              "AP_CHECK_TOKEN": "c4ec4b" + "f" * 26, "AP_PROJECT_TOKEN": tc.TOKENS["AP_PROJECT_TOKEN"]}
 LINT_IMAGE = "%s/ap-lint@sha256:%064x" % (tc.REGISTRY, 7)
 LINT, ANALYST, ENGINE, GATEWAY = "contract-lint", "analyst", "engine", "gateway"
 
@@ -45,7 +45,8 @@ class Base(tc.ComposeTest):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.env = {**cls.env, **NEW_TOKENS, "AP_IMAGE_LINT": LINT_IMAGE}
+        cls.env = {**cls.env, **NEW_TOKENS, "AP_IMAGE_LINT": LINT_IMAGE,
+                   "AP_IMAGE_PROJECT": tc.IMAGE_ENV["AP_IMAGE_PROJECT"]}
 
     def cfg(self):
         return self.checker_input(tc.COMPOSE)

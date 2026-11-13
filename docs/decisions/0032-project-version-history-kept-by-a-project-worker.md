@@ -30,6 +30,8 @@ sources:
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-13T21:00:00Z }
 ---
 
+Superseded in part by [ADR 0033](/decisions/0033-project-worker-in-its-own-small-image.md): the project worker runs in its own small image, and the check image keeps its Alpine base.
+
 # Origin
 
 Feature 001 builds each slice into a new project that the developer receives with its own version

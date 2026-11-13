@@ -1,8 +1,10 @@
 // Package checksvc serves the check contract (src/check/api): the check service, which runs the
 // pattern's step checks (engine/checks) over a project folder it only reads and returns the files
-// an agent step left, and a procedure step's worker, which runs that step's fixed procedure
-// (engine/procedures) and writes its files into the project. One program, cmd/check, serves either
-// deployment (research D29).
+// an agent step left; a procedure step's worker, which runs that step's fixed procedure
+// (engine/procedures) and writes its files into the project; and the project worker, which keeps
+// each project's version history, one git commit per accepted step, and restores the project to
+// its last commit before each attempt (history.go). One program, cmd/check, serves each
+// deployment (research D29, D30).
 //
 // Every request passes the same checks, in this order: its token (401; a request without an
 // accepted token is counted against its source address, the connection's peer address, and gets
@@ -53,19 +55,27 @@ type Config struct {
 	// GenerationRepeatable runs, which finds it on PATH); Template the pattern's module template
 	// folder (the generate procedure).
 	OapiCodegen, Template string
+	// History is the project worker's own folder, outside every project, where it keeps its record
+	// of each project's last commit (the contract's history guard). Non-empty makes this
+	// deployment the project worker: it serves commitStep and restoreStep only. Empty, this
+	// deployment answers both with 404 VersionHistoryNotServed.
+	History string
+	// Git is the git binary the project worker runs; empty means `git` on PATH.
+	Git string
 	// Env is added to the process's environment for every command a check or procedure runs, for
 	// example GOMODCACHE, GOCACHE or GOFLAGS; a later entry wins. The service's own settings come
 	// after it: no module proxy, no workspace, the local toolchain only.
 	Env []string
 }
 
-// NewHandler returns the deployment's whole HTTP handler. With Procedure empty it is the check
-// service (runCheck, readStepFiles); otherwise it serves that one procedure for Step
-// (runProcedure). It panics on a Config without a Token or Project, or with only one of
-// Procedure and Step.
+// NewHandler returns the deployment's whole HTTP handler. With History set it is the project
+// worker (commitStep, restoreStep); with Procedure set it serves that one procedure for Step
+// (runProcedure); with neither it is the check service (runCheck, readStepFiles). It panics on a
+// Config without a Token or Project, with only one of Procedure and Step, or with both History and
+// Procedure.
 func NewHandler(c Config) http.Handler {
-	if c.Token == "" || c.Project == "" || (c.Procedure == "") != (c.Step == "") {
-		panic("checksvc: Config needs Token and Project, and Procedure and Step together")
+	if c.Token == "" || c.Project == "" || (c.Procedure == "") != (c.Step == "") || (c.History != "" && c.Procedure != "") {
+		panic("checksvc: Config needs Token and Project, Procedure and Step together, and not both History and Procedure")
 	}
 	k := checkContract
 	s := &service{cfg: c, limits: k.limits}
@@ -100,6 +110,8 @@ var routes = map[string]string{
 	"POST /checks/{checkName}/run":         opRunCheck,
 	"POST /step-files":                     opReadStepFiles,
 	"POST /procedures/{procedureName}/run": opRunProcedure,
+	"POST /project-versions/commit":        opCommitStep,
+	"POST /project-versions/restore":       opRestoreStep,
 }
 
 type front struct {
@@ -171,10 +183,14 @@ func (f *front) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			sl.release()
 		}
 	}()
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, f.contract.limits.RequestBodyMax))
+	bodyMax := f.contract.limits.RequestBodyMax
+	if op == opCommitStep {
+		bodyMax = f.contract.limits.CommitBodyMax
+	}
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, bodyMax))
 	if err != nil {
 		writeProblem(w, newProblem(http.StatusBadRequest, gen.ErrorCodeInvalidRequest,
-			fmt.Sprintf("the body cannot be read or is larger than %d bytes", f.contract.limits.RequestBodyMax)))
+			fmt.Sprintf("the body cannot be read or is larger than %d bytes", bodyMax)))
 		return
 	}
 	if !jsonContent(r.Header.Values("Content-Type")) {

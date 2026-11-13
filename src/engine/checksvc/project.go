@@ -55,7 +55,12 @@ func unreadable(format string, a ...any) error {
 	return fault(422, gen.ErrorCodeUnreadableProject, fmt.Sprintf(format, a...))
 }
 
-// readProject reads every regular file of dir without following a symbolic link: the walk reads
+// gitFolder is the version history's folder at the project folder's root. No walk of the project
+// enters or lists it.
+const gitFolder = ".git"
+
+// readProject reads every regular file of dir outside its version history (`.git` at its root),
+// without following a symbolic link: the walk reads
 // entries with lstat, and each file is opened with O_NOFOLLOW. More than lim.ProjectFilesMax files
 // is 422 UnreadableProject; a file larger than lim.ProjectFileMax is never read whole (at most one
 // byte more is), and is an entry no operation reads. Only the last part of a path is protected
@@ -81,6 +86,12 @@ func readProject(ctx context.Context, dir, name string, lim limits) (*project, e
 		}
 		rel = filepath.ToSlash(rel)
 		switch {
+		case rel == gitFolder:
+			// The version history is not part of the project (contract, Version history).
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		case !procedures.IsProjectPath(rel):
 			p.bad = append(p.bad, fmt.Sprintf("%q is not a project path", rel))
 		case d.Type()&fs.ModeSymlink != 0:
