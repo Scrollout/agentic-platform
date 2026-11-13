@@ -39,7 +39,7 @@ var pattern []byte
 //go:embed gen/agents/analyst.yaml gen/agents/analyst/instruction.md
 //go:embed gen/agents/tests.yaml gen/agents/tests/instruction.md
 //go:embed gen/agents/code.yaml gen/agents/code/instruction.md
-//go:embed gen/agents/review.yaml gen/agents/review/instruction.md
+//go:embed gen/agents/review.yaml gen/agents/review/instruction.md gen/agents/review/findings.schema.json
 var agentFiles embed.FS
 
 // agentRoot is where agentFiles holds src/agents.

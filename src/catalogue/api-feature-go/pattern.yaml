@@ -158,7 +158,7 @@ steps:
   - name: review
     worker: agent:review
     # The digest of src/agents/review.yaml and src/agents/review/ (as for tests).
-    agent_digest: "74f4b2e0b12afa04aded15be4acf4b2d2da771833a0040c1e88d3ef91eb5b6f0"
+    agent_digest: "7ae46ba3c221b8edc614defd0d6a2cabe35a143051d4510a72ee30e42afca1c5"
     inputs: [contract, examples, generated-code, tests, code, slice/rules]
     outputs: [findings]
     writable: []

@@ -26,6 +26,20 @@ func MatchGlob(globs []string, p string) bool {
 	return false
 }
 
+// NotOwn is t without the files that writable matches (MatchGlob's dialect: "dir/**" is every
+// path below dir, any other entry one exact path). An earlier step's file that the judged step may
+// write (the seam internal/app/app.go, which generate writes and code replaces) is the judged
+// step's to change, so the "unchanged" checks judge only the others.
+func NotOwn(t Tree, writable []string) Tree {
+	out := Tree{}
+	for p, h := range t {
+		if !MatchGlob(writable, p) {
+			out[p] = h
+		}
+	}
+	return out
+}
+
 // HidePaths rewrites a tool's output so it names paths relative to dir only: dir's absolute path
 // (as given, and with symbolic links resolved) is dropped and every other absolute path is
 // replaced by `<host path>`.

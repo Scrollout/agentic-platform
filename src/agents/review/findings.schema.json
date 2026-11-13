@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "findings.schema.json",
+  "title": "ReviewFindings",
+  "description": "The review agent's whole answer: its findings, each citing a rule of the slice, a file and a line. Each finding's fields are the engine's machine.Finding.",
+  "type": "object",
+  "required": ["findings"],
+  "additionalProperties": false,
+  "properties": {
+    "findings": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "required": ["rule", "file", "line", "text", "blocking"],
+        "additionalProperties": false,
+        "properties": {
+          "rule": {
+            "type": "string",
+            "pattern": "^R-[0-9]+$",
+            "description": "The slice rule the finding concerns, `R-<n>`, as tagged in features/slice.feature."
+          },
+          "file": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_][A-Za-z0-9_./-]*$",
+            "description": "The project file, relative to the project folder, for example internal/notes/notes.go."
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "The line in that file, counted from 1."
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What is wrong and why, in one or two sentences."
+          },
+          "blocking": {
+            "type": "boolean",
+            "description": "True only when the code breaks the rule and a test of that rule fails at this file."
+          }
+        }
+      }
+    }
+  }
+}

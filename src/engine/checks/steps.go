@@ -6,6 +6,7 @@ package checks
 // hash at fault. A check that cannot run fails (fail closed). No model, network or clock.
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -24,6 +25,8 @@ import (
 	"syscall"
 	"time"
 
+	gherkin "github.com/cucumber/gherkin/go/v42"
+	messages "github.com/cucumber/messages/go/v34"
 	"golang.org/x/mod/modfile"
 
 	"github.com/agentic-platform/engine/canonical"
@@ -485,9 +488,10 @@ func scenarioCounts(output string) (none, some bool) {
 // run too). It judges binding, not results (owner, 2026-11-13): the tests step's tests must fail
 // against the stub, so the exit code is not read. It passes only when the tests build, no step is
 // undefined, pending or ambiguous, and scenarios ran: at least one, and when the project's
-// features/slice.feature can be read, at least as many as it has. godog's "No scenarios" or
-// "0 scenarios" fails, and so does a run with neither a scenario count nor a package whose tests
-// ran.
+// features/slice.feature can be read, as many as godog's own summary counts (scenariosRun) and
+// at least as many as the file has, each Outline row counted (featureScenarios). godog's "No
+// scenarios" or "0 scenarios" fails, and so does a run with neither a scenario count nor a
+// package whose tests ran.
 func GodogStrict(r GoRunner, project string) []CheckResult {
 	const check = "GodogStrict"
 	res, bad := runGo(check, r, project, "test", "-v", "./tests/...")
@@ -507,7 +511,11 @@ func GodogStrict(r GoRunner, project string) []CheckResult {
 	if none || (!some && !testsRan(res.Output)) {
 		return []CheckResult{fail(check, "godog ran no scenario, so no example was checked: "+excerpt(res.Output, "scenarios", "no test files", "no packages", "no tests to run"))}
 	}
-	if want, ok := featureScenarios(project); ok {
+	want, ok, err := featureScenarios(project)
+	if err != nil {
+		return []CheckResult{fail(check, "features/slice.feature is not Gherkin, so its scenarios cannot be counted: "+err.Error())}
+	}
+	if ok {
 		if got := scenariosRun(res.Output); got < want {
 			return []CheckResult{fail(check, fmt.Sprintf("godog ran %d scenarios, and features/slice.feature has %d, so not every example ran", got, want))}
 		}
@@ -521,29 +529,56 @@ var ansiColour = regexp.MustCompile("\x1b\\[[0-9;]*m")
 // unboundSteps matches godog's summary counts of pending or ambiguous steps ("1 pending").
 var unboundSteps = regexp.MustCompile(`(?i)\b[1-9][0-9]* (pending|ambiguous)\b|ambiguous step definition`)
 
-// scenarioLine is a scenario heading in a Gherkin file.
-var scenarioLine = regexp.MustCompile(`(?m)^\s*Scenario( Outline)?:`)
-
-// featureScenarios is the number of scenarios in the project's features/slice.feature; false when
-// it cannot be read.
-func featureScenarios(project string) (int, bool) {
+// featureScenarios is the number of scenarios godog runs from the project's
+// features/slice.feature: its pickles, as the Gherkin parser godog uses compiles them, so each
+// Examples row of a Scenario Outline is one scenario and `Scenario:` in a docstring or a `#`
+// comment is none. ok is false when the file cannot be read; err is set when it is not Gherkin.
+func featureScenarios(project string) (n int, ok bool, err error) {
 	b, err := os.ReadFile(filepath.Join(project, "features", "slice.feature"))
 	if err != nil {
-		return 0, false
+		return 0, false, nil
 	}
-	return len(scenarioLine.FindAll(b, -1)), true
+	ids := &messages.Incrementing{}
+	gd, err := gherkin.ParseGherkinDocument(bytes.NewReader(b), ids.NewId)
+	if err != nil {
+		return 0, true, err
+	}
+	return len(gherkin.Pickles(*gd, "features/slice.feature", ids.NewId)), true, nil
 }
 
-// scenariosRun adds up godog's "<n> scenarios" summary counts.
+// godogScenarios is godog's own scenario summary line, "<n> scenarios (<k> passed, ...)", at the
+// start of a line as godog prints it; godogSteps is the steps line godog prints right after it.
+var (
+	godogScenarios = regexp.MustCompile(`^([0-9]+) scenarios? \(([0-9]+ (passed|failed|pending|undefined|ambiguous|skipped)(, )?)+\)$`)
+	godogSteps     = regexp.MustCompile(`^[0-9]+ steps? \(([0-9]+ (passed|failed|pending|undefined|ambiguous|skipped)(, )?)+\)$`)
+)
+
+// scenariosRun adds up the scenario counts of godog's own summaries: a scenarios line directly
+// followed by its steps line, and per top-level test (`=== RUN   TestX`) only the last one, which
+// godog prints when its run ends. A line a test prints that looks like a count, alone or inside a
+// scenario before godog's summary, does not add to it.
 func scenariosRun(output string) int {
-	n := 0
-	for _, l := range strings.Split(output, "\n") {
-		f := strings.Fields(l)
-		if len(f) >= 2 && (f[1] == "scenarios" || f[1] == "scenario") {
-			if k, err := strconv.Atoi(f[0]); err == nil {
-				n += k
+	n, last := 0, -1
+	lines := strings.Split(output, "\n")
+	for i, l := range lines {
+		l = strings.TrimRight(l, "\r")
+		if rest, ok := strings.CutPrefix(l, "=== RUN   "); ok && !strings.Contains(rest, "/") {
+			if last >= 0 {
+				n += last
 			}
+			last = -1
+			continue
 		}
+		m := godogScenarios.FindStringSubmatch(l)
+		if m == nil || i+1 >= len(lines) || !godogSteps.MatchString(strings.TrimRight(lines[i+1], "\r")) {
+			continue
+		}
+		if k, err := strconv.Atoi(m[1]); err == nil {
+			last = k
+		}
+	}
+	if last >= 0 {
+		n += last
 	}
 	return n
 }

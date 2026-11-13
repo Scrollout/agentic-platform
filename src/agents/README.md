@@ -165,6 +165,10 @@ findings and the lines the last fix changed.
   `readStepFiles`. The review agent answers through `structured_output` in tool mode with the bare
   JSON `{"findings":[{"rule","file","line","text","blocking"}]}` the engine requires (T054h): the
   runtime validates it against the schema in `review.yaml`, so no fence or prose reaches the engine.
+  That schema's source is [`review/findings.schema.json`](review/findings.schema.json), whose
+  finding fields are `machine.Finding`'s; `scripts/generate.sh` writes it into `review.yaml`
+  between its markers, as for the analyst, and `--check-committed` fails when the two differ.
+  Since the file is below `review/`, it is part of the review agent's digest and the engine embeds it.
   A finding cites a slice rule `R-<n>`, a project file and a line; it blocks only when rerunning
   that rule's tests fails at that file (ADR 0031).
 - **Budget:** per session 900,000 tokens, $0.15 and 8 minutes, at most 40 model turns (30 for

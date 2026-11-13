@@ -478,7 +478,9 @@ page, none of which an existing project provides.
     `func New() gen.ServerInterface`, and may add packages under `internal/`. The code step's
     "unchanged" checks skip a file its own `writable` matches. EveryExampleBound judges binding,
     not results: no undefined, pending or ambiguous step and every scenario run, whatever the exit
-    code, since the tests step's tests must fail against the stub. DependenciesAllowed judges only
+    code, since the tests step's tests must fail against the stub. "Every scenario run" compares
+    godog's own summary count (not any printed line shaped like one) with the pickles of
+    `features/slice.feature`, each Scenario Outline Examples row one scenario (T049c). DependenciesAllowed judges only
     the step's own writable files (go.mod's requires only when go.mod is one of them). Agent step
     sessions use `safety_policy: autonomous` inside gVisor (D13), the analyst staying
     `restricted`.

@@ -5,6 +5,8 @@ go 1.26.0
 require (
 	github.com/agentic-platform/check v0.0.0
 	github.com/agentic-platform/slice v0.0.0
+	github.com/cucumber/gherkin/go/v42 v42.0.1
+	github.com/cucumber/messages/go/v34 v34.2.0
 	github.com/getkin/kin-openapi v0.153.0
 	github.com/oapi-codegen/runtime v1.8.0
 	github.com/oasdiff/oasdiff v1.37.0
@@ -17,8 +19,6 @@ require (
 	cloud.google.com/go v0.123.0 // indirect
 	github.com/TwiN/go-color v1.4.1 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
-	github.com/cucumber/gherkin/go/v42 v42.0.1 // indirect
-	github.com/cucumber/messages/go/v34 v34.2.0 // indirect
 	github.com/go-openapi/jsonpointer v1.0.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/tidwall/gjson v1.20.0 // indirect

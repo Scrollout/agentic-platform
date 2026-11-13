@@ -72,18 +72,8 @@ var checkByName = map[string]func(c *call) []checks.CheckResult{
 	},
 }
 
-// notOwn is t without the files the judged step may write: an earlier step's file that this step
-// may write (the seam internal/app/app.go, which generate writes and code replaces; pattern.yaml)
-// is this step's to change, so "unchanged" checks judge only the others.
-func (c *call) notOwn(t checks.Tree) checks.Tree {
-	out := checks.Tree{}
-	for p, b := range t {
-		if !checks.MatchGlob(c.req.Step.Writable, p) {
-			out[p] = b
-		}
-	}
-	return out
-}
+// notOwn is t without the files the judged step may write (checks.NotOwn).
+func (c *call) notOwn(t checks.Tree) checks.Tree { return checks.NotOwn(t, c.req.Step.Writable) }
 
 // approved is the request's approved part; the schema requires three, and a part missing gives an
 // empty one, whose hash no file has.

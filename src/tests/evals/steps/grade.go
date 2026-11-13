@@ -103,20 +103,18 @@ func (e Env) deps(step PatternStep, after string) Result {
 }
 
 // unchanged runs one of the Unchanged checks as the check service does: the files the judged step
-// may itself write are dropped from both trees first (the seam internal/app/app.go, T049b).
+// may itself write are dropped from both trees first (checks.NotOwn; the seam internal/app/app.go, T049b).
 func (e Env) unchanged(grader, before, after string, globs []string, of func(b, a checks.Tree, globs []string) []checks.CheckResult) Result {
 	read := func(dir string) (checks.Tree, error) {
 		f, err := Read(dir)
 		if err != nil {
 			return nil, err
 		}
-		own := map[string][]byte{}
+		b := map[string][]byte{}
 		for p, c := range f {
-			if !checks.MatchGlob(e.step("code").Writable, p) {
-				own[p] = []byte(c)
-			}
+			b[p] = []byte(c)
 		}
-		return checks.HashTree(own), nil
+		return checks.NotOwn(checks.HashTree(b), e.step("code").Writable), nil
 	}
 	b, err := read(before)
 	if err != nil {
