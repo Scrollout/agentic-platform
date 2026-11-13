@@ -389,6 +389,7 @@ func (r *runs) begin(id string, call func(ctx context.Context) error) error {
 // the machine interrupts the run, to be resumed.
 func (s *sliceServer) follow(m *machine.Machine, id string, op *operation) func(ctx context.Context) (WorkResult, error) {
 	total := len(s.runs.pattern.Steps)
+	op.onCancel = func() { _, _ = m.Cancel(id) } // ErrRunEnded: it ended meanwhile
 	return func(ctx context.Context) (WorkResult, error) {
 		for {
 			changed := s.runs.next(id)
@@ -409,10 +410,7 @@ func (s *sliceServer) follow(m *machine.Machine, id string, op *operation) func(
 			}
 			select {
 			case <-changed:
-			case <-ctx.Done():
-				if s.runs.base.Err() == nil {
-					_, _ = m.Cancel(id) // ErrRunEnded: it ended meanwhile
-				}
+			case <-ctx.Done(): // cancelled: op.onCancel ends the run; the engine stopping interrupts it
 				return WorkResult{}, ctx.Err()
 			}
 		}

@@ -233,6 +233,7 @@ func (r *rig) waitFor(t *testing.T, id string, want gen.OperationStatus) gen.Ope
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
+		r.clock.Advance(1100 * time.Millisecond) // the fake clock never moves; stay under the rate limit
 		op := r.do("GET", "/operations/"+id+"?api-version="+apiVersion, clientToken, "", nil).operation(t, 200)
 		if op.Status == want {
 			return op

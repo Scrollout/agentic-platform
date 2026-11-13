@@ -70,6 +70,9 @@ type operations struct {
 type operation struct {
 	view   gen.Operation
 	cancel context.CancelFunc
+	// onCancel, set before launch, runs when cancelOperation cancels the operation, whether or not
+	// its work has started: a run's operation ends its run with it.
+	onCancel func()
 }
 
 func ended(s gen.OperationStatus) bool {
@@ -132,16 +135,22 @@ func (s *operations) get(id string) (gen.Operation, bool) {
 // reports whether the operation exists and whether it had already ended.
 func (s *operations) cancelOp(id string) (view gen.Operation, found, hadEnded bool) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	op, ok := s.ops[id]
 	if !ok {
+		s.mu.Unlock()
 		return gen.Operation{}, false, false
 	}
 	if ended(op.view.Status) {
+		s.mu.Unlock()
 		return op.view, true, true
 	}
 	op.cancel()
-	return op.view, true, false
+	view = op.view
+	s.mu.Unlock()
+	if op.onCancel != nil {
+		op.onCancel() // outside the lock: it may record an event
+	}
+	return view, true, false
 }
 
 func (s *operations) set(op *operation, change func(v *gen.Operation)) {

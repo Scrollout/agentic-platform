@@ -230,6 +230,7 @@ func (sp *spRig) settle(t *testing.T, id string) spOp {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
+		sp.clock.Advance(1100 * time.Millisecond) // the fake clock never moves; stay under the rate limit
 		r := sp.do("GET", "/operations/"+id+"?api-version="+apiVersion, clientToken, "", nil)
 		if r.Code != 200 {
 			t.Fatalf("getOperation %s = %d: %s", id, r.Code, r.Body.String())

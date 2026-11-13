@@ -183,7 +183,7 @@ func createNotes(t *testing.T, h http.Handler) map[string]any {
 		if op.Status == "failed" || op.Status == "cancelled" || time.Now().After(deadline) {
 			t.Fatalf("operation ended %q: %v", op.Status, op.Error)
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(60 * time.Millisecond)
 		r := do(t, h, "GET", "/operations/"+op.ID+"?api-version="+apiVersion, "")
 		if r.Code != 200 {
 			t.Fatalf("getOperation = %d: %s", r.Code, r.Body)
