@@ -65,7 +65,7 @@ for the race run, never to build an image.
 
 `images.lock` also pins `alpine-git`, git's exact apk package version in the `alpine` pin's
 release, which `build.sh` passes as `ALPINE_GIT` to `Dockerfile.project`. An Alpine package has no
-digest, so it is pinned by version only (an owner-approved exception, ADR 0032); a new package
+digest, so it is pinned by version only (an owner-approved exception: ADR 0033 and the plan's Complexity Tracking); a new package
 release makes that build fail until the pin moves.
 
 `images.lock` also pins `wiremock`, the WireMock image that serves as the recorded-model replay
@@ -74,7 +74,7 @@ gateway on test networks only; no image is built from it and Compose does not st
 
 - `Dockerfile.agent`: the agent step image, with Docker Agent copied from its pinned image, the Go toolchain, and `TELEMETRY_ENABLED=false`.
 - `Dockerfile.check`: the check service (`/check`, research D29) with the Go toolchain, the pinned oapi-codegen (`images.lock`, passed by `build.sh` as `OAPI_CODEGEN`), the catalogue's module template at `/opt/template` and the module cache of its `go.mod` at `/opt/gomodcache` (read-only), so checks and the generate procedure run with no network and a read-only root.
-- `Dockerfile.project`: the project worker (research D30, ADR 0032), built as `build.sh project` (`ap-project`, `AP_IMAGE_PROJECT`): the static check binary from the golang pin on the `alpine` pin, with `git=<alpine-git>` from apk and a folder `/var/lib/project-worker` of mode 1777, which a new `project-worker-state` volume takes its mode from; no Go toolchain (about 45 MB).
+- `Dockerfile.project`: the project worker (research D30, ADRs 0032 and 0033), built as `build.sh project` (`ap-project`, `AP_IMAGE_PROJECT`): the static check binary from the golang pin on the `alpine` pin, with `git=<alpine-git>` from apk and a folder `/var/lib/project-worker` of mode 1777, which a new `project-worker-state` volume takes its mode from; no Go toolchain (about 45 MB).
 - `Dockerfile.engine`: the workflow engine, a static Go binary on `scratch`; expects the main package `src/engine/cmd/engine`.
 - `Dockerfile.cli`: the terminal client, a static Go binary on `scratch`; expects `src/cli/cmd/cli`.
 - `Dockerfile.page`: the read-only run page, a static Go binary on `scratch`; expects `src/page/cmd/page`.

@@ -690,7 +690,7 @@ page, none of which an existing project provides.
     (`src/deploy/Dockerfile.project`): a static build on the golang pin, then the `alpine` pin by
     digest with `apk add git=2.49.1-r0`, git's exact package version in Alpine 3.22, pinned in
     images.lock as `alpine-git`. An Alpine package has no digest, so git is pinned by exact
-    version only, an owner-approved exception (plan.md, Exceptions). The image is 45.3 MB, and
+    version only, an owner-approved exception (plan.md, Complexity Tracking). The image is 45.3 MB, and
     the project worker's tests pass with its git 2.49.1 as with the host's (2026-11-13).
   - **The generate step's mount** (owner, 2026-11-13): only the generate procedure worker gets
     the project root writable, since its `writable` names `go.mod` and `go.sum` in the root and

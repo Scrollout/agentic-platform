@@ -1,11 +1,11 @@
-# Project worker image (research D30, ADR 0032): the check program (`/check`, src/engine/cmd/check)
+# Project worker image (research D30, ADRs 0032 and 0033): the check program (`/check`, src/engine/cmd/check)
 # as the project worker, with git, which it runs to keep each new project's version history. No Go
 # toolchain, template or module cache: the project worker runs no check and no procedure. Build
 # context: src/. Pins come from build args that deploy/build.sh reads from images.lock: GOLANG_IMAGE
 # (the golang line) builds the static binary; ALPINE_IMAGE (the alpine line, pinned by digest) is
 # the runtime base; ALPINE_GIT (the alpine-git line) is git's exact package version in that Alpine
 # release. Alpine packages have no digest, so git is pinned by exact version only (plan.md,
-# Exceptions; owner, 2026-11-13): a new package release makes this build fail until the pin moves.
+# Complexity Tracking; owner, 2026-11-13): a new package release makes this build fail until the pin moves.
 ARG GOLANG_IMAGE
 ARG ALPINE_IMAGE
 FROM ${GOLANG_IMAGE} AS build

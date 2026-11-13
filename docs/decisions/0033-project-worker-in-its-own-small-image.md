@@ -17,7 +17,7 @@ sources:
     title: Feature 001 research, D30
   - id: plan
     resource: ../../specs/001-prose-to-accepted-slice/plan.md
-    title: Feature 001 plan, Decisions and Exceptions
+    title: Feature 001 plan, Decisions and Complexity Tracking
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-13T23:45:00Z }
 ---
 
@@ -46,12 +46,12 @@ Sources: [Feature 001 research, D30](../../specs/001-prose-to-accepted-slice/res
   (`src/deploy/Dockerfile.project`, `AP_IMAGE_PROJECT`), built, signed and verified like the
   other images.
 - Its base is the `alpine` pin by digest. git is added with `apk add git=2.49.1-r0`, pinned by
-  exact package version in `images.lock` (`alpine-git`). The plan's Exceptions table records this
+  exact package version in `images.lock` (`alpine-git`). The plan's Complexity Tracking table records this
   version-only pin as an owner-approved exception to Principle XIII.
 - The image is about 45 MB. The check image keeps its Alpine base, without git.
 - Rejected: the check image on the Debian golang pin (1.29 GB, too large for the host).
 
-Sources: [Feature 001 plan, Exceptions](../../specs/001-prose-to-accepted-slice/plan.md).
+Sources: [Feature 001 plan, Complexity Tracking](../../specs/001-prose-to-accepted-slice/plan.md).
 
 # Consequences
 

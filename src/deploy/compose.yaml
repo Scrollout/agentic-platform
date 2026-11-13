@@ -318,7 +318,7 @@ services:
     extra_hosts: { engine: *engine-on-checks }
     networks: [checks]
 
-  # The project worker (src/engine/cmd/check, research D30, ADR 0032): the check program's third
+  # The project worker (src/engine/cmd/check, research D30, ADRs 0032 and 0033): the check program's third
   # deployment, in its own small image (Dockerfile.project: the binary and git, no Go toolchain),
   # which keeps each new project's version history (one git commit per accepted step)
   # and restores the project to its last commit before each attempt. It is the one service with the

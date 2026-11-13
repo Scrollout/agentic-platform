@@ -48,7 +48,7 @@ The project worker runs the check binary in its own image, `ap-project`
 (`src/deploy/Dockerfile.project`): the `alpine` pin by digest with `apk add git=2.49.1-r0`, git's
 exact package version in Alpine 3.22, pinned in `images.lock` as `alpine-git`. An Alpine package
 has no digest, so git is pinned by exact version, not by digest (owner, 2026-11-13;
-[ADR 0033](/decisions/0033-project-worker-in-its-own-small-image.md); plan.md, Exceptions). The check image, on the Alpine golang pin, has no git. The project worker's tests
+[ADR 0033](/decisions/0033-project-worker-in-its-own-small-image.md); plan.md, Complexity Tracking). The check image, on the Alpine golang pin, has no git. The project worker's tests
 pass with git 2.49.1 and with the host's git.
 
 Sources: [Feature 001 research, D30](../../specs/001-prose-to-accepted-slice/research.md).
