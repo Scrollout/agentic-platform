@@ -103,6 +103,7 @@ the [terminal contract](../cli/contract.md). It calls only `docker` and passes e
 | `AP_PROJECTS_DIR` | Absolute path of the projects folder |
 | `AP_PAGE_PORT` | Host port of the run page, published on `127.0.0.1` only (by `page-proxy`) |
 | `AP_CLIENT_TOKEN`, `AP_PAGE_TOKEN`, `AP_WORKER_TOKEN`, `AP_LINT_TOKEN`, `AP_ANALYST_TOKEN`, `AP_CHECK_TOKEN`, `AP_PROJECT_TOKEN` | This session's tokens, 64 hex characters each and pairwise distinct; `ap up` on a started session keeps them, and only `ap up` after `ap down` makes new ones. The last four are what the engine calls `contract-lint`, `analyst`, `check` and `project-worker` with; each reaches only the engine and its own service (the engine gets `AP_PROJECT_TOKEN` in T053e). A session started before `AP_PROJECT_TOKEN` existed is refused as incomplete: run `ap down` |
+| `AP_GRANTS_DIR` | The step worker grants folder, `${XDG_STATE_HOME:-~/.local/state}/agentic-platform/grants` (research D31). `ap up` makes it and hands it to the engine's user (65532) with mode 700, from a one-off container with only the CHOWN capability; only the engine mounts it, read-only, at `ENGINE_GRANTS_DIR`. `build-workers` writes one file per grant into it (named the lowercase hex SHA-256 of the worker's token, holding `{"slice","step","call_token"}`, mode 600, from a one-off container running as the engine's user, the tokens on standard input), and `down` empties it. Unset, Compose names a folder that does not exist, so the engine does not start |
 | `AP_HOST_USER` | The developer's `uid:gid`: the gateway runs as it to read the key file (mode 600; Compose cannot change a file secret's owner outside Swarm), and step workers run as it to write projects |
 | `AP_GATEWAY_IMAGE` | The `nginx` pin from `images.lock`, its one home; the gateway and `page-proxy` run it |
 | `AP_IMAGE_ENGINE`, `AP_IMAGE_PAGE`, `AP_IMAGE_CLI`, `AP_IMAGE_AGENT`, `AP_IMAGE_CHECK`, `AP_IMAGE_PROJECT`, `AP_IMAGE_TESTS`, `AP_IMAGE_LINT` | Each image's digest reference from `images.env`, verified by `ap up` before anything starts and kept in the session; an image a profile `up` does not start (`agent`, `tests`), `page` until the run page exists (T056, `up` then starts neither `page` nor `page-proxy`), and `lint`, `check` and `project` until their first signed build (T038g, T054c, T053c), is verified when built and otherwise given the placeholder `ap-<name>:not-built`, so Compose can read the file. `up` does start `contract-lint`, `check` and `project-worker`, so without `build.sh lint`, `build.sh check` and `build.sh project` its `docker compose up` fails with `No such image: ap-<name>:not-built` |
@@ -152,7 +153,8 @@ limits, and writable `tmpfs` only where it needs one; no service mounts a contai
 | `page-proxy` | `ap up`, with `page` | `page`, `page-host` | The `nginx` pin with the fixed `page-proxy/nginx.conf`; publishes the page's port on `127.0.0.1` only and passes each request, Host header unchanged, to the page |
 | `cli` | each client command (`run --rm`, profile `client`) | `clients` | Client token |
 | `tests` | `ap test <suite>` (profile `tests`) | `clients` | Client token; no `Dockerfile.tests` yet |
-| `step-agent` | `ap build-workers` (profile `workers`) | `agents` | gVisor, `/tmp` executable, projects read-only; finds `engine` and `gateway` through `extra_hosts`; the template for per-step workers |
+| `step-agent` | `ap build-workers` (profile `workers`) | `agents` | The template of each agent step's container: Docker Agent `serve api /agents/$STEP_AGENT.yaml` with `--auth-token "$STEP_TOKEN"` through `sh -c` (it refuses to start without either; the token is then on docker-agent's command line inside the sandbox, a known limit); `ENGINE_TOKEN` empty, so the template holds no session token; gVisor, `/tmp` executable, `src/agents` read-only at `/agents`, a placeholder `ANTHROPIC_API_KEY`; finds `engine` and `gateway` through `extra_hosts` |
+| `procedure-worker` | `ap build-workers` (profile `workers`) | `checks` | The template of each procedure step's container: `/check` from the check image as `CHECK_DEPLOYMENT=procedure-worker`, run as `AP_HOST_USER`; the template holds no token (`CHECK_TOKEN` empty, so it does not start alone), and `build-workers` sets `CHECK_PROCEDURE`, `CHECK_STEP` and `CHECK_TOKEN`, the container's call token; gVisor; finds `engine` through `extra_hosts`; cannot reach the gateway |
 | `check` | `ap up`, like `contract-lint` (no profile; its image stays optional until built) | `checks` | The check service (`CHECK_DEPLOYMENT=check-service`): runs `/check`, answers only the engine's `AP_CHECK_TOKEN` (`CHECK_TOKEN`), holds no worker token; gVisor, `/tmp` executable, projects read-only; finds `engine` through `extra_hosts`; cannot reach the gateway |
 | `project-worker` | `ap up`, like `check` | `checks` | The project worker (`CHECK_DEPLOYMENT=project-worker`, research D30): runs `/check` from its own image (`AP_IMAGE_PROJECT`, `Dockerfile.project`) as `AP_HOST_USER`, answers only `AP_PROJECT_TOKEN` (`CHECK_TOKEN`); gVisor, `/tmp` executable, the projects folder read-write (the only service with it writable), its records on the named volume `project-worker-state` at `/var/lib/project-worker` (`CHECK_HISTORY_DIR`), mounted by no other service and kept by `ap down`; finds `engine` through `extra_hosts`; cannot reach the gateway |
 
@@ -206,6 +208,28 @@ them again). A container Compose did not start in that `up`, such as a client co
 running, keeps the network in use and the `up` fails; run `ap down`, then `ap up`. Our images
 are started by digest and never pulled (`pull_policy: never`). The projects folder is not mounted into the gateway,
 engine, page or client.
+
+`ap build-workers <slice> <project>` (research D29, D30, D31) reads the steps and their writable
+entries from `src/catalogue/api-feature-go/pattern.yaml` and the Compose project name from
+`compose.yaml`, then: writes the slice's grants and registers each step's endpoint
+`http://<compose project>-worker-<slice>-<step>:8080` with the engine (`registerWorker`, sent by a
+one-off busybox `nc` container on the `agents` network with the request on standard input, so no
+token is on a command line; a 404 stops it with exit 4 before anything else is made); makes the
+project folder, an empty `.git` and the folders of each step's entries (`dir/**` its folder, an
+exact path its folder); and starts one container per step with `docker compose run -d` from
+`step-agent` or `procedure-worker`. Each container mounts only its project, at
+`/projects/<project>`: read-only, with only its step's folders writable (contract-check `api/` and
+`features/`, tests `tests/`, code `internal/` and `cmd/`, review nothing), except generate, whose
+whole project root is writable because its `go.mod` and `go.sum` are in it (a stated limit); `.git`
+is bound read-only on top in every container. The container holds only its call token; its worker
+token, used only by the launcher to register it, stays in
+`${XDG_STATE_HOME:-~/.local/state}/agentic-platform/workers/<slice>` (mode 600) for the session.
+A container carries a label of what it was started with, so one that is running with the same
+settings is left alone and any other is replaced: running it twice changes nothing. An existing
+project folder that holds a file or symbolic link at any depth, or anything in `.git`, is refused
+with exit 3 before anything is granted, registered, made or started (the engine's `ProjectExists`
+rule); one of empty folders only, such as the skeleton it made, is accepted. `ap down` removes the workers, their grants and their tokens. It needs built
+agent and check images that `ap up` verified.
 
 To read the resolved configuration without starting anything, set the variables and run
 `docker compose -f src/deploy/compose.yaml --profile '*' config`.

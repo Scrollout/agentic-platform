@@ -156,6 +156,15 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
     file. For a reused result (`reused_from`), `commitStep` first writes the reused outputs'
     stored artifacts into the step's writable paths; this is how a replay's new project gets its
     files, and it lifts the guard that reused a result with files only in its own project.
+  - **A new project** (owner, 2026-11-13; research D31): `startRun` refuses a project with
+    `ProjectExists` when a recorded run builds into it, or when its folder holds a file (a regular
+    file or a symbolic link, at any depth) or a `.git` that holds anything, even an empty folder. A
+    folder holding only empty folders, such as the skeleton `ap build-workers` makes, is accepted.
+  - **Step worker grants** (owner, 2026-11-13; research D31): `ap build-workers` writes one file
+    per grant into a folder only the engine mounts, read-only, named the lowercase hex SHA-256 of
+    the worker's token and holding `{"slice","step","call_token"}`, mode 0600 and owned by the
+    engine's user. The engine reads it at each worker-token authentication: a removed file revokes
+    the grant, and an unreadable or malformed one grants nothing.
   - **Who writes `.git`**: only the project worker. `ap build-workers` creates the project folder
     with an empty `.git` folder and binds it read-only into every step container, including the
     generate worker, whose project root is otherwise writable (a stated limit). The project

@@ -308,7 +308,11 @@ def check_config(cfg, env):
                    "worker": {"AP_WORKER_TOKEN"}, "lint": {"AP_LINT_TOKEN"},
                    "analyst": {"AP_ANALYST_TOKEN"}, "check": {"AP_CHECK_TOKEN"},
                    "project-worker": {"AP_PROJECT_TOKEN"}}.get(role, set())
-        required = allowed - {"AP_LINT_TOKEN", "AP_ANALYST_TOKEN", "AP_CHECK_TOKEN", "AP_PROJECT_TOKEN"} if role == "engine" else allowed
+        if "workers" in (svc.get("profiles") or []):
+            # a template `ap build-workers` starts (step-agent, procedure-worker) holds no session
+            # token by default: the launcher gives each container its own (owner, 2026-11-13)
+            allowed = set()
+        required =allowed - {"AP_LINT_TOKEN", "AP_ANALYST_TOKEN", "AP_CHECK_TOKEN", "AP_PROJECT_TOKEN"} if role == "engine" else allowed
         rule = {"engine": "token_engine", "page": "token_page", "cli": "token_cli", "client": "token_cli",
                 "worker": "token_worker", "gateway": "token_gateway", "lint": "token_lint",
                 "analyst": "token_analyst", "check": "token_check", "project-worker": "token_check"}.get(role)
@@ -440,6 +444,23 @@ class ComposeTest(unittest.TestCase):
     def test_real_file_satisfies_every_rule(self):
         bad, examined = self.real()
         self.assertEqual(bad, {}, "violations: %s" % bad)
+
+    def test_the_worker_templates_hold_no_session_token(self):
+        """step-agent and procedure-worker get their tokens from `ap build-workers` only: a manual
+        `docker compose up` must not hand them the check service's or the session's worker token
+        (owner, 2026-11-13)."""
+        cfg = self.checker_input(COMPOSE) if COMPOSE.is_file() else self.fail("no compose.yaml")
+        services = cfg.get("services") or {}
+        for name in ("step-agent", "procedure-worker"):
+            with self.subTest(template=name):
+                self.assertIn(name, services)
+                blob = json.dumps(services[name])
+                held = sorted(k for k, v in TOKENS.items() if v in blob)
+                self.assertEqual(held, [], "%s holds session tokens by default" % name)
+                env = services[name].get("environment") or {}
+                for k in ("ENGINE_TOKEN", "CHECK_TOKEN"):
+                    if k in env:
+                        self.assertIn(env[k], ("", None), "%s's %s is not empty by default" % (name, k))
 
     def test_real_file_examines_the_expected_services(self):
         cfg = self.checker_input(COMPOSE) if COMPOSE.is_file() else self.fail("no compose.yaml")

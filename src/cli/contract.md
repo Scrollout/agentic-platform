@@ -4,10 +4,15 @@ Two names, two jobs:
 
 - **The launcher** `src/deploy/ap` runs on the host and only calls `docker compose` (research D6).
   Its own commands are `up --credentials <file> --projects <folder>`, `down`, `build-workers
-  <slice>`, `page`, `test <suite>` (runs the test harness in its own container) and `registry`
+  <slice> <project>`, `page`, `test <suite>` (runs the test harness in its own container) and `registry`
   (starts the local image registry if it isn't running; `src/deploy/build.sh` calls it). It intercepts
-  `build`, `resume` and `replay`: it runs `build-workers` for the slice (for a run, the run's slice)
-  first, then passes the command on. Every other command is passed unchanged to the terminal
+  `build`, `resume` and `replay`: it runs `build-workers` for the slice and project (for a run, the
+  run's slice) first, then passes the command on. `build-workers <slice> <project>` makes the
+  project folder with an empty `.git` and the folders the steps write, starts one step container per
+  step of the pattern (each with only its step's paths writable), writes each container's grant
+  for the engine and registers it; running it again changes nothing. It exits 3 for a slice or
+  project name that is not one, for a project folder that already holds a file or symlink at any depth or a non-empty `.git` (naming it, and changing nothing), or without the agent and check images, 4 when the engine has no
+  such slice (`NotFound`), and 1 when Docker or the engine fails. Every other command is passed unchanged to the terminal
   client, which never calls the launcher.
 
   `up` refuses (exit 3) a credentials file that is missing, empty, not owned by the developer or

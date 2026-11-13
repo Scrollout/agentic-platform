@@ -86,6 +86,14 @@ func setup(getenv func(string) string) (http.Handler, func() error, error) {
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
 		return nil, nil, fmt.Errorf("ENGINE_STORE_DIR %q is not an existing directory", dir)
 	}
+	// The folder of step worker grants the launcher writes (api.Config.GrantsDir); optional:
+	// unset, no step worker can register.
+	grants := getenv("ENGINE_GRANTS_DIR")
+	if grants != "" {
+		if fi, err := os.Stat(grants); err != nil || !fi.IsDir() {
+			return nil, nil, fmt.Errorf("ENGINE_GRANTS_DIR %q is not an existing directory", grants)
+		}
+	}
 
 	schemas, err := slice.LoadSchemasFS(api.ContractFiles())
 	if err != nil {
@@ -115,10 +123,11 @@ func setup(getenv func(string) string) (http.Handler, func() error, error) {
 	}
 
 	cfg := api.Config{
-		Tokens:  api.Tokens{Client: env["ENGINE_CLIENT_TOKEN"], Page: env["ENGINE_PAGE_TOKEN"], Worker: env["ENGINE_WORKER_TOKEN"]},
-		Slices:  svc,
-		Store:   st,
-		Workers: api.NewWorkers(),
+		Tokens:    api.Tokens{Client: env["ENGINE_CLIENT_TOKEN"], Page: env["ENGINE_PAGE_TOKEN"], Worker: env["ENGINE_WORKER_TOKEN"]},
+		Slices:    svc,
+		Store:     st,
+		Workers:   api.NewWorkers(),
+		GrantsDir: grants,
 	}
 	if err := wireSteps(&cfg, svc, st, env["AP_CHECK_URL"], env["AP_CHECK_TOKEN"]); err != nil {
 		st.Close()

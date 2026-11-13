@@ -332,13 +332,48 @@ func (s *sliceServer) projectTaken(project string) error {
 	if s.projects == "" {
 		return nil
 	}
-	switch _, err := os.Lstat(filepath.Join(s.projects, project)); {
-	case err == nil:
-		return &sl.Error{Code: string(gen.ErrorCodeProjectExists), Detail: fmt.Sprintf("the projects folder already holds %s", project)}
-	case !errors.Is(err, fs.ErrNotExist):
+	held, err := projectHolds(filepath.Join(s.projects, project))
+	if err != nil {
 		return fmt.Errorf("whether project %s exists: %w", project, err)
 	}
+	if held != "" {
+		return &sl.Error{Code: string(gen.ErrorCodeProjectExists), Detail: fmt.Sprintf("the projects folder already holds %s (%s)", project, held)}
+	}
 	return nil
+}
+
+// projectHolds says what makes the project folder dir taken, or "" when it is free (owner,
+// 2026-11-13): a folder that does not exist, or one holding only empty folders and an empty
+// `.git` (the skeleton `ap build-workers` makes), is free; a folder holding a file or a symbolic
+// link at any depth, a `.git` holding anything, or dir itself not being a folder, is taken.
+// Symbolic links are never followed.
+func projectHolds(dir string) (string, error) {
+	fi, err := os.Lstat(dir)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return "", nil
+	case err != nil:
+		return "", err
+	case !fi.IsDir():
+		return "it is not a folder", nil
+	}
+	held := ""
+	err = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(dir, p)
+		switch {
+		case !d.IsDir():
+			held = "the file " + filepath.ToSlash(rel)
+		case filepath.Dir(rel) == ".git":
+			held = "a non-empty .git"
+		default:
+			return nil
+		}
+		return filepath.SkipAll
+	})
+	return held, err
 }
 
 // ready refuses WorkersNotReady while a step of the pattern has no registered worker for the

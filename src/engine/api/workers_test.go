@@ -249,6 +249,9 @@ func TestProjectExistsCreatesNoOperationAndWritesNothing(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(projects, "notes-app"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(projects, "notes-app", "README.md"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	sp := newNotes(t)
 	sp.approveAfterSeed(t)
 	r := newRig(t, func(c *Config) {

@@ -22,6 +22,14 @@
 # longer in the local image store (replaced by a rebuild) is pulled back by digest from the local
 # registry first. The session keeps the verified references, so later commands start exactly those
 # images. `registry` starts the local registry if it isn't running (build.sh and `up` call it).
+#
+# Step workers (research D5, D29, D30, D31): `build-workers <slice> <project>` makes the slice's step
+# workers ready for a build into the new project folder <project>: one container per step of the
+# pattern, from the Compose templates step-agent and procedure-worker, each with its own tokens, a
+# grant the engine reads from the grants folder, and a registration with the engine. Running it
+# again changes nothing. The worker tokens of the session are kept in
+# ${XDG_STATE_HOME:-$HOME/.local/state}/agentic-platform/workers/<slice> (mode 600) and the grants in
+# .../agentic-platform/grants (the engine's user's, mode 700); `down` removes both.
 set -u
 
 here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
@@ -39,7 +47,22 @@ optional_images="page agent check project tests lint"
 # shellcheck disable=SC2086
 image_vars=$(printf 'AP_IMAGE_%s ' $needed_images $optional_images | tr '[:lower:]' '[:upper:]')
 token_vars="AP_CLIENT_TOKEN AP_PAGE_TOKEN AP_WORKER_TOKEN AP_LINT_TOKEN AP_ANALYST_TOKEN AP_CHECK_TOKEN AP_PROJECT_TOKEN"
-vars="AP_CREDENTIALS_FILE AP_PROJECTS_DIR AP_PAGE_PORT $token_vars AP_HOST_USER AP_GATEWAY_IMAGE $image_vars"
+vars="AP_CREDENTIALS_FILE AP_PROJECTS_DIR AP_PAGE_PORT $token_vars AP_HOST_USER AP_GATEWAY_IMAGE AP_GRANTS_DIR $image_vars"
+# The step worker grants (research D31): one file per grant, named the SHA-256 of the worker's token
+# and holding {"slice","step","call_token"}, in a folder only the engine mounts (read-only). The
+# folder and its files belong to the engine's user, the `user` of the engine in compose.yaml, so no
+# other container and no other host user can read them; `ap` writes them from a one-off container
+# running as that user.
+grants_dir=$state_dir/grants
+engine_user=65532:65532
+# Each slice's worker tokens: one line per step, `<step> <worker token> <call token>`, and a line
+# `id <hex>` that changes with them.
+workers_dir=$state_dir/workers
+# Compose's project name, read from its one home, `name:` in compose.yaml; it prefixes the
+# networks and the step containers' names.
+compose_project=$(awk '/^name: / { print $2; exit }' "$here/compose.yaml")
+# The label on each step container: what it was started with, so an unchanged one is left alone.
+worker_label=org.agentic-platform.worker
 default_page_port=7878
 default_registry_port=5005
 # The registry's names, derived here only. AP_REGISTRY_NAME runs a second, independent registry
@@ -65,7 +88,7 @@ usage() {
 usage: ap up --credentials <file> --projects <folder>
        ap down
        ap page
-       ap build-workers <slice>
+       ap build-workers <slice> <project>
        ap test <suite>
        ap registry
        ap <terminal client command> [arguments]   (see src/cli/contract.md)
@@ -416,7 +439,7 @@ cmd_up() {
   AP_PROJECT_TOKEN=$7
 
   AP_CREDENTIALS_FILE=$cred AP_PROJECTS_DIR=$proj AP_PAGE_PORT=$port
-  AP_HOST_USER=$(id -u):$(id -g) AP_GATEWAY_IMAGE=$gateway_image
+  AP_HOST_USER=$(id -u):$(id -g) AP_GATEWAY_IMAGE=$gateway_image AP_GRANTS_DIR=$grants_dir
   # shellcheck disable=SC2086
   export $vars
 
@@ -429,6 +452,7 @@ cmd_up() {
     for v in $vars; do eval "val=\$$v"; printf '%s=%s\n' "$v" "$(quote "$val")"; done
   } >"$tmp" && chmod 600 "$tmp" && mv -f -- "$tmp" "$sess" || { rm -f -- "$tmp"; die 1 "cannot write $sess"; }
   umask "$old_umask"
+  ensure_grants_dir
 
   if [ "$AP_IMAGE_PAGE" = "$(placeholder page)" ]; then
     # No run page image yet (T056): start everything else; page and page-proxy stay at zero.
@@ -448,7 +472,7 @@ cmd_down() {
   AP_CREDENTIALS_FILE=/nonexistent AP_PROJECTS_DIR=/nonexistent AP_PAGE_PORT=$default_page_port
   AP_CLIENT_TOKEN=none AP_PAGE_TOKEN=none AP_WORKER_TOKEN=none AP_LINT_TOKEN=none AP_ANALYST_TOKEN=none AP_CHECK_TOKEN=none AP_PROJECT_TOKEN=none
   AP_HOST_USER=65534:65534
-  AP_GATEWAY_IMAGE=none
+  AP_GATEWAY_IMAGE=none AP_GRANTS_DIR=/nonexistent
   for n in $needed_images $optional_images; do eval "AP_IMAGE_$(upper "$n")=\$(placeholder \"\$n\")"; done
   # shellcheck disable=SC2086
   export $vars
@@ -456,9 +480,15 @@ cmd_down() {
   if [ -e "$sess" ] || [ -L "$sess" ]; then
     if session_ok && (. "$sess") >/dev/null 2>&1; then load; else say "the session file $sess is not read: it ${why:-cannot be read}"; fi
   fi
-  say "stopping the platform; run records and project folders are kept"
+  say "stopping the platform and the step workers; run records and project folders are kept"
   compose --profile '*' down --remove-orphans || die 1 "docker compose down failed; the session is kept"
   rm -f -- "$sess"
+  # The step workers are gone, so are their grants and tokens.
+  rm -rf -- "$workers_dir"
+  if [ -d "$grants_dir" ] && [ ! -L "$grants_dir" ]; then
+    as_engine_in_grants find /grants -mindepth 1 -delete </dev/null ||
+      die 1 "cannot remove the step worker grants in $grants_dir"
+  fi
 }
 
 cmd_page() {
@@ -467,11 +497,257 @@ cmd_page() {
   echo "http://127.0.0.1:$AP_PAGE_PORT"
 }
 
-# Make the slice's step workers ready (research D5): one container per step of the slice's pattern,
-# each with only its step's writable paths writable, registered with the engine.
+# The grants folder (research D31), made by `up` before the engine starts: mode 700 and owned by the
+# engine's user, handed over by a one-off container that runs as root with CHOWN as its only
+# capability and no network (as for the registry's volume). One already owned by the engine's user
+# is left alone.
+ensure_grants_dir() {
+  [ ! -L "$grants_dir" ] || die 1 "$grants_dir is a symbolic link; remove it and run ap up again"
+  if [ ! -d "$grants_dir" ]; then
+    (umask 077 && mkdir -p -- "$grants_dir") || die 1 "cannot create the grants folder $grants_dir"
+  fi
+  set -f
+  # shellcheck disable=SC2046
+  set -- $(ls -ldn -- "$grants_dir")
+  set +f
+  [ "$3:$4" != "$engine_user" ] || return 0
+  [ "$3" = "$(id -u)" ] || die 1 "the grants folder $grants_dir belongs to neither you nor the engine; remove it and run ap up again"
+  chmod 700 -- "$grants_dir" || die 1 "cannot make $grants_dir private (mode 700)"
+  alpine_image=$(pin alpine)
+  [ -n "$alpine_image" ] || die 1 "no alpine pin in $here/images.lock"
+  docker run --rm --network none --read-only --cap-drop ALL --cap-add CHOWN --security-opt no-new-privileges \
+    --user 0:0 -v "$grants_dir:/grants" --entrypoint chown "$alpine_image" "$engine_user" /grants >/dev/null ||
+    die 1 "cannot hand the grants folder $grants_dir to the engine's user $engine_user"
+}
+
+# Run a command in a one-off container as the engine's user, with the grants folder at /grants and
+# no network; its standard input is this command's.
+as_engine_in_grants() {
+  alpine_image=$(pin alpine)
+  [ -n "$alpine_image" ] || die 1 "no alpine pin in $here/images.lock"
+  docker run --rm -i --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+    --user "$engine_user" -v "$grants_dir:/grants" "$alpine_image" "$@"
+}
+
+# The grant files of one slice, from lines `<worker token> <grant JSON>` on standard input: each
+# written (mode 600, replaced atomically) unless it already holds that grant, and every other grant
+# of the slice removed. The tokens travel on standard input only; the file names are their SHA-256.
+# shellcheck disable=SC2016
+grants_script='set -eu
+umask 077
+keep=" "
+while read -r tok json; do
+  name=$(printf "%s" "$tok" | sha256sum | cut -c1-64)
+  keep="$keep$name "
+  if [ -f "/grants/$name" ] && [ "$(cat "/grants/$name")" = "$json" ]; then continue; fi
+  printf "%s\n" "$json" >"/grants/.$name.tmp"
+  mv -f "/grants/.$name.tmp" "/grants/$name"
+done
+for f in /grants/*; do
+  [ -f "$f" ] || continue
+  case $keep in *" ${f##*/} "*) continue ;; esac
+  if grep -q "^{\"slice\":\"$1\"," "$f"; then rm -f "$f"; fi
+done'
+
+# The pattern's steps (src/catalogue/api-feature-go/pattern.yaml, the catalogue's one pattern and the
+# one the engine embeds), one line per step: `<name> <worker> <writable entry>...`. A step or entry
+# that is not in the pattern's own rules stops build-workers.
+read_pattern() {
+  pfile=$here/../catalogue/api-feature-go/pattern.yaml
+  [ -f "$pfile" ] || die 1 "no pattern at $pfile"
+  out=$(awk '
+    /^steps:/ { s = 1; next }
+    s && /^[^ #]/ { s = 0 }
+    !s { next }
+    /^  - name: / { if (line != "") print line; line = $3; w = 0; next }
+    /^    worker: / { line = line " " $2; w = 0; next }
+    /^    writable: *$/ { w = 1; next }
+    /^    [a-z_]+:/ { w = 0; next }
+    w && /^      - / { line = line " " $2; next }
+    END { if (line != "") print line }
+  ' "$pfile") || die 1 "cannot read the pattern $pfile"
+  [ -n "$out" ] || die 1 "the pattern $pfile declares no steps"
+  printf '%s\n' "$out" | while read -r pname pworker pentries; do
+    case $pname in '' | *[!a-z0-9-]*) die 1 "the pattern's step name '$pname' is not [a-z0-9-]+" ;; esac
+    case $pworker in agent:[a-z0-9]* | procedure:[a-z0-9]*) ;; *) die 1 "the pattern's step $pname has the worker '$pworker'" ;; esac
+    case ${pworker#*:} in *[!a-z0-9-]*) die 1 "the pattern's step $pname has the worker '$pworker'" ;; esac
+    for e in $pentries; do
+      # dir/** or one exact path, in ProjectPath characters, never naming .git
+      p=${e%/\*\*}
+      case $p in
+        '' | /* | */ | *//* | *[!A-Za-z0-9._~+@=,/-]* | .git | .git/* | */.git | */.git/*)
+          die 1 "the pattern's step $pname has the writable entry '$e' (only dir/** or one exact path)" ;;
+      esac
+    done
+  done || exit $?
+  printf '%s\n' "$out"
+}
+
+# The folders a step's container mounts writable, from its writable entries: the folder of each
+# `dir/**`, the folder an exact path is in, or `.` (the project root) for an exact path in the root.
+step_folders() {
+  for e in "$@"; do
+    case $e in
+      *'/**') printf '%s\n' "${e%/\*\*}" ;;
+      */*) printf '%s\n' "${e%/*}" ;;
+      *) printf '.\n' ;;
+    esac
+  done | sort -u
+}
+
+# One HTTP call to the engine on the network the step agents share with it, from a one-off
+# container (busybox nc, no capability) under runc, so Docker's DNS finds `engine`. The request,
+# token included, goes on standard input only. Prints the response's status code.
+register_worker() {
+  rtoken=$1 rendpoint=$2
+  body="{\"endpoint\":\"$rendpoint\"}"
+  resp=$(printf 'POST /workers?api-version=%s HTTP/1.1\r\nHost: engine\r\nAuthorization: Bearer %s\r\nContent-Type: application/json\r\nContent-Length: %s\r\nConnection: close\r\n\r\n%s' \
+    "$api_version" "$rtoken" "${#body}" "$body" |
+    docker run --rm -i --network "${compose_project}_agents" --read-only --cap-drop ALL \
+      --security-opt no-new-privileges --user 65532:65532 "$alpine_image" nc -w 30 engine 8080) || resp=''
+  printf '%s\n' "$resp" | head -n 1 | tr -d '\r' | awk '$1 ~ /^HTTP\// { print $2 }'
+}
+
+# Make the slice's step workers ready for a build into the new project folder (research D5, D29,
+# D30): the project folder with an empty `.git` and the folders of each step's writable entries;
+# one container per step of the pattern, from the step-agent or procedure-worker template under
+# gVisor, with only that step's project mounted (read-only, its writable folders writable, `.git`
+# read-only; the review step's wholly read-only); a worker token and a call token per container, its
+# grant in the grants folder and its registration with the engine. A container started with the
+# same settings and still running is left alone, so running it again changes nothing.
 build_workers() {
-  [ -n "${1:-}" ] || usage
-  die 3 "build-workers: not available yet: T053 (per-slice step containers; no agent definitions exist in src/agents)"
+  slice=$1 project=$2
+  case $slice in S-[0-9]*) ;; *) die 3 "build-workers: '$slice' is not a slice ID (S-<n>)" ;; esac
+  case ${slice#S-} in *[!0-9]*) die 3 "build-workers: '$slice' is not a slice ID (S-<n>)" ;; esac
+  case $project in
+    [a-z0-9]*) ;;
+    *) die 3 "build-workers: '$project' is not a project name (lowercase letters, digits and hyphens, at most 63)" ;;
+  esac
+  case $project in *[!a-z0-9-]*) die 3 "build-workers: '$project' is not a project name (lowercase letters, digits and hyphens, at most 63)" ;; esac
+  [ "${#project}" -le 63 ] || die 3 "build-workers: '$project' is not a project name (lowercase letters, digits and hyphens, at most 63)"
+  for n in agent check; do
+    eval "val=\$AP_IMAGE_$(upper "$n")"
+    [ "$val" != "$(placeholder "$n")" ] ||
+      die 3 "build-workers needs the $n image: build it with src/deploy/build.sh $n, then run ap up again"
+  done
+  case $AP_PROJECTS_DIR in *:* | *,*) die 1 "the projects folder $AP_PROJECTS_DIR has a ':' or ',' in its path, which a bind mount cannot name" ;; esac
+  alpine_image=$(pin alpine)
+  [ -n "$alpine_image" ] || die 1 "no alpine pin in $here/images.lock"
+  # shellcheck disable=SC2012
+  api_version=$(ls -- "$here/../engine/api/preview" 2>/dev/null)
+  case $api_version in '' | *[!0-9a-z-]*) die 1 "cannot tell the engine's API version from $here/../engine/api/preview" ;; esac
+  steps=$(read_pattern) || exit $?
+
+  # The project must be new, by the engine's ProjectExists rule (owner, 2026-11-13): an existing
+  # folder may hold only empty folders and an empty `.git` (the skeleton build-workers makes); one
+  # holding a file or a symbolic link at any depth, or anything in `.git`, is refused before
+  # anything is granted, registered, made or started.
+  pdir=$AP_PROJECTS_DIR/$project
+  if [ -e "$pdir" ] || [ -L "$pdir" ]; then
+    [ -d "$pdir" ] && [ ! -L "$pdir" ] || die 3 "build-workers: the project folder $pdir exists and is not a folder"
+    if [ -n "$(find "$pdir" ! -type d 2>&1 | head -n 1)" ] ||
+      { [ -e "$pdir/.git" ] && [ -n "$(find "$pdir/.git" -mindepth 1 2>&1 | head -n 1)" ]; }; then
+      die 3 "build-workers: the project folder $pdir already holds files or a version history (ProjectExists); build into a new project"
+    fi
+  fi
+  case $compose_project in '' | *[!a-z0-9_-]*) die 1 "cannot read Compose's project name from $here/compose.yaml" ;; esac
+  lower_slice=$(printf '%s' "$slice" | tr '[:upper:]' '[:lower:]')
+
+  # The slice's tokens: kept while the session lasts, made when missing or incomplete.
+  tokfile=$workers_dir/$slice
+  if [ -e "$tokfile" ] || [ -L "$tokfile" ]; then
+    set -f
+    # shellcheck disable=SC2046
+    set -- $(ls -ldn -- "$tokfile")
+    set +f
+    [ ! -L "$tokfile" ] && [ -f "$tokfile" ] && [ "$3" = "$(id -u)" ] &&
+      case $1 in -rw------- | -rw-------.) true ;; *) false ;; esac ||
+      die 1 "the worker tokens file $tokfile is not a regular file of yours with mode 600; run: ap down"
+  fi
+  tokens_id=$(awk '$1 == "id" && NF == 2 { print $2 }' "$tokfile" 2>/dev/null)
+  complete=yes
+  for st in $(printf '%s\n' "$steps" | awk '{ print $1 }'); do
+    line=$(awk -v s="$st" '$1 == s && NF == 3 && $2 ~ /^[0-9a-f]+$/ && $3 ~ /^[0-9a-f]+$/ && length($2) == 64 && length($3) == 64' "$tokfile" 2>/dev/null)
+    [ -n "$line" ] || complete=no
+  done
+  if [ "$complete" = no ] || [ -z "$tokens_id" ]; then
+    old_umask=$(umask)
+    umask 077
+    mkdir -p -- "$workers_dir" && chmod 700 -- "$workers_dir" || die 1 "cannot create $workers_dir or make it private (mode 700)"
+    tmp=$tokfile.$$
+    {
+      echo "id $(rand | cut -c1-16)"
+      for st in $(printf '%s\n' "$steps" | awk '{ print $1 }'); do echo "$st $(rand) $(rand)"; done
+    } >"$tmp" && chmod 600 "$tmp" && mv -f -- "$tmp" "$tokfile" || { rm -f -- "$tmp"; die 1 "cannot write $tokfile"; }
+    umask "$old_umask"
+    tokens_id=$(awk '$1 == "id" { print $2 }' "$tokfile")
+    say "made new worker tokens for $slice"
+  fi
+  token_of() { awk -v s="$1" -v f="$2" '$1 == s { print $f }' "$tokfile"; }
+
+  # The grants, then the registrations: a slice the engine does not have stops here, before any
+  # folder or container is made.
+  [ -d "$grants_dir" ] || die 1 "no grants folder $grants_dir; run: ap up"
+  printf '%s\n' "$steps" | while read -r st _; do
+    printf '%s {"slice":"%s","step":"%s","call_token":"%s"}\n' "$(token_of "$st" 2)" "$slice" "$st" "$(token_of "$st" 3)"
+  done | as_engine_in_grants sh -c "$grants_script" sh "$slice" ||
+    die 1 "cannot write the step worker grants of $slice in $grants_dir"
+  for st in $(printf '%s\n' "$steps" | awk '{ print $1 }'); do
+    cname=$compose_project-worker-$lower_slice-$st
+    code=$(register_worker "$(token_of "$st" 2)" "http://$cname:8080")
+    case $code in
+      200) ;;
+      404) die 4 "build-workers: the engine has no slice $slice with a step $st (NotFound)" ;;
+      '') die 1 "build-workers: no answer from the engine registering $cname; is the platform up (ap up)?" ;;
+      *) die 1 "build-workers: the engine answered $code registering $cname" ;;
+    esac
+  done
+
+  # The project folder, its empty `.git` (the project worker makes the repository in it, D30) and
+  # the folders the steps mount writable; empty folders are no project files.
+  mkdir -p -- "$pdir/.git" || die 1 "cannot create the project folder $pdir"
+  printf '%s\n' "$steps" | while read -r st _ entries; do
+    # shellcheck disable=SC2086
+    for f in $(step_folders $entries); do
+      [ "$f" = . ] || mkdir -p -- "$pdir/$f" || die 1 "cannot create $pdir/$f"
+    done
+  done || exit $?
+
+  inside=/projects/$project
+  printf '%s\n' "$steps" | while read -r st worker entries; do
+    cname=$compose_project-worker-$lower_slice-$st
+    # shellcheck disable=SC2086
+    folders=$(step_folders $entries)
+    case " $(printf '%s ' $folders)" in
+      *' . '*) mounts="-v $pdir:$inside" ;;
+      *)
+        mounts="-v $pdir:$inside:ro"
+        for f in $folders; do mounts="$mounts -v $pdir/$f:$inside/$f"; done
+        ;;
+    esac
+    mounts="$mounts -v $pdir/.git:$inside/.git:ro"
+    case $worker in
+      agent:*) service=step-agent image=$AP_IMAGE_AGENT env="-e STEP_AGENT=${worker#agent:} -e STEP_TOKEN -e ENGINE_TOKEN=" ;;
+      *) service=procedure-worker image=$AP_IMAGE_CHECK env="-e CHECK_PROCEDURE=${worker#procedure:} -e CHECK_STEP=$st -e CHECK_TOKEN" ;;
+    esac
+    want="$service $image $project $st $(printf '%s %s' "$mounts" "$env" | cksum | cut -d' ' -f1) $tokens_id"
+    have=$(docker container inspect -f "{{index .Config.Labels \"$worker_label\"}}/{{.State.Running}}" "$cname" 2>/dev/null) || have=absent
+    if [ "$have" = "$want/true" ]; then
+      say "the $st worker $cname is running as declared; unchanged"
+      continue
+    fi
+    if [ "$have" != absent ]; then
+      say "replacing the $st worker $cname (it was started with other settings or stopped)"
+      docker rm -f "$cname" >/dev/null || die 1 "cannot remove the container $cname"
+    fi
+    call=$(token_of "$st" 3)
+    # shellcheck disable=SC2086
+    (STEP_TOKEN=$call CHECK_TOKEN=$call && export STEP_TOKEN CHECK_TOKEN &&
+      compose run -d -T --no-deps --name "$cname" -l "$worker_label=$want" $mounts $env "$service" >/dev/null) ||
+      die 1 "cannot start the $st worker $cname"
+    say "started the $st worker $cname ($service) for $project"
+  done || exit $?
+  say "the step workers of $slice are ready for the project $project"
 }
 
 cmd_test() {
@@ -493,10 +769,10 @@ case $cmd in
   up) cmd_up "$@" ;;
   down) cmd_down "$@" ;;
   page) cmd_page "$@" ;;
-  build-workers) [ $# -eq 1 ] || usage; load; build_workers "$1" ;;
+  build-workers) load; [ $# -eq 2 ] || usage; build_workers "$1" "$2" ;;
   test) cmd_test "$@" ;;
   registry) [ $# -eq 0 ] || usage; ensure_registry ;;
-  build) [ $# -ge 1 ] || usage; load; build_workers "$1" || exit $?; compose_run cli build "$@" ;;
+  build) [ $# -ge 2 ] || usage; load; build_workers "$1" "$2" || exit $?; compose_run cli build "$@" ;;
   resume | replay)
     # The workers are those of the run's slice; finding it needs the run's record from the engine.
     [ $# -ge 1 ] || usage

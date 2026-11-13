@@ -764,3 +764,51 @@ page, none of which an existing project provides.
   `core.hooksPath`, `core.fsmonitor`, `gc.auto`); <https://docs.docker.com/engine/storage/bind-mounts/> (a bind source must
   exist with `--mount`); experiment 2026-11-13 (git in the pinned golang images, above);
   OpenSSF Scorecard API for github.com/git/git, 5.7 on 2026-11-09.
+
+### D31. Step worker grants reach the engine through a folder it reads at each authentication
+
+- **Decision** (owner, 2026-11-13; T053d):
+  - **Grants after start**: `api.Config.WorkerGrants` is read when the engine starts, but `ap
+    build-workers` makes each slice's grants later. So `ap build-workers` writes one file per grant
+    into a host folder that only the engine mounts, read-only
+    (`${XDG_STATE_HOME:-~/.local/state}/agentic-platform/grants`, `AP_GRANTS_DIR`, mounted at
+    `ENGINE_GRANTS_DIR`). The file is named the lowercase hex SHA-256 of the worker's token and
+    holds the JSON `{"slice":"S-1","step":"code","call_token":"…"}`, where `call_token` is the
+    token the engine calls that worker with. The files are mode 0600 and owned by the engine's
+    user, and so is the folder (mode 700): `ap up` hands it over with a one-off container that has
+    only the CHOWN capability, and `ap` writes the files from a one-off container running as that
+    user, with the tokens on standard input only.
+  - **Reading**: the engine reads the folder at each authentication of a token that is no session
+    token and not in `WorkerGrants` (`api.Config.GrantsDir`), so a new file grants at once and a
+    removed one revokes. An unreadable, non-regular, larger than 4 KiB or malformed file grants
+    nothing (fail closed). `WorkerGrants` keeps working beside it. `ap down` removes every grant.
+  - **Tokens**: each step container gets two tokens, both made by the launcher: the worker's
+    token, which the launcher registers the container with (`serve api` cannot register itself,
+    D29), and the call token, which the container accepts and the engine sends. The container holds
+    only its call token, in its environment. The tokens last as long as the session and are kept in
+    `.../agentic-platform/workers/<slice>` (mode 600), so running `build-workers` again changes
+    nothing.
+  - **A project folder of empty folders is not taken** (owner, 2026-11-13): `startRun` refuses a
+    project with `ProjectExists` only when its folder holds a file (a regular file or a symbolic
+    link, at any depth) or a `.git` that holds anything, even an empty folder. A folder holding
+    only empty folders, such as the skeleton `build-workers` makes before the build, is accepted.
+- **Rationale**: a file per grant needs no new engine operation and no restart, and the engine
+  stays the only reader. Naming it by the token's hash keeps the token out of every file name,
+  and reading it at each authentication makes revoking a removal.
+- **Alternatives rejected**: restarting the engine with a new `WorkerGrants` (drops in-memory
+  registrations and running operations); a new engine operation to add grants (a management call
+  the launcher would have to authenticate as something stronger than a worker).
+  - **Refusals and defaults** (owner, 2026-11-13, after review): `build-workers` refuses a
+    project folder by the same rule as ProjectExists (a file or symbolic link at any depth, or a
+    non-empty `.git`), naming the folder and changing nothing; and the `step-agent` and
+    `procedure-worker` templates hold no token by default (`ENGINE_TOKEN` and `CHECK_TOKEN`
+    empty), so only `build-workers` gives a step container a token.
+- **Known limits**: `compose.yaml` gives `AP_GRANTS_DIR` a default naming a folder that does not
+  exist, rather than `:?`, so the Compose tests' variable list stays unchanged; without the
+  variable the engine does not start (the bind source is missing). Docker Agent takes the call
+  token as its `--auth-token` flag, so inside an agent step's sandbox it is on docker-agent's
+  command line, readable by the agent's shell tool. Re-running `build-workers` for another
+  project replaces the slice's containers, also during a run (a follow-up task).
+- **Recorded as** [ADR 0034](../../docs/decisions/0034-step-worker-grants-as-files-read-at-each-authentication.md).
+- Sources: owner's decisions, 2026-11-13; <https://docs.docker.com/engine/storage/bind-mounts/>
+  (a bind source must exist).

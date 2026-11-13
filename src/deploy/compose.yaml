@@ -12,6 +12,9 @@
 #   AP_ANALYST_TOKEN     this session's token the engine calls the analyst service with
 #   AP_CHECK_TOKEN       this session's token the engine calls the check service with (D29)
 #   AP_PROJECT_TOKEN     this session's token the engine calls the project worker with (D30)
+#   AP_GRANTS_DIR        absolute path of the folder of step worker grants `ap build-workers` writes
+#                        (research D31); only the engine mounts it, read-only. Unset, it names a
+#                        folder that does not exist, so the engine does not start
 #   AP_HOST_USER         the developer's numeric uid:gid; the gateway runs as it to read the key
 #                        file (mode 600), and step workers and the project worker run as it to
 #                        write the projects folder
@@ -30,7 +33,9 @@
 #
 # Profiles: no profile is what `ap up` starts (gateway, engine, page, contract-lint, analyst, check,
 # project-worker). `client` and `tests` are run
-# on demand with `docker compose run --rm`; `workers` are started by `ap build-workers`.
+# on demand with `docker compose run --rm`; `workers` (step-agent, procedure-worker) are templates
+# `ap build-workers` starts once per step of a slice with `docker compose run -d`, adding that step's
+# project mounts and its own call token.
 #
 # Networks: every one is internal and isolated (no route out, and no address of the host's, so no
 # host service is reachable from it) except `egress`, which only the gateway joins, and
@@ -140,13 +145,17 @@ services:
       AP_CHECK_URL: http://check:8080
       AP_CHECK_TOKEN: ${AP_CHECK_TOKEN:?set AP_CHECK_TOKEN (ap up does this)}
       ENGINE_STORE_DIR: /var/lib/engine
+      ENGINE_GRANTS_DIR: /var/lib/engine-grants
     tmpfs:
       - /tmp:mode=1777,size=16m
     # The engine's store (runs, slices, acceptances; T038g) on a named volume only it mounts, so
     # the root stays read-only and `ap down` keeps the records. Docker gives a new volume the
-    # image directory's owner, 65532 (Dockerfile.engine).
+    # image directory's owner, 65532 (Dockerfile.engine). The step worker grants `ap build-workers`
+    # writes (research D31): a host folder owned by the engine's user 65532, mode 700, that no
+    # other service mounts; the engine reads a grant file at each worker-token authentication.
     volumes:
       - { type: volume, source: engine-store, target: /var/lib/engine }
+      - { type: bind, source: "${AP_GRANTS_DIR:-/nonexistent/ap-grants-dir-is-set-by-ap-up}", target: /var/lib/engine-grants, read_only: true }
     networks:
       clients: {}
       agents: { ipv4_address: *engine-on-agents }
@@ -276,22 +285,58 @@ services:
       resources:
         limits: { cpus: "2", memory: 1g, pids: 512 }
 
-  # Step agent worker (Docker Agent). The template `ap build-workers` starts per step of a slice,
-  # each with only that step's writable paths mounted writable (research D5); here the projects
-  # folder is read-only.
+  # Agent step worker (Docker Agent `serve api`, research D29). The template `ap build-workers`
+  # starts once per agent step of a slice (`agent:<name>` in the pattern): STEP_AGENT names the
+  # definition under /agents and STEP_TOKEN is the token the engine calls it with (the launcher's,
+  # one per container). The token reaches the container through its environment, so it is not in
+  # the container's configured command (`docker inspect`); a known limit: Docker Agent takes it as
+  # the `--auth-token` flag, so inside the sandbox it is on docker-agent's own command line, which
+  # the agent's shell tool can read. The launcher mounts only the step's project, read-only at
+  # /projects/<project>, with the step's writable folders writable and `.git` read-only (research
+  # D5, D30). The template holds no token (owner, 2026-11-13): ENGINE_TOKEN stays empty, since the
+  # launcher registers the container on its behalf, and an empty STEP_AGENT or STEP_TOKEN stops
+  # it, so a manual `docker compose up` gets no session token. The model key never reaches it: the
+  # gateway adds it, and the placeholder only lets the Anthropic client start (as for the analyst).
   step-agent:
     <<: *sandboxed
     image: ${AP_IMAGE_AGENT:?set AP_IMAGE_AGENT to the signed ap-agent image (ap up does this; build it with src/deploy/build.sh agent)}
     pull_policy: never
     user: ${AP_HOST_USER:?set AP_HOST_USER to the developer's uid:gid (ap up does this)}
+    entrypoint: ["sh", "-c", "if [ -z \"$${STEP_AGENT:-}\" ] || [ -z \"$${STEP_TOKEN:-}\" ]; then echo 'step-agent: STEP_AGENT and STEP_TOKEN must be set (ap build-workers sets them)' >&2; exit 1; fi; exec /usr/local/bin/docker-agent serve api \"/agents/$$STEP_AGENT.yaml\" --listen 0.0.0.0:8080 --auth-token \"$$STEP_TOKEN\" --session-db /tmp/session.db"]
+    command: []
     environment:
       ENGINE_URL: http://engine:8080
-      ENGINE_TOKEN: ${AP_WORKER_TOKEN:?set AP_WORKER_TOKEN (ap up does this)}
+      ENGINE_TOKEN: ""
       MODEL_GATEWAY_URL: http://gateway:8080
+      ANTHROPIC_API_KEY: placeholder-not-a-key
+      TELEMETRY_ENABLED: "false"
     volumes:
-      - { type: bind, source: "${AP_PROJECTS_DIR:?set AP_PROJECTS_DIR to the projects folder (ap up does this)}", target: /projects, read_only: true }
+      - { type: bind, source: ../agents, target: /agents, read_only: true }
     extra_hosts: { engine: *engine-on-agents, gateway: *gateway-on-agents }
     networks: [agents]
+
+  # Procedure step worker (src/engine/cmd/check as a `procedure-worker` deployment, research D29).
+  # The template `ap build-workers` starts once per procedure step of a slice
+  # (`procedure:<name>`): it sets CHECK_PROCEDURE and CHECK_STEP and CHECK_TOKEN, the container's
+  # own call token (empty in the template, so the worker does not start without the launcher), and mounts the project as for step-agent (generate alone gets the
+  # project root writable, for go.mod and go.sum, with `.git` read-only on top; research D30). It
+  # runs as the developer so they own the files it writes, and like the check service it has no
+  # route to the gateway.
+  procedure-worker:
+    <<: *sandboxed
+    image: ${AP_IMAGE_CHECK:?set AP_IMAGE_CHECK to the signed ap-check image (ap up does this; build it with src/deploy/build.sh check)}
+    pull_policy: never
+    user: ${AP_HOST_USER:?set AP_HOST_USER to the developer's uid:gid (ap up does this)}
+    command: ["/check"]
+    environment:
+      CHECK_LISTEN_ADDRESS: ":8080"
+      CHECK_TOKEN: ""
+      CHECK_PROJECTS_DIR: /projects
+      CHECK_OAPI_CODEGEN: /usr/local/bin/oapi-codegen
+      CHECK_TEMPLATE_DIR: /opt/template
+      CHECK_DEPLOYMENT: procedure-worker
+    extra_hosts: { engine: *engine-on-checks }
+    networks: [checks]
 
   # The check service (src/engine/cmd/check, research D29): runs checks on generated code and reads
   # a step's files, over the projects folder it only reads, with no route to the gateway (plan

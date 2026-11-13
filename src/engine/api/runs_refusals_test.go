@@ -55,6 +55,9 @@ func TestStartRunRefusesAProjectFolderThatAlreadyExistsBeforeAnyStepRuns(t *test
 	if err := os.Mkdir(filepath.Join(projects, "notes-app"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(projects, "notes-app", "README.md"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	sp := newNotes(t)
 	sp.approveAfterSeed(t)
 	// WorkersNotReady comes before ProjectExists, so every declared step has a worker first.
@@ -68,7 +71,9 @@ func TestStartRunRefusesAProjectFolderThatAlreadyExistsBeforeAnyStepRuns(t *test
 	if n := r.rec.count(); n != 0 {
 		t.Errorf("Work ran %d times for a refused run", n)
 	}
-	if es, _ := os.ReadDir(filepath.Join(projects, "notes-app")); len(es) != 0 {
+	if es, _ := os.ReadDir(filepath.Join(projects, "notes-app")); len(es) != 1 || es[0].Name() != "README.md" {
 		t.Errorf("the existing folder was written to: %v", es)
+	} else if fi, err := os.Lstat(filepath.Join(projects, "notes-app", "README.md")); err != nil || !fi.Mode().IsRegular() || fi.Size() != 0 {
+		t.Errorf("the existing README.md was changed: %v, %v", fi, err)
 	}
 }

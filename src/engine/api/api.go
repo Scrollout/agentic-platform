@@ -71,8 +71,18 @@ type Config struct {
 	Store SliceStore
 	// WorkerGrants maps each step worker's token to the slice and step it was issued for. A token
 	// in it is accepted as a worker token, besides Tokens.Worker, and registerWorker registers
-	// the worker for its grant; an empty token is ignored. nil means no worker can register.
+	// the worker for its grant; an empty token is ignored. nil means no worker can register
+	// through it.
 	WorkerGrants map[string]WorkerGrant
+	// GrantsDir is a folder of grants made after the engine started (the launcher's
+	// build-workers, research D31). A token that is no session token and not in WorkerGrants is
+	// a worker token when the folder holds a file named the lowercase hex SHA-256 of the token
+	// whose content is the JSON object {"slice","step","call_token"}, each a non-empty string; it
+	// grants as a WorkerGrant with CallToken call_token. The folder is read at each such
+	// authentication, so a new file grants at once and a removed one revokes. A file that cannot
+	// be read, is not a regular file, is larger than 4 KiB or does not hold exactly that object
+	// grants nothing (fail closed). Empty means no such folder.
+	GrantsDir string
 	// Projects is the projects folder: a project is a folder in it, and startRun refuses a
 	// project whose folder exists (ProjectExists). Empty means no projects folder is known, so
 	// only a project a recorded run builds into is refused.
@@ -126,6 +136,7 @@ func NewHandler(cfg Config) http.Handler {
 		contract:  c,
 		mux:       mux,
 		tokens:    acceptedTokens(cfg.Tokens, cfg.WorkerGrants),
+		grants:    cfg.GrantsDir,
 		limit:     newLimiter(now, c.perSecond),
 		anonymous: newLimiter(now, c.perAddress),
 		keys:      &keyStore{now: now, keep: c.keepKeys, entries: map[string]*keyEntry{}},
@@ -156,6 +167,7 @@ type front struct {
 	contract contract
 	mux      *http.ServeMux
 	tokens   []acceptedToken
+	grants   string   // Config.GrantsDir
 	limit    *limiter // per accepted token
 	// anonymous counts requests without an accepted token, per source address.
 	anonymous *limiter
@@ -251,7 +263,8 @@ func jsonContent(values []string) bool {
 }
 
 // authenticate returns the accepted token the request's bearer token is, or nil for none. Every
-// accepted token is compared, in constant time each.
+// accepted token is compared, in constant time each; a token none of them is may still have a
+// grant in the grants folder (grantFromDir).
 func (f *front) authenticate(r *http.Request) *acceptedToken {
 	scheme, token, ok := strings.Cut(r.Header.Get("Authorization"), " ")
 	if !ok || !strings.EqualFold(scheme, "Bearer") || token == "" {
@@ -262,6 +275,9 @@ func (f *front) authenticate(r *http.Request) *acceptedToken {
 		if t := &f.tokens[i]; subtle.ConstantTimeCompare([]byte(t.token), []byte(token)) == 1 && found == nil {
 			found = t
 		}
+	}
+	if found == nil && f.grants != "" {
+		found = grantFromDir(f.grants, token)
 	}
 	return found
 }

@@ -1,11 +1,19 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"slices"
 	"sync"
+	"syscall"
 
 	"github.com/agentic-platform/engine/api/gen"
 	sl "github.com/agentic-platform/engine/slices"
@@ -44,6 +52,49 @@ func acceptedTokens(t Tokens, grants map[string]WorkerGrant) []acceptedToken {
 		}
 	}
 	return out
+}
+
+// grantFileMaxBytes bounds a grant file; a larger one grants nothing.
+const grantFileMaxBytes = 4096
+
+// grantFromDir returns the worker token that token is by its grant file in dir, or nil when dir
+// holds none or the file is unreadable, not a regular file, too large or malformed. The file is
+// named the lowercase hex SHA-256 of the token, so the token never appears in a file name, and it
+// is read again at every call, so removing it revokes the grant. Its requests are counted under
+// a key of their own, as each granted token's are.
+func grantFromDir(dir, token string) *acceptedToken {
+	sum := sha256.Sum256([]byte(token))
+	name := hex.EncodeToString(sum[:])
+	f, err := os.OpenFile(filepath.Join(dir, name), os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	if fi, err := f.Stat(); err != nil || !fi.Mode().IsRegular() {
+		return nil
+	}
+	b, err := io.ReadAll(io.LimitReader(f, grantFileMaxBytes+1))
+	if err != nil || len(b) > grantFileMaxBytes {
+		return nil
+	}
+	var g struct {
+		Slice     *string `json:"slice"`
+		Step      *string `json:"step"`
+		CallToken *string `json:"call_token"`
+	}
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&g); err != nil || dec.More() {
+		return nil
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return nil
+	}
+	if g.Slice == nil || g.Step == nil || g.CallToken == nil || *g.Slice == "" || *g.Step == "" || *g.CallToken == "" {
+		return nil
+	}
+	return &acceptedToken{token: token, scheme: workerScheme, id: workerScheme + "/" + name,
+		grant: &WorkerGrant{Slice: *g.Slice, Step: *g.Step, CallToken: *g.CallToken}}
 }
 
 // grantKey holds the WorkerGrant of a request made with a granted worker token.

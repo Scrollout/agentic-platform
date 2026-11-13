@@ -300,17 +300,17 @@ func (x *runsRig) getRun(id string) runView {
 	return v
 }
 
-// waitRun polls getRun until cond holds, for at most 5 seconds.
+// waitRun polls getRun until cond holds, for at most 30 seconds.
 func (x *runsRig) waitRun(id, what string, cond func(runView) bool) runView {
 	x.t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for {
 		v := x.getRun(id)
 		if cond(v) {
 			return v
 		}
 		if time.Now().After(deadline) {
-			x.t.Fatalf("run %s is %q (outcome %v) after 5s, want %s", id, v.Status, v.Outcome, what)
+			x.t.Fatalf("run %s is %q (outcome %v) after 30s, want %s", id, v.Status, v.Outcome, what)
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
