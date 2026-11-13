@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/agentic-platform/engine/api/gen"
 	"github.com/agentic-platform/engine/slices"
@@ -27,11 +28,15 @@ type SliceStore interface {
 // sliceServer serves the slice operations from a slices.Service and the run store; every other
 // operation is the skeleton server's. A refusal the contract lists under a status code comes at
 // once, before any operation exists; every accepted change is an operation whose work calls the
-// Service. Nothing can be built yet, so startRun ends in a refusal.
+// Service. startRun and registerWorker are in workers.go.
 type sliceServer struct {
 	*server
-	svc   *slices.Service
-	store SliceStore
+	svc     *slices.Service
+	store   SliceStore
+	workers *workers
+	// projects is Config.Projects; lastRun is the number of the last run ID given out.
+	projects string
+	lastRun  atomic.Int64
 }
 
 var _ gen.StrictServerInterface = (*sliceServer)(nil)
@@ -209,16 +214,6 @@ func (s *sliceServer) ApprovePart(_ context.Context, req gen.ApprovePartRequestO
 		_, err := s.svc.Approve(ctx, id, part, hash)
 		return err
 	})}, nil
-}
-
-// StartRun refuses in the contract's order: an unknown slice, then a pattern condition that
-// fails, then a part not approved at its current hash, then a step without a ready worker. No
-// step worker registers yet, so a slice that passes the rest is refused with WorkersNotReady.
-func (s *sliceServer) StartRun(_ context.Context, req gen.StartRunRequestObject) (gen.StartRunResponseObject, error) {
-	if err := s.svc.Buildable(req.SliceIdParameter); err != nil {
-		return s.refuse("startRun", err)
-	}
-	return s.refuse("startRun", &slices.Error{Code: string(gen.ErrorCodeWorkersNotReady), Detail: "a step of the pattern has no registered worker"})
 }
 
 // change starts the operation of a change to slice id; its result is the slice.

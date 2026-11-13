@@ -68,6 +68,14 @@ type Config struct {
 	Slices *slices.Service
 	// Store is what the run store keeps about each slice; required with Slices.
 	Store SliceStore
+	// WorkerGrants maps each step worker's token to the slice and step it was issued for. A token
+	// in it is accepted as a worker token, besides Tokens.Worker, and registerWorker registers
+	// the worker for its grant; an empty token is ignored. nil means no worker can register.
+	WorkerGrants map[string]WorkerGrant
+	// Projects is the projects folder: a project is a folder in it, and startRun refuses a
+	// project whose folder exists (ProjectExists). Empty means no projects folder is known, so
+	// that refusal never applies.
+	Projects string
 }
 
 // NewHandler returns the engine's whole HTTP handler.
@@ -92,7 +100,7 @@ func NewHandler(cfg Config) http.Handler {
 		if cfg.Store == nil {
 			panic("api: Config.Slices needs Config.Store")
 		}
-		impl = &sliceServer{server: srv, svc: cfg.Slices, store: cfg.Store}
+		impl = &sliceServer{server: srv, svc: cfg.Slices, store: cfg.Store, workers: newWorkers(), projects: cfg.Projects}
 	}
 	mux := http.NewServeMux()
 	gen.HandlerWithOptions(gen.NewStrictHandlerWithOptions(impl, nil, gen.StrictHTTPServerOptions{
@@ -103,11 +111,9 @@ func NewHandler(cfg Config) http.Handler {
 	}), gen.StdHTTPServerOptions{BaseRouter: mux, ErrorHandlerFunc: invalidRequest})
 	mustRouteEveryOperation(mux, c)
 	return &front{
-		contract: c,
-		mux:      mux,
-		tokens: []struct{ token, scheme string }{
-			{cfg.Tokens.Client, clientScheme}, {cfg.Tokens.Page, pageScheme}, {cfg.Tokens.Worker, workerScheme},
-		},
+		contract:  c,
+		mux:       mux,
+		tokens:    acceptedTokens(cfg.Tokens, cfg.WorkerGrants),
 		limit:     newLimiter(now, c.perSecond),
 		anonymous: newLimiter(now, c.perAddress),
 		keys:      &keyStore{now: now, keep: c.keepKeys, entries: map[string]*keyEntry{}},
@@ -130,7 +136,7 @@ func mustRouteEveryOperation(mux *http.ServeMux, c contract) {
 type front struct {
 	contract contract
 	mux      *http.ServeMux
-	tokens   []struct{ token, scheme string }
+	tokens   []acceptedToken
 	limit    *limiter // per accepted token
 	// anonymous counts requests without an accepted token, per source address.
 	anonymous *limiter
@@ -140,8 +146,8 @@ type front struct {
 type rawBodyKey struct{}
 
 func (f *front) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	caller := f.authenticate(r)
-	if caller == "" {
+	tok := f.authenticate(r)
+	if tok == nil {
 		if wait, ok := f.anonymous.allow(sourceAddress(r)); !ok {
 			w.Header().Set("Retry-After", strconv.Itoa(wait))
 			writeProblem(w, newProblem(http.StatusTooManyRequests, gen.ErrorCodeRateLimited,
@@ -151,7 +157,8 @@ func (f *front) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, newProblem(http.StatusUnauthorized, gen.ErrorCodeUnauthorized, "send this session's token as `Authorization: Bearer <token>`"))
 		return
 	}
-	if wait, ok := f.limit.allow(caller); !ok {
+	caller := tok.scheme
+	if wait, ok := f.limit.allow(tok.id); !ok {
 		w.Header().Set("Retry-After", strconv.Itoa(wait))
 		writeProblem(w, newProblem(http.StatusTooManyRequests, gen.ErrorCodeRateLimited,
 			fmt.Sprintf("more than %d requests in one second with this token", f.contract.perSecond)))
@@ -194,7 +201,11 @@ func (f *front) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, newProblem(http.StatusBadRequest, gen.ErrorCode(code), detail))
 		return
 	}
-	r = r.WithContext(context.WithValue(r.Context(), rawBodyKey{}, body))
+	ctx := context.WithValue(r.Context(), rawBodyKey{}, body)
+	if tok.grant != nil {
+		ctx = context.WithValue(ctx, grantKey{}, *tok.grant)
+	}
+	r = r.WithContext(ctx)
 	r.Body = io.NopCloser(bytes.NewReader(body))
 
 	keys := r.Header.Values("Idempotency-Key")
@@ -207,7 +218,7 @@ func (f *front) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fmt.Sprintf("send one Idempotency-Key of %d to %d characters", f.contract.keyMin, f.contract.keyMax)))
 		return
 	}
-	f.keys.serve(w, r, caller+"\x00"+keys[0], sha256.Sum256([]byte(r.Method+" "+r.URL.Path+"\x00"+string(body))), f.mux)
+	f.keys.serve(w, r, tok.id+"\x00"+keys[0], sha256.Sum256([]byte(r.Method+" "+r.URL.Path+"\x00"+string(body))), f.mux)
 }
 
 // jsonContent reports whether a request's Content-Type header values are exactly one media
@@ -220,18 +231,20 @@ func jsonContent(values []string) bool {
 	return err == nil && media == "application/json"
 }
 
-// authenticate returns the security scheme of the request's bearer token, or "" for none.
-func (f *front) authenticate(r *http.Request) string {
+// authenticate returns the accepted token the request's bearer token is, or nil for none. Every
+// accepted token is compared, in constant time each.
+func (f *front) authenticate(r *http.Request) *acceptedToken {
 	scheme, token, ok := strings.Cut(r.Header.Get("Authorization"), " ")
 	if !ok || !strings.EqualFold(scheme, "Bearer") || token == "" {
-		return ""
+		return nil
 	}
-	for _, t := range f.tokens {
-		if t.token != "" && subtle.ConstantTimeCompare([]byte(t.token), []byte(token)) == 1 {
-			return t.scheme
+	var found *acceptedToken
+	for i := range f.tokens {
+		if t := &f.tokens[i]; subtle.ConstantTimeCompare([]byte(t.token), []byte(token)) == 1 && found == nil {
+			found = t
 		}
 	}
-	return ""
+	return found
 }
 
 // sourceAddress returns the host part of the connection's peer address, with an IPv4-mapped

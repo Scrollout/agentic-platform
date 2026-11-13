@@ -27,8 +27,11 @@ type Service struct {
 	// attempts is the pattern's limits.attempts: how often Create asks the analyst for a usable
 	// proposal. 1 when there is no pattern or it gives no positive limit (fail closed on cost).
 	attempts int
-	now      func() time.Time
-	log      *slog.Logger
+	// steps are the names of the pattern's steps, in its order; nil when there is no pattern or
+	// its steps cannot be read.
+	steps []string
+	now   func() time.Time
+	log   *slog.Logger
 
 	mu   sync.Mutex
 	last int // the number of the last slice ID given out; IDs are never reused
@@ -84,7 +87,7 @@ func New(cfg Config) (*Service, error) {
 		log = slog.New(slog.DiscardHandler)
 	}
 	s := &Service{schemas: cfg.Schemas, analyst: cfg.Analyst, diff: cfg.Diff, lint: cfg.Lint, pattern: cfg.Pattern,
-		attempts: attemptsOf(cfg.Pattern), now: now, log: log, reserved: map[string]bool{}, unsaved: map[string]bool{}, slices: map[string]*record{}, changing: map[string]*sync.Mutex{},
+		attempts: attemptsOf(cfg.Pattern), steps: stepsOf(cfg.Pattern), now: now, log: log, reserved: map[string]bool{}, unsaved: map[string]bool{}, slices: map[string]*record{}, changing: map[string]*sync.Mutex{},
 		records: cfg.Records}
 	if s.records != nil {
 		if err := s.load(); err != nil {
@@ -107,6 +110,32 @@ func attemptsOf(pattern []byte) int {
 	}
 	return p.Limits.Attempts
 }
+
+// stepsOf reads the step names from a pattern.yaml, its one home. A missing or unreadable
+// pattern, or a step without a name, gives no steps (fail closed: no worker can register and no
+// build can start).
+func stepsOf(pattern []byte) []string {
+	var p struct {
+		Steps []struct {
+			Name string `yaml:"name"`
+		} `yaml:"steps"`
+	}
+	if pattern == nil || yaml.Unmarshal(pattern, &p) != nil {
+		return nil
+	}
+	names := make([]string, 0, len(p.Steps))
+	for _, st := range p.Steps {
+		if st.Name == "" {
+			return nil
+		}
+		names = append(names, st.Name)
+	}
+	return names
+}
+
+// Steps returns the names of the pattern's steps, in the pattern's order. It is empty when there
+// is no pattern or its steps cannot be read.
+func (s *Service) Steps() []string { return slices.Clone(s.steps) }
 
 // Create proposes a slice from a description (createSlice). An approved slice of the same
 // description is offered instead, without running the analyst. An empty description, or one the
