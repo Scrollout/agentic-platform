@@ -240,7 +240,7 @@ func (r *rig) waitFor(t *testing.T, id string, want gen.OperationStatus) gen.Ope
 		if time.Now().After(deadline) {
 			t.Fatalf("operation %s is %q after 5s, want %q", id, op.Status, want)
 		}
-		time.Sleep(5 * time.Millisecond)
+		time.Sleep(60 * time.Millisecond)
 	}
 }
 

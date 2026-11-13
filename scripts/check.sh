@@ -23,6 +23,13 @@ go_checks() {
   scripts/generate.sh
   scripts/generate.sh --check
   go_run bridge "for m in $GO_MODULES; do (cd \$m && go mod download); done"
+  # The step checks' godog run (TestGodogStrictReal) is offline: put the pinned godog and its
+  # dependencies into the shared module cache now, from the fixture module that requires it.
+  godog=$(awk '$1=="godog"{print $2}' src/deploy/images.lock); godog=${godog##*@}
+  fixture=engine/checks/testdata/steps/godog/clean
+  grep -q "github.com/cucumber/godog $godog\$" "src/$fixture/go.mod" ||
+    { echo "check: $fixture/go.mod does not require godog $godog (src/deploy/images.lock)" >&2; exit 1; }
+  go_run bridge "cd $fixture && GOWORK=off GOFLAGS=-mod=readonly go mod download"
   # Both images must carry the same Go release, or the race run tests another compiler.
   [ -n "$GO_RACE_IMAGE" ] || { echo "check: no golang-race pin in src/deploy/images.lock" >&2; exit 1; }
   v=$(go_run none "go env GOVERSION")

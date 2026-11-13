@@ -25,3 +25,6 @@ MIT License
 
 BSD 2-Clause License
 - nginx (nginx.org), Copyright Igor Sysoev and Nginx, Inc.
+
+BSD 3-Clause License
+- golang.org/x/mod (go.googlesource.com/mod), Copyright 2009 The Go Authors

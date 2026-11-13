@@ -202,7 +202,7 @@ checkpoint.
 ### Evals and tests for User Story 2 ⚠️
 
 - [ ] T041 [P] [US2] Write the step agents' eval suites in `src/tests/evals/steps/`: tests, code and review agents on the example slice in 3 of 3 trials, plus injected instructions in earlier artifacts that try to widen scope or edit tests
-- [ ] T042 [P] [US2] Write planted-violation and clean fixtures for every check in `src/engine/checks/testdata/` (scope, tests unchanged, dependencies against the pattern's allowed and forbidden lists, tests fail against the stub, all tests pass, godog `--strict`, generation drift, contract hash equals the approved hash, evidence-backed finding) and a test that runs each check on both
+- [X] T042 [P] [US2] Write planted-violation and clean fixtures for every check in `src/engine/checks/testdata/` (scope, tests unchanged, dependencies against the pattern's allowed and forbidden lists, tests fail against the stub, all tests pass, godog `--strict`, generation drift, contract hash equals the approved hash, evidence-backed finding) and a test that runs each check on both
 - [ ] T043 [P] [US2] Write failing machine tests in `src/engine/machine/machine_test.go`: a step is accepted only when all checks pass; DONE is ignored; a check that errors counts as failed; 3 rejected attempts or 3 review rounds hand over; a later review round considers only open findings and changed lines; token, cost and time budgets hand over; a hand-over expires after 14 days; cancelling a run's operation ends it `cancelled`; one active run at a time (`RunActive`); every run ends in one outcome; every event names model, agent digest, pattern version, inputs, reuse key and the refs it concerns; a run waiting for the developer is active; a failing worker or unavailable model makes a rejected attempt and the run can be resumed
 - [ ] T044 [P] [US2] Write failing reuse, resume and replay tests in `src/engine/machine/reuse_test.go`: equal inputs give the same reuse key; an accepted result is reused without running the step; resume repeats no accepted step; a replay's artifacts are byte-identical; comparison lists only differing fields
 - [ ] T045 [P] [US2] Write Schemathesis conformance tests (including `registerWorker` with `http://svc:8080`, `http://svc:8080/` accepted and a path after the port refused) for `startRun`, `resumeRun`, `replayRun`, `acceptHandOver`, `compareRuns`, `listRuns`, `getRun`, `listRunEvents`, `getArtifact` and `registerWorker` (each with its allowed and refused token kinds) in `src/tests/contract/runs_test.go`
@@ -213,7 +213,7 @@ checkpoint.
 
 ### Implementation for User Story 2
 
-- [ ] T048 [P] [US2] Implement the checks in `src/engine/checks/` until T042 passes
+- [X] T048 [P] [US2] Implement the checks in `src/engine/checks/` until T042 passes
 - [ ] T049 [P] [US2] Write the step agents `src/agents/tests.yaml`, `src/agents/code.yaml` and `src/agents/review.yaml` (Haiku through the gateway, `safety: autonomous` inside the gVisor container; review findings as JSON with rule id, file and line) until T041 passes
 - [ ] T050 [US2] Implement the fixed procedures in `src/engine/procedures/`: contract check (copies the approved contract, verifies its hash and re-lints it), generate (oapi-codegen, vendored dependencies resolved offline, generated stub, run twice and compared), review gate (evidence-backed findings, narrowing rounds)
 - [ ] T051 [US2] Implement the state machine, budgets, expiry and the one-active-run rule in `src/engine/machine/machine.go` until T043 passes

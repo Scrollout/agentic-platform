@@ -316,8 +316,9 @@ page, none of which an existing project provides.
 
 ### D25. RFC 8785 canonical JSON is written in the engine, not adopted
 
-- **Decision**: part hashes (D17) use a small RFC 8785 canonicaliser in `src/engine/slices`
-  (`canonical.go`) instead of a library. It covers objects, arrays and strings, which is all a
+- **Decision**: part hashes (D17) use a small RFC 8785 canonicaliser in the engine
+  (`src/engine/canonical/`, shared by `slices` and the step checks) instead of a library. It
+  covers objects, arrays and strings, which is all a
   slice part contains under the schemas (no numbers, booleans or nulls), and refuses anything else.
 - **Evidence** (2026-11-12): the reference implementation `github.com/cyberphone/json-canonicalization`
   has an OpenSSF Scorecard of 2.2, its licence is reported as NOASSERTION by GitHub, and it has no

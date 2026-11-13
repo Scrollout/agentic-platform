@@ -1,0 +1,3 @@
+[
+  {"part": "code", "check": "RuleTest/R-2", "passed": false, "reason": "R-2 test fails at internal/x.go:14"}
+]

@@ -5,6 +5,7 @@
 * [Distribution registry](distribution-registry.md) - The CNCF Distribution image registry, run on 127.0.0.1 to hold the platform's built images, their SBOM and provenance attestations, and their signatures.
 * [Docker Agent](docker-agent.md) - The agent runtime the platform is built on; here it runs the analyst as a long-lived serve api service.
 * [go-yaml](go-yaml.md) - The YAML library (go.yaml.in/yaml/v3) the slice model and the engine use to read contracts, patterns and rules.
+* [golang.org/x/mod](x-mod.md) - The Go team's module library; the engine's DependenciesAllowed step check reads a project's go.mod with its modfile package.
 * [gVisor](gvisor.md) - The application-kernel sandbox (runtime runsc) that every step, check, analyst and contract-lint container runs under.
 * [kin-openapi](kin-openapi.md) - The Go OpenAPI 3 parser that oasdiff uses as a library, and which the engine imports for contract loading.
 * [markdownlint-cli2](markdownlint-cli2.md) - The Markdown linter scripts/check.sh and the commit hook run on docs, specs and source Markdown.

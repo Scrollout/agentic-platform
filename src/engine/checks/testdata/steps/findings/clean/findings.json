@@ -1,0 +1,4 @@
+[
+  {"rule": "R-2", "file": "internal/x.go", "line": 14, "text": "does not reject a negative amount", "blocking": true, "confirming_check": "RuleTest/R-2"},
+  {"rule": "", "file": "", "line": 0, "text": "naming could be clearer", "blocking": false, "confirming_check": ""}
+]

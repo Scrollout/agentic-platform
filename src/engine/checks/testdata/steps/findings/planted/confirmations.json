@@ -1,0 +1,4 @@
+[
+  {"part": "code", "check": "RuleTest/R-3", "passed": false, "reason": "x"},
+  {"part": "code", "check": "RuleTest/R-4", "passed": false, "reason": "x"}
+]
