@@ -76,7 +76,7 @@ Shipped by Story 2 so far:
   run (T053e).
   A reused result is reused in any project: `commitStep` writes its stored files there.
 
-Planned for Story 2 (T053a, split into T053c to T053e):
+Built for Story 2 (T053a, split into T053c to T053e, all done):
 
 - **Project worker** (T053c): a third deployment of the check program, which `ap up` starts
   under gVisor with the projects folder writable and its own token. It keeps each new project's
@@ -90,7 +90,7 @@ Planned for Story 2 (T053a, split into T053c to T053e):
   slice is approved and a build is asked for, each with only its step's writable paths writable
   (research D5). It registers them with the engine and wires each procedure step worker's token.
 
-Until then no step container runs, so a run cannot yet build a slice end to end
+Still planned: T053a's end-to-end run through `ap build-workers`, a real build and the hand-over
 (research D29 and D30, [ADR 0030](/decisions/0030-agent-steps-on-docker-agent-checks-in-a-check-service.md)).
 
 Every container runs read-only with all capabilities dropped; the analyst, contract-lint, the check
