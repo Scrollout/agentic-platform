@@ -209,7 +209,7 @@ checkpoint.
 - [ ] T046 [P] [US2] Write the planted-failure suite `src/tests/acceptance/planted_test.go` (five scenarios, 3 trials each, deterministic: each failure is injected by a recording of the step agent's response, through the recorded model; the 3-of-3 trials against the live model are the step agents' evals, T041) and the acceptance test `src/tests/acceptance/us2_test.go` for spec scenarios US2.1 to US2.10, including that a run is acknowledged only after it is recorded (Principle X) and the model-unavailable edge case
 - [ ] T067 [P] [US2] Write failing tests in a new file for FR-008 and an edge case: a run never starts a step or check the pattern does not declare (a worker registered for an undeclared step is refused; the machine runs only the pattern's steps and their declared checks), and a build pointed at a folder that already exists under the projects folder is refused before any step runs
 - [ ] T068 [US1] Cover the edge case "answers contradict an earlier answer or rule: the contradiction is shown and must be resolved before approval": an analyst eval case in a new file whose answers contradict a rule, graded on the revision raising a question about it, and an acceptance case that such a slice cannot be approved while that question is open
-- [ ] T047 [P] [US2] Write failing tests for the run page in `src/page/page_test.go`: it sends only GET requests, binds to `127.0.0.1`, rejects an unexpected Host header, and shows a run's events and a comparison
+- [X] T047 [P] [US2] Write failing tests for the run page in `src/page/page_test.go`: it sends only GET requests, binds to `127.0.0.1`, rejects an unexpected Host header, and shows a run's events and a comparison
 
 ### Implementation for User Story 2
 
@@ -221,7 +221,8 @@ checkpoint.
 - [ ] T053 [US2] Implement worker registration and the per-slice step containers in `src/engine/api/workers.go` and the launcher's `build-workers` (only each step's writable paths mounted writable, under gVisor), and the new project folder with its own version history
 - [ ] T054 [US2] Implement the run operations in `src/engine/api/runs.go` until T045 passes
 - [ ] T055 [US2] Implement `build`, `resume`, `replay`, `take-over`, `compare`, `artifact`, `runs` and `run` in `src/cli/` and the launcher's `test planted` until T046 passes
-- [ ] T056 [US2] Implement the read-only run page in `src/page/` until T047 passes
+- [X] T056 [US2] Implement the read-only run page in `src/page/` until T047 passes
+- [ ] T056a Close what the T056 review left open (non-blocking): record in research D18 that the page also accepts `localhost` on its port (`TestLocalhostHostAccepted`; the `compose.yaml` comment says "the one Host header") or drop it; a per-address rate limit on the page (plan threat model, "Run page"; only the engine's per-token limit applies today); show an engine 401/403 as "the page's token was refused" instead of 502; drop the `ap` "page optional" fallback once `build.sh page` is built and signed (with T021); new tests in a new file by a separate author for: `cmd/page` refusing a missing or invalid setting, Host case, trailing dot, missing port and IPv6, run IDs that need escaping, the 50-page notice, each engine error status, a malformed engine body, `/compare` without `run` or `with`, HEAD and OPTIONS, markup in store text with the CSP and nosniff headers, the empty pages, and the token never appearing in a page. Binding to `127.0.0.1` is proven by `scripts/tests/test_compose.py`, not the page tests
 - [ ] T057 [US2] Fresh review of Story 2 in an isolated copy; every finding fixed, made a task, or closed with a reason
 
 **Checkpoint**: Stories 1 and 2 work; quickstart steps 3 to 5 pass; the walking skeleton runs end to end through `scripts/e2e.sh`.

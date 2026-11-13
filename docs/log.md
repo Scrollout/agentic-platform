@@ -2,6 +2,7 @@
 
 ## 2026-11-13
 
+* **Implementation**: Feature 001, T056 (Story 2): the read-only run page `src/page` shows a run's events in order and the differences between two runs, through the generated engine client with its own token and only GET calls; it answers only GET and only its configured Host (or `localhost` on the same port), escapes all store text with `html/template`, has no forms or scripts, and turns engine errors into a plain error page. Tests by a separate author (T047).
 * **Knowledge**: Feature 001, T061 (part), T062, T064: component concepts for [Docker Agent](/components/docker-agent.md), [nginx](/components/nginx.md), [gVisor](/components/gvisor.md), [Spectral](/components/spectral.md), [Redocly CLI](/components/redocly-cli.md), [oapi-codegen](/components/oapi-codegen.md), [jsonschema](/components/jsonschema.md), [cucumber/gherkin and godog](/components/cucumber-gherkin.md), [go-yaml](/components/go-yaml.md), [Schemathesis](/components/schemathesis.md), [markdownlint-cli2](/components/markdownlint-cli2.md) and [kin-openapi](/components/kin-openapi.md); glossary terms Slice, Pattern, Catalogue, Run, Step, Check and Hand-over; the architecture overview now shows what Story 1 shipped and Story 2's planned containers.
 * **Evals**: Feature 001, T039b: with the analyst's instructions for a description that is not an HTTP API, the live eval suite passed (7th run): 14 of 14 cases pass^3, 42 of 42 trials, on `claude-haiku-5-5`, including the new non-HTTP case.
 
