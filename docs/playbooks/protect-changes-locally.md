@@ -77,9 +77,12 @@ A fresh clone of the repository, or a change to the hooks.
    under a standing approval, and a fresh agent's judgement does not replace it. A commit that
    only adds test files needs no `Tests-approved-by` trailer.
 10. A commit that stages non-test Go code together with test files, even new ones, is refused
-   without a `Tests-approved-by` trailer. Test-first keeps them apart: the separate test author's
-   new tests are committed first and seen failing, and the code that makes them pass follows in
-   its own commit, so neither needs the trailer.
+   without a `Tests-approved-by` trailer. New tests cannot be committed alone while they fail,
+   because the pre-commit hook runs `go test`, so a unit is committed once its separate author's
+   tests and the code that makes them pass both pass: one commit with the owner's
+   `Tests-approved-by:` trailer, after the owner approves that commit (owner's choice,
+   2026-11-13). Test-first stays shown by the order of work: the tests are written by a separate
+   author and seen failing before the code exists, and the fresh review checks it.
 
 # Verification
 

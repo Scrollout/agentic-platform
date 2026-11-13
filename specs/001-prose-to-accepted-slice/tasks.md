@@ -39,8 +39,9 @@ fresh review.
   US2 on (US1 was implemented task by task without it). Round 1 of the 2026-11-13 re-run (Opus,
   fresh, at `3601b34`) failed (K1 to K4); fixed in `bab854b` and `d5de8e1`; round 2 (Opus, fresh,
   at `d5de8e1`) passed with 3 MEDIUM and 5 LOW, fixed or recorded in the next commit. The hook requires a `Tests-approved-by:` trailer when non-test Go code
-  and test files are staged together, even when the tests are new (it stands: test-first commits
-  them apart; playbook step 10); Story 1's trailers naming "separate test author (Claude
+  and test files are staged together, even when the tests are new; failing tests cannot be
+  committed alone, so each unit's tests and code are committed together with the owner's trailer
+  (playbook step 10, owner's choice 2026-11-13); Story 1's trailers naming "separate test author (Claude
   Sonnet), new test files only" record that no existing test changed, not an approval: only the
   owner approves (ADR 0029).
 - **Done means**: tests pass, `python3 scripts/okf.py check` reports OK, `docs/log.md` records the
@@ -254,8 +255,9 @@ checkpoint.
   (T036) and slice service; a failure there becomes a fix task.
 - **US2 (Phase 4)**: after Foundational, T034 (the pattern), T037 (approved slices) and T010e (the
   hook enforces ADR 0029). T035a's pattern-schema check in `scripts/check.sh` comes before T051,
-  since US2 builds from the pattern. Tests T041–T047 and T067 are committed and seen failing before
-  implementation T048–T056 (plan, Exceptions: Story 1 broke this order). T050 before T051; T053 before T054.
+  since US2 builds from the pattern. Tests T041–T047 and T067 are written and seen failing before
+  implementation T048–T056, then committed with the code that makes them pass (plan, Exceptions:
+  Story 1 broke this order). T050 before T051; T053 before T054.
 - **Polish (Phase 5)**: alongside each story's completion; T066 last.
 
 ### Parallel Opportunities
