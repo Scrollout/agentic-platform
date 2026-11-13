@@ -98,9 +98,13 @@ cost in USD, minutes), `status` (`approved`). A step: `name`, `worker` (`agent:<
   took the work over); `expired` is timed out; `cancelled` is cancelled. A build refused before it
   is accepted as a run (`NotApproved`, `PatternDoesNotFit`, `RunActive`, `WorkersNotReady`) is the
   rejected-by-policy case: no run is created.
-- **Run record**: append-only JSON Lines. Each event: `seq`, `at`, `run`, `kind` (see research
-  D23), `step`, `attempt`, `round` (review), `worker`, `model`, `agent_digest`, `pattern`,
-  `inputs[]` and `artifacts[]` (hashes), `reuse_key`, `refs[]` (the `G-`, `R-`, `T-`,
+- **Run record**: append-only JSON Lines. Each event: `seq`, `at`, `run`, `slice` (on
+  `RunStarted`), `kind` (see research D23), `step`, `attempt`, `round` (review), `worker`, `model`,
+  `agent_digest`, `pattern`, `inputs[]` and `artifacts[]` (hashes), `reuse_key`, `usage` (`tokens`,
+  `cost_usd`: what one attempt used, on `AttemptMade`, or on `StepRejected` for an attempt that made
+  none; summed, the run's use, so its budgets hold across a restart; a negative amount counts as
+  0), `changed_lines[]` (`file`, `line`: on `StepAccepted` or `ResultReused`, the lines a fix changed, which the next
+  review round is given, also after a restart), `refs[]` (the `G-`, `R-`, `T-`,
   `R-<n>/E-<n>` or `contract/<operationId>` IDs it concerns), `check` (name, passed, reason),
   `finding` (rule, file, line, text, blocking, confirming check), `detail`. Each kind requires the
   fields that explain it (see `run-event.schema.json`).

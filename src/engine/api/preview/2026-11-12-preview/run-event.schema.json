@@ -24,6 +24,10 @@
     "run": {
       "$ref": "slice-defs.schema.json#/$defs/run_id"
     },
+    "slice": {
+      "$ref": "slice-defs.schema.json#/$defs/slice_id",
+      "description": "The slice the run builds; on RunStarted only."
+    },
     "kind": {
       "type": "string",
       "enum": [
@@ -88,6 +92,50 @@
     },
     "reuse_key": {
       "$ref": "slice-defs.schema.json#/$defs/hash"
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tokens",
+        "cost_usd"
+      ],
+      "description": "What one attempt used: on AttemptMade, and on StepRejected for an attempt that made no AttemptMade (its worker failed or its result was refused), so the run's use can be summed from its record.",
+      "properties": {
+        "tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Model tokens."
+        },
+        "cost_usd": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Model cost in US dollars."
+        }
+      }
+    },
+    "changed_lines": {
+      "type": "array",
+      "description": "On StepAccepted or ResultReused: the lines the accepted result reports changing (a fix of review findings), which the next review round is given; kept here so a resumed run still gives them.",
+      "items": {
+        "type": "object",
+        "required": [
+          "file",
+          "line"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Path relative to the project folder."
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
     },
     "refs": {
       "type": "array",
@@ -361,6 +409,54 @@
         "required": [
           "detail"
         ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "slice"
+        ]
+      },
+      "then": {
+        "properties": {
+          "kind": {
+            "const": "RunStarted"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "usage"
+        ]
+      },
+      "then": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "AttemptMade",
+              "StepRejected"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "changed_lines"
+        ]
+      },
+      "then": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "StepAccepted",
+              "ResultReused"
+            ]
+          }
+        }
       }
     }
   ]
