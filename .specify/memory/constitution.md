@@ -504,6 +504,27 @@ Rationale: [ADR 0025](../../docs/decisions/0025-engineering-principles.md).
 - Feature work MUST go through Spec Kit: `/speckit-specify`, `/speckit-plan`, `/speckit-tasks`,
   `/speckit-analyze`, and `/speckit-implement`, with `/speckit-clarify`, `/speckit-checklist`, and
   `/speckit-converge` as needed. `/speckit-analyze` MUST pass before `/speckit-implement`.
+- During implementation, Spec Kit MUST be used as its own guides describe
+  ([ADR 0035](../../docs/decisions/0035-spec-kit-during-implementation.md)):
+  - **Assess a discovery first**: a defect against agreed intent is fixed in code with a
+    regression test; anything else is a change of intent, design, or task breakdown. Code and
+    tests are evidence, never a replacement source of requirements.
+  - **Fix at the source**: a requirement gap goes to `/speckit-specify` or `/speckit-clarify`, a
+    design gap to the plan and its design artifacts, a task gap to `tasks.md`. A gap that
+    `/speckit-analyze` or a checklist reports MUST be fixed in the artifacts, never patched in
+    code.
+  - **Intent before code**: a change of intent MUST update the spec, then the plan and design
+    artifacts, then `tasks.md`, in that order, committed as its own reviewable change before the
+    code that delivers it. Rationale a replaced artifact held MUST be kept before it is replaced.
+  - **Analyze until clean**: `/speckit-analyze` MUST be re-run after every change to `spec.md`,
+    `plan.md`, `tasks.md`, or a design artifact, and its findings fixed at their source until it
+    reports no CRITICAL or HIGH finding. Analyze only reports; artifacts are reconciled by hand.
+  - **Validated stages**: `/speckit-implement` MUST run one unit of tasks at a time, each
+    validated before the next starts. With unchecked checklist items it MUST ask the owner before
+    continuing, and it MUST NOT change a checklist marker or approve its own work.
+  - **Converge**: `/speckit-converge` MUST run after the implementation of each user story and
+    before a feature is done. It only appends tasks; a gap becomes a task, never a direct code
+    edit, and implement and converge repeat until converge finds nothing.
 - Every spec MUST link the problem-space needs it addresses and the glossary terms it uses. Every
   plan MUST show the OSS research that Principle VI requires, including what Docker Agent already
   provides and what the platform adds.
@@ -552,4 +573,4 @@ Rationale: [ADR 0025](../../docs/decisions/0025-engineering-principles.md).
   - PATCH for clarifications and wording that do not change meaning
 - Compliance is checked in every plan's Constitution Check and in `/speckit-analyze`.
 
-**Version**: 2.0.0 | **Ratified**: 2026-11-11 | **Last Amended**: 2026-11-12
+**Version**: 2.1.0 | **Ratified**: 2026-11-11 | **Last Amended**: 2026-11-14

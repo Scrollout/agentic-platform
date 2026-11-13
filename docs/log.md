@@ -1,5 +1,9 @@
 # Directory Update Log
 
+## 2026-11-14
+
+* **Constitution**: version 2.1.0 ([ADR 0035](/decisions/0035-spec-kit-during-implementation.md)), from Spec Kit v1.4.0's guides on evolving specs and agentic SDD: during implementation a discovery is assessed first (defect or change of intent), fixed at its source, a change of intent updates spec, plan and tasks in that order as its own commit before code, `/speckit-analyze` is re-run until clean after every artifact change, implement runs in validated stages behind the checklist gate, and `/speckit-converge` runs after each user story and before a feature is done.
+
 ## 2026-11-13
 
 * **Implementation**: Feature 001, T053d (Story 2): `ap build-workers <slice> <project>` makes the project folder with an empty `.git` and the steps' folders, and starts one gVisor container per step of the pattern from the `step-agent` or the new `procedure-worker` template, each mounting only its project read-only with its step's writable folders writable (the whole root for generate) and `.git` read-only on top, each with its own call token; it registers each with the engine on its behalf, and running it again changes nothing. The engine learns grants made after it started from a folder only it mounts, read-only, one file per grant named by the SHA-256 of the worker's token and read at each authentication, so a removed file revokes and a malformed one grants nothing (owner's decision, research D31). `startRun` now refuses a project only when its folder holds a file, a symbolic link or a non-empty `.git`, so the skeleton of empty folders is accepted, and `build-workers` refuses a taken folder by the same rule; the worker templates hold no token by default (owner's decisions, [ADR 0034](/decisions/0034-step-worker-grants-as-files-read-at-each-authentication.md)). Tests by a separate author.
