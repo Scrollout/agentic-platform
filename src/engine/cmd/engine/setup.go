@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"embed"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -12,13 +10,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"sort"
-	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/agentic-platform/engine/analyst"
 	"github.com/agentic-platform/engine/api"
+	"github.com/agentic-platform/engine/canonical"
 	"github.com/agentic-platform/engine/contracts"
 	"github.com/agentic-platform/engine/slices"
 	"github.com/agentic-platform/engine/store"
@@ -124,33 +121,27 @@ func setup(getenv func(string) string) (http.Handler, func() error, error) {
 	return h, closeFn, nil
 }
 
-// agentDigest is the SHA-256, in lowercase hex, of the agent definition files under root, framed
-// so that no two sets of files give the same input: for each file, in byte order of its path
-// relative to root (the path under the analyst service's /agents), the path, a line feed, the
-// file's length in bytes as a decimal number, a line feed, then the file's bytes.
+// agentDigest is the SHA-256, in lowercase hex, of the agent definition files under root in their
+// framed form (canonical.FramedHash), each by its path relative to root (the path under the
+// analyst service's /agents), so that no two sets of files give the same digest.
 func agentDigest(files fs.FS, root string) (string, error) {
-	var paths []string
+	var set []canonical.File
 	err := fs.WalkDir(files, root, func(p string, d fs.DirEntry, err error) error {
-		if err == nil && !d.IsDir() {
-			paths = append(paths, strings.TrimPrefix(p, root+"/"))
+		if err != nil || d.IsDir() {
+			return err
 		}
-		return err
+		b, err := fs.ReadFile(files, p)
+		if err != nil {
+			return err
+		}
+		set = append(set, canonical.File{Path: strings.TrimPrefix(p, root+"/"), Content: b})
+		return nil
 	})
 	if err != nil {
 		return "", err
 	}
-	if len(paths) == 0 {
+	if len(set) == 0 {
 		return "", errors.New("no files")
 	}
-	sort.Strings(paths)
-	h := sha256.New()
-	for _, p := range paths {
-		b, err := fs.ReadFile(files, root+"/"+p)
-		if err != nil {
-			return "", err
-		}
-		h.Write([]byte(p + "\n" + strconv.Itoa(len(b)) + "\n"))
-		h.Write(b)
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
+	return canonical.FramedHash(set), nil
 }

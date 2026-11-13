@@ -49,6 +49,23 @@ mounted writable.
 `inputs` and `outputs` name artifacts. `slice/<part>` is an approved part of the slice. Any other
 name is the accepted output of the earlier step that lists it under `outputs`.
 
+## Module template
+
+The generate step starts from [`template/`](template/), the new project's module before
+generation. The generate procedure copies it, adds the approved contract, and writes the result
+into the project, except `vendortools/`.
+
+| File | What it declares |
+|------|------------------|
+| `template/go.mod` | The module path `example.com/service` (fixed, so the same contract gives the same files) and the pinned modules: `github.com/oapi-codegen/runtime v1.8.0`, the engine's version, as the one direct require, and `github.com/cucumber/godog v0.16.0`, the `src/deploy/images.lock` version, with the modules both need, marked `// indirect` |
+| `template/go.sum` | The hash of every module above. The procedure vendors with `GOPROXY=off` and refuses the result when `go mod vendor` would change `go.mod` or `go.sum` or a module disagrees with its hash |
+| `template/gen/oapi-codegen.yaml` | The project's oapi-codegen settings: package `gen`, strict server on `net/http`, models, output `gen/api.gen.go` |
+| `template/gen/generate.go` | The `//go:generate oapi-codegen` line. The procedure runs it with the pinned oapi-codegen in `gen/`, and `GenerationRepeatable` runs it again with `go generate` |
+| `template/vendortools/tools.go` | The packages vendored besides those the generated code imports, so later steps build offline from `vendor/`: godog for the tests step, and the runtime packages generated code may import. Its `tools` build tag keeps it out of every build, and the procedure never writes it into the project |
+
+The procedure also writes `gen/stub.go`, a `Stub` that answers every operation of the generated
+`ServerInterface` with 501 Not Implemented, for the tests to fail against.
+
 ## Dependencies
 
 Each entry is a Go package pattern: `std` (the standard library), an import path, or a path

@@ -1,0 +1,19 @@
+openapi: 3.1.0
+info:
+  title: Broken
+  version: 1.0.0
+paths:
+  /things:
+    get:
+      operationId: getThings
+      responses:
+        "200":
+          description: Things.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NoSuchSchema"
+components:
+  schemas:
+    Other:
+      type: string

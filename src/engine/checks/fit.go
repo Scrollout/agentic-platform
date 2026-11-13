@@ -129,6 +129,14 @@ func readSlice(b []byte) fitInput {
 	return in
 }
 
+// ContractUnreadable says why a contract's text cannot be read as the fit conditions read it
+// (exactly one YAML document without duplicate keys), or returns "" when it can. The contract-check
+// procedure refuses such a contract with this reason.
+func ContractUnreadable(text string) string {
+	_, why := readContract(text)
+	return why
+}
+
 // readContract parses the contract as exactly one YAML document. Decoding it once into a generic
 // value rejects duplicate keys, aliases that contain themselves and excessive aliasing, so the
 // node walks below are bounded.

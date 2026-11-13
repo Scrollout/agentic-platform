@@ -46,7 +46,7 @@ go_checks() {
   # The tests run once, with the race detector, in the Debian image.
   echo "== go test -race ($vr, CGO_ENABLED=1)"
   go_run none "
-    export GOPROXY=off GOFLAGS=-mod=readonly CGO_ENABLED=1
+    export GOPROXY=off GOFLAGS=-mod=readonly CGO_ENABLED=1 AP_OAPI_CODEGEN=/gopath/bin/oapi-codegen
     for m in $GO_MODULES; do
       if [ -z \"\$(find \"\$m\" -name '*.go' -print -quit)\" ]; then echo \"skip \$m: no Go files yet\"; continue; fi
       (cd \"\$m\" && go test -race ./...)
