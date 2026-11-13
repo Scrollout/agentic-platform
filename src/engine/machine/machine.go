@@ -7,7 +7,14 @@
 // An attempt the worker fails (an error, such as an unavailable model) is a rejected attempt; when
 // every attempt of a step fails so, or the run's context is cancelled (the platform stops), the run
 // is interrupted and Resume continues it without running an accepted step again. A step whose
-// reuse key is in Config.Results is not run: its accepted result is reused.
+// reuse key is in Config.Results is not run: its accepted result is reused, in any project.
+//
+// With Config.History, the project worker's version history is the run's compensation and its
+// commits (data-model.md, run rules): Restore before every attempt, Commit after every accepted
+// or reused step and before anything for the next step or the run's outcome. A failing call is
+// retried with backoff up to 3 times (D7), then the run is interrupted, never handed over, and
+// Resume makes the call again first; with less than 1 s of the run's time budget left the call is
+// not made and the run is interrupted.
 //
 // The machine holds its lock only while it reads or changes a run and appends an event, never
 // while a worker or a check runs, so a worker may call Start, Get or Cancel.
@@ -287,8 +294,51 @@ type StartParams struct {
 	Refs    []string
 }
 
+// History is the project's version history, kept by the project worker (check contract,
+// restoreStep and commitStep; data-model.md, run rules). An error, a time-out included, means the
+// call did not take effect; a repeat of either call is safe.
+type History interface {
+	// Restore makes the project folder hold Before, from the last commit, before an attempt.
+	Restore(ctx context.Context, r RestoreRequest) error
+	// Commit records an accepted or reused step as the project's next commit; created is false
+	// for a repeat of a commit already made.
+	Commit(ctx context.Context, r CommitRequest) (created bool, err error)
+}
+
+// RestoreRequest is restoreStep for the attempt about to start.
+type RestoreRequest struct {
+	Run       string
+	Step      Step
+	Attempt   int // from 1
+	Round     int // review rounds only, from 1; 0 otherwise
+	Project   string
+	Before    []File        // the files the last accepted step left; empty before the first
+	TimeLimit time.Duration // what is left of the run's time budget
+}
+
+// CommitRequest is commitStep for one accepted or reused step.
+type CommitRequest struct {
+	Run          string
+	Step         Step
+	Attempt      int    // the accepted attempt (StepAccepted); 0 for a reused result
+	Round        int    // the event's round, 0 when it has none
+	ReusedFrom   string // ResultReused only: the run that accepted the result
+	Project      string
+	Before       []File     // the previous accepted step's project files, empty for the first
+	ProjectFiles []File     // the event's Files
+	AcceptedAt   time.Time  // the `at` of the StepAccepted or ResultReused event
+	Outputs      []Artifact // ResultReused only: each declared output that is a set of project files
+	TimeLimit    time.Duration
+}
+
+// Artifact is a stored output by name and hash.
+type Artifact struct{ Name, SHA256 string }
+
 // Config wires a Machine. Results (optional) is the accepted-result store; Model is the model the
-// pattern's agents use, part of every agent step's reuse key.
+// pattern's agents use, part of every agent step's reuse key. History (optional) is the project's
+// version history: with it the machine calls Restore before every attempt and Commit after every
+// accepted or reused step. Sleep is the wait before a retried History call; nil waits in real
+// time.
 type Config struct {
 	Pattern Pattern
 	Worker  Worker
@@ -297,6 +347,8 @@ type Config struct {
 	Events  Events
 	Results *Results
 	Model   string
+	History History
+	Sleep   func(ctx context.Context, d time.Duration) error
 }
 
 // Reader is implemented by an Events sink that can read a run's record back, so a machine made
@@ -352,14 +404,16 @@ type run struct {
 
 	artifacts map[string]string // input or output name to hash
 	used      Usage
-	elapsed   time.Duration // running time before the current stretch
-	since     time.Time     // start of the current running stretch
-	pos       int           // index of the step being run
-	round     int           // review round, 0 before the first
-	fixing    bool          // the fix step runs before the next review round
-	open      []Finding     // blocking findings of the last review round
-	changed   []Line        // the lines the last fix changed
-	before    []File        // the project's files after the last accepted step
+	elapsed   time.Duration  // running time before the current stretch
+	since     time.Time      // start of the current running stretch
+	pos       int            // index of the step being run
+	round     int            // review round, 0 before the first
+	fixing    bool           // the fix step runs before the next review round
+	open      []Finding      // blocking findings of the last review round
+	changed   []Line         // the lines the last fix changed
+	before    []File         // the project's files after the last accepted step
+	commit    *CommitRequest // the last accepted step's commit, nil before the first
+	committed bool           // commit was made since the run (re)started driving
 }
 
 // New makes a Machine.
@@ -515,6 +569,7 @@ func (m *Machine) Resume(ctx context.Context, id string) (Run, error) {
 	}
 	r.Status, r.Reason, r.ExpiresAt = StatusRunning, "", time.Time{}
 	r.since, r.driving = m.cfg.Clock.Now(), true
+	r.committed = false // resume commits the last accepted step again first; a repeat is safe
 	m.mu.Unlock()
 	return m.drive(ctx, r)
 }
@@ -607,12 +662,15 @@ func (m *Machine) ExpireDue() error {
 
 // emit appends one event of the run; the lock is held. A run that has ended takes no more events
 // (errHalt). On an append error nothing changes and the error is returned.
-func (m *Machine) emit(r *run, e Event) error {
+func (m *Machine) emit(r *run, e Event) error { return m.emitp(r, &e) }
+
+// emitp is emit, filling in the event's seq, time and run.
+func (m *Machine) emitp(r *run, e *Event) error {
 	if r.Status == StatusEnded {
 		return errHalt
 	}
 	e.Seq, e.At, e.Run = r.seq+1, m.cfg.Clock.Now(), r.ID
-	if err := m.cfg.Events.Append(e); err != nil {
+	if err := m.cfg.Events.Append(*e); err != nil {
 		return fmt.Errorf("machine: run %s: the run record could not be written: %w", r.ID, err)
 	}
 	r.seq++

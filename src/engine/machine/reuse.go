@@ -52,7 +52,6 @@ type Accepted struct {
 	Run       string
 	Lines     []Line
 	Files     []File // the project's files after the step
-	Project   string // the project the step's files were written into
 }
 
 // Results is the accepted-result store, in memory. A nil *Results finds nothing and keeps nothing.

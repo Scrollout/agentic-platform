@@ -67,22 +67,6 @@ func stepsCalled(f *fixture) []string {
 	return out
 }
 
-func TestResultWithFilesIsNotReusedInAnotherProject(t *testing.T) {
-	results := machine.NewResults()
-	first := projectFixture(t, results, "generate", "tests")
-	assertEnded(t, first.startIn("RUN-1", "proj-a"), first.ev, "done")
-
-	second := projectFixture(t, results, "generate", "tests")
-	assertEnded(t, second.startIn("RUN-2", "proj-b"), second.ev, "done")
-	if got := stepsCalled(second); !slices.Equal(got, []string{"generate", "tests"}) {
-		t.Fatalf("steps run again in the other project = %v, want generate and tests only", got)
-	}
-	if got := second.reusedSteps(); !slices.Equal(got, []string{"contract-check", "code", "review"}) {
-		t.Fatalf("ResultReused for %v, want only the steps without files", got)
-	}
-	validate(t, second.ev.events)
-}
-
 func TestResultWithoutFilesIsReusedAcrossProjects(t *testing.T) {
 	results := machine.NewResults()
 	first := projectFixture(t, results)

@@ -76,6 +76,7 @@ type runs struct {
 	noRun   string // why no run can start, or ""
 	worker  machine.Worker
 	checker machine.Checker
+	history machine.History
 	model   string
 	clock   machine.Clock
 	results *machine.Results
@@ -100,7 +101,7 @@ func newRuns(cfg Config, svc *sl.Service, now func() time.Time, base context.Con
 	if !ok {
 		return nil
 	}
-	r := &runs{st: st, worker: cfg.StepWorker, checker: cfg.StepChecker, model: cfg.Model, clock: clockFunc(now),
+	r := &runs{st: st, worker: cfg.StepWorker, checker: cfg.StepChecker, history: cfg.History, model: cfg.Model, clock: clockFunc(now),
 		base: base, machines: map[string]*machine.Machine{}, pending: map[string]*runInfo{},
 		changed: map[string]chan struct{}{}, current: map[string]string{}}
 	switch p, err := svc.Pattern(); {
@@ -153,7 +154,7 @@ func (r *runs) reloadResults() {
 		for _, ev := range events {
 			if (ev.Kind == "StepAccepted" || ev.Kind == "ResultReused") && ev.ReuseKey != "" {
 				r.results.Put(machine.Accepted{Key: ev.ReuseKey, Artifacts: slices.Clone(ev.Artifacts), Run: ev.Run, Lines: slices.Clone(ev.ChangedLines),
-					Files: slices.Clone(ev.Files), Project: info.Project})
+					Files: slices.Clone(ev.Files)})
 			}
 		}
 	}
@@ -265,7 +266,7 @@ func (r *runs) machineFor(slice string) *machine.Machine {
 	m, ok := r.machines[slice]
 	if !ok {
 		m = machine.New(machine.Config{Pattern: r.pattern, Worker: r.worker, Checker: r.checker, Clock: r.clock,
-			Events: runEvents{r: r, slice: slice}, Results: r.results, Model: r.model})
+			Events: runEvents{r: r, slice: slice}, Results: r.results, Model: r.model, History: r.history})
 		r.machines[slice] = m
 	}
 	return m

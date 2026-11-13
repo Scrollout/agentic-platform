@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math/rand/v2"
 	"regexp"
 	"slices"
 	"strings"
@@ -28,15 +29,18 @@ func (s Step) Reviews() bool { return slices.Contains(s.Checks, noBlockingFindin
 func isAgent(s Step) bool { return strings.HasPrefix(s.Worker, "agent:") }
 
 // record appends an event under the lock.
-func (x *driver) record(e Event) error {
+func (x *driver) record(e Event) error { return x.recordp(&e) }
+
+// recordp is record, filling in the event's seq, time and run.
+func (x *driver) recordp(e *Event) error {
 	x.m.mu.Lock()
 	defer x.m.mu.Unlock()
 	return x.recordLocked(e)
 }
 
 // recordLocked appends an event; when the append fails the run is interrupted (it can be resumed).
-func (x *driver) recordLocked(e Event) error {
-	err := x.m.emit(x.r, e)
+func (x *driver) recordLocked(e *Event) error {
+	err := x.m.emitp(x.r, e)
 	if err != nil && !errors.Is(err, errHalt) {
 		x.stopLocked(StatusInterrupted, "the run record could not be written", nil)
 	}
@@ -54,7 +58,7 @@ func (x *driver) stopLocked(st Status, reason string, open []Finding) {
 func (x *driver) pause(kind string, st Status, reason string, open []Finding) error {
 	x.m.mu.Lock()
 	defer x.m.mu.Unlock()
-	if err := x.recordLocked(Event{Kind: kind, Refs: x.r.refs, Detail: reason}); err != nil {
+	if err := x.recordLocked(&Event{Kind: kind, Refs: x.r.refs, Detail: reason}); err != nil {
 		return err
 	}
 	x.stopLocked(st, reason, open)
@@ -84,6 +88,9 @@ func (x *driver) steps(ctx context.Context) error {
 		}
 		x.r.pos++
 		x.r.round, x.r.fixing, x.r.open, x.r.changed = 0, false, nil, nil
+	}
+	if err := x.flush(ctx); err != nil { // `done` only after the last accepted step's commit
+		return err
 	}
 	x.m.mu.Lock()
 	defer x.m.mu.Unlock()
@@ -165,17 +172,12 @@ func (x *driver) artifacts() map[string]string {
 	return maps.Clone(x.r.artifacts)
 }
 
-// reusable says whether an accepted result can stand for the step in this run. One that left
-// project files is reused only in the project they were written into: nothing yet writes a reused
-// result's files into a new project (T053a), so a replay into one would start the next step from
-// files the folder does not hold. Until T053a lifts this, such a step runs again there.
-func (x *driver) reusable(a Accepted) bool {
-	return len(a.Files) == 0 || a.Project == x.r.Project
-}
-
-// accept makes the step's artifacts and the project's files after it the run's, and counts it
-// accepted.
-func (x *driver) accept(s Step, artifacts []string, files []File) {
+// accept makes the step's artifacts and the project's files after it the run's, counts it
+// accepted and makes its commit the one to make next (flush). e is the recorded StepAccepted or
+// ResultReused; reusedFrom names the run whose result a ResultReused reuses.
+func (x *driver) accept(s Step, e Event, reusedFrom string) {
+	artifacts, files := e.Artifacts, e.Files
+	x.r.commit, x.r.committed = commitOf(x.r, s, e, reusedFrom), false
 	x.m.mu.Lock()
 	defer x.m.mu.Unlock()
 	x.r.before = slices.Clone(files)
@@ -200,17 +202,20 @@ func (x *driver) step(ctx context.Context, s Step, round int, open []Finding, ch
 		inputs[i] = h
 	}
 	keyInputs, key := x.stepKey(s, inputs, open, changed)
-	if a, ok := x.m.cfg.Results.Get(key); ok && len(a.Artifacts) == len(s.Outputs) && x.reusable(a) {
+	if err := x.flush(ctx); err != nil { // the last accepted step's commit comes before anything for this one
+		return Result{}, rejected, err
+	}
+	if a, ok := x.m.cfg.Results.Get(key); ok && len(a.Artifacts) == len(s.Outputs) {
 		e := Event{Kind: "ResultReused", Step: s.Name, Round: round, Worker: s.Worker, Pattern: x.r.Pattern,
 			Inputs: keyInputs, Artifacts: a.Artifacts, ReuseKey: key, Refs: x.r.refs, ChangedLines: slices.Clone(a.Lines),
 			Files: slices.Clone(a.Files)}
 		if isAgent(s) {
 			e.AgentDigest, e.Model = s.AgentDigest, x.m.cfg.Model
 		}
-		if err := x.record(e); err != nil {
+		if err := x.recordp(&e); err != nil {
 			return Result{}, rejected, err
 		}
-		x.accept(s, a.Artifacts, a.Files)
+		x.accept(s, e, a.Run)
 		out := map[string]string{}
 		for i, name := range s.Outputs {
 			out[name] = a.Artifacts[i]
@@ -230,6 +235,9 @@ func (x *driver) step(ctx context.Context, s Step, round int, open []Finding, ch
 		}
 		if why := x.runOverBudget(); why != "" {
 			return Result{}, overBudget, x.handOver(why, nil)
+		}
+		if err := x.restore(ctx, s, a, round); err != nil {
+			return Result{}, rejected, err
 		}
 		res, v, why, err := x.attempt(ctx, s, attemptOf{a, round, open, changed, inputs, keyInputs, key})
 		if err != nil {
@@ -383,12 +391,12 @@ func (x *driver) attempt(ctx context.Context, s Step, at attemptOf) (Result, ver
 	case len(failed) == 0:
 		made.Kind, made.Usage, made.ChangedLines = "StepAccepted", nil, slices.Clone(res.ChangedLines)
 		made.Files = slices.Clone(res.ProjectFiles)
-		if err := x.record(made); err != nil {
+		if err := x.recordp(&made); err != nil {
 			return res, rejected, "", err
 		}
 		x.m.cfg.Results.Put(Accepted{Key: at.key, Artifacts: artifacts, Run: x.r.ID, Lines: slices.Clone(res.ChangedLines),
-			Files: slices.Clone(res.ProjectFiles), Project: x.r.Project})
-		x.accept(s, artifacts, res.ProjectFiles)
+			Files: slices.Clone(res.ProjectFiles)})
+		x.accept(s, made, "")
 		return res, accepted, "", nil
 	case open:
 		why := fmt.Sprintf("review round %d left blocking findings open", at.round)
@@ -430,4 +438,121 @@ func (x *driver) runOverBudget() string {
 		return fmt.Sprintf("the run took %s, past the run's time budget of %s", took, rb.Duration)
 	}
 	return ""
+}
+
+// historyRetries is how often a failed restoreStep or commitStep is retried (D7).
+const historyRetries = 3
+
+// historyBackoff is the wait before retry n (0-based): exponential backoff with jitter over the
+// window 1s<<n, as api/operations.go's backoff, but never 0: half the window plus a random part
+// of the other half, in (window/2, window].
+func historyBackoff(n int) time.Duration {
+	window := time.Second << n
+	return window/2 + rand.N(window/2) + 1
+}
+
+// historyMinLeft is the least of the run's time budget a History call is made with.
+const historyMinLeft = time.Second
+
+// commitOf is the commit of the step a StepAccepted or ResultReused event accepted, made on the
+// files r held before it (r.before, not yet replaced).
+func commitOf(r *run, s Step, e Event, reusedFrom string) *CommitRequest {
+	c := &CommitRequest{Run: r.ID, Step: s, Attempt: e.Attempt, Round: e.Round, Project: r.Project,
+		Before: slices.Clone(r.before), ProjectFiles: slices.Clone(e.Files), AcceptedAt: e.At}
+	if e.Kind == "ResultReused" {
+		c.Attempt, c.ReusedFrom = 0, reusedFrom
+		if !s.Reviews() { // the review's findings are not a set of project files
+			for i, o := range s.Outputs {
+				if i < len(e.Artifacts) {
+					c.Outputs = append(c.Outputs, Artifact{Name: o, SHA256: e.Artifacts[i]})
+				}
+			}
+		}
+	}
+	return c
+}
+
+// left is what is left of the run's time budget.
+func (x *driver) left() time.Duration {
+	return x.pattern().RunBudget.Duration - (x.r.elapsed + x.m.cfg.Clock.Now().Sub(x.r.since))
+}
+
+func (x *driver) sleep(ctx context.Context, d time.Duration) error {
+	if x.m.cfg.Sleep != nil {
+		return x.m.cfg.Sleep(ctx, d)
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
+
+// callHistory makes one History call, given what is left of the run's budget, retried after a
+// wait with jitter (historyBackoff) up to historyRetries times. When it still fails, or less
+// than historyMinLeft is left, the run is interrupted (never handed over) with the reason; the
+// error halts the run.
+func (x *driver) callHistory(ctx context.Context, step, what string, call func(ctx context.Context, left time.Duration) error) error {
+	var err error
+	for try := 0; ; try++ {
+		left := x.left()
+		if left < historyMinLeft {
+			return x.interrupt(fmt.Sprintf("%s was not called: less than %s of the run's time budget is left", what, historyMinLeft))
+		}
+		cctx, cancel := context.WithTimeout(ctx, left)
+		err = call(cctx, left)
+		cancel()
+		if err == nil {
+			return nil
+		}
+		if ctx.Err() != nil {
+			return x.interrupt(fmt.Sprintf("the run stopped during step %s", step))
+		}
+		if try == historyRetries {
+			break
+		}
+		if serr := x.sleep(ctx, historyBackoff(try)); serr != nil {
+			return x.interrupt(fmt.Sprintf("the run stopped during step %s", step))
+		}
+	}
+	return x.interrupt(fmt.Sprintf("%s failed %d times; the last: %v", what, historyRetries+1, err))
+}
+
+// restore calls restoreStep before an attempt: the project folder is made to hold the files the
+// last accepted step left, undoing whatever an earlier attempt wrote (the run's compensation).
+func (x *driver) restore(ctx context.Context, s Step, attempt, round int) error {
+	h := x.m.cfg.History
+	if h == nil {
+		return nil
+	}
+	rq := RestoreRequest{Run: x.r.ID, Step: s, Attempt: attempt, Round: round, Project: x.r.Project,
+		Before: slices.Clone(x.r.before)}
+	return x.callHistory(ctx, s.Name, fmt.Sprintf("restoreStep for attempt %d of step %s", attempt, s.Name),
+		func(ctx context.Context, left time.Duration) error {
+			rq.TimeLimit = left
+			return h.Restore(ctx, rq)
+		})
+}
+
+// flush makes the last accepted step's commit unless it was made since the run started driving;
+// Resume always makes it again (a repeat is safe).
+func (x *driver) flush(ctx context.Context) error {
+	h, c := x.m.cfg.History, x.r.commit
+	if h == nil || c == nil || x.r.committed {
+		return nil
+	}
+	err := x.callHistory(ctx, c.Step.Name, "commitStep for step "+c.Step.Name,
+		func(ctx context.Context, left time.Duration) error {
+			rq := *c
+			rq.TimeLimit = left
+			_, err := h.Commit(ctx, rq)
+			return err
+		})
+	if err == nil {
+		x.r.committed = true
+	}
+	return err
 }

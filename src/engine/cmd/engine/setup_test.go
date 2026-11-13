@@ -90,6 +90,7 @@ func goodEnv(lint, analyst, dir string) env {
 		"AP_LINT_URL": lint, "AP_LINT_TOKEN": "lint-token",
 		"AP_ANALYST_URL": analyst, "AP_ANALYST_TOKEN": "analyst-token",
 		"AP_CHECK_URL": "http://check:8080", "AP_CHECK_TOKEN": "check-token",
+		"AP_PROJECT_URL": "http://project-worker:8080", "AP_PROJECT_TOKEN": "project-token",
 		"ENGINE_STORE_DIR": dir,
 	}
 }
@@ -111,6 +112,7 @@ func TestSetupRefusesAMissingOrEmptyVariableNamingIt(t *testing.T) {
 	for _, name := range []string{
 		"ENGINE_LISTEN_ADDRESS", "ENGINE_CLIENT_TOKEN", "ENGINE_PAGE_TOKEN", "ENGINE_WORKER_TOKEN",
 		"AP_LINT_URL", "AP_LINT_TOKEN", "AP_ANALYST_URL", "AP_ANALYST_TOKEN", "AP_CHECK_URL", "AP_CHECK_TOKEN", "ENGINE_STORE_DIR",
+		"AP_PROJECT_URL", "AP_PROJECT_TOKEN",
 	} {
 		for _, how := range []string{"missing", "empty"} {
 			e := goodEnv("http://lint:8080", "http://analyst:8080", dir)
@@ -139,7 +141,7 @@ func TestSetupRefusesAMissingOrEmptyVariableNamingIt(t *testing.T) {
 
 func TestSetupRefusesTokensThatAreNotAllDistinct(t *testing.T) {
 	dir := t.TempDir()
-	names := []string{"ENGINE_CLIENT_TOKEN", "ENGINE_PAGE_TOKEN", "ENGINE_WORKER_TOKEN", "AP_LINT_TOKEN", "AP_ANALYST_TOKEN"}
+	names := []string{"ENGINE_CLIENT_TOKEN", "ENGINE_PAGE_TOKEN", "ENGINE_WORKER_TOKEN", "AP_LINT_TOKEN", "AP_ANALYST_TOKEN", "AP_PROJECT_TOKEN"}
 	for i, a := range names {
 		for _, b := range names[i+1:] {
 			e := goodEnv("http://lint:8080", "http://analyst:8080", dir)

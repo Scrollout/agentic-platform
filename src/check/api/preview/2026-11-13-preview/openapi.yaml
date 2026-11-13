@@ -59,15 +59,29 @@ info:
     the ID of the last commit it made, that commit's parent ID, the `run`, `step`, `round` and
     `attempt` or `reused_from` its trailers name, and the SHA-256 of the `.git/config` it wrote.
     It replaces the record atomically (a temporary file, written and synced, then renamed over
-    the old one): first a provisional record right after creating the repository (the
-    `.git/config` hash, no commit yet), then after it makes each commit object and before it
-    moves the branch to it. Creating the repository: only commitStep does it, in its step (5),
-    after its `before` check, when the project has no record. It empties the contents of `.git` (never the folder itself, which step
-    containers mount; with no record, anything in it can only be the project worker's own
-    unfinished first call, since no step container can write `.git`), creates the folder when
-    it is missing, runs `git init --template=` (no template) with the branch `main`, and writes
-    the provisional record. The history check: before running any other git command,
-    commitStep and restoreStep inspect `.git` as files, and with a record it passes only when
+    the old one): first a claimed record (the project's name and the time it was claimed, in
+    UTC; no `.git/config` hash, no commit and no run) when a first touch passes the new-project check below, before `git init` and before
+    any file is written; then a provisional record right after creating the repository (the
+    `.git/config` hash, no commit yet); then after it makes each commit object and before it
+    moves the branch to it. A new project (FR-025): with no record, a call is the run's first
+    touch of the project when it is restoreStep for attempt 1 or commitStep with `reused_from`
+    (a replay's first write). It passes only when the folder holds no file and no symbolic link
+    outside `.git`, at any depth, and `.git` is missing or empty (a folder of empty folders, such
+    as the skeleton `ap build-workers` makes, passes); otherwise it answers 409 ProjectExists,
+    whose `detail` names the first path found, and changes nothing. A first touch that passes
+    writes the claimed record first. Every other call with no record, and every call with a
+    claimed record, follows the no-record rules below, so the first commit, a restore after a
+    rejected attempt, a resume that repeats an attempt and a retry after a crash in any window
+    are never a first touch. Creating the
+    repository: only commitStep does it, in its step (5),
+    after its `before` check, when the project has no record or a claimed one. It empties the
+    contents of `.git` (never the folder itself, which step containers mount; with no record or
+    a claimed one, anything in it can only be the project worker's own unfinished first call,
+    since no step container can write `.git`), creates the folder when it is missing, runs `git
+    init --template=` (no template) with the branch `main`, and writes the provisional record. A
+    crash at any point of a first call leaves the claimed or the provisional record, so the
+    next call recovers it by these rules. The history check: before running any other git command,
+    commitStep and restoreStep inspect `.git` as files, and with a provisional or full record it passes only when
     `.git` holds no symbolic link anywhere and no `commondir`, `gitdir`, `shallow`,
     `info/grafts` or `objects/info/alternates`; `.git/HEAD` is exactly `ref: refs/heads/main`
     followed by one line feed; `.git/config` has the recorded SHA-256; no `packed-refs` entry
@@ -75,8 +89,9 @@ info:
     names the recorded parent (is missing, when the recorded commit has no parent) only when the
     recorded commit is exactly the commit this request makes (a call that stopped between
     recording and moving the branch); with a provisional record, the branch must be missing.
-    Then, with git, the recorded commit must exist with the recorded parent and trailers. With
-    no record, restoreStep needs no repository: it only requires `before` to be empty (otherwise 409
+    Then, with git, the recorded commit must exist with the recorded parent and trailers. The
+    history check applies only with a provisional or a full record. With no record or a claimed
+    one, restoreStep needs no repository: it only requires `before` to be empty (otherwise 409
     ProjectStateDiffers, as for a last commit that does not hold `before`). Anything else answers 409
     HistoryChanged and changes nothing. Git always runs with `GIT_NO_REPLACE_OBJECTS=1`,
     `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`, `-c core.fsmonitor=false`, `-c
@@ -457,7 +472,14 @@ paths:
         earlier run's result for it (ResultReused, with `reused_from`), and before it calls anything
         for the next step or records the run's outcome. Exactly one of `attempt` and `reused_from`
         is sent, and `outputs` only with `reused_from`; any other combination is 400 InvalidRequest.
-        In order: (1) Repeat. When the last commit already records this `run`, `step`, `round` and
+        In order: (0) A new project (FR-025; info.description, A new project). With no record, a
+        call with `reused_from` (a replay's first write) answers 409 ProjectExists, its `detail`
+        naming the first path found, and changes nothing when the folder holds any file or
+        symbolic link outside `.git`, at any depth, or a `.git` that holds anything (a missing or
+        empty `.git` and a folder of empty folders pass); when it passes, the claimed record is
+        written atomically before `git init` or any file. With no record or a claimed one, the
+        no-record rules follow; the history check applies only with a provisional or full
+        record. (1) Repeat. When the last commit already records this `run`, `step`, `round` and
         `attempt` or `reused_from` (its trailers, below), the call is a repeat: when that commit is
         exactly the commit this request makes (its tree holds `project_files`, its parent's tree
         holds `before`, its dates are `accepted_at`), nothing is changed and the call answers with
@@ -467,7 +489,7 @@ paths:
         history check (info.description, The project worker's record) comes before this, and a
         failed check is 409 HistoryChanged. (2)
         Starting state. The last commit must hold exactly the files `before` lists (before the
-        first commit, with no record or a provisional one, none); otherwise 409
+        first commit, with no record or a claimed or provisional one, none); otherwise 409
         ProjectStateDiffers and nothing is changed. (3) A reused result. With `reused_from`, every
         output's content is checked against its `sha256` before anything is written (422
         InputHashMismatch), then the files are written as runProcedure writes a completed result:
@@ -477,7 +499,7 @@ paths:
         sent. (4) Ending state. The folder must now hold exactly the files `project_files` lists;
         otherwise 409 ProjectStateDiffers and nothing is committed (files step 3 wrote stay, and a
         repeat converges them). (5) Commit. The repository is created in `.git` when the project
-        has no record (info.description, Creating the repository; the run's first commit, after
+        has no record or a claimed one (info.description, Creating the repository; the run's first commit, after
         contract-check), with the one branch `main`; `.git` is emptied only here, in step (5),
         after the starting-state check of step (2) passed, and the folder is committed on `main` as one commit whose parent
         is the last commit (none for the first). A step that changed no file still gets its commit,
@@ -507,7 +529,7 @@ paths:
         '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
         '401': [Unauthorized]
         '404': [VersionHistoryNotServed]
-        '409': [ProjectStateDiffers, HistoryChanged]
+        '409': [ProjectStateDiffers, HistoryChanged, ProjectExists]
         '422': [UnreadableProject, InputHashMismatch]
         '429': [RateLimited]
         '500': [WriteFailed, ResponseTooLarge]
@@ -559,9 +581,17 @@ paths:
         `before` lists, taken from the last commit of its version history, so an attempt starts from
         the files the last accepted step left. The engine calls it before every attempt of every
         step: it undoes whatever a rejected or interrupted attempt wrote (the run's compensation),
-        and changes nothing when the folder already holds `before`. The history check
-        (info.description, The project worker's record) comes first; a failed check is 409
-        HistoryChanged. The last commit must hold
+        and changes nothing when the folder already holds `before`. In order: (0) A new project
+        (FR-025; info.description, A new project). With no record, a call for attempt 1 (the
+        run's first touch of the folder) answers 409 ProjectExists, its `detail` naming the first
+        path found, and changes nothing when the folder holds any file or symbolic link outside
+        `.git`, at any depth, or any content in `.git` (a missing or empty `.git` and a folder of
+        empty folders pass); when it passes, the claimed record is written atomically before any
+        file changes. A call for a later attempt with no record, and any call with a claimed
+        record, attempt 1 included, keeps the no-record rules, so a rejected first attempt is
+        still undone and a resume that repeats attempt 1 is not refused. (1) The history check (info.description, The project worker's record),
+        only with a provisional or full record; a failed check is 409 HistoryChanged. (2) The
+        last commit must hold
         exactly the files `before` lists (no commit holds none, so before the first accepted step
         `before` is empty); otherwise 409 ProjectStateDiffers and nothing is changed. Every file the
         commit holds is written back in place with its committed bytes where the folder's differs
@@ -586,7 +616,7 @@ paths:
         '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
         '401': [Unauthorized]
         '404': [VersionHistoryNotServed]
-        '409': [ProjectStateDiffers, HistoryChanged]
+        '409': [ProjectStateDiffers, HistoryChanged, ProjectExists]
         '422': [UnreadableProject]
         '429': [RateLimited]
         '500': [WriteFailed, ResponseTooLarge]
@@ -692,7 +722,10 @@ components:
       description: ProjectStateDiffers, the project's last commit or its folder does not hold the
         files the request lists; `detail` names the first path that differs, or says that the
         project has no commit. Or HistoryChanged, the project's version history is not the one the
-        project worker made (its record); `detail` says what differs. Nothing was committed.
+        project worker made (its record); `detail` says what differs. Or ProjectExists, the
+        project has no record and its folder already holds a file, a symbolic link or a non-empty
+        `.git` (commitStep with `reused_from`, restoreStep for attempt 1); `detail` names the
+        first path found. Nothing was committed.
       content:
         application/problem+json:
           schema:
@@ -743,7 +776,9 @@ components:
         histories (commitStep, restoreStep). ProjectStateDiffers: the project's last commit or its
         folder does not hold the files the request lists. HistoryChanged: the project's version history
         is not the one the project worker made (`.git/HEAD`, the branch `main` or `.git/config`
-        differs from its record). UnreadableProject: the project folder does not exist, is not a folder,
+        differs from its record). ProjectExists: the project has no record and its folder
+        already holds a file, a symbolic link or a non-empty `.git`, so a run may not take it over
+        (FR-025). UnreadableProject: the project folder does not exist, is not a folder,
         cannot be read, holds more than `x-limits.project-files-max` files, or holds an entry the
         operation may not read or write (not a regular file or folder, a file larger than
         `x-limits.project-file-max-bytes`, a path that is not a ProjectPath, or reached through a
@@ -765,6 +800,7 @@ components:
       - VersionHistoryNotServed
       - ProjectStateDiffers
       - HistoryChanged
+      - ProjectExists
       - UnreadableProject
       - InputHashMismatch
       - StepFilesTooLarge

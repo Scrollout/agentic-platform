@@ -95,6 +95,9 @@ type Config struct {
 	// engine cannot drive a run.
 	StepWorker  machine.Worker
 	StepChecker machine.Checker
+	// History is the project worker's version history (machine.Config.History): restoreStep
+	// before every attempt, commitStep after every accepted or reused step. nil makes no calls.
+	History machine.History
 	// Model is the model the pattern's agent steps use, part of their reuse keys. Empty means no
 	// accepted result of an agent step is reused (a replay runs those steps again).
 	Model string

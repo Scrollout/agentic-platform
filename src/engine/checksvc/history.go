@@ -128,13 +128,19 @@ func ident(date int64) string {
 // ---- the record ----
 
 // record is the project worker's record of a project's last commit, kept outside the project.
-// Commit empty is the provisional record written right after the repository was created.
+// Commit empty is the provisional record written right after the repository was created. A
+// claimed record (ClaimedAt set, everything else empty but Project) is the one a passing first
+// touch writes before anything else (FR-025); the no-record rules apply to it.
 type record struct {
 	Commit string `json:"commit"`
 	Parent string `json:"parent"`
 	stamp
-	Config string `json:"config_sha256"`
+	Config    string `json:"config_sha256"`
+	Project   string `json:"project,omitempty"`
+	ClaimedAt string `json:"claimed_at,omitempty"`
 }
+
+func (r record) claimed() bool { return r.ClaimedAt != "" }
 
 func (s *service) recordPath(project string) string {
 	return filepath.Join(s.cfg.History, project+".json")
@@ -153,11 +159,41 @@ func (s *service) loadRecord(project string) (*record, error) {
 	var r record
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(&r); err != nil || (r.Commit != "" && !objectID.MatchString(r.Commit)) ||
-		(r.Parent != "" && !objectID.MatchString(r.Parent)) || (r.Commit == "" && r.Parent != "") || len(r.Config) != 64 {
+	bad := dec.Decode(&r) != nil
+	if r.claimed() {
+		_, terr := time.Parse(time.RFC3339, r.ClaimedAt)
+		bad = bad || terr != nil || r.Project != project || r.Commit != "" || r.Parent != "" || r.Config != "" ||
+			r.stamp.message() != (stamp{}).message()
+	} else {
+		bad = bad || r.Project != "" || (r.Commit != "" && !objectID.MatchString(r.Commit)) ||
+			(r.Parent != "" && !objectID.MatchString(r.Parent)) || (r.Commit == "" && r.Parent != "") || len(r.Config) != 64
+	}
+	if bad {
 		return nil, historyChanged("the project worker's record of %s is not one it wrote", project)
 	}
 	return &r, nil
+}
+
+// firstTouch applies the FR-025 guard to a run's first touch of a project with no record
+// (restoreStep for attempt 1, commitStep with reused_from) and, when it passes, claims the
+// project: the claimed record is written atomically before anything else changes. It returns
+// the record the call goes on with: nil for no record or a claimed one, which follow the same
+// no-record rules.
+func (s *service) firstTouch(dir, project string, rec *record, first bool) (*record, error) {
+	if rec == nil && first {
+		if err := newProject(dir, project); err != nil {
+			return nil, err
+		}
+		claim := record{Project: project, ClaimedAt: time.Now().UTC().Format(time.RFC3339)}
+		if err := s.saveRecord(project, claim); err != nil {
+			return nil, historyWriteFailed("the version history of %s could not be written", project)
+		}
+		return nil, nil
+	}
+	if rec != nil && rec.claimed() {
+		return nil, nil
+	}
+	return rec, nil
 }
 
 // saveRecord replaces the project's record atomically: a temporary file in the same folder,
@@ -654,6 +690,50 @@ func (s *service) guard(r *repo, rec *record, w *wanted) (string, error) {
 	}
 }
 
+// ---- a new project (FR-025) ----
+
+// newProject is the guard on a run's first touch of a project the worker has no record for
+// (restoreStep for attempt 1, commitStep with reused_from): the folder may hold folders only,
+// with no file or symbolic link at any depth and a missing or empty `.git`; otherwise 409
+// ProjectExists naming the first path found, before anything changes. No link is followed.
+func newProject(dir, name string) error {
+	exists := func(why string) error {
+		return fault(409, gen.ErrorCodeProjectExists, "the project "+name+" already exists: "+why+"; a run builds only into a new project")
+	}
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == dir {
+			return nil
+		}
+		rel, _ := filepath.Rel(dir, path)
+		rel = filepath.ToSlash(rel)
+		if rel == gitFolder && d.IsDir() {
+			es, err := os.ReadDir(path)
+			if err != nil {
+				return err
+			}
+			if len(es) > 0 {
+				return exists(".git holds " + es[0].Name())
+			}
+			return fs.SkipDir
+		}
+		if !d.IsDir() {
+			return exists("it holds " + rel)
+		}
+		return nil
+	})
+	if err != nil {
+		var p *problemError
+		if errors.As(err, &p) {
+			return err
+		}
+		return unreadable("the project folder %s cannot be read", name)
+	}
+	return nil
+}
+
 // ---- commitStep ----
 
 func (s *service) CommitStep(ctx context.Context, req gen.CommitStepRequestObject) (gen.CommitStepResponseObject, error) {
@@ -712,6 +792,9 @@ func (s *service) commitStep(ctx context.Context, body gen.CommitRequest, output
 	}
 	rec, err := s.loadRecord(body.Project)
 	if err != nil {
+		return none, err
+	}
+	if rec, err = s.firstTouch(dir, body.Project, rec, body.ReusedFrom != nil); err != nil {
 		return none, err
 	}
 	r := s.repo(ctx, dir, w.date)
@@ -1007,6 +1090,9 @@ func (s *service) restoreStep(ctx context.Context, body gen.RestoreRequest) (gen
 	}
 	rec, err := s.loadRecord(body.Project)
 	if err != nil {
+		return none, err
+	}
+	if rec, err = s.firstTouch(dir, body.Project, rec, body.Attempt == 1); err != nil {
 		return none, err
 	}
 	r := s.repo(ctx, dir, 0)

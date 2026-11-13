@@ -71,8 +71,10 @@ Shipped by Story 2 so far:
   sends every check to the check service, except ContractLintPasses, which goes to contract-lint.
   A review finding blocks only when its rule's tests, rerun by the check service, fail at the file
   it names ([ADR 0031](/decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md)).
-  Until T053e writes a replay's reused files into the new project, a reused result that left
-  files is reused only in its own project.
+  Before every attempt it calls the project worker's `restoreStep`, and after every accepted or
+  reused step its `commitStep`, retried with backoff with jitter and otherwise interrupting the
+  run (T053e).
+  A reused result is reused in any project: `commitStep` writes its stored files there.
 
 Planned for Story 2 (T053a, split into T053c to T053e):
 
@@ -81,7 +83,7 @@ Planned for Story 2 (T053a, split into T053c to T053e):
   version history as a git repository in the project folder, with [git](/components/git.md):
   `commitStep` makes one deterministic commit per accepted step (and first writes a reused step's
   stored files during a replay), and `restoreStep` restores the project to its last commit before
-  every attempt, which is the run's compensation. The engine calls both (T053e). It still runs
+  every attempt, which is the run's compensation. The engine calls both (T053e). The engine runs
   no git and mounts no project, and the check service stays read-only
   ([ADR 0032](/decisions/0032-project-version-history-kept-by-a-project-worker.md)).
 - **Step containers** (T053d): `ap build-workers` starts the per-slice step containers when a

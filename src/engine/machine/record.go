@@ -85,6 +85,11 @@ func (m *Machine) load(events []Event) (*run, error) {
 			if !slices.Contains(r.Accepted, s.Name) {
 				r.Accepted = append(r.Accepted, s.Name)
 			}
+			reusedFrom := ""
+			if a, ok := m.cfg.Results.Get(e.ReuseKey); ok && e.Kind == "ResultReused" {
+				reusedFrom = a.Run
+			}
+			r.commit = commitOf(r, s, e, reusedFrom) // resume makes it again first
 			r.before = slices.Clone(e.Files)
 			switch {
 			case review:

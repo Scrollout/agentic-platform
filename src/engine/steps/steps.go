@@ -2,7 +2,7 @@
 // D27, D29): an agent step on its step container's Docker Agent `serve api`, a fixed procedure on
 // its procedure step worker, and every check on the check service, except ContractLintPasses,
 // which the contract-lint service judges. NewWorker and NewChecker give the machine's Worker and
-// Checker.
+// Checker, and NewHistory its History, the project worker's restoreStep and commitStep.
 //
 // What an attempt returns is bound to the files it left: the worker reads them once (readStepFiles
 // or runProcedure), stores each output's framed form and returns its hash, the project's files
@@ -54,6 +54,9 @@ type Config struct {
 	Endpoints Endpoints
 	// CheckURL and CheckToken reach the check service.
 	CheckURL, CheckToken string
+	// ProjectURL and ProjectToken reach the project worker, which keeps each project's version
+	// history (NewHistory).
+	ProjectURL, ProjectToken string
 	// Lint judges ContractLintPasses: it lints a contract's text.
 	Lint func(ctx context.Context, contract string) (passed bool, reason string, err error)
 	// Models is the model each agent step's definition pins, by step name. An agent step with no

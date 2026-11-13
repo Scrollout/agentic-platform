@@ -127,7 +127,8 @@ services:
         limits: { cpus: "1", memory: 128m, pids: 128 }
 
   # Workflow engine (src/engine). It holds the three caller tokens to tell callers apart (research
-  # D12), and the tokens it calls contract-lint and the analyst with (research D27, D28).
+  # D12), and the tokens it calls contract-lint, the analyst, the check service and the project
+  # worker with (research D27, D28, D29, D30).
   engine:
     <<: *hardened
     image: ${AP_IMAGE_ENGINE:?set AP_IMAGE_ENGINE to the signed ap-engine image (ap up does this; build it with src/deploy/build.sh engine)}
@@ -144,6 +145,8 @@ services:
       AP_ANALYST_TOKEN: ${AP_ANALYST_TOKEN:?set AP_ANALYST_TOKEN (ap up does this)}
       AP_CHECK_URL: http://check:8080
       AP_CHECK_TOKEN: ${AP_CHECK_TOKEN:?set AP_CHECK_TOKEN (ap up does this)}
+      AP_PROJECT_URL: http://project-worker:8080
+      AP_PROJECT_TOKEN: ${AP_PROJECT_TOKEN:?set AP_PROJECT_TOKEN (ap up does this)}
       ENGINE_STORE_DIR: /var/lib/engine
       ENGINE_GRANTS_DIR: /var/lib/engine-grants
     tmpfs:

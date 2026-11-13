@@ -5,7 +5,9 @@
 // ENGINE_WORKER_TOKEN; AP_LINT_URL and AP_LINT_TOKEN for the contract-lint service;
 // AP_ANALYST_URL and AP_ANALYST_TOKEN for the analyst service; and ENGINE_STORE_DIR, the existing
 // directory of the run store; and AP_CHECK_URL and AP_CHECK_TOKEN for the check service. All tokens
-// must differ. ENGINE_GRANTS_DIR, optional, is the existing folder of step worker grants the
+// must differ. AP_PROJECT_URL and AP_PROJECT_TOKEN reach the project worker, which keeps each
+// project's version history (restoreStep before every attempt, commitStep after every accepted
+// step). ENGINE_GRANTS_DIR, optional, is the existing folder of step worker grants the
 // launcher writes (one file per grant, read at each worker-token authentication; research D31);
 // unset, no step worker can register. See setup.
 package main

@@ -49,11 +49,11 @@ const agentRoot = "gen/agents"
 var variables = []string{
 	"ENGINE_LISTEN_ADDRESS", "ENGINE_CLIENT_TOKEN", "ENGINE_PAGE_TOKEN", "ENGINE_WORKER_TOKEN",
 	"AP_LINT_URL", "AP_LINT_TOKEN", "AP_ANALYST_URL", "AP_ANALYST_TOKEN", "AP_CHECK_URL", "AP_CHECK_TOKEN",
-	"ENGINE_STORE_DIR",
+	"AP_PROJECT_URL", "AP_PROJECT_TOKEN", "ENGINE_STORE_DIR",
 }
 
 // tokenVariables must all differ from each other: each names one caller or one callee.
-var tokenVariables = []string{"ENGINE_CLIENT_TOKEN", "ENGINE_PAGE_TOKEN", "ENGINE_WORKER_TOKEN", "AP_LINT_TOKEN", "AP_ANALYST_TOKEN", "AP_CHECK_TOKEN"}
+var tokenVariables = []string{"ENGINE_CLIENT_TOKEN", "ENGINE_PAGE_TOKEN", "ENGINE_WORKER_TOKEN", "AP_LINT_TOKEN", "AP_ANALYST_TOKEN", "AP_CHECK_TOKEN", "AP_PROJECT_TOKEN"}
 
 // projectsMount is where a step container sees the projects folder (src/deploy/compose.yaml).
 const projectsMount = "/projects"
@@ -77,7 +77,7 @@ func setup(getenv func(string) string) (http.Handler, func() error, error) {
 			}
 		}
 	}
-	for _, name := range []string{"AP_LINT_URL", "AP_ANALYST_URL", "AP_CHECK_URL"} {
+	for _, name := range []string{"AP_LINT_URL", "AP_ANALYST_URL", "AP_CHECK_URL", "AP_PROJECT_URL"} {
 		if u, err := url.Parse(env[name]); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 			return nil, nil, fmt.Errorf("%s is not an http(s) URL with a host", name)
 		}
@@ -129,7 +129,7 @@ func setup(getenv func(string) string) (http.Handler, func() error, error) {
 		Workers:   api.NewWorkers(),
 		GrantsDir: grants,
 	}
-	if err := wireSteps(&cfg, svc, st, env["AP_CHECK_URL"], env["AP_CHECK_TOKEN"]); err != nil {
+	if err := wireSteps(&cfg, svc, st, env); err != nil {
 		st.Close()
 		return nil, nil, err
 	}
@@ -155,8 +155,9 @@ func setup(getenv func(string) string) (http.Handler, func() error, error) {
 // step's result is reused. cfg.Model is set only when every agent step pins the same model.
 // An agent step whose `agent_digest` in the pattern is not its embedded definition's digest
 // (agentDigest) stops the engine (Principle XVII: the pattern's digest is checked against the
-// definition, never trusted as written).
-func wireSteps(cfg *api.Config, svc *slices.Service, st *store.Store, url, token string) error {
+// definition, never trusted as written). cfg.History is the project worker's version history at
+// AP_PROJECT_URL.
+func wireSteps(cfg *api.Config, svc *slices.Service, st *store.Store, env map[string]string) error {
 	p, err := svc.Pattern()
 	if err != nil {
 		return nil // no pattern: the engine refuses every run (WorkersNotReady) and says why
@@ -188,12 +189,14 @@ func wireSteps(cfg *api.Config, svc *slices.Service, st *store.Store, url, token
 		cfg.Model = common
 	}
 	base := steps.Config{
-		Pattern: mp, Endpoints: cfg.Workers, CheckURL: url, CheckToken: token,
+		Pattern: mp, Endpoints: cfg.Workers, CheckURL: env["AP_CHECK_URL"], CheckToken: env["AP_CHECK_TOKEN"],
+		ProjectURL: env["AP_PROJECT_URL"], ProjectToken: env["AP_PROJECT_TOKEN"],
 		Lint: svc.LintContract, Models: models, Projects: projectsMount,
 		Approved: svc.ApprovedParts, Load: st.Artifact,
 	}
 	cfg.StepWorker = &sliceWorkers{base: base, st: st, by: map[string]machine.Worker{}}
 	cfg.StepChecker = steps.NewChecker(base)
+	cfg.History = steps.NewHistory(base)
 	return nil
 }
 

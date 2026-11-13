@@ -125,7 +125,7 @@ func TestProjectWorkerNonEmptyGitWithNoRecord(t *testing.T) {
 	snap := w.state(t)
 	want409(t, post(t, base, commitPath, next), "HistoryChanged", "ProjectStateDiffers")
 	w.unchanged(t, snap, "a commitStep with a repository and no record")
-	want409(t, post(t, base, restorePath, restoreBody(testsStep(), v2.ProjectFiles)), "HistoryChanged", "ProjectStateDiffers")
+	want409(t, post(t, base, restorePath, withAttempt(restoreBody(testsStep(), v2.ProjectFiles), 2)), "HistoryChanged", "ProjectStateDiffers")
 	w.unchanged(t, snap, "a restoreStep with a repository and no record")
 }
 

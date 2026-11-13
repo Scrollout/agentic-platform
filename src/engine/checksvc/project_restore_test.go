@@ -83,7 +83,7 @@ func TestProjectWorkerRestoreWithNoRecord(t *testing.T) {
 	t.Run("before empty: needs no repository", func(t *testing.T) {
 		w := newPW(t)
 		write(t, w.dir, "api/openapi.yaml", []byte("an interrupted attempt's file\n"))
-		r := wantRestored(t, post(t, w.base, restorePath, restoreBody(ccStep(), nil)))
+		r := wantRestored(t, post(t, w.base, restorePath, withAttempt(restoreBody(ccStep(), nil), 2)))
 		if strings.Join(r.Restored, ",") != "api/openapi.yaml" || len(r.ProjectFiles) != 0 || len(projectFiles(t, w.dir)) != 0 {
 			t.Errorf("with before empty every file outside .git is removed: %+v", r)
 		}
@@ -98,7 +98,7 @@ func TestProjectWorkerRestoreWithNoRecord(t *testing.T) {
 		w := newPW(t)
 		write(t, w.dir, "api/openapi.yaml", []byte("x\n"))
 		snap := w.state(t)
-		want409(t, post(t, w.base, restorePath, restoreBody(ccStep(), []pf{{"api/openapi.yaml", sum([]byte("x\n"))}})), "ProjectStateDiffers", "HistoryChanged")
+		want409(t, post(t, w.base, restorePath, withAttempt(restoreBody(ccStep(), []pf{{"api/openapi.yaml", sum([]byte("x\n"))}}), 2)), "ProjectStateDiffers", "HistoryChanged")
 		w.unchanged(t, snap, "a restore with no record and a non-empty before")
 	})
 }
