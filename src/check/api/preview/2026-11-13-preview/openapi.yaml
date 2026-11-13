@@ -1,0 +1,946 @@
+openapi: 3.1.0
+info:
+  title: Agentic Platform check service API
+  version: 2026-11-13-preview
+  description: >-
+    Judges one attempt of a build step by running one named check, returns the files an attempt
+    left in its step's writable paths, and produces one procedure step's files by running its fixed
+    procedure. One program serves this contract in two deployments. The check service reads the
+    project folder and never writes it; it serves runCheck and readStepFiles, and answers every
+    runProcedure with 404 UnknownProcedure. A procedure step's worker, which the launcher starts for
+    that step with only the step's writable paths writable and registers with the engine, serves
+    runProcedure for its step's procedure only, at the endpoint it registered; it answers every
+    runCheck with 404 UnknownCheck and every readStepFiles with 404 UnknownStep. Neither deployment
+    keeps anything between calls, and the same request over the same project gives the same
+    response and leaves the same files, whatever the `run`, `attempt` and `round` (they only name
+    the call in the log). Only the engine calls it, with the `engineToken`; a request with no token or
+    any other token returns 401 Unauthorized. Every operation requires the `api-version` query
+    parameter: a missing value returns 400 MissingApiVersionParameter, any value other than
+    2026-11-13-preview returns 400 UnsupportedApiVersionValue. A request body must be sent with
+    `Content-Type: application/json` (parameters such as `charset=utf-8` may follow); any other
+    body, a body that does not match this contract, or one larger than
+    `x-limits.request-body-max-bytes` returns 400 InvalidRequest. No response body is larger than
+    `x-limits.response-body-max-bytes`. At most `x-limits.calls-at-once` calls run at once; a call
+    beyond that returns 503 Busy with `Retry-After` and runs nothing. A call still running after its
+    `time_limit_seconds` is stopped with every process it started and returns 504
+    TimeLimitExceeded. The engine's token may make at most `x-limits.requests-per-second-per-token`
+    requests in any one-second window; more return 429 RateLimited with `Retry-After`. Requests with
+    no accepted token are counted by their source address (the connection's peer address, never a
+    header): up to `x-limits.requests-per-second-per-address-without-token` in any one-second window
+    get 401, more get 429. runCheck and readStepFiles change nothing; runProcedure, repeated with
+    the same request, leaves the same files. So no operation takes an Idempotency-Key and repeating
+    a call is always safe. `x-error-codes` lists the problem codes each status code may carry.
+    Names of checks, procedures, steps, runs, inputs and outputs are those of the catalogue pattern
+    the engine runs (engine contract, `pattern.schema.json`). Project paths. Every path in a request
+    or a response is a ProjectPath. Every file the services read or write is reached without
+    following a symbolic link: an entry of the project folder that is not a regular file or a
+    folder, or whose path is not a ProjectPath, is never read, listed or written; runCheck fails on
+    it naming it, and readStepFiles and runProcedure answer 422 UnreadableProject. Writable paths.
+    A step's `writable` entries follow the catalogue's glob dialect: `dir/**` matches every path
+    below `dir`, and any other entry matches exactly one path. Artifacts. An input named
+    `slice/<part>` (`slice/goals`, `slice/rules`, `slice/contract`) is an approved part of the slice:
+    its `sha256` is the part hash the slice stores, the SHA-256 of the part's RFC 8785 canonical JSON
+    (engine contract, `slice-defs.schema.json`), and its content, when sent, is that canonical JSON.
+    Any other input or output name is a step's output, a set of project files: its `sha256` is the
+    SHA-256 of the files' framed form (for each file in byte order of its path: the path, a line
+    feed, the file's length in bytes in decimal, a line feed, then its bytes; no files give the hash
+    of no bytes), and its content, when sent, is that framed form. An output's files are the files
+    matching its step's `writable` entries when the step declares one output; when it declares
+    several, the output at position i holds the files matching writable entry i, and a step that
+    declares several outputs and a different number of writable entries is refused with 400
+    InvalidRequest. In the api-feature-go pattern this gives `contract` = `api/openapi.yaml`,
+    `examples` = `features/slice.feature`, `generated-code` = `gen/**`, `go.mod`, `go.sum`,
+    `vendor/**`, `tests` = `tests/**` and `code` = `internal/**`, `cmd/**`. An agent step declares
+    exactly one output; the review step's output, `findings`, is what its worker reports, and it
+    writes no file.
+  contact:
+    name: Agentic Platform maintainers
+  license:
+    name: MIT
+    identifier: MIT
+x-limits:
+  # Requests the engine's token may make in any one-second window (sliding); more get 429.
+  requests-per-second-per-token: 20
+  # Requests without an accepted token one source address may make in any one-second window
+  # (sliding); up to this many get 401, more get 429.
+  requests-per-second-per-address-without-token: 20
+  # Required of every service contract by the project ruleset (to be scoped to services that take
+  # an Idempotency-Key, tasks.md T054d). No operation here takes one, so no key is ever kept; the
+  # value promises nothing.
+  idempotency-key-retention-hours: 1
+  # Most characters of a ProjectPath; its characters are ASCII, so also its bytes.
+  path-max-chars: 256
+  # Most files `before`, `project_files`, `files` and `removed` may list. A list entry is at most
+  # about 350 bytes of JSON (a 256-byte path, a 64-character hash), so a full list is at most
+  # about 3.5 MB.
+  project-files-max: 10000
+  # Most bytes of one input's or approved part's content before base64 encoding (the engine API's
+  # largest request body, so any slice part fits); a check request carries the 3 approved parts,
+  # a procedure request at most `inputs-with-content-max` inputs with content.
+  input-max-bytes: 1048576
+  inputs-with-content-max: 4
+  # Most findings and changed lines a check request carries; a finding's text is at most 4096
+  # characters.
+  findings-max: 100
+  changed-lines-max: 2000
+  # Largest request body accepted, in bytes; a larger one gets 400 InvalidRequest. Derived from
+  # the limits above: `before` (about 3.5 MB) + at most 4 contents of 1 MiB in base64 (about 5.6 MB) + 100
+  # findings (about 1.7 MB in UTF-8) + 2000 changed lines (about 0.6 MB) + step facts, which fits
+  # 12 MiB.
+  request-body-max-bytes: 12582912
+  # Most bytes, before base64 encoding, of all files a procedure's outputs hold together. A
+  # procedure whose files would hold more returns `completed: false`, no outputs, and writes
+  # nothing.
+  procedure-output-max-bytes: 8388608
+  # Most bytes, before base64 encoding, of all files readStepFiles returns together; more gets 422
+  # StepFilesTooLarge.
+  step-files-max-bytes: 8388608
+  # Largest response body, in bytes. Derived: 8 MiB of files in base64 (about 11.2 MB) + their
+  # 10000 list entries (about 3.5 MB) + `project_files` (about 3.5 MB) + `removed` (about 2.7 MB)
+  # + a reason of 65536 characters (at most 256 KiB), which fits 24 MiB.
+  response-body-max-bytes: 25165824
+  # Calls that may run at once in one deployment; one more gets 503 Busy.
+  calls-at-once: 2
+  # Largest `time_limit_seconds` a call may ask for: the api-feature-go pattern's step budget
+  # (pattern.yaml `budgets.step.minutes`, 10 minutes; research D14).
+  call-time-limit-seconds-max: 600
+servers:
+- url: /
+  description: The check service's address, or the procedure step worker's registered endpoint, on a
+    network shared with the engine; not reachable from outside the platform's networks.
+tags:
+- name: checks
+  description: Judge one attempt of a step, and read the files it left.
+- name: procedures
+  description: Produce one step's files by a fixed procedure.
+paths:
+  /checks/{checkName}/run:
+    post:
+      tags:
+      - checks
+      operationId: runCheck
+      x-operation-name: Agentic.Check/checks/action
+      summary: Run a check on one attempt of a step
+      description: >-
+        Served by the check service. Runs the check `checkName` on the project folder `project` as
+        it stands now, after the attempt, compared with `before`, and answers whether the attempt
+        passes it. Call it once per check the step declares, after the attempt's worker has
+        finished. Before judging, the check computes from the folder the framed hash of every entry
+        of `outputs`, and of every input that is an earlier step's output; when one differs from the
+        hash the request names, the verdict is `passed: false` naming that output or input, so a
+        verdict always concerns the files the engine stored. An output or input that is not a set
+        of project files (the review step's `findings`, a `slice/<part>`) is exempt: it is not
+        recomputed. A check that meets something it cannot
+        judge (an entry that is not a regular file or whose path is not a ProjectPath, a test binary
+        that cannot be built, a go command that fails to start) answers `passed: false` with a
+        reason naming it; it never passes by default. The checks served, by name: ScopeKept, every
+        path added, changed or removed between `before` and now matches the step's `writable`.
+        DependenciesAllowed, `go.mod` has no replace directive, the project has no symbolic link,
+        and every import outside the project's module and every direct requirement matches the
+        step's `dependencies.allowed` and no `dependencies.forbidden` entry (forbidden wins; the
+        catalogue README's package patterns). ContractMatchesApproval, the SHA-256 of the RFC 8785
+        canonical JSON of `{"contract": <api/openapi.yaml as text>}` equals the `sha256` of the
+        `contract` entry of `approved`, whatever the step's inputs. ExamplesMatchApproval,
+        `features/slice.feature` is byte for byte the `examples` text of the `rules` entry of
+        `approved` (its content, after checking it has that entry's `sha256`), in UTF-8. GenerationRepeatable, a
+        fresh generation from `api/openapi.yaml` gives exactly the `generated-code` files.
+        GeneratedCodeBuilds, the project builds with the go toolchain, offline, from `vendor/`.
+        TestsBuild, every test package builds. EveryExampleBound, godog `--strict` finds no
+        undefined, pending or ambiguous step for any scenario of `features/slice.feature`.
+        TestsFailAgainstStub, the tests build and fail against the generated stub. TestsUnchanged
+        and GeneratedCodeUnchanged, see EarlierStep. AllTestsPass, every test passes, offline.
+        FindingsCarryEvidence, every blocking finding names a rule, a file, a line of at least 1 and
+        a confirming check that `confirmations` shows as failed. NoBlockingFindingOpen, no blocking
+        finding names a confirming check that `confirmations` shows as failed. Any other name,
+        including the pattern's ContractLintPasses (which the engine judges with its contract-lint
+        service), answers 404 UnknownCheck. 422 UnreadableProject when the project folder does not
+        exist under the projects folder, is not a folder, cannot be read, or holds more than
+        `x-limits.project-files-max` files; 504 TimeLimitExceeded when the check did not finish
+        within `time_limit_seconds`. A caller treats every response other than 200 as a failed
+        check.
+      security:
+      - engineToken: []
+      x-error-codes:
+        '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
+        '401': [Unauthorized]
+        '404': [UnknownCheck]
+        '422': [UnreadableProject, InputHashMismatch]
+        '429': [RateLimited]
+        '503': [Busy]
+        '504': [TimeLimitExceeded]
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - name: checkName
+        in: path
+        required: true
+        description: The check's name as the step declares it in the pattern's `checks`, for example
+          ScopeKept.
+        schema:
+          $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/check_name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckRequest'
+      responses:
+        '200':
+          description: The check ran to the end; `passed` is its verdict.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckVerdict'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/UnknownName'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Busy'
+        '504':
+          $ref: '#/components/responses/TimeLimitExceeded'
+  /step-files:
+    post:
+      tags:
+      - checks
+      operationId: readStepFiles
+      x-operation-name: Agentic.Check/step-files/action
+      summary: Read the files an attempt left in its step's writable paths
+      description: >-
+        Served by the check service. Returns every regular file of the project folder `project` that
+        matches the step's `writable` entries, with its content, and the paths matching them that
+        `before` lists and the folder no longer holds. The engine calls it once per attempt of an
+        agent step, after the worker has finished and before any runCheck, and stores the files'
+        framed form under `sha256` as the artifact of the step's one output. It returns all those
+        files, not only the ones that differ from `before`, so the artifact holds the step's files on
+        its own. A step with no writable entries gets no files. 404 UnknownStep when this deployment
+        does not serve it (a procedure step's worker); 422 UnreadableProject as for runCheck, or
+        when the folder holds an entry that is not a regular file or a folder, or a path that is not
+        a ProjectPath (`detail` names it); 422 StepFilesTooLarge when the files hold more than
+        `x-limits.step-files-max-bytes` together; 504 TimeLimitExceeded when reading did not finish
+        within `time_limit_seconds`. A caller treats every response other than 200 as a rejected
+        attempt.
+      security:
+      - engineToken: []
+      x-error-codes:
+        '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
+        '401': [Unauthorized]
+        '404': [UnknownStep]
+        '422': [UnreadableProject, StepFilesTooLarge]
+        '429': [RateLimited]
+        '503': [Busy]
+        '504': [TimeLimitExceeded]
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StepFilesRequest'
+      responses:
+        '200':
+          description: The files the step's writable paths hold now.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StepFiles'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/UnknownName'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Busy'
+        '504':
+          $ref: '#/components/responses/TimeLimitExceeded'
+  /procedures/{procedureName}/run:
+    post:
+      tags:
+      - procedures
+      operationId: runProcedure
+      x-operation-name: Agentic.Check/procedures/action
+      summary: Run a fixed procedure for one attempt of a step
+      description: >-
+        Served by the procedure step's worker; the engine calls the endpoint that worker registered.
+        Runs the fixed procedure `procedureName` (the step's worker is `procedure:<procedureName>`)
+        on `inputs` and the project folder `project` as it stands now, writes the files it produces
+        into the project, and returns them, grouped by the step's outputs. The procedures served:
+        contract-check, whose `contract` output is the `contract` text of the `slice/contract`
+        input and whose `examples` output is the `examples` text of the `slice/rules` input, each
+        in UTF-8; and generate, whose `generated-code` output is the oapi-codegen server and types
+        generated from the `contract` input, a stub, `go.mod`, `go.sum` and the vendored
+        dependencies, resolved offline. With `completed` true the files matching the step's
+        `writable` entries are exactly the returned files: each is written, replacing any file at
+        its path, and every other file matching those entries is removed; no file outside them is
+        touched, and a repeat of the same request leaves the same files. No write or removal
+        follows a symbolic link: a path any part of which is a symbolic link answers 422
+        UnreadableProject before anything is written. A procedure that runs to the end but cannot
+        produce its outputs (for example a contract that does not generate, or files larger than
+        `x-limits.procedure-output-max-bytes`) answers `completed: false` with a reason and no
+        outputs, and writes nothing. 404 UnknownProcedure when this deployment does not serve a
+        procedure of that name (the check service serves none; a procedure worker only its step's);
+        422 UnreadableProject as for readStepFiles; 422 InputHashMismatch when an input's content
+        does not have the SHA-256 it is sent with; 500 WriteFailed when writing or removing a file
+        failed after the procedure produced its outputs, and 504 TimeLimitExceeded when the
+        procedure did not finish within `time_limit_seconds`; after either the step's writable paths
+        may hold partial files, and a repeat of the request converges them. A caller treats every
+        response other than 200, and `completed: false`, as a rejected attempt.
+      security:
+      - engineToken: []
+      x-error-codes:
+        '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
+        '401': [Unauthorized]
+        '404': [UnknownProcedure]
+        '422': [UnreadableProject, InputHashMismatch]
+        '429': [RateLimited]
+        '500': [WriteFailed]
+        '503': [Busy]
+        '504': [TimeLimitExceeded]
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - name: procedureName
+        in: path
+        required: true
+        description: The procedure's name, the part of the step's `worker` after `procedure:`, for
+          example contract-check.
+        schema:
+          type: string
+          pattern: ^[a-z0-9-]+$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcedureRequest'
+      responses:
+        '200':
+          description: The procedure ran to the end; `completed` says whether it produced and wrote its
+            outputs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcedureResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/UnknownName'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/WriteFailed'
+        '503':
+          $ref: '#/components/responses/Busy'
+        '504':
+          $ref: '#/components/responses/TimeLimitExceeded'
+components:
+  securitySchemes:
+    engineToken:
+      type: http
+      scheme: bearer
+      description: The token this session issued to the engine for calling this deployment. No other
+        component holds it; any other token returns 401 Unauthorized.
+  parameters:
+    ApiVersion:
+      name: api-version
+      in: query
+      required: true
+      description: The API version. This contract is 2026-11-13-preview. A missing value returns 400
+        MissingApiVersionParameter; any other value returns 400 UnsupportedApiVersionValue.
+      schema:
+        $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/api_version
+  headers:
+    RetryAfter:
+      description: Seconds to wait before trying again.
+      schema:
+        type: integer
+        minimum: 1
+  responses:
+    BadRequest:
+      description: The request is malformed; `code` and `detail` say what to fix.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: The token is missing or is not the engine's token for this deployment.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnknownName:
+      description: This deployment serves no check (UnknownCheck) or procedure (UnknownProcedure) of
+        that name, or does not serve readStepFiles (UnknownStep); `detail` says which. Nothing ran.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: UnreadableProject, the project folder cannot be read as a whole, or holds an entry
+        the operation may not read; InputHashMismatch, an input's content does not have its SHA-256;
+        or StepFilesTooLarge, the step's files exceed `x-limits.step-files-max-bytes`. `detail` names
+        the folder, input or path, never a path outside the projects folder. Nothing was written.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: More than `x-limits.requests-per-second-per-token` requests in one second with the
+        engine's token, or more than `x-limits.requests-per-second-per-address-without-token` without
+        an accepted token from this source address; try again after `Retry-After`.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    WriteFailed:
+      description: Writing or removing a file in the step's writable paths failed after the procedure
+        produced its outputs; `detail` names the path. The paths may hold partial files.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Busy:
+      description: '`x-limits.calls-at-once` calls are already running; nothing ran. Try again after
+        `Retry-After`.'
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TimeLimitExceeded:
+      description: The call was still running after `time_limit_seconds`; it was stopped with every
+        process it started, and it gave no verdict and no outputs.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    ErrorCode:
+      type: string
+      description: >-
+        A stable problem code. InvalidRequest: the body or a parameter does not match this contract.
+        MissingApiVersionParameter, UnsupportedApiVersionValue: the api-version is missing or not
+        served. Unauthorized: see 401. RateLimited: see 429. UnknownCheck, UnknownProcedure: this
+        deployment serves no check or procedure of that name. UnknownStep: this deployment does not
+        serve readStepFiles. UnreadableProject: the project folder does not exist, is not a folder,
+        cannot be read, holds more than `x-limits.project-files-max` files, or holds an entry the
+        operation may not read or write (not a regular file or folder, a path that is not a
+        ProjectPath, or reached through a symbolic link). InputHashMismatch: an input's content does
+        not have the SHA-256 it is sent with. StepFilesTooLarge: the step's files exceed
+        `x-limits.step-files-max-bytes`. WriteFailed: a procedure's file could not be written or
+        removed. Busy: `x-limits.calls-at-once` calls are running. TimeLimitExceeded: the call did
+        not finish within its `time_limit_seconds`.
+      enum:
+      - InvalidRequest
+      - MissingApiVersionParameter
+      - UnsupportedApiVersionValue
+      - Unauthorized
+      - RateLimited
+      - UnknownCheck
+      - UnknownProcedure
+      - UnknownStep
+      - UnreadableProject
+      - InputHashMismatch
+      - StepFilesTooLarge
+      - WriteFailed
+      - Busy
+      - TimeLimitExceeded
+    Problem:
+      type: object
+      description: An RFC 9457 problem with a stable `code`.
+      required:
+      - type
+      - title
+      - code
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        supported_versions:
+          type: array
+          description: With UnsupportedApiVersionValue, the api-versions this service serves.
+          items:
+            type: string
+    Hash:
+      $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/hash
+    ProjectPath:
+      type: string
+      description: >-
+        A file's path relative to the project folder: parts of ASCII letters, digits and `.`, `_`,
+        `~`, `+`, `@`, `=`, `,` and `-`, joined by single `/`; no leading or trailing `/`, no `.` or
+        `..` part, no space or control character, at most `x-limits.path-max-chars` characters. A
+        file whose path is not of this form is never read, listed or written.
+      minLength: 1
+      maxLength: 256
+      pattern: ^(?!(.*/)?\.\.?(/|$))[A-Za-z0-9._~+@=,-]+(/[A-Za-z0-9._~+@=,-]+)*$
+    ProjectFile:
+      type: object
+      description: One regular file of the project folder, by path and content hash.
+      required:
+      - path
+      - sha256
+      additionalProperties: false
+      properties:
+        path:
+          $ref: '#/components/schemas/ProjectPath'
+        sha256:
+          $ref: '#/components/schemas/Hash'
+    ProjectFiles:
+      type: array
+      description: Regular files of a project folder in byte order of `path`, each path once, at most
+        `x-limits.project-files-max`.
+      maxItems: 10000
+      items:
+        $ref: '#/components/schemas/ProjectFile'
+    Writable:
+      type: array
+      description: The step's `writable` entries, copied from the pattern; `dir/**` matches every path
+        below `dir`, any other entry exactly one path.
+      maxItems: 64
+      items:
+        type: string
+        minLength: 1
+        maxLength: 259
+        pattern: ^(?!(.*/)?\.\.?(/|$))[A-Za-z0-9._~+@=,-]+(/[A-Za-z0-9._~+@=,-]+)*(/\*\*)?$
+    OutputNames:
+      type: array
+      description: The step's declared outputs, in the pattern's order.
+      maxItems: 16
+      items:
+        type: string
+        minLength: 1
+        maxLength: 64
+    StepFacts:
+      type: object
+      description: One step of the pattern as the engine runs it, with the values its checks and
+        procedures need, copied from the pattern unchanged.
+      required:
+      - name
+      - writable
+      - dependencies
+      - outputs
+      additionalProperties: false
+      properties:
+        name:
+          $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/step_name
+        writable:
+          $ref: '#/components/schemas/Writable'
+        dependencies:
+          $ref: ../../../../engine/api/preview/2026-11-12-preview/pattern.schema.json#/properties/steps/items/properties/dependencies
+        outputs:
+          $ref: '#/components/schemas/OutputNames'
+    EarlierStep:
+      type: object
+      description: >-
+        A step the pattern runs before this one, with the paths it may write and its outputs.
+        TestsUnchanged reads the earlier step whose outputs hold `tests`, and GeneratedCodeUnchanged
+        the one whose outputs hold `generated-code`: no path matching that step's `writable` may be
+        added, changed or removed compared with `before`.
+      required:
+      - name
+      - writable
+      - outputs
+      additionalProperties: false
+      properties:
+        name:
+          $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/step_name
+        writable:
+          $ref: '#/components/schemas/Writable'
+        outputs:
+          $ref: '#/components/schemas/OutputNames'
+    ArtifactRef:
+      type: object
+      description: A named artifact by its SHA-256, in the form info.description's Artifacts gives for
+        its name.
+      required:
+      - name
+      - sha256
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: The input or output name the pattern declares, for example `slice/contract` or
+            `generated-code`.
+        sha256:
+          $ref: '#/components/schemas/Hash'
+    Artifact:
+      type: object
+      description: A named artifact with its content, in the form info.description's Artifacts gives
+        for its name. The service checks that `content` has the SHA-256 `sha256` before it runs
+        anything, and answers 422 InputHashMismatch otherwise.
+      required:
+      - name
+      - sha256
+      - content
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        sha256:
+          $ref: '#/components/schemas/Hash'
+        content:
+          type: string
+          format: byte
+          contentEncoding: base64
+          maxLength: 1398104
+          description: The artifact's bytes, base64 encoded (RFC 4648, with padding), at most
+            `x-limits.input-max-bytes` before encoding.
+    Confirmation:
+      type: object
+      description: The verdict of another check the engine ran on the project as this attempt left it.
+      required:
+      - check
+      - passed
+      - reason
+      additionalProperties: false
+      properties:
+        check:
+          $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/check_name
+        passed:
+          type: boolean
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 65536
+    Finding:
+      description: A review finding as the worker reported it; its text is at most 4096 characters.
+      allOf:
+      - $ref: ../../../../engine/api/preview/2026-11-12-preview/run-event.schema.json#/properties/finding
+      - type: object
+        properties:
+          text:
+            type: string
+            maxLength: 4096
+          file:
+            $ref: '#/components/schemas/ProjectPath'
+            description: A finding whose `file` is not a ProjectPath makes the request 400
+              InvalidRequest; the engine fails such a finding's attempt (it counts as a failed
+              FindingsCarryEvidence) and never sends it.
+    ApprovedPart:
+      type: object
+      description: One approved part of the slice, from the engine's slice record. `sha256` is the
+        hash the approval stores, the SHA-256 of `content`, which is the part's RFC 8785 canonical
+        JSON (engine contract, `slice-defs.schema.json`). The service checks that `content` has that
+        hash and answers 422 InputHashMismatch otherwise.
+      required:
+      - part
+      - sha256
+      - content
+      additionalProperties: false
+      properties:
+        part:
+          type: string
+          enum:
+          - goals
+          - rules
+          - contract
+          description: The part; the examples are in `rules`.
+        sha256:
+          $ref: '#/components/schemas/Hash'
+        content:
+          type: string
+          format: byte
+          contentEncoding: base64
+          maxLength: 1398104
+          description: The part's canonical JSON, base64 encoded (RFC 4648, with padding), at most
+            `x-limits.input-max-bytes` before encoding.
+    CallCommon:
+      type: object
+      description: >-
+        What every call names: whose attempt it is, which project it reads and how long it may
+        take.
+      required:
+      - run
+      - step
+      - attempt
+      - project
+      - before
+      - time_limit_seconds
+      properties:
+        run:
+          $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/run_id
+        step:
+          $ref: '#/components/schemas/StepFacts'
+        attempt:
+          type: integer
+          minimum: 1
+          description: The attempt of the step, from 1.
+        round:
+          type: integer
+          minimum: 1
+          description: The review round, from 1; only for the review step.
+        project:
+          $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/project_name
+          description: The project folder's name under the projects folder.
+        before:
+          $ref: '#/components/schemas/ProjectFiles'
+          description: >-
+            Every regular file of the project as the step accepted last left it: the
+            `project_files` of that step's accepted attempt as readStepFiles (agent step) or
+            runProcedure (procedure step) returned them; empty for the first step, whose project
+            folder is new. A check that compares states compares the folder now with this list.
+        time_limit_seconds:
+          type: integer
+          minimum: 1
+          maximum: 600
+          description: How long the call may run, at most `x-limits.call-time-limit-seconds-max`;
+            the engine passes what is left of the step's time budget.
+    CheckRequest:
+      description: >-
+        One check of one attempt. `earlier_steps` are the pattern's steps before this one, in order.
+        `approved` holds every approved part of the slice the run builds, one entry per part, filled
+        by the engine from the slice record whatever the step declares as inputs: approval is
+        platform data, not a step input, and the checks that compare the project with the approval
+        read only this field. `inputs` are the step's declared inputs by hash, in the pattern's
+        order. `outputs` are the attempt's outputs by hash,
+        one per declared output, as readStepFiles or runProcedure returned them. `findings` and
+        `changed_lines` are what the attempt's worker reported (the review step's findings; a fix's
+        changed lines); a check treats them as claims to verify, never as facts. `confirmations` are
+        the verdicts of the other checks the engine ran on the project as this attempt left it,
+        which a finding may name as its confirming check; a check named by no confirmation confirms
+        nothing.
+      allOf:
+      - $ref: '#/components/schemas/CallCommon'
+      - type: object
+        required:
+        - approved
+        - earlier_steps
+        - inputs
+        - outputs
+        properties:
+          approved:
+            type: array
+            minItems: 3
+            maxItems: 3
+            items:
+              $ref: '#/components/schemas/ApprovedPart'
+          earlier_steps:
+            type: array
+            maxItems: 16
+            items:
+              $ref: '#/components/schemas/EarlierStep'
+          inputs:
+            type: array
+            maxItems: 16
+            items:
+              $ref: '#/components/schemas/ArtifactRef'
+          outputs:
+            type: array
+            maxItems: 16
+            items:
+              $ref: '#/components/schemas/ArtifactRef'
+          findings:
+            type: array
+            maxItems: 100
+            items:
+              $ref: '#/components/schemas/Finding'
+          changed_lines:
+            type: array
+            maxItems: 2000
+            items:
+              $ref: ../../../../engine/api/preview/2026-11-12-preview/run-event.schema.json#/properties/changed_lines/items
+          confirmations:
+            type: array
+            maxItems: 64
+            items:
+              $ref: '#/components/schemas/Confirmation'
+      unevaluatedProperties: false
+    CheckVerdict:
+      type: object
+      description: >-
+        The check's verdict on the attempt. The engine accepts an attempt only when every verdict
+        passed and every verdict's `project_files` equals the `project_files` readStepFiles or
+        runProcedure returned for the attempt, so all verdicts concern the same files; that list is
+        the next step's `before`.
+      required:
+      - check
+      - passed
+      - reason
+      - refs
+      - project_files
+      additionalProperties: false
+      properties:
+        check:
+          $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/check_name
+          description: The check that ran, the path's `checkName`.
+        passed:
+          type: boolean
+          description: True only when the check found nothing at fault.
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 65536
+          description: What the check confirmed, or every fault it found, each naming the file,
+            import, rule, output or hash at fault, in the order found and joined by "; ". It names
+            paths relative to the project folder only.
+        refs:
+          type: array
+          maxItems: 256
+          description: The slice items the verdict concerns, for example the example a failing test
+            binds to; empty when it names none.
+          items:
+            $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/ref
+        project_files:
+          $ref: '#/components/schemas/ProjectFiles'
+          description: Every regular file of the project folder with a ProjectPath, as this check read
+            it.
+    StepFilesRequest:
+      description: The attempt whose files are read.
+      allOf:
+      - $ref: '#/components/schemas/CallCommon'
+      unevaluatedProperties: false
+    FileContent:
+      type: object
+      description: One file of the project with its content.
+      required:
+      - path
+      - sha256
+      - content
+      additionalProperties: false
+      properties:
+        path:
+          $ref: '#/components/schemas/ProjectPath'
+        sha256:
+          $ref: '#/components/schemas/Hash'
+        content:
+          type: string
+          format: byte
+          contentEncoding: base64
+          description: The file's bytes, base64 encoded (RFC 4648, with padding).
+    StepFiles:
+      type: object
+      description: >-
+        The files the step's writable paths hold after the attempt. `sha256` is the SHA-256 of
+        `files` in framed form (of no bytes when `files` is empty).
+      required:
+      - sha256
+      - files
+      - removed
+      - project_files
+      additionalProperties: false
+      properties:
+        sha256:
+          $ref: '#/components/schemas/Hash'
+        files:
+          type: array
+          maxItems: 10000
+          description: Every regular file matching the step's `writable` entries, in byte order of
+            `path`.
+          items:
+            $ref: '#/components/schemas/FileContent'
+        removed:
+          type: array
+          maxItems: 10000
+          description: Paths matching the step's `writable` entries that `before` lists and the folder
+            no longer holds, in byte order.
+          items:
+            $ref: '#/components/schemas/ProjectPath'
+        project_files:
+          $ref: '#/components/schemas/ProjectFiles'
+          description: Every regular file of the project folder as it was read; the next step's
+            `before` once the attempt is accepted.
+    ProcedureRequest:
+      description: >-
+        One run of a fixed procedure for one attempt. `inputs` are the step's declared inputs with
+        their content, in the pattern's order.
+      allOf:
+      - $ref: '#/components/schemas/CallCommon'
+      - type: object
+        required:
+        - inputs
+        properties:
+          inputs:
+            type: array
+            maxItems: 4
+            items:
+              $ref: '#/components/schemas/Artifact'
+      unevaluatedProperties: false
+    ProcedureOutput:
+      type: object
+      description: >-
+        One declared output of the step and the files the procedure produced for it. `sha256` is the
+        SHA-256 of the output's framed form, which is also the artifact the engine stores. Every
+        file's path matches the output's writable entries (see info.description, Artifacts), and no
+        path is in two outputs.
+      required:
+      - name
+      - sha256
+      - files
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        sha256:
+          $ref: '#/components/schemas/Hash'
+        files:
+          type: array
+          maxItems: 10000
+          description: The output's files in byte order of `path`.
+          items:
+            $ref: '#/components/schemas/FileContent'
+    ProcedureResult:
+      type: object
+      description: The procedure's result. With `completed` true, `outputs` holds exactly one entry per
+        output the step declares, in the step's order, and the files are written; with `completed`
+        false it is empty, nothing was written, and `reason` says why.
+      required:
+      - procedure
+      - completed
+      - reason
+      - outputs
+      - project_files
+      additionalProperties: false
+      properties:
+        procedure:
+          type: string
+          pattern: ^[a-z0-9-]+$
+          description: The procedure that ran, the path's `procedureName`.
+        completed:
+          type: boolean
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 65536
+          description: What the procedure produced, or why it could not, naming paths relative to the
+            project folder only.
+        outputs:
+          type: array
+          maxItems: 16
+          items:
+            $ref: '#/components/schemas/ProcedureOutput'
+        project_files:
+          $ref: '#/components/schemas/ProjectFiles'
+          description: Every regular file of the project folder after the procedure wrote its files;
+            the next step's `before` once the attempt is accepted.

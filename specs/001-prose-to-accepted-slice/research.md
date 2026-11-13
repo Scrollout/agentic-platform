@@ -414,3 +414,139 @@ page, none of which an existing project provides.
   pinned image, a Node process and a temp file per request); vacuum in the engine (contradicts
   D4 and ADR 0004).
 - Sources: <https://github.com/stoplightio/spectral/blob/develop/docs/guides/3-javascript.md>.
+
+### D29. Agent steps run on Docker Agent `serve api`; checks and procedures run in a check service with its own contract
+
+- **Decision** (owner-approved 2026-11-13; T054a):
+  - **Agent steps**: each agent step container runs the pinned Docker Agent `serve api` with that
+    step's agent definition, under gVisor with only the step's writable paths mounted writable
+    (D5, D13). The engine's `machine.Worker` calls it with the analyst's session flow (D27): one
+    titled session per attempt with `safety_policy: restricted`, the event stream read until
+    `stream_stopped`, the session deleted afterwards. The launcher registers each container with
+    the engine on its behalf (T053a), since `serve api` cannot call `registerWorker`. No new
+    contract: Docker Agent's API is the adopted contract (Contract-first, "for an adopted
+    protocol, its published schema is the contract").
+  - **Model for reuse keys**: the model each agent definition pins (Principle XV) is the model in
+    the step's reuse key (D8). The engine checks it against the model the session reports in
+    `agent_info`; a different model fails the attempt.
+  - **Checks and fixed procedures**: one small Go program with its own versioned OpenAPI
+    contract, `src/check/api/preview/2026-11-13-preview/openapi.yaml`, of which it is the
+    provider, serves two deployments, each accepting only a bearer token issued to the engine.
+    Never in the engine (D5).
+    - The **check service**, in the check container with the project mounted read-only, serves
+      `runCheck` and `readStepFiles`.
+    - A **procedure step worker**, one per procedure step (owner, 2026-11-13), started and
+      registered by the launcher like an agent step's container (T053a) with only that step's
+      writable paths mounted writable, serves `runProcedure` for its step's procedure: it writes
+      the step's files into the project and returns them. The engine calls the endpoint the
+      worker registered.
+    - Each deployment answers the operations it does not serve with 404 (`UnknownCheck`,
+      `UnknownProcedure`, `UnknownStep`).
+  - **Agent step outputs** (owner, 2026-11-13): the check service returns them with a separate
+    read operation, `readStepFiles`, not inside `runCheck`'s verdict: it is called once per
+    attempt while `runCheck` is called once per check, so the files (up to 16 MiB,
+    `x-limits.step-files-max-bytes`) are not sent again with every verdict, and a verdict stays
+    small. It returns every file the step's writable paths hold, not only those that differ from
+    `before`, so the artifact holds the step's files on its own; the engine stores it by hash.
+  - **ContractLintPasses** (owner, 2026-11-13): the engine judges it by calling the contract-lint
+    service (D28); the check service does not serve it (404 `UnknownCheck`).
+  - **Synchronous calls**: every operation answers in the call, bounded by `time_limit_seconds`
+    (at most 600 s, the step budget, D14). `runCheck` and `readStepFiles` are queries, which
+    Principle IV lets answer synchronously. `runProcedure` writes files, but it is one attempt of
+    a step inside a run, not a management operation: the run is the operation `startRun` already
+    returns and lets the client follow and cancel. Nothing keeps state between calls, and the same
+    request over the same project gives the same response and leaves the same files, so no
+    operation takes an `Idempotency-Key`. The `idempotency-key-retention-hours` the project
+    ruleset requires of every contract is declared as 1, with a comment that it promises nothing,
+    until T054d scopes that rule to services that take the key (owner, 2026-11-13).
+  - **What travels**: a check call carries the step's facts copied from the pattern (writable
+    entries in the catalogue's glob dialect, `dir/**` or one exact path; dependencies; outputs;
+    and the earlier steps' writable entries and outputs), `approved` (every approved part of the slice,
+    by its stored hash and canonical JSON, filled by the engine from the slice record whatever the
+    step's inputs: approval is platform data, not a step input), the inputs and the attempt's
+    outputs by hash, the worker's findings and changed lines, the
+    verdicts of the attempt's other checks (`confirmations`, which FindingsCarryEvidence and
+    NoBlockingFindingOpen need), and `before`. A procedure call carries its inputs by content,
+    checked against their hashes. Outputs come back by content (base64), not by reference,
+    because the service has no store and the engine records every artifact by hash (D8).
+  - **Hash forms**: an approved part's hash, and a `slice/<part>` input's, is the part hash the
+    slice stores (SHA-256 of the part's RFC 8785 canonical JSON). ContractMatchesApproval compares
+    `canonical.ContractHash` of `api/openapi.yaml`'s text with `approved`'s contract hash, and
+    ExamplesMatchApproval compares `features/slice.feature` with the examples in `approved`'s
+    rules part, so the code step, whose inputs hold no `slice/contract`, is judged against the
+    approval and not against another step's output. Every step
+    output is a set of files hashed in framed form (path, line feed, length, line feed, bytes, in
+    byte order of path, as the agent digest in D27). A one-output step's output is all files under
+    its writable entries; a step with several outputs pairs output i with writable entry i
+    (contract-check: `contract` = `api/openapi.yaml`, `examples` = `features/slice.feature`). An
+    agent step has exactly one output.
+  - **Binding verdicts to stored files** (Principle XX): the engine takes an attempt's files once,
+    from `readStepFiles` (agent step) or `runProcedure` (procedure step), and stores them by hash;
+    each `runCheck` recomputes the framed hash of every output and every earlier-output input from
+    the folder and fails on a mismatch, (outputs that are not file sets, such as the review step's `findings`, are exempt), and the
+    engine accepts the attempt only when every
+    verdict's `project_files` equals the list that first call returned. That list becomes the next
+    step's `before`.
+  - **Paths**: every path is ASCII letters, digits and `._~+@=,-` in parts joined by single `/`,
+    at most 256 characters, with no `.` or `..` part, so no control character can make a framed
+    hash ambiguous or a path escape the folder. Nothing is read, written or removed through a
+    symbolic link (`O_NOFOLLOW` on every part); a procedure's write converges on a repeat, and a
+    write that fails after the procedure produced its outputs answers 500 `WriteFailed`.
+  - **Limits, derived from each other**: 10,000 files per list (about 3.5 MB), 4 inputs with
+    content of at most 1 MiB each (about 5.6 MB in base64), 100 findings of at most 4,096
+    characters and 2,000 changed lines give a request of at most 12 MiB; 8 MiB of files (about
+    11.2 MB in base64) with their lists give a response of at most 24 MiB. The time limit is the
+    pattern's step budget, `budgets.step.minutes` (D14).
+  - **Checks served**: of the pattern's 15 check names, the check service serves 14; every name
+    but ContractLintPasses. Implemented in `engine/checks` today: ScopeKept (`Scope`),
+    DependenciesAllowed (`Dependencies`), ContractMatchesApproval (`ContractHash`),
+    GenerationRepeatable (`GenerationDrift`), EveryExampleBound (`GodogStrict`),
+    TestsFailAgainstStub, AllTestsPass, TestsUnchanged and FindingsCarryEvidence. T054c adds
+    ExamplesMatchApproval, GeneratedCodeBuilds, TestsBuild, GeneratedCodeUnchanged and
+    NoBlockingFindingOpen, and makes the comparing checks work from `before`'s hash list.
+  - **Tokens**: the engine holds one token per deployment it calls. For a procedure step worker
+    the launcher creates the token, gives it to the worker in its environment and to the engine
+    with the worker's grant; that wiring belongs to T053a.
+  - **Layout**: the contract and its generated server, client and types live in a new Go module
+    `src/check` (`src/check/api/check.oapi-codegen.yaml` → `src/check/api/gen/`); the service's
+    command is `src/engine/cmd/check`, in the engine module, so it serves `engine/checks` and the
+    T050 procedures without copying them, and the engine's `machine.Checker` uses the same
+    generated client. `scripts/generate.sh` finds a contract only at
+    `src/<service>/api/{stable,preview}/<date>[-preview]/` and writes one generated file per
+    target to `src/<module>/api/gen/`, so a check client generated inside the engine module would
+    share the package `src/engine/api/gen` with the engine's own server types (`Problem`,
+    `ErrorCode`) and collide; a `src/check` module that also holds the command would have to
+    import the engine module while the engine imports it, a module cycle. The engine module
+    requires `src/check`, which requires only `oapi-codegen/runtime`.
+  - **Changes this needs on protected paths** (T054c, each with the owner's `Approved-by:`):
+    `src/check/go.mod` (new), `src/go.work` (`./check`), `src/engine/go.mod` (require the check
+    module), `scripts/check.sh` (`GO_MODULES` gains `check`), `src/deploy/Dockerfile.check` (build
+    and run `cmd/check`), `src/deploy/Dockerfile.engine` (the check module in its build context)
+    and `src/deploy/compose.yaml` (the check service's command and its own token, the engine's
+    `AP_CHECK_URL` and `AP_CHECK_TOKEN`; the check container no longer needs the worker token; a
+    procedure step worker template like `step-agent`, running the same image's procedure mode).
+- **Rationale**: an agent step is the same Docker Agent call the analyst already makes, tested
+  under gVisor (D27), so the engine keeps one client for agents and no shim is needed. Checks
+  run code an agent wrote and must not run in the engine (Principle VIII, D5, D13); a contract
+  between engine and check service is required between components (Contracts between
+  components). Comparing against a list of hashes keeps the service stateless and independent of
+  how the project's version history is kept (T053a, open). The status codes follow Google's
+  mapping of `NOT_FOUND` to 404, `UNAVAILABLE` to 503 and `DEADLINE_EXCEEDED` to 504.
+- **Alternatives rejected**: step and check workers pulling work through new engine operations,
+  with a shim in each container to fetch work and report results (a second, home-made protocol
+  beside Docker Agent's, more engine surface, and a shim per image); one check container started
+  per call (it needs the container engine's socket, which no container may hold, D5, D6); checks
+  in the engine (D5); the check service's command in its own module (the module cycle above);
+  procedures in the read-only check service returning files for someone else to write (no
+  component could write them, owner, 2026-11-13); agent step files inside every `runCheck`
+  verdict (sent once per check instead of once per attempt).
+- **Open, for T053a**: how a replay's reused step files are written into the new project (the
+  engine has no project mount and the check service only reads it), and how the project's
+  version history is kept, including returning the writable paths to the last accepted state
+  after a rejected attempt. Not designed here. **Open, for T054c**: which check the engine runs
+  to confirm a review finding, so that `confirmations` can hold a failing one (the code step's
+  own checks all passed when it was accepted).
+- Sources: <https://docker.github.io/docker-agent/features/api-server/>;
+  <https://google.aip.dev/193> (error model: status code mapping);
+  <https://go.dev/ref/mod#workspaces>; `scripts/generate.sh` and `scripts/contract-versions.sh`
+  (read 2026-11-13).

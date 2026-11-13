@@ -7,11 +7,11 @@ status: draft
 sources:
   - id: research
     resource: ../../specs/001-prose-to-accepted-slice/research.md
-    title: Feature 001 research, D5 to D13, D24, D27, D28
+    title: Feature 001 research, D5 to D13, D24, D27, D28, D29
   - id: adr-0028
     resource: /decisions/0028-sign-platform-images-locally.md
     title: "ADR 0028: Sign the platform's images locally with cosign"
-generated: { by: claude-code/claude-sonnet-5-5, at: 2026-11-13T12:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-13T15:00:00Z }
 ---
 
 # Context
@@ -49,8 +49,14 @@ Shipped by Story 1:
 
 Planned for Story 2: per-step **step containers** and **check containers**, started by `ap` when a
 slice is approved and a build is asked for, each with only its step's paths writable
-(research D5). The engine runs the step, then the check decides; the check container cannot reach
-the gateway.
+(research D5). An agent step container runs the pinned Docker Agent `serve api` with its step's
+agent definition, called by the engine with one session per attempt, as the analyst is. A
+procedure step's container runs its fixed procedure and writes the step's files. Checks run in the
+**check service** in the check container, which reads the project, never writes it, and returns an
+agent step's files for the engine to store. Both serve one
+[contract](../../src/check/api/preview/2026-11-13-preview/openapi.yaml) that only the engine calls.
+The check container cannot reach the gateway
+(research D29, [ADR 0030](/decisions/0030-agent-steps-on-docker-agent-checks-in-a-check-service.md)).
 
 Every container runs read-only with all capabilities dropped; the analyst, contract-lint and the
 workers run under [gVisor](/components/gvisor.md). Networks are internal and isolated: `clients`,

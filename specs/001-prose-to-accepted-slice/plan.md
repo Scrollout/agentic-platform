@@ -23,7 +23,7 @@ replay is byte-identical. The approach is the ADR 0026 spike, made general and d
 oapi-codegen, Redocly CLI (contract bundling), Spectral (also as the contract-lint service, D28),
 oasdiff (as a Go library in the engine), santhosh-tekuri/jsonschema, Schemathesis, nginx (gateway),
 gVisor, WireMock (the recorded model, D26), cosign and the Distribution registry (local signing,
-D24); Docker Agent `serve api` runs the analyst (D27);
+D24); Docker Agent `serve api` runs the analyst (D27) and each agent step (D29);
 Claude Haiku via the gateway (D2–D4, D9, D13)
 
 **Storage**: append-only JSON Lines run records and a content-addressed artifact store in a named
@@ -125,7 +125,13 @@ src/
 │   ├── machine/                          # state machine, reuse, resume, budgets
 │   ├── checks/                           # check implementations, with planted fixtures
 │   ├── procedures/                       # fixed steps: contract check, generate, review gate
+│   ├── cmd/check/                        # serves the check contract (D29): checks/ in the check
+│   │                                     #   service, procedures/ in each procedure step worker
 │   └── store/                            # run records and artifact store
+├── check/          # check service contract module (D29), provider: engine/cmd/check
+│   ├── api/preview/2026-11-13-preview/   # openapi.yaml: runCheck, readStepFiles, runProcedure
+│   ├── api/check.oapi-codegen.yaml       # generation config: server, client and types
+│   └── api/gen/                          # generated (not committed); used by cmd/check and the engine
 ├── slice/          # shared Go package: slice model, schemas, traceability, EARS derivation
 ├── catalogue/
 │   └── api-feature-go/pattern.yaml       # the one pattern (declaration only)
@@ -136,9 +142,16 @@ src/
 └── tests/          # contract, acceptance, planted failures, evals (Go module)
 ```
 
-**Structure Decision**: Go modules `src/engine`, `src/slice`, `src/cli`, `src/page` and
-`src/tests`; declarations in `src/catalogue` and `src/agents`; packaging in `src/deploy`. The
-engine's contract lives with the engine, as ADR 0004 requires. Built images exclude `src/tests`,
+**Structure Decision**: Go modules `src/engine`, `src/slice`, `src/cli`, `src/page`, `src/check`
+and `src/tests`; declarations in `src/catalogue` and `src/agents`; packaging in `src/deploy`. The
+engine's contract lives with the engine, as ADR 0004 requires. The check service's contract and
+its generated code live in `src/check`, a module that needs only `oapi-codegen/runtime`; its
+command `src/engine/cmd/check` is in the engine module so it reuses `engine/checks` and
+`engine/procedures` without copying them; it runs read-only as the check service (checks, an agent
+step's files) and as each procedure step's worker (its procedure, with the step's writable paths), and the engine's check client uses the same generated
+package (research D29, [ADR 0030](../../docs/decisions/0030-agent-steps-on-docker-agent-checks-in-a-check-service.md)).
+Agent steps run the pinned Docker Agent `serve api`, whose API is their contract (D29). Built
+images exclude `src/tests`,
 test files and evals (one Docker ignore rule per image).
 
 ## Complexity Tracking

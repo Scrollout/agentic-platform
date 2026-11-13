@@ -83,7 +83,7 @@ sources:
   - id: da-headless
     resource: https://docker.github.io/docker-agent/guides/headless/
     title: Docker Agent - Headless mode
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-13T15:00:00Z }
 ---
 
 # Summary
@@ -184,6 +184,7 @@ Sources: [Docker Agent - Distribution](https://docker.github.io/docker-agent/con
   - Session endpoints cover create, list, get, delete, fork, steer, follow-up (with `Idempotency-Key`), tool-call approval (`/resume`), elicitation and per-session safety policy.
   - Each turn streams typed SSE events, for example `agent_choice`, `tool_call`, `tool_call_confirmation`, `token_usage` and `budget_exceeded`.
   - Auth is one shared bearer token, which is mandatory on non-loopback addresses. There is no TLS, and the request body cap is 1 MiB by default.
+  - One turn is `POST /api/sessions` (with a title, or a second model call names the session), then `POST /api/sessions/{id}/agent/{agent}`, whose stream ends with `stream_stopped`; `agent_info` names the model the agent runs and the last `agent_choice` holds its answer (seen with v1.160.0 in feature 001, research D27).
 - **Sessions are stored in SQLite (`session.db`), with migrations.**
   - One run per session at a time.
   - Live run state, budgets and idempotency keys are held in memory.
