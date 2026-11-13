@@ -51,7 +51,7 @@ type pcase struct {
 }
 
 var (
-	genWritable  = []string{"gen/**", "go.mod", "go.sum", "vendor/**"}
+	genWritable  = []string{"gen/**", "go.mod", "go.sum", "vendor/**", "internal/app/app.go"}
 	codeWritable = []string{"internal/**", "cmd/**"}
 	forbid       = []string{"os/exec", "syscall", "unsafe", "plugin", "net/rpc/..."}
 )

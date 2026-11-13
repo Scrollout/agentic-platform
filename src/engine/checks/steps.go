@@ -217,12 +217,25 @@ func matchPackage(patterns []string, path string, module bool) (string, bool) {
 	return "", false
 }
 
-// Dependencies (DependenciesAllowed): no replace directive in go.mod and no symlink in the
-// project; every import in the project's .go files (vendor/ aside) and
+// Dependencies (DependenciesAllowed) over the whole project: no replace directive in go.mod and
+// no symlink in the project; every import in the project's .go files (vendor/ aside) and
 // every direct require in go.mod outside the project's own module matches allowed and no
 // forbidden entry; an indirect require (`// indirect`) must match no forbidden entry. Forbidden
 // wins. One failing result per offending import or require.
 func Dependencies(project string, allowed, forbidden []string) []CheckResult {
+	return dependencies(project, func(string) bool { return true }, allowed, forbidden)
+}
+
+// DependenciesOf is DependenciesAllowed as a step is judged (owner, 2026-11-13): only the step's
+// own writable files, matched by its writable globs, are judged against its lists, since another
+// step's files were judged by that step's lists and ScopeKept keeps them unchanged. go.mod's
+// replace directives and requires are judged only when go.mod is one of them; a symlink anywhere
+// in the project still fails.
+func DependenciesOf(project string, writable, allowed, forbidden []string) []CheckResult {
+	return dependencies(project, func(rel string) bool { return MatchGlob(writable, rel) }, allowed, forbidden)
+}
+
+func dependencies(project string, judged func(rel string) bool, allowed, forbidden []string) []CheckResult {
 	const check = "DependenciesAllowed"
 	gomod, err := os.ReadFile(filepath.Join(project, "go.mod"))
 	if err != nil {
@@ -237,8 +250,12 @@ func Dependencies(project string, allowed, forbidden []string) []CheckResult {
 	}
 	module := mf.Module.Mod.Path
 	var out []CheckResult
+	ownMod := judged("go.mod")
 	// A replace can swap an allowed module for another one or for a local folder, so none is allowed.
 	for _, r := range mf.Replace {
+		if !ownMod {
+			break
+		}
 		out = append(out, fail(check, fmt.Sprintf("go.mod has replace %s => %s, and no replace directive is allowed", r.Old.Path, r.New.Path)))
 	}
 	own := func(p string) bool { return p == module || strings.HasPrefix(p, module+"/") }
@@ -254,6 +271,9 @@ func Dependencies(project string, allowed, forbidden []string) []CheckResult {
 		}
 	}
 	for _, r := range mf.Require {
+		if !ownMod {
+			break
+		}
 		verb := "requires"
 		if r.Indirect {
 			verb = "requires indirectly"
@@ -281,7 +301,7 @@ func Dependencies(project string, allowed, forbidden []string) []CheckResult {
 			}
 			return nil
 		}
-		if !strings.HasSuffix(p, ".go") {
+		if !strings.HasSuffix(p, ".go") || !judged(rel) {
 			return nil
 		}
 		f, err := parser.ParseFile(fset, p, nil, parser.ImportsOnly)
@@ -460,26 +480,72 @@ func scenarioCounts(output string) (none, some bool) {
 	return none, some
 }
 
-// GodogStrict runs the Gherkin examples through `go test -v ./tests/...`, where godog's TestSuite
-// runs them with Strict set (-v so godog's summary is shown for a passing run too). It passes only
-// on exit 0 with no "undefined" in the output and a scenario run: godog's "No scenarios" or
+// GodogStrict (EveryExampleBound) runs the Gherkin examples through `go test -v ./tests/...`,
+// where godog's TestSuite runs them with Strict set (-v so godog's summary is shown for a passing
+// run too). It judges binding, not results (owner, 2026-11-13): the tests step's tests must fail
+// against the stub, so the exit code is not read. It passes only when the tests build, no step is
+// undefined, pending or ambiguous, and scenarios ran: at least one, and when the project's
+// features/slice.feature can be read, at least as many as it has. godog's "No scenarios" or
 // "0 scenarios" fails, and so does a run with neither a scenario count nor a package whose tests
-// ran (strictness is not left to the exit code).
+// ran.
 func GodogStrict(r GoRunner, project string) []CheckResult {
 	const check = "GodogStrict"
 	res, bad := runGo(check, r, project, "test", "-v", "./tests/...")
-	switch {
-	case bad != nil:
+	if bad != nil {
 		return []CheckResult{*bad}
+	}
+	res.Output = ansiColour.ReplaceAllString(res.Output, "") // godog colours its counts
+	switch {
+	case strings.Contains(res.Output, "[build failed]") || strings.Contains(res.Output, "[setup failed]"):
+		return []CheckResult{fail(check, "the tests do not build, so no example is bound: "+excerpt(res.Output, "failed", ".go:"))}
 	case strings.Contains(res.Output, "undefined"):
 		return []CheckResult{fail(check, "godog --strict found undefined steps: "+excerpt(res.Output, "undefined"))}
-	case res.ExitCode != 0:
-		return []CheckResult{fail(check, fmt.Sprintf("the godog run exited %d: %s", res.ExitCode, excerpt(res.Output, "--- FAIL", "failed", "pending")))}
+	case unboundSteps.MatchString(res.Output):
+		return []CheckResult{fail(check, "godog --strict found pending or ambiguous steps: "+excerpt(res.Output, "pending", "ambiguous"))}
 	}
-	if none, some := scenarioCounts(res.Output); none || (!some && !testsRan(res.Output)) {
+	none, some := scenarioCounts(res.Output)
+	if none || (!some && !testsRan(res.Output)) {
 		return []CheckResult{fail(check, "godog ran no scenario, so no example was checked: "+excerpt(res.Output, "scenarios", "no test files", "no packages", "no tests to run"))}
 	}
-	return []CheckResult{pass(check, "every scenario passes under godog --strict: "+excerpt(res.Output, "scenarios ("))}
+	if want, ok := featureScenarios(project); ok {
+		if got := scenariosRun(res.Output); got < want {
+			return []CheckResult{fail(check, fmt.Sprintf("godog ran %d scenarios, and features/slice.feature has %d, so not every example ran", got, want))}
+		}
+	}
+	return []CheckResult{pass(check, "every scenario runs with no undefined, pending or ambiguous step: "+excerpt(res.Output, "scenarios ("))}
+}
+
+// ansiColour is a terminal colour sequence.
+var ansiColour = regexp.MustCompile("\x1b\\[[0-9;]*m")
+
+// unboundSteps matches godog's summary counts of pending or ambiguous steps ("1 pending").
+var unboundSteps = regexp.MustCompile(`(?i)\b[1-9][0-9]* (pending|ambiguous)\b|ambiguous step definition`)
+
+// scenarioLine is a scenario heading in a Gherkin file.
+var scenarioLine = regexp.MustCompile(`(?m)^\s*Scenario( Outline)?:`)
+
+// featureScenarios is the number of scenarios in the project's features/slice.feature; false when
+// it cannot be read.
+func featureScenarios(project string) (int, bool) {
+	b, err := os.ReadFile(filepath.Join(project, "features", "slice.feature"))
+	if err != nil {
+		return 0, false
+	}
+	return len(scenarioLine.FindAll(b, -1)), true
+}
+
+// scenariosRun adds up godog's "<n> scenarios" summary counts.
+func scenariosRun(output string) int {
+	n := 0
+	for _, l := range strings.Split(output, "\n") {
+		f := strings.Fields(l)
+		if len(f) >= 2 && (f[1] == "scenarios" || f[1] == "scenario") {
+			if k, err := strconv.Atoi(f[0]); err == nil {
+				n += k
+			}
+		}
+	}
+	return n
 }
 
 // genOnly keeps the files under gen/.

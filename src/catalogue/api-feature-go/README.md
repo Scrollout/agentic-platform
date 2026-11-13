@@ -41,10 +41,18 @@ mounted writable.
 | Step | Worker | Writes | Accepted when |
 |------|--------|--------|---------------|
 | contract-check | procedure | `api/openapi.yaml`, `features/slice.feature` (copies of the approved contract and examples) | both hashes equal the approved hashes, Spectral passes, nothing else changed |
-| generate | procedure | `gen/**` (oapi-codegen output and the stub), `go.mod`, `go.sum`, `vendor/**` | a second run gives identical files, the code builds, dependencies are allowed, nothing else changed |
-| tests | agent | `tests/**` (godog step definitions) | the tests build, godog `--strict` binds every example, the tests fail against the stub, dependencies are allowed, nothing else changed |
-| code | agent | `internal/**`, `cmd/**` | all tests pass, and tests, generated code and contract are unchanged, dependencies are allowed, nothing else changed |
+| generate | procedure | `gen/**` (oapi-codegen output and the stub), `go.mod`, `go.sum`, `vendor/**`, `internal/app/app.go` (the seam) | a second run gives identical files, the code builds, dependencies are allowed, nothing else changed |
+| tests | agent | `tests/**` (godog step definitions) | the tests build, godog `--strict` binds and runs every example (pass or fail), the tests fail against the stub, dependencies are allowed, nothing else changed |
+| code | agent | `internal/**`, `cmd/**` (replacing the seam) | all tests pass, and tests, generated code (the seam aside) and contract are unchanged, dependencies are allowed, nothing else changed |
 | review | agent | nothing | every blocking finding carries evidence a check confirms, and none is open |
+
+The seam (owner, 2026-11-13): the tests reach the code only through
+`example.com/service/internal/app`, serving `gen.Handler(app.New())`. The generate procedure writes
+`internal/app/app.go` (not part of the template) with `func New() gen.ServerInterface { return gen.Stub{} }`,
+so the tests build and fail before any code exists. The code step replaces that file with the real
+implementation (it may add packages under `internal/`) and keeps `New`'s signature. Since both
+steps may write it, the "unchanged" checks of the code step do not judge it, and each step's
+DependenciesAllowed judges only that step's own writable files.
 
 `inputs` and `outputs` name artifacts. `slice/<part>` is an approved part of the slice. Any other
 name is the accepted output of the earlier step that lists it under `outputs`.
@@ -64,15 +72,16 @@ into the project, except `vendortools/`.
 | `template/vendortools/tools.go` | The packages vendored besides those the generated code imports, so later steps build offline from `vendor/`: godog for the tests step, and the runtime packages generated code may import. Its `tools` build tag keeps it out of every build, and the procedure never writes it into the project |
 
 The procedure also writes `gen/stub.go`, a `Stub` that answers every operation of the generated
-`ServerInterface` with 501 Not Implemented, for the tests to fail against.
+`ServerInterface` with 501 Not Implemented, for the tests to fail against, and the seam
+`internal/app/app.go`, whose `New` returns it.
 
 ## Dependencies
 
 Each entry is a Go package pattern: `std` (the standard library), an import path, or a path
 ending in `/...` (that path and everything below it), as defined by the
 [go command](https://pkg.go.dev/cmd/go#hdr-Package_lists_and_patterns). The check matches every
-package the step's code imports from outside the project's own module, directly or not, as
-`go list -deps` reports it. An import must match an `allowed` entry and no `forbidden` entry.
+package the step's own writable files import from outside the project's own module, directly or
+not, as `go list -deps` reports it; another step's files are judged by that step's lists. An import must match an `allowed` entry and no `forbidden` entry.
 `forbidden` wins over `allowed`, which is how `os/exec` and `syscall` stay out even though `std`
 is allowed.
 

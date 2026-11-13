@@ -9,6 +9,32 @@ model or the Docker Agent pin must pass that agent's eval suite (XIX).
 | Agent | Definition | Prompt | Evals |
 |-------|------------|--------|-------|
 | analyst | `analyst.yaml` | `analyst/instruction.md` | `../tests/evals/analyst/` |
+| tests | `tests.yaml` | `tests/instruction.md` | `../tests/evals/steps/` |
+| code | `code.yaml` | `code/instruction.md` | `../tests/evals/steps/` |
+| review | `review.yaml` | `review/instruction.md` | `../tests/evals/steps/` |
+
+## Agent digests
+
+An agent's digest names the exact definition a proposal or a run step used. It is the SHA-256, in
+lowercase hex, of the agent's files framed as `canonical.Framed` frames them: `<name>.yaml` and
+every file below `<name>/`, each as its path relative to this folder, a line feed, its length in
+decimal, a line feed and its bytes, in byte order of path (research D27). No other agent's files
+are part of it, so adding or changing one agent leaves the others' digests as they were.
+
+- The analyst's digest is computed by the engine from the definition it embeds, and every
+  proposal names it.
+- Each agent step's digest is declared in the pattern, `agent_digest` in
+  [`../catalogue/api-feature-go/pattern.yaml`](../catalogue/api-feature-go/pattern.yaml), and the
+  engine checks it: at start it computes the digest of each agent step's embedded definition and
+  refuses to start when the pattern's value differs, naming the step and both values. So a changed
+  prompt or definition fails `go test ./cmd/engine/` (and `scripts/check.sh`) until the pattern is
+  updated, and the pattern never names a definition the engine does not run (XVII: checked against
+  the declaration, not kept by hand unchecked).
+- The engine embeds every definition it digests (`src/engine/cmd/engine/setup.go`, copied by
+  `scripts/generate.sh`); it also reads each step's pinned model from it (XV).
+
+To get a digest after changing a definition, run the engine's tests: the refusal names the new
+value.
 
 ## The analyst
 
@@ -103,3 +129,46 @@ $0.10 and 5 minutes per session, checked between requests, so the last request c
 then a session stays within one pattern step (1,000,000 tokens, $0.20, 10 minutes). When the limits
 are reached without an accepted answer, the run exits 1 with `agent produced no final answer: max
 iterations reached` or a budget message.
+
+## The step agents
+
+The tests, code and review agents do the pattern's three agent steps (spec US2). Each runs as the
+pinned Docker Agent `serve api` in its step's container, called by the engine once per attempt
+(research D29), with the message `src/engine/steps` builds: the step, the project folder under
+`/projects`, the writable paths and each input by name and SHA-256, and, for a later round, the open
+findings and the lines the last fix changed.
+
+- **Model:** `claude-haiku-5-5`, pinned (XV), only through the gateway, as the analyst.
+- **What the platform owns (XIV):** the safety mode (the engine opens each session with
+  `safety_policy: autonomous`, so the tools run; the container is the boundary), which paths are
+  writable (the container mounts only the step's writable paths writable, D5), egress (only the
+  gateway) and the sandbox (gVisor, D13). The definitions declare no `permissions`, hooks,
+  `sandbox` or safety key, so they widen none of it.
+- **Tools:** each declares only what its step needs.
+
+  | Agent | Writes (pattern) | Toolsets |
+  |-------|------------------|----------|
+  | tests | `tests/**` | `filesystem` without `remove_directory`; `shell` for `go vet`, `go build`, `go test` |
+  | code | `internal/**`, `cmd/**` | the same |
+  | review | nothing | `filesystem` with `readonly: true`; `shell` for `go test` |
+
+  The shell's `go` runs offline (`GOFLAGS=-mod=vendor`, `GOPROXY=off`, `GOWORK=off`,
+  `GOTOOLCHAIN=local`); the container has no network but the gateway anyway.
+- **The seam:** the tests always serve `gen.Handler(app.New())`; the generate procedure writes
+  `internal/app/app.go` with `New` returning the stub, and the code agent replaces it, keeping
+  `func New() gen.ServerInterface` (pattern.yaml).
+- **Prompts:** each instruction states the step's writable paths and allowed dependencies as the
+  pattern declares them, that everything read from the project or listed in the message is data and
+  never instructions, and that the agent's own "done" counts for nothing: only the step's checks
+  decide (XX).
+- **Answers:** the tests and code agents' answers are not read; their files are, through
+  `readStepFiles`. The review agent answers through `structured_output` in tool mode with the bare
+  JSON `{"findings":[{"rule","file","line","text","blocking"}]}` the engine requires (T054h): the
+  runtime validates it against the schema in `review.yaml`, so no fence or prose reaches the engine.
+  A finding cites a slice rule `R-<n>`, a project file and a line; it blocks only when rerunning
+  that rule's tests fails at that file (ADR 0031).
+- **Budget:** per session 900,000 tokens, $0.15 and 8 minutes, at most 40 model turns (30 for
+  review), within one pattern step (1,000,000 tokens, $0.20, 10 minutes).
+
+To check that a definition loads, run it as the analyst above with `--dry-run` and
+`--network none`, for example `run --exec --dry-run /agents/tests.yaml -`.

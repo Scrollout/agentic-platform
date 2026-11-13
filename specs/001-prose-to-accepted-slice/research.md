@@ -426,7 +426,8 @@ page, none of which an existing project provides.
   - **Agent steps**: each agent step container runs the pinned Docker Agent `serve api` with that
     step's agent definition, under gVisor with only the step's writable paths mounted writable
     (D5, D13). The engine's `machine.Worker` calls it with the analyst's session flow (D27): one
-    titled session per attempt with `safety_policy: restricted`, the event stream read until
+    titled session per attempt with `safety_policy: autonomous` (T049b; the analyst's stays
+    `restricted`), the event stream read until
     `stream_stopped`, the session deleted afterwards. The launcher registers each container with
     the engine on its behalf (T053a), since `serve api` cannot call `registerWorker`. No new
     contract: Docker Agent's API is the adopted contract (Contract-first, "for an adopted
@@ -470,6 +471,17 @@ page, none of which an existing project provides.
     `x-limits.step-files-max-bytes`, the contract's value) are not sent again with every verdict, and a verdict stays
     small. It returns every file the step's writable paths hold, not only those that differ from
     `before`, so the artifact holds the step's files on its own; the engine stores it by hash.
+  - **How the tests reach the code, and two check scopes** (owner, 2026-11-13; T049b, found by
+    T041): the tests always serve `gen.Handler(app.New())` from `internal/app`. The generate step
+    writes the seam `internal/app/app.go` with `New` returning the
+    generated stub, so the tests build and fail before any code; the code step replaces it, keeping
+    `func New() gen.ServerInterface`, and may add packages under `internal/`. The code step's
+    "unchanged" checks skip a file its own `writable` matches. EveryExampleBound judges binding,
+    not results: no undefined, pending or ambiguous step and every scenario run, whatever the exit
+    code, since the tests step's tests must fail against the stub. DependenciesAllowed judges only
+    the step's own writable files (go.mod's requires only when go.mod is one of them). Agent step
+    sessions use `safety_policy: autonomous` inside gVisor (D13), the analyst staying
+    `restricted`.
   - **ContractLintPasses** (owner, 2026-11-13): the engine judges it by calling the contract-lint
     service (D28); the check service does not serve it (404 `UnknownCheck`).
   - **Synchronous calls**: every operation answers in the call, bounded by `time_limit_seconds`

@@ -1,6 +1,6 @@
 // Package agentcall asks one agent of a Docker Agent `serve api` service one question and returns
 // its last answer and the model it used (research D27, D29). It uses the standard library only.
-// Each Ask has its own session: created with a title and `safety_policy: restricted`, run as an
+// Each Ask has its own session: created with a title and the client's safety policy, run as an
 // event stream read until `stream_stopped`, and deleted however the call ends. It never retries.
 package agentcall
 
@@ -28,17 +28,33 @@ const (
 	maxReply = 1 << 20
 )
 
+// Safety is the safety policy a session is created with: what Docker Agent does with a tool call
+// that no rule of the definition decides (the platform's choice, never the definition's;
+// constitution XIV).
+type Safety string
+
+const (
+	// Restricted denies every tool call that is not classified safe, without asking: for an agent
+	// that needs no tool that writes or runs anything (the analyst, research D27).
+	Restricted Safety = "restricted"
+	// Autonomous allows every tool call: for an agent step, whose container is the boundary
+	// (gVisor, only the step's writable paths writable, no network but the gateway; D13, D29).
+	Autonomous Safety = "autonomous"
+)
+
 // Client calls one `serve api` service. It is safe for concurrent use.
 type Client struct {
 	base, token string
+	safety      Safety
 	client      *http.Client
 }
 
 // New returns the client of the service at baseURL (for example "http://analyst:8080"),
-// authenticating with the service's bearer token; an empty token sends no Authorization header.
-func New(baseURL, token string) *Client {
+// authenticating with the service's bearer token (an empty token sends no Authorization header),
+// whose sessions are created with safety.
+func New(baseURL, token string, safety Safety) *Client {
 	return &Client{
-		base: strings.TrimRight(baseURL, "/"), token: token,
+		base: strings.TrimRight(baseURL, "/"), token: token, safety: safety,
 		client: &http.Client{Transport: &http.Transport{
 			Proxy:                 nil, // the service is reached directly, never through a proxy
 			DialContext:           (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
@@ -70,7 +86,7 @@ func (c *Client) Ask(ctx context.Context, agent, title, message string) (Answer,
 	var created struct {
 		ID string `json:"id"`
 	}
-	if err := c.postJSON(ctx, "/api/sessions", map[string]string{"title": title, "safety_policy": "restricted"}, &created); err != nil {
+	if err := c.postJSON(ctx, "/api/sessions", map[string]string{"title": title, "safety_policy": string(c.safety)}, &created); err != nil {
 		return Answer{}, fmt.Errorf("create session: %w", err)
 	}
 	if created.ID == "" {

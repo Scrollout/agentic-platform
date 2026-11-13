@@ -33,9 +33,13 @@ import (
 //go:embed gen/catalogue/api-feature-go/pattern.yaml
 var pattern []byte
 
-// The analyst's definition, as the analyst service mounts src/agents at /agents.
+// The agent definitions, as the analyst service and each agent step's container mount src/agents
+// at /agents: the analyst's and each agent step's (`agent:<name>` in the pattern).
 //
 //go:embed gen/agents/analyst.yaml gen/agents/analyst/instruction.md
+//go:embed gen/agents/tests.yaml gen/agents/tests/instruction.md
+//go:embed gen/agents/code.yaml gen/agents/code/instruction.md
+//go:embed gen/agents/review.yaml gen/agents/review/instruction.md
 var agentFiles embed.FS
 
 // agentRoot is where agentFiles holds src/agents.
@@ -87,7 +91,7 @@ func setup(getenv func(string) string) (http.Handler, func() error, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("the embedded contract's schemas: %w", err)
 	}
-	digest, err := agentDigest(agentFiles, agentRoot)
+	digest, err := agentDigest(agentFiles, agentRoot, "analyst")
 	if err != nil {
 		return nil, nil, fmt.Errorf("the embedded analyst definition: %w", err)
 	}
@@ -140,6 +144,9 @@ func setup(getenv func(string) string) (http.Handler, func() error, error) {
 // step's model is the one its embedded definition pins; a step whose definition is not embedded has
 // none, so its attempts fail before anything is called, and cfg.Model stays empty, so no agent
 // step's result is reused. cfg.Model is set only when every agent step pins the same model.
+// An agent step whose `agent_digest` in the pattern is not its embedded definition's digest
+// (agentDigest) stops the engine (Principle XVII: the pattern's digest is checked against the
+// definition, never trusted as written).
 func wireSteps(cfg *api.Config, svc *slices.Service, st *store.Store, url, token string) error {
 	p, err := svc.Pattern()
 	if err != nil {
@@ -152,6 +159,9 @@ func wireSteps(cfg *api.Config, svc *slices.Service, st *store.Store, url, token
 		name, ok := strings.CutPrefix(s.Worker, "agent:")
 		if !ok {
 			continue
+		}
+		if d, err := agentDigest(agentFiles, agentRoot, name); err == nil && d != s.AgentDigest {
+			return fmt.Errorf("pattern step %s: agent_digest %s is not the digest of its definition src/agents/%s.yaml and src/agents/%s/, %s", s.Name, s.AgentDigest, name, name, d)
 		}
 		m, err := pinnedModel(agentFiles, agentRoot+"/"+name+".yaml")
 		switch {
@@ -230,14 +240,22 @@ func pinnedModel(files fs.FS, path string) (string, error) {
 	return m.Provider + "/" + m.Model, nil
 }
 
-// agentDigest is the SHA-256, in lowercase hex, of the agent definition files under root in their
-// framed form (canonical.FramedHash), each by its path relative to root (the path under the
-// analyst service's /agents), so that no two sets of files give the same digest.
-func agentDigest(files fs.FS, root string) (string, error) {
+// agentDigest is the SHA-256, in lowercase hex, of agent name's definition files under root in
+// their framed form (canonical.FramedHash): `<name>.yaml` and every file below `<name>/`, each by
+// its path relative to root (the path under the container's /agents), so that no two sets of
+// files give the same digest and no other agent's files change it. It fails when `<name>.yaml` is
+// not there.
+func agentDigest(files fs.FS, root, name string) (string, error) {
+	if _, err := fs.Stat(files, root+"/"+name+".yaml"); err != nil {
+		return "", err
+	}
 	var set []canonical.File
 	err := fs.WalkDir(files, root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
+		}
+		if rel := strings.TrimPrefix(p, root+"/"); rel != name+".yaml" && !strings.HasPrefix(rel, name+"/") {
+			return nil
 		}
 		b, err := fs.ReadFile(files, p)
 		if err != nil {

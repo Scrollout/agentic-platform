@@ -292,7 +292,7 @@ func TestAgentAttemptSessionFlowAndOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 	creates := r.agent.rec.find("POST", "/api/sessions")
-	if len(creates) != 1 || creates[0].body["safety_policy"] != "restricted" {
+	if len(creates) != 1 || creates[0].body["safety_policy"] != "autonomous" {
 		t.Fatalf("session create: %+v", creates)
 	}
 	if title, _ := creates[0].body["title"].(string); title == "" {

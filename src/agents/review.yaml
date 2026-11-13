@@ -1,0 +1,111 @@
+# The review agent: a fresh review of a built slice that reports findings, each citing a rule of
+# the slice, a file and a line (spec US2, FR-016, FR-017; research D9, D11, D13, D29; pattern step
+# `review` in src/catalogue/api-feature-go/pattern.yaml). Its findings are claims: a finding
+# blocks only when rerunning the tests of the rule it names fails at the file it names
+# (FindingsCarryEvidence, NoBlockingFindingOpen; ADR 0031). Docker Agent config, schema version
+# 16, for the docker-agent pin in src/deploy/images.lock. How the platform runs it: README.md here.
+#
+# What this definition does not decide (the platform owns it, constitution XIV): the safety mode
+# (the engine opens each session with its own policy), what is writable (the review step's
+# container mounts the project read-only, D5), egress (the only route is the model gateway) and
+# telemetry (TELEMETRY_ENABLED=false in the image; --otel is never passed). Nothing here widens
+# them: no permissions, hooks, sandbox or safety key.
+version: "16"
+
+metadata:
+  description: Reviews a built slice against its rules, contract and tests, and reports findings that cite a rule, a file and a line, as JSON.
+  version: 0.1.0
+  license: MIT
+
+models:
+  # Claude Haiku, only through the platform's model gateway (D9). A model version change is a
+  # behaviour change (XV): change this pin only with a passing step-agent eval run (XIX).
+  haiku:
+    provider: anthropic
+    model: claude-haiku-5-5
+    # The gateway is the only route out and adds the provider key itself; an unset
+    # MODEL_GATEWAY_URL stops the agent at load. The container's ANTHROPIC_API_KEY is a
+    # placeholder, never a key (as for the analyst).
+    base_url: ${env.MODEL_GATEWAY_URL}
+    token_key: ANTHROPIC_API_KEY
+    max_tokens: 16000
+    # Pinned rather than left to the model's default, so the effort cannot change under us.
+    thinking_budget: medium
+    # Docker Agent does not price a model behind a custom base_url; without prices the budget
+    # below would count no cost. Per million tokens, prompts up to 100K tokens.
+    cost:
+      input: 0.10
+      output: 0.50
+
+agents:
+  root:
+    model: haiku
+    description: Reviews the built slice and answers with its findings as JSON.
+    instruction_file: review/instruction.md
+    add_date: false
+    add_environment_info: false
+    skills: false
+    session_compaction: false
+    # Read the slice, the tests and the code, run the tests, answer: about 10 model turns; the
+    # rest is room for the runtime's schema-rejection retries.
+    max_iterations: 30
+    toolsets:
+      # Reading only: the review step writes nothing (its writable list is empty).
+      - type: filesystem
+        readonly: true
+      # For `go test` and `go vet` only, to see whether a rule's tests fail before calling a
+      # finding blocking. Offline, from vendor/.
+      - type: shell
+        env:
+          GOFLAGS: -mod=vendor -buildvcs=false
+          GOPROXY: "off"
+          GOWORK: "off"
+          GOTOOLCHAIN: local
+    structured_output:
+      name: review_findings
+      description: The review's whole answer, its findings, exactly as the system prompt describes them.
+      # Tool mode: the model answers by calling the internal tool, and the runtime validates the
+      # arguments against `schema` before it accepts them, so the answer is bare JSON
+      # `{"findings":[...]}`, which the engine requires (src/engine/steps: agentAnswer, T054h).
+      # The engine reads `rule`, `file`, `line`, `text` and `blocking` (machine.Finding).
+      mode: tool
+      schema:
+        type: object
+        required: [findings]
+        additionalProperties: false
+        properties:
+          findings:
+            type: array
+            maxItems: 20
+            items:
+              type: object
+              required: [rule, file, line, text, blocking]
+              additionalProperties: false
+              properties:
+                rule:
+                  type: string
+                  pattern: "^R-[0-9]+$"
+                  description: The slice rule the finding concerns, `R-<n>`, as tagged in features/slice.feature.
+                file:
+                  type: string
+                  minLength: 1
+                  pattern: "^[A-Za-z0-9_][A-Za-z0-9_./-]*$"
+                  description: The project file, relative to the project folder, for example internal/notes/notes.go.
+                line:
+                  type: integer
+                  minimum: 1
+                  description: The line in that file, counted from 1.
+                text:
+                  type: string
+                  minLength: 1
+                  description: What is wrong and why, in one or two sentences.
+                blocking:
+                  type: boolean
+                  description: True only when the code breaks the rule and a test of that rule fails at this file.
+
+# Per session, within one pattern step's budget (1,000,000 tokens, $0.20, 10 minutes). Docker
+# Agent checks these at turn boundaries, so a run can overshoot by one turn.
+budget:
+  max_tokens: 900000
+  max_cost: 0.15
+  max_time: 8m

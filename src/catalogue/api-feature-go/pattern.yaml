@@ -55,10 +55,18 @@ budgets:
 # Project layout written by the steps (paths relative to the new project's folder):
 #   api/openapi.yaml, features/slice.feature   contract-check (approved copies)
 #   gen/**, go.mod, go.sum, vendor/**           generate
+#   internal/app/app.go                         generate (the seam), then code
 #   tests/**                                    tests
 #   internal/**, cmd/**                         code
+# The seam (owner, 2026-11-13): the tests always serve gen.Handler(app.New()) from package
+# example.com/service/internal/app. Generate writes internal/app/app.go with New returning the
+# generated stub, so the tests build and fail before any code exists; the code step replaces it
+# with the real implementation (and may add packages under internal/), keeping New's signature
+# `func New() gen.ServerInterface`. GeneratedCodeUnchanged therefore does not judge a file the
+# judged step may itself write.
 # Dependency entries are Go package patterns (`std`, a path, or a path ending in `/...`), matched
-# against every import outside the project's own module; forbidden wins over allowed.
+# against every import outside the project's own module in the step's own writable files (and
+# go.mod's requires when go.mod is one of them); forbidden wins over allowed.
 steps:
   - name: contract-check
     worker: procedure:contract-check
@@ -85,6 +93,7 @@ steps:
       - go.mod
       - go.sum
       - vendor/**
+      - internal/app/app.go
     checks:
       - GenerationRepeatable
       - GeneratedCodeBuilds
@@ -103,9 +112,10 @@ steps:
 
   - name: tests
     worker: agent:tests
-    # Not yet set: T049 writes src/agents/tests.yaml; this becomes its SHA-256. No definition
-    # hashes to all zeros, so a run fails closed until then.
-    agent_digest: "0000000000000000000000000000000000000000000000000000000000000000"
+    # The digest of src/agents/tests.yaml and src/agents/tests/, framed as the analyst's
+    # (src/agents/README.md, "Agent digests"). The engine refuses to start when it differs from
+    # the definition it embeds.
+    agent_digest: "f043478e3fae704a5bb36e6601f1c1828e2cae8b5c885b71b7f51974ad2e369c"
     inputs: [contract, examples, generated-code, slice/rules]
     outputs: [tests]
     writable:
@@ -125,8 +135,8 @@ steps:
 
   - name: code
     worker: agent:code
-    # Not yet set: T049 writes src/agents/code.yaml; this becomes its SHA-256 (fails closed until then).
-    agent_digest: "0000000000000000000000000000000000000000000000000000000000000000"
+    # The digest of src/agents/code.yaml and src/agents/code/ (as for tests).
+    agent_digest: "27b39b942b5b83ff4c7ed57e2f9a0c31e5a2b86d932211b3c5e7bfb96f9659e2"
     inputs: [contract, examples, generated-code, tests, slice/rules]
     outputs: [code]
     writable:
@@ -147,8 +157,8 @@ steps:
 
   - name: review
     worker: agent:review
-    # Not yet set: T049 writes src/agents/review.yaml; this becomes its SHA-256 (fails closed until then).
-    agent_digest: "0000000000000000000000000000000000000000000000000000000000000000"
+    # The digest of src/agents/review.yaml and src/agents/review/ (as for tests).
+    agent_digest: "74f4b2e0b12afa04aded15be4acf4b2d2da771833a0040c1e88d3ef91eb5b6f0"
     inputs: [contract, examples, generated-code, tests, code, slice/rules]
     outputs: [findings]
     writable: []

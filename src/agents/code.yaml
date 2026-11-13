@@ -1,0 +1,70 @@
+# The code agent: writes the implementation under internal/ and cmd/ that makes the tests step's
+# tests pass, without changing tests, generated code or contract (spec US2,
+# FR-012..FR-014; research D9, D13, D29; pattern step `code` in
+# src/catalogue/api-feature-go/pattern.yaml). Docker Agent config, schema version 16, for the
+# docker-agent pin in src/deploy/images.lock. How the platform runs it: README.md here.
+#
+# What this definition does not decide (the platform owns it, constitution XIV): the safety mode
+# (the engine opens each session with its own policy), which paths are writable (the step's
+# container mounts only `internal/` and `cmd/` writable, D5), egress (the only route is the model
+# gateway) and telemetry (TELEMETRY_ENABLED=false in the image; --otel is never passed). Nothing
+# here widens them: no permissions, hooks, sandbox or safety key.
+version: "16"
+
+metadata:
+  description: Writes the service under internal/ and cmd/ so that every test passes, without changing tests, generated code or contract.
+  version: 0.1.0
+  license: MIT
+
+models:
+  # Claude Haiku, only through the platform's model gateway (D9). A model version change is a
+  # behaviour change (XV): change this pin only with a passing step-agent eval run (XIX).
+  haiku:
+    provider: anthropic
+    model: claude-haiku-5-5
+    # The gateway is the only route out and adds the provider key itself; an unset
+    # MODEL_GATEWAY_URL stops the agent at load. The container's ANTHROPIC_API_KEY is a
+    # placeholder, never a key (as for the analyst).
+    base_url: ${env.MODEL_GATEWAY_URL}
+    token_key: ANTHROPIC_API_KEY
+    max_tokens: 16000
+    # Pinned rather than left to the model's default, so the effort cannot change under us.
+    thinking_budget: medium
+    # Docker Agent does not price a model behind a custom base_url; without prices the budget
+    # below would count no cost. Per million tokens, prompts up to 100K tokens.
+    cost:
+      input: 0.10
+      output: 0.50
+
+agents:
+  root:
+    model: haiku
+    description: Writes the code step's implementation under internal/ and cmd/.
+    instruction_file: code/instruction.md
+    add_date: false
+    add_environment_info: false
+    skills: false
+    session_compaction: false
+    # Read the tests and the generated code, write two or three files, run the tests, fix what
+    # fails: about 15 model turns; the rest is room for fixes.
+    max_iterations: 40
+    toolsets:
+      # Reading and writing files. No remove_directory. Which files it can change is decided by
+      # the container's mounts and judged by ScopeKept, not by this list.
+      - type: filesystem
+        tools: [read_file, read_multiple_files, list_directory, directory_tree, search_files_content, write_file, edit_file, create_directory]
+      # For `go build`, `go vet` and `go test` only. Offline: modules come from vendor/, never from
+      # the network (the container has none anyway).
+      - type: shell
+        env:
+          GOFLAGS: -mod=vendor -buildvcs=false
+          GOPROXY: "off"
+          GOWORK: "off"
+          GOTOOLCHAIN: local
+
+# Per session, within one pattern step's budget (1,000,000 tokens, $0.20, 10 minutes). Docker
+# Agent checks these at turn boundaries, so a run can overshoot by one turn.
+budget:
+  max_tokens: 900000
+  max_cost: 0.15
+  max_time: 8m

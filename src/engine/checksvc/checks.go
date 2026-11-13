@@ -30,7 +30,7 @@ var checkByName = map[string]func(c *call) []checks.CheckResult{
 	},
 	"DependenciesAllowed": func(c *call) []checks.CheckResult {
 		d := c.req.Step.Dependencies
-		return checks.Dependencies(c.dir, d.Allowed, d.Forbidden)
+		return checks.DependenciesOf(c.dir, c.req.Step.Writable, d.Allowed, d.Forbidden)
 	},
 	"ContractMatchesApproval": func(c *call) []checks.CheckResult {
 		return checks.ContractHash(c.dir, c.approved(gen.ApprovedPartPartContract).HashValue)
@@ -55,14 +55,14 @@ var checkByName = map[string]func(c *call) []checks.CheckResult{
 		if !ok {
 			return []checks.CheckResult{{Check: "TestsUnchanged", Reason: "no earlier step has the output tests"}}
 		}
-		return checks.TestsUnchangedOf(c.before, c.project.tree(), w)
+		return checks.TestsUnchangedOf(c.notOwn(c.before), c.notOwn(c.project.tree()), w)
 	},
 	"GeneratedCodeUnchanged": func(c *call) []checks.CheckResult {
 		w, ok := c.earlierWritable("generated-code")
 		if !ok {
 			return []checks.CheckResult{{Check: "GeneratedCodeUnchanged", Reason: "no earlier step has the output generated-code"}}
 		}
-		return checks.GeneratedCodeUnchangedOf(c.before, c.project.tree(), w)
+		return checks.GeneratedCodeUnchangedOf(c.notOwn(c.before), c.notOwn(c.project.tree()), w)
 	},
 	"FindingsCarryEvidence": func(c *call) []checks.CheckResult {
 		return checks.FindingsRerun(c.runner, c.dir, c.findings())
@@ -70,6 +70,19 @@ var checkByName = map[string]func(c *call) []checks.CheckResult{
 	"NoBlockingFindingOpen": func(c *call) []checks.CheckResult {
 		return checks.NoBlockingFindingOpen(c.runner, c.dir, c.findings())
 	},
+}
+
+// notOwn is t without the files the judged step may write: an earlier step's file that this step
+// may write (the seam internal/app/app.go, which generate writes and code replaces; pattern.yaml)
+// is this step's to change, so "unchanged" checks judge only the others.
+func (c *call) notOwn(t checks.Tree) checks.Tree {
+	out := checks.Tree{}
+	for p, b := range t {
+		if !checks.MatchGlob(c.req.Step.Writable, p) {
+			out[p] = b
+		}
+	}
+	return out
 }
 
 // approved is the request's approved part; the schema requires three, and a part missing gives an

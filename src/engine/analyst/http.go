@@ -33,7 +33,7 @@ type HTTP struct {
 // "http://analyst:8080"), authenticating with the service's bearer token. digest is the agent
 // definition's digest, which every proposal names as its AgentDigest; the service does not report it.
 func NewHTTP(baseURL, token, digest string) *HTTP {
-	return &HTTP{digest: digest, client: agentcall.New(baseURL, token)}
+	return &HTTP{digest: digest, client: agentcall.New(baseURL, token, agentcall.Restricted)}
 }
 
 var _ slices.Analyst = (*HTTP)(nil)

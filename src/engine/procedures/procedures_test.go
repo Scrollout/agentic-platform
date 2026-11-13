@@ -265,7 +265,7 @@ func generated(t *testing.T) procedures.Result {
 }
 
 func writable(p string) bool {
-	return strings.HasPrefix(p, "gen/") || strings.HasPrefix(p, "vendor/") || p == "go.mod" || p == "go.sum"
+	return strings.HasPrefix(p, "gen/") || strings.HasPrefix(p, "vendor/") || p == "go.mod" || p == "go.sum" || p == "internal/app/app.go"
 }
 
 func TestGenerateOutputAndWritableSet(t *testing.T) {

@@ -264,7 +264,7 @@ func (w *worker) agent(ctx context.Context, r machine.Request, agent, url, token
 		return machine.Result{}, fmt.Errorf("agent step %s declares %d outputs; an agent step has exactly one", r.Step.Name, len(r.Step.Outputs))
 	}
 	before := w.before(r)
-	ans, err := agentcall.New(url, token).Ask(ctx, agent, "ap-step-"+r.Step.Name, w.message(r))
+	ans, err := agentcall.New(url, token, agentcall.Autonomous).Ask(ctx, agent, "ap-step-"+r.Step.Name, w.message(r))
 	// from here on, every failure returns what the session used, so the budgets count it
 	spent := machine.Result{Model: ans.Model, Usage: machine.Usage{Tokens: ans.Tokens, CostUSD: ans.CostUSD}}
 	if err != nil {

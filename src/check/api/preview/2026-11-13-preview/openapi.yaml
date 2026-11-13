@@ -143,10 +143,12 @@ paths:
         that cannot be built, a go command that fails to start) answers `passed: false` with a
         reason naming it; it never passes by default. The checks served, by name: ScopeKept, every
         path added, changed or removed between `before` and now matches the step's `writable`.
-        DependenciesAllowed, `go.mod` has no replace directive, the project has no symbolic link,
-        and every import outside the project's module and every direct requirement matches the
-        step's `dependencies.allowed` and no `dependencies.forbidden` entry (forbidden wins; the
-        catalogue README's package patterns). ContractMatchesApproval, the SHA-256 of the RFC 8785
+        DependenciesAllowed, the project has no symbolic link, and in the step's own files (those its
+        `writable` matches) every import outside the project's module matches the step's
+        `dependencies.allowed` and no `dependencies.forbidden` entry, and when `go.mod` is one of
+        them it has no replace directive and every direct requirement matches the same way
+        (forbidden wins; the catalogue README's package patterns). Other steps' files are not
+        judged by this step's lists. ContractMatchesApproval, the SHA-256 of the RFC 8785
         canonical JSON of `{"contract": <api/openapi.yaml as text>}` equals the `sha256` of the
         `contract` entry of `approved`, whatever the step's inputs. ExamplesMatchApproval,
         `features/slice.feature` is byte for byte the `examples` text of the `rules` entry of
@@ -154,7 +156,9 @@ paths:
         fresh generation from `api/openapi.yaml` gives exactly the `generated-code` files.
         GeneratedCodeBuilds, the project builds with the go toolchain, offline, from `vendor/`.
         TestsBuild, every test package builds. EveryExampleBound, godog `--strict` finds no
-        undefined, pending or ambiguous step for any scenario of `features/slice.feature`.
+        undefined, pending or ambiguous step for any scenario of `features/slice.feature`, and every
+        scenario runs; whether the scenarios pass is not judged (the tests step's must fail against
+        the stub).
         TestsFailAgainstStub, the tests build and fail against the generated stub. TestsUnchanged
         and GeneratedCodeUnchanged, see EarlierStep. AllTestsPass, every test passes, offline.
         FindingsCarryEvidence, every blocking finding names a rule, a file the project holds as a
@@ -606,7 +610,8 @@ components:
         A step the pattern runs before this one, with the paths it may write and its outputs.
         TestsUnchanged reads the earlier step whose outputs hold `tests`, and GeneratedCodeUnchanged
         the one whose outputs hold `generated-code`: no path matching that step's `writable` may be
-        added, changed or removed compared with `before`.
+        added, changed or removed compared with `before`, unless the judged step's own `writable`
+        matches it too (the seam `internal/app/app.go`, which generate writes and code replaces).
       required:
       - name
       - writable

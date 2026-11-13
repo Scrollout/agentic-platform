@@ -15,6 +15,8 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/mod/modfile"
+
 	"github.com/agentic-platform/engine/canonical"
 	"github.com/agentic-platform/engine/checks"
 )
@@ -45,7 +47,8 @@ const generateDirective = "//go:generate oapi-codegen "
 // Generate is the generate procedure. From the contract output of contract-check (the framed form
 // of api/openapi.yaml) it produces the output generated-code: the template's files (go.mod, go.sum,
 // gen/), the code oapi-codegen generates into gen/ by the template's directive, gen/stub.go (a
-// server that answers every operation 501 Not Implemented) and vendor/ from `go mod vendor`, all
+// server that answers every operation 501 Not Implemented), the seam internal/app/app.go (New
+// returning that stub, for the tests to serve) and vendor/ from `go mod vendor`, all
 // offline. It runs the whole generation twice in fresh folders and completes only when both give
 // the same bytes, go.mod and go.sum are the template's byte for byte (so the template's go.sum
 // verified every module), and the module builds from vendor/ alone.
@@ -92,6 +95,35 @@ func Generate(ctx context.Context, cfg GenerateConfig, in []Input) (Result, erro
 	}, nil
 }
 
+// seamPath is the seam between the tests and the code (pattern.yaml, owner 2026-11-13): the tests
+// serve gen.Handler(app.New()), and the code step replaces this file, keeping New's signature.
+const seamPath = "internal/app/app.go"
+
+// writeSeam writes seamPath below dir for the module that gomod names: New returns the generated
+// stub, so the tests build and fail before any code exists.
+func writeSeam(dir string, gomod []byte) error {
+	module := modfile.ModulePath(gomod)
+	if module == "" {
+		return errors.New("generate: the template's go.mod names no module")
+	}
+	src := `// Package app is the seam between the tests and the code: the tests serve
+// gen.Handler(app.New()). The generate step wrote this file, with New returning the generated
+// stub; the code step replaces it with the real implementation and keeps New's signature.
+package app
+
+import "` + module + `/gen"
+
+// New returns the server under test: until the code step replaces this file, the stub that
+// answers every operation with 501 Not Implemented.
+func New() gen.ServerInterface { return gen.Stub{} }
+`
+	p := filepath.Join(dir, filepath.FromSlash(seamPath))
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(p, []byte(src), 0o644)
+}
+
 // generateOnce runs one generation in a fresh folder and returns the output's files, or a reason.
 func generateOnce(ctx context.Context, cfg GenerateConfig, contract []byte) ([]File, string, error) {
 	dir, err := os.MkdirTemp("", "generate-")
@@ -126,6 +158,9 @@ func generateOnce(ctx context.Context, cfg GenerateConfig, contract []byte) ([]F
 	if keep["go.mod"] == nil || keep["go.sum"] == nil {
 		return nil, "", errors.New("generate: the template has no go.mod or no go.sum")
 	}
+	if _, ok := keep[seamPath]; ok {
+		return nil, "", fmt.Errorf("generate: the template holds %s, which the procedure writes", seamPath)
+	}
 	if _, ok := keep[contractPath]; ok {
 		return nil, "", fmt.Errorf("generate: the template holds %s, which is the step's input", contractPath)
 	}
@@ -158,6 +193,9 @@ func generateOnce(ctx context.Context, cfg GenerateConfig, contract []byte) ([]F
 		return nil, "the generated code in gen/ cannot be read for the stub: " + scrub([]byte(err.Error()), dir), nil
 	}
 	if err := os.WriteFile(filepath.Join(gen, "stub.go"), stub, 0o644); err != nil {
+		return nil, "", err
+	}
+	if err := writeSeam(dir, keep["go.mod"]); err != nil {
 		return nil, "", err
 	}
 	// -mod=mod lets go mod vendor read the module cache; go.sum then verifies every module, and
