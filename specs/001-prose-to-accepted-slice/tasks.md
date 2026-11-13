@@ -36,8 +36,11 @@ fresh review.
   follow-up tasks: 4 CRITICAL (C1 test-change rule, C2 gate not re-run, C3 reviewer setup, C4 hook
   not enforcing ADR 0029) and 5 HIGH, fixed in this tasks.md and data-model.md; to pass again before
   `/speckit-implement` continues with US2. Implementation runs through `/speckit-implement` from
-  US2 on (US1 was implemented task by task without it). Until T010e, the hook required a `Tests-approved-by:` trailer when
-  non-test Go code and test files were staged together, even when the tests were new; Story 1's trailers naming "separate test author (Claude
+  US2 on (US1 was implemented task by task without it). Round 1 of the 2026-11-13 re-run (Opus,
+  fresh, at `3601b34`) failed (K1 to K4); fixed in `bab854b` and `d5de8e1`; round 2 (Opus, fresh,
+  at `d5de8e1`) passed with 3 MEDIUM and 5 LOW, fixed or recorded in the next commit. The hook requires a `Tests-approved-by:` trailer when non-test Go code
+  and test files are staged together, even when the tests are new (it stands: test-first commits
+  them apart; playbook step 10); Story 1's trailers naming "separate test author (Claude
   Sonnet), new test files only" record that no existing test changed, not an approval: only the
   owner approves (ADR 0029).
 - **Done means**: tests pass, `python3 scripts/okf.py check` reports OK, `docs/log.md` records the
@@ -231,7 +234,7 @@ checkpoint.
 - [X] T010c Make the older script tests fail instead of skip when a prerequisite is missing (constitution: a test MAY be skipped only as a strict expected failure naming an open task): `test_compose.py`, `test_generate.py`, `test_ruleset.py` and `test_npm_tool.py` skip without Docker, and `test_npm_tool.py` skips when it cannot find the Docker bridge gateway or fetch its control `$ref`; by a fresh test author
 - [ ] T059 [P] Run the evals (T025, T041) from `scripts/check.sh` on every change to a prompt, agent definition, model or Docker Agent version, with a test-scoped API key that has a provider spending limit
 - [ ] T060 [P] Record decision records in `docs/decisions/`: Go as the platform's stack, Docker Agent's `serve api` as the integration mode (ADR 0002 follow-up), the run store format, the slice format (structured EARS rules and Gherkin examples)
-- [ ] T061 [P] (concepts for every tool adopted so far written 2026-11-13; godog's is marked planned until US2 adds it; the `docs/apis/` engine API concept is left) (closes, before T066, the component concepts for tools adopted in earlier tasks) Add `docs/components/` concepts for Docker Agent, godog, cucumber/gherkin, oapi-codegen (with its runtime library), Redocly CLI, go-yaml (`go.yaml.in/yaml/v3`), Spectral, oasdiff, jsonschema, Schemathesis, nginx and gVisor, and an engine API concept under `docs/apis/`
+- [ ] T061 [P] (concepts for every tool adopted so far written 2026-11-13; godog's is marked planned until US2 adds it; the `docs/apis/` engine API concept is left) (closes, before T066, the component concepts for tools adopted in earlier tasks) Add `docs/components/` concepts for govulncheck, go-licenses, Docker Agent, godog, cucumber/gherkin, oapi-codegen (with its runtime library), Redocly CLI, go-yaml (`go.yaml.in/yaml/v3`), Spectral, oasdiff, jsonschema, Schemathesis, nginx and gVisor, and an engine API concept under `docs/apis/`
 - [X] T062 [P] (done 2026-11-13) Add the terms Slice, Pattern, Catalogue, Run, Step, Check and Hand-over to `docs/overview/glossary.md`
 - [ ] T063 [P] Re-run the OpenSSF Scorecard for every adopted tool before release and update research.md (D22)
 - [ ] T064 (overview updated for Story 1 on 2026-11-13; the problem-space rows and the Story 2 update are left) Update `docs/architecture/overview.md`, set the problem-space rows this spec serves to `done` only as their tests pass, and record the change in `docs/log.md`
@@ -246,7 +249,9 @@ checkpoint.
 - **Foundational (Phase 2)**: after Setup. T011 before T011a, T011c, T011b and T011d; T011b and T011d before T015
   and T018 (it changes generated types); T011 before T012; T012 before T012a and before every task
   that uses the generated code; T024a any time after T012; T016, T017, T018 after their tests T013, T014, T015.
-- **US1 (Phase 3)**: after Foundational. Tests T025–T031 before implementation T032–T039.
+- **US1 (Phase 3)**: after Foundational. Tests T025–T031 before implementation T032–T039 (not
+  followed for T030 and T031; see plan, Exceptions). T068 is passed by the existing analyst
+  (T036) and slice service; a failure there becomes a fix task.
 - **US2 (Phase 4)**: after Foundational, T034 (the pattern), T037 (approved slices) and T010e (the
   hook enforces ADR 0029). T035a's pattern-schema check in `scripts/check.sh` comes before T051,
   since US2 builds from the pattern. Tests T041–T047 and T067 are committed and seen failing before

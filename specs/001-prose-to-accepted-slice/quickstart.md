@@ -24,7 +24,8 @@ src/deploy/ap up --credentials ~/.config/agentic-platform/anthropic_api_key --pr
 src/deploy/ap page
 ```
 
-Expected: the gateway, engine and run page start (the terminal client runs per command); `page`
+Expected: the gateway, engine and run page start (the terminal client runs per command; until the
+run page exists, T056, `ap up` says so and starts the rest); `page`
 prints a `http://127.0.0.1:<port>` address (port 7878 unless `AP_PAGE_PORT` is set). Only the
 gateway has internet access. `src/deploy/ap down` stops everything and keeps run records and
 projects.

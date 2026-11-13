@@ -44,7 +44,8 @@ Shipped by Story 1:
   contract; only the engine reaches it (research D28).
 - **Model gateway**: [nginx](/components/nginx.md), the only container with egress and the only one
   that holds the provider key.
-- **Terminal client** (`src/cli`) and **run page** (`src/page`): both call the engine API.
+- **Terminal client** (`src/cli`): calls the engine API. The read-only **run page** (`src/page`)
+  arrives with Story 2 (T056); until then `ap up` starts without it.
 
 Planned for Story 2: per-step **step containers** and **check containers**, started by `ap` when a
 slice is approved and a build is asked for, each with only its step's paths writable
