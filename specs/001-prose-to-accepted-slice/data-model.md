@@ -129,6 +129,11 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
   belongs to the implementation.
 - **A failing worker or model**: a worker that errors, including an unavailable model, makes a
   rejected attempt, retried within the step's attempts; the run can then be resumed (edge case).
+- **Pivot, compensation and timeout** (constitution, Reliable events and side effects; research
+  D29): the pivot is the run's outcome recorded with the project handed over (`done` or
+  `handed-over`); before it, a rejected attempt's writes are undone by restoring the step's
+  writable paths to the last accepted state from the stored artifacts before the next attempt
+  (T053a); the timeout is the step and run time budgets (D14).
 
 ## Step checks
 

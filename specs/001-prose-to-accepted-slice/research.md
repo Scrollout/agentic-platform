@@ -78,10 +78,12 @@ fresh review round 1.
 
 - **Decision**: when a slice is approved and the developer asks to build, the launcher starts that
   slice's step containers, each with only its step's writable paths mounted writable, under gVisor
-  (D13); it does the same before `resume` and `replay`. Each container registers with the engine
-  using its own token, which names its slice and step. `startRun`, `resumeRun` and `replayRun` are
-  refused with `WorkersNotReady` until every step of the pattern has a registered worker. Checks
-  run in a separate check container under gVisor, never in the engine.
+  (D13); it does the same before `resume` and `replay`. The launcher registers each container with
+  the engine on its behalf, with a worker token that names its slice and step (D29: Docker Agent's
+  `serve api` cannot call `registerWorker`; a procedure step worker's own token, which the engine
+  uses to call it, comes with that grant). `startRun`, `resumeRun` and `replayRun` are refused
+  with `WorkersNotReady` until every step of the pattern has a registered worker. Checks run in a
+  separate check service under gVisor, never in the engine (D29).
 - **Rationale**: read-only mounts per step are a required guard (S3); the engine never receives the
   container engine's socket (S1); an API client without the launcher gets an explicit refusal, so
   the API stays the only management path (Principle III).
@@ -145,7 +147,10 @@ fresh review round 1.
 - **Decision**: `ap up` creates a session; the launcher generates a random token per session and per
   container; each container accepts only calls with the caller's token, on an internal network.
   The engine API has three token kinds: the client token may call every developer operation, the
-  page token only GET operations, and a worker token only `registerWorker`; others get 403.
+  page token only GET operations, and a worker token only `registerWorker`; others get 403. Since
+  D29 the launcher, not the container, uses the worker token to register each step container. The
+  engine holds its own token for each deployment it calls: the check service's, and each procedure
+  step worker's, which the launcher creates and passes with the worker's grant (T053a).
 - **Rationale**: Principle V within a local version; full workload identity is an approved
   exception (plan, Complexity Tracking). "Session" here is the platform's start, distinct from a
   build run.
@@ -444,8 +449,8 @@ page, none of which an existing project provides.
       `UnknownProcedure`, `UnknownStep`).
   - **Agent step outputs** (owner, 2026-11-13): the check service returns them with a separate
     read operation, `readStepFiles`, not inside `runCheck`'s verdict: it is called once per
-    attempt while `runCheck` is called once per check, so the files (up to 16 MiB,
-    `x-limits.step-files-max-bytes`) are not sent again with every verdict, and a verdict stays
+    attempt while `runCheck` is called once per check, so the files (at most
+    `x-limits.step-files-max-bytes`, the contract's value) are not sent again with every verdict, and a verdict stays
     small. It returns every file the step's writable paths hold, not only those that differ from
     `before`, so the artifact holds the step's files on its own; the engine stores it by hash.
   - **ContractLintPasses** (owner, 2026-11-13): the engine judges it by calling the contract-lint
@@ -504,6 +509,20 @@ page, none of which an existing project provides.
     TestsFailAgainstStub, AllTestsPass, TestsUnchanged and FindingsCarryEvidence. T054c adds
     ExamplesMatchApproval, GeneratedCodeBuilds, TestsBuild, GeneratedCodeUnchanged and
     NoBlockingFindingOpen, and makes the comparing checks work from `before`'s hash list.
+  - **The run as a process across components** (constitution, Reliable events and side
+    effects): a run spans the engine, the step workers and the check service, and agent steps and
+    `runProcedure` write project files.
+    - **Pivot**: the run's outcome recorded with the project handed over to the developer (`done`
+      or `handed-over`). After it nothing is undone.
+    - **Compensation**: before the pivot, the state-changing steps are an attempt's writes into
+      the project. For a rejected attempt, the step's writable paths are restored to the last
+      accepted state, from the artifacts the engine stored by hash, before the next attempt; who
+      restores them, and how, is T053a's design, with the project's version history. An accepted
+      attempt's files are kept: they are the state resume and later steps build on. Run-record
+      events are not undone: they are the append-only record (D8).
+    - **Timeout**: the step and run time budgets (D14), with each call bounded by
+      `time_limit_seconds` (at most the step budget); a run waiting for the developer expires
+      after 14 days.
   - **Tokens**: the engine holds one token per deployment it calls. For a procedure step worker
     the launcher creates the token, gives it to the worker in its environment and to the engine
     with the worker's grant; that wiring belongs to T053a.
@@ -542,8 +561,8 @@ page, none of which an existing project provides.
   verdict (sent once per check instead of once per attempt).
 - **Open, for T053a**: how a replay's reused step files are written into the new project (the
   engine has no project mount and the check service only reads it), and how the project's
-  version history is kept, including returning the writable paths to the last accepted state
-  after a rejected attempt. Not designed here. **Open, for T054c**: which check the engine runs
+  version history is kept and the compensation above is carried out (which component restores
+  the writable paths after a rejected attempt). Not designed here. **Open, for T054c**: which check the engine runs
   to confirm a review finding, so that `confirmations` can hold a failing one (the code step's
   own checks all passed when it was accepted).
 - Sources: <https://docker.github.io/docker-agent/features/api-server/>;

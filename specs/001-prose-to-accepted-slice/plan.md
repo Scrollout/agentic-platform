@@ -64,7 +64,7 @@ per token on the API
 | XII. Tenant isolation | Not applicable | One developer by scope (FR-021); listed in Complexity Tracking for the record |
 | XIII. Secure supply chain | Exception (approved, partial) | Images pinned by version and digest; Go tools by version, verified by the Go checksum database; Node tools with their whole dependency tree in `scripts/tools/package-lock.json`; local scans in `scripts/check.sh`; signature verification at start; automated update pull requests deferred while there is no hosted forge |
 | XIV. Safe defaults and least agency | Pass | Default-deny egress; per-step writable paths and allowed dependencies; checks fail closed; budgets; rate limits |
-| XV. Compatible public APIs | Pass | `api-version` query parameter, preview `2026-11-12-preview`, version errors, idempotency keys kept 24 hours, paginated lists |
+| XV. Compatible public APIs | Pass | Engine API: `api-version` query parameter, preview `2026-11-12-preview`, version errors, idempotency keys kept 24 hours, paginated lists. The check service (`2026-11-13-preview`, D29) is internal, called only by the engine with its own token, not a public API: `runProcedure` takes no idempotency key and is repeat-safe by contract (the same request over the same project leaves the same files) |
 | XVI. Human control of agents | Exception (approved, partial) | Feature branch; local hooks run every check and refuse protected-path changes without the owner's `Approved-by:` trailer; agent commits carry an attribution trailer. Hosted branch protection when a forge is used |
 | XVII. Declare, derive, converge | Pass | Slices and patterns are declarations; EARS text, code and tests are derived |
 | XVIII. Abstractions say what | Pass | The API and CLI describe outcomes, not mechanisms |
@@ -78,8 +78,9 @@ per token on the API
 
 Elements and trust boundaries: developer; terminal client; launcher (the only part with
 container-engine access); engine; analyst and step agents; the model (provider); gateway; check
-container; run store; run page; the new project; artifacts passed from one step into the next
-agent's context (a trust boundary).
+container; the check service API (engine token; `runCheck`, `readStepFiles`); procedure step
+workers (writable project mounts, serving `runProcedure`); run store; run page; the new project;
+artifacts passed from one step into the next agent's context (a trust boundary).
 
 | Element | S | T | R | I | D | E | OWASP mapping | Mitigation |
 |---------|---|---|---|---|---|---|---------------|------------|
@@ -88,6 +89,8 @@ agent's context (a trust boundary).
 | Step-to-step artifacts entering a context | | ✓ | | | | ✓ | LLM01 indirect, ASI06 memory poisoning | Accepted artifacts only, by hash; read-only mounts; injection cases in evals |
 | Step agents | | ✓ | | | ✓ | ✓ | ASI02 tool misuse, LLM06 excessive agency | gVisor, read-only outside scope, no capabilities, no egress, resource limits |
 | Check container running generated code | | ✓ | | ✓ | ✓ | ✓ | ASI05 code execution | gVisor, no network, time and resource limits, ephemeral file system |
+| Check service API (`runCheck`, `readStepFiles`) | ✓ | ✓ | ✓ | ✓ | ✓ | | ASI03 identity abuse, LLM10 unbounded consumption | Accepts only the bearer token issued to the engine (`engineToken`; any other gets 401), on a network shared only with the engine; per-token and per-address rate limits, request and response size caps, `calls-at-once` (503 Busy) and `time_limit_seconds` (504, the process tree stopped), all in the contract's `x-limits`; the project mounted read-only; every path a ProjectPath, nothing read through a symbolic link; input hashes checked (InputHashMismatch); the engine accepts an attempt only when every verdict's `project_files` equals the files it stored by hash; the service keeps no state and the engine records every verdict (D29, `src/check/api/preview/2026-11-13-preview/openapi.yaml`) |
+| Procedure step workers (`runProcedure`) | ✓ | ✓ | | | ✓ | ✓ | ASI02 tool misuse, LLM06 excessive agency, ASI03 identity abuse | One worker per procedure step, started by the launcher with a token it creates for that worker and gives only to the worker and the engine (T053a); only that step's writable paths mounted writable; gVisor, no capabilities, no egress, resource limits; a fixed procedure, no model; other procedures and steps answer 404; inputs by content checked against their hashes; writes only ProjectPaths, never through a symbolic link, converging on a repeat; the files it returns are stored by hash and judged by the check service's checks (scope among them); a rejected attempt's writes are undone before the next attempt (D29, T053a) |
 | Gateway | ✓ | | | ✓ | ✓ | | LLM02 | Only holder of credentials; only the provider host; no header or body logging; budget caps |
 | Host-reachable bridges: page forwarder, gateway, image registry | | | | ✓ | | ✓ | — | Stated limit (T022d): only these three can reach the host's services, since Docker publishes no port from an `isolated` network and the gateway needs egress; each is a pinned, static component with a fixed configuration and nothing else on its network. Mitigation path: an optional host firewall rule, added by the owner with root and never by `ap`, drops new connections from the platform's subnets (`10.231.0.0/16`) to the host ([local environment](../../docs/operations/local.md#optional-host-firewall-rule)) |
 | Launcher | | ✓ | | | | ✓ | LLM03 supply chain | Verifies image signatures at start; pins by digest; never passes the socket to a container |
@@ -147,8 +150,10 @@ and `src/tests`; declarations in `src/catalogue` and `src/agents`; packaging in 
 engine's contract lives with the engine, as ADR 0004 requires. The check service's contract and
 its generated code live in `src/check`, a module that needs only `oapi-codegen/runtime`; its
 command `src/engine/cmd/check` is in the engine module so it reuses `engine/checks` and
-`engine/procedures` without copying them; it runs read-only as the check service (checks, an agent
-step's files) and as each procedure step's worker (its procedure, with the step's writable paths), and the engine's check client uses the same generated
+`engine/procedures` without copying them. It runs in two deployments: as the check service, with
+the project mounted read-only (checks, an agent step's files), and as each procedure step's
+worker, which is not read-only: its step's writable paths are mounted writable and the rest of
+the project read-only (its procedure). The engine's check client uses the same generated
 package (research D29, [ADR 0030](../../docs/decisions/0030-agent-steps-on-docker-agent-checks-in-a-check-service.md)).
 Agent steps run the pinned Docker Agent `serve api`, whose API is their contract (D29). Built
 images exclude `src/tests`,
@@ -177,3 +182,5 @@ single-developer version only and are recorded in the commit that carries this p
 |------|----------|--------|
 | Test-first task split (tasks.md rules; Outside-in, test-first) | T005, T012 | Each task holds a check and its planted-violation tests. The tests were written by a separate test author (commits `c3bb1ff` and `66de0d3`), so authorship is separate; only the task split is not. Later tasks keep the split. |
 | Contract-first step 3 and Outside-in, test-first ("see them fail before writing the minimal code") | T030, T031 against T038, T038c, T039 (commits `65b82c8`, `044fe8d`, then `a0b5688`) | In Story 1 the API conformance and acceptance suites were written after the slice handlers and the terminal client they judge; the unit tests of each unit came first, by separate authors. The late suites found two engine defects, fixed with regression tests in `a0b5688`. Approved by the project owner on 2026-11-13. From Story 2 on, T045, T046 and T067 are written and seen failing before T054 and T055 exist. |
+| Tasks dependencies ("T050 before T051") | T051 (the state machine) built before T050 (the fixed procedures) | The machine takes every step through injected `machine.Worker` and `machine.Checker` interfaces, so its tests (T043) and code needed no procedure; T050 is still open. Approved by the project owner on 2026-11-13. |
+| Outside-in, test-first ("see them fail before writing the minimal code"); the previous row's "T046 before T054" | T054 (the run operations) built before T046 (the planted-failure and Story 2 acceptance suites) | T054 was written against T045's conformance suite and its unit tests, by separate authors; T046 did not exist. The owner chose on 2026-11-13 to write T046 now and judge T054 with it before anything else; any T054 defect it finds is fixed first, with a regression test. Approved by the project owner on 2026-11-13. |
