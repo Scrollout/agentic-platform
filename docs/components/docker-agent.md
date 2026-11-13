@@ -32,7 +32,9 @@ Sources: [Feature 001 research](../../specs/001-prose-to-accepted-slice/research
 - `serve api /agents/analyst.yaml` on port 8080 of the `analyst` service. The engine opens one
   titled session per analyst call (`POST /api/sessions` with `safety_policy: restricted`), runs the
   agent, reads the event stream until `stream_stopped`, takes the last `agent_choice` as the
-  proposal and deletes the session (research D27). It calls no other Docker Agent interface.
+  proposal and deletes the session (research D27). Agent steps (`tests`, `code`, `review`) use the same session calls on their step containers with
+  `safety_policy: autonomous`; the container (gVisor, no egress, the step's writable paths) is the
+  boundary (research D29, T049b). It calls no other Docker Agent interface.
 - Model calls go to the [model gateway](/components/nginx.md), never to the provider.
 
 # Dependencies

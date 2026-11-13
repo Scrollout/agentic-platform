@@ -140,12 +140,17 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
 
 - **Scope**: a step may change only paths its `writable` globs match; `dir/**` means everything
   below `dir`, any other entry one exact path.
-- **Tests unchanged**: files the tests step wrote are byte-identical after every later step.
-- **Dependencies**: `go.mod` and imports against the pattern's allowed and forbidden lists;
-  forbidden wins over allowed.
+- **Tests unchanged**: files the tests step wrote are byte-identical after every later step; the
+  "unchanged" checks skip the current step's own writable paths (the seam `internal/app/app.go`,
+  which generate writes and code replaces).
+- **Dependencies**: imports in the step's own writable files (and `go.mod` when the step may
+  write it) against the pattern's allowed and forbidden lists; forbidden wins over allowed.
 - **Tests fail against the stub**: before code, the derived tests build and fail; a test that does
   not build does not count as failing.
-- **All tests pass** and **godog `--strict`**: after code; godog runs from the project's vendored
+- **Every example bound** (godog `--strict`): after tests; judged on binding, not results: it
+  fails on a build failure, an undefined, pending or ambiguous step, or fewer scenarios run than
+  `features/slice.feature` holds.
+- **All tests pass**: after code; godog runs from the project's vendored
   dependencies inside the check container, with no network (D3, T050).
 - **Generation drift**: generated code equals a fresh generation from the approved contract.
 - **Contract hash**: the project's contract equals the approved contract's hash.

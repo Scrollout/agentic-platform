@@ -63,7 +63,8 @@ Shipped by Story 2 so far:
   deployment is a procedure step's worker, which runs one fixed procedure and writes only that
   step's files; the launcher does not start these yet (T053a).
 - **Engine run steps**: the engine calls each agent step as a Docker Agent `serve api` session,
-  one per attempt, as it calls the analyst, and calls each procedure step's registered worker. It
+  one per attempt, as it calls the analyst but with `safety_policy: autonomous` (the analyst stays
+  `restricted`; the step container is the boundary), and calls each procedure step's registered worker. It
   sends every check to the check service, except ContractLintPasses, which goes to contract-lint.
   A review finding blocks only when its rule's tests, rerun by the check service, fail at the file
   it names ([ADR 0031](/decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md)).

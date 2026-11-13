@@ -51,7 +51,9 @@ Sources: [Feature 001 research, D29](../../specs/001-prose-to-accepted-slice/res
 # Decision
 
 - Each agent step container runs the pinned Docker Agent `serve api` with its step's agent
-  definition. The engine calls it as it calls the analyst: one session per attempt. The launcher
+  definition. The engine calls it as it calls the analyst: one session per attempt. Step sessions use
+  `safety_policy: autonomous` inside the step container (gVisor, no egress, only the step's
+  writable paths); the analyst stays `restricted` (research D29, T049b). The launcher
   registers the container with the engine on its behalf. Docker Agent's API is the contract.
 - The model in a step's reuse key is the model its agent definition pins. The engine checks it
   against the model the session reports; a different model fails the attempt.
