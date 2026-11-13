@@ -3,6 +3,7 @@ module github.com/agentic-platform/engine
 go 1.26.0
 
 require (
+	github.com/agentic-platform/check v0.0.0
 	github.com/agentic-platform/slice v0.0.0
 	github.com/getkin/kin-openapi v0.153.0
 	github.com/oapi-codegen/runtime v1.8.0
@@ -29,5 +30,7 @@ require (
 	go.yaml.in/yaml/v4 v4.0.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 )
+
+replace github.com/agentic-platform/check => ../check
 
 replace github.com/agentic-platform/slice => ../slice

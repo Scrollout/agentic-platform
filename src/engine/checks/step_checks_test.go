@@ -63,15 +63,6 @@
 //	// research D17/D25). It is not the SHA-256 of the file's bytes. The implementation reuses that
 //	// one function (single owner); the tests compute the same value independently.
 //	func ContractHash(project, approved string) []CheckResult
-//
-//	// Finding is a review finding (JSON: rule, file, line, text, blocking, confirming_check).
-//	// FindingsCarryEvidence returns one result per blocking finding. A blocking finding passes
-//	// only with a rule id, a file, a line > 0 and a confirming check that appears in confirmations
-//	// with Passed == false (the rule test fails at the cited place, confirming the violation).
-//	// Non-blocking findings are suggestions and yield no result. Reasons name the rule id (or file
-//	// when the rule id is missing).
-//	type Finding struct { Rule, File string; Line int; Text string; Blocking bool; ConfirmingCheck string }
-//	func FindingsCarryEvidence(findings []Finding, confirmations []CheckResult) []CheckResult
 package checks_test
 
 import (
@@ -377,45 +368,6 @@ func TestContractHash(t *testing.T) {
 	}
 }
 
-func readFindings(t *testing.T, kind string) ([]checks.Finding, []checks.CheckResult) {
-	t.Helper()
-	var f []checks.Finding
-	var c []checks.CheckResult
-	for name, into := range map[string]any{"findings.json": &f, "confirmations.json": &c} {
-		b, err := os.ReadFile(stepDir("findings", kind, name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := json.Unmarshal(b, into); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return f, c
-}
-
-func TestFindingsCarryEvidence(t *testing.T) {
-	f, c := readFindings(t, "clean")
-	if rs := checks.FindingsCarryEvidence(f, c); !allPassed(rs) {
-		t.Fatalf("evidence-backed finding rejected (suggestions must not fail): %+v", rs)
-	}
-	f, c = readFindings(t, "planted")
-	rs := checks.FindingsCarryEvidence(f, c)
-	got := reasons(rs)
-	if len(rs) != 3 || allPassed(rs) {
-		t.Fatalf("want 3 results (one per blocking finding), none passing: %+v", rs)
-	}
-	for _, r := range rs {
-		if r.Passed {
-			t.Errorf("a blocking finding without full evidence passed: %+v", r)
-		}
-	}
-	for _, want := range []string{"R-2", "R-3", "internal/z.go"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("no reason names %s: %q", want, got)
-		}
-	}
-}
-
 // TestEveryStepCheckFailsOnItsPlantedFixture runs each check on its clean fixture (must pass) and
 // its planted one (must fail, reason naming the violation), using the fakes where a Go run is needed.
 func TestEveryStepCheckFailsOnItsPlantedFixture(t *testing.T) {
@@ -423,8 +375,6 @@ func TestEveryStepCheckFailsOnItsPlantedFixture(t *testing.T) {
 	regen := fakeGo{gen: func(dir string) { _ = os.WriteFile(filepath.Join(dir, "gen", "gen.go"), cleanDrift, 0o644) }}
 	failRun := fakeGo{res: map[string]checks.GoResult{"test": {ExitCode: 1, Output: "--- FAIL: TestExample\n1 scenarios (1 undefined)"}}}
 	passRun := fakeGo{res: map[string]checks.GoResult{"test": {Output: "ok"}}}
-	cf, cc := readFindings(t, "clean")
-	pf, pc := readFindings(t, "planted")
 	approved := approvedHash(t, stepDir("contracthash", "clean"))
 
 	cases := []struct {
@@ -474,10 +424,6 @@ func TestEveryStepCheckFailsOnItsPlantedFixture(t *testing.T) {
 			func() []checks.CheckResult { return checks.ContractHash(stepDir("contracthash", "clean"), approved) },
 			func() []checks.CheckResult { return checks.ContractHash(stepDir("contracthash", "planted"), approved) },
 			"api/openapi.yaml"},
-		{"evidence-backed finding",
-			func() []checks.CheckResult { return checks.FindingsCarryEvidence(cf, cc) },
-			func() []checks.CheckResult { return checks.FindingsCarryEvidence(pf, pc) },
-			"R-2"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

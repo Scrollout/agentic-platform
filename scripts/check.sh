@@ -13,7 +13,7 @@ go_run() {  # go_run <network: bridge|none> <script> [image]: a shell in a pinne
     --user "$(id -u):$(id -g)" -e GOPATH=/gopath -e GOCACHE=/gopath/cache -e GOTOOLCHAIN=local \
     "${3:-$GO_IMAGE}" sh -ec "$2"
 }
-GO_MODULES="engine slice cli page tests"
+GO_MODULES="check engine slice cli page tests"
 
 go_checks() {
   # Committed generated blocks first: regenerating would overwrite their drift before --check.

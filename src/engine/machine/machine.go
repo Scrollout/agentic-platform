@@ -104,7 +104,8 @@ type Pattern struct {
 
 func (p Pattern) ref() string { return p.ID + "@" + p.Version }
 
-// Finding is a review finding. It blocks only with a file, a line and the check that confirms it.
+// Finding is a review finding. A blocking one carries a file and a line; Check is informational
+// (run-event.schema.json): the review checks confirm a finding by rerunning its rule's tests.
 type Finding struct {
 	Rule     string `json:"rule"`
 	File     string `json:"file,omitempty"`

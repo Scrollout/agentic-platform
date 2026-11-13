@@ -469,9 +469,7 @@ page, none of which an existing project provides.
     and the earlier steps' writable entries and outputs), `approved` (every approved part of the slice,
     by its stored hash and canonical JSON, filled by the engine from the slice record whatever the
     step's inputs: approval is platform data, not a step input), the inputs and the attempt's
-    outputs by hash, the worker's findings and changed lines, the
-    verdicts of the attempt's other checks (`confirmations`, which FindingsCarryEvidence and
-    NoBlockingFindingOpen need), and `before`. A procedure call carries its inputs by content,
+    outputs by hash, the worker's findings and changed lines, and `before`. A procedure call carries its inputs by content,
     checked against their hashes. Outputs come back by content (base64), not by reference,
     because the service has no store and the engine records every artifact by hash (D8).
   - **Hash forms**: an approved part's hash, and a `slice/<part>` input's, is the part hash the
@@ -562,9 +560,25 @@ page, none of which an existing project provides.
 - **Open, for T053a**: how a replay's reused step files are written into the new project (the
   engine has no project mount and the check service only reads it), and how the project's
   version history is kept and the compensation above is carried out (which component restores
-  the writable paths after a rejected attempt). Not designed here. **Open, for T054c**: which check the engine runs
-  to confirm a review finding, so that `confirmations` can hold a failing one (the code step's
-  own checks all passed when it was accepted).
+  the writable paths after a rejected attempt). Not designed here. **Closed by T054e** (owner, 2026-11-13): no
+  other check confirms a review finding. FindingsCarryEvidence and NoBlockingFindingOpen rerun the
+  tests of the rule the finding names (godog scenarios tagged `@R-<n>`, and Go tests whose name
+  names the rule) against the current code, with `go test -json`, and a finding blocks only when
+  one of those tests fails with output naming the finding's file as a project path followed by
+  `:` and a line (the check contract's runCheck states the exact rule). FindingsCarryEvidence
+  asks of each blocking finding a rule, a file the project holds and a line of at least 1, and
+  fails only when that evidence is missing or the rerun cannot be judged (tests that do not
+  build); a blocking finding the rerun does not confirm is a suggestion. NoBlockingFindingOpen
+  fails on each confirmed one. `confirmations` is gone from the contract; the `check` a finding
+  names is not consulted, and `run-event.schema.json` no longer requires it of a blocking finding
+  (informational; oasdiff finds no breaking change). **Known limits** (accepted, 2026-11-13): only a
+  path's last part is protected against a symbolic link swapped in after the folder is walked
+  (`O_NOFOLLOW`); a child process that calls `setsid` leaves the process group the time limit
+  kills, and the deployment's container (Principle VIII) contains it; and the rerun trusts the
+  project's tests, so tests can fake or avoid a confirmation (the code and fix steps cannot
+  change `tests/**`, which TestsUnchanged checks). Child processes get a minimal environment (no token, no
+  CHECK_* setting), each project file is read up to `x-limits.project-file-max-bytes`, and a
+  response above `response-body-max-bytes` is 500 ResponseTooLarge.
 - Sources: <https://docker.github.io/docker-agent/features/api-server/>;
   <https://google.aip.dev/193> (error model: status code mapping);
   <https://go.dev/ref/mod#workspaces>; `scripts/generate.sh` and `scripts/contract-versions.sh`

@@ -6,8 +6,9 @@ package checks
 // hash at fault. A check that cannot run fails (fail closed). No model, network or clock.
 
 import (
-	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"go/parser"
@@ -16,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -64,11 +66,30 @@ func readTree(root string) (map[string][]byte, error) {
 	return files, err
 }
 
+// Tree is a set of project files by slash-separated path, each with the SHA-256 of its bytes in
+// lowercase hex: what the comparing checks compare, so they can compare a folder with the hash
+// list a step's accepted attempt left (check contract, `before`) as well as with another folder.
+type Tree map[string]string
+
+// HashTree is the Tree of files read whole.
+func HashTree(files map[string][]byte) Tree {
+	t := Tree{}
+	for p, b := range files {
+		h := sha256.Sum256(b)
+		t[p] = hex.EncodeToString(h[:])
+	}
+	return t
+}
+
 // changedFiles lists, sorted, every path added, changed or removed between two trees.
 func changedFiles(before, after map[string][]byte) []string {
+	return changedPaths(HashTree(before), HashTree(after))
+}
+
+func changedPaths(before, after Tree) []string {
 	var out []string
 	for p, b := range before {
-		if a, ok := after[p]; !ok || !bytes.Equal(a, b) {
+		if a, ok := after[p]; !ok || a != b {
 			out = append(out, p)
 		}
 	}
@@ -81,7 +102,7 @@ func changedFiles(before, after map[string][]byte) []string {
 	return out
 }
 
-func change(before, after map[string][]byte, p string) string {
+func change(before, after Tree, p string) string {
 	_, inBefore := before[p]
 	_, inAfter := after[p]
 	switch {
@@ -93,21 +114,7 @@ func change(before, after map[string][]byte, p string) string {
 	return "changed"
 }
 
-// matchGlob: "dir/**" matches everything below dir; any other entry is one exact path.
-func matchGlob(globs []string, p string) bool {
-	for _, g := range globs {
-		if dir, ok := strings.CutSuffix(g, "/**"); ok {
-			if strings.HasPrefix(p, dir+"/") {
-				return true
-			}
-		} else if g == p {
-			return true
-		}
-	}
-	return false
-}
-
-func readTrees(check, before, after string) (map[string][]byte, map[string][]byte, *CheckResult) {
+func readTrees(check, before, after string) (Tree, Tree, *CheckResult) {
 	b, err := readTree(before)
 	if err != nil {
 		r := fail(check, "the project before the step cannot be read: "+err.Error())
@@ -118,20 +125,25 @@ func readTrees(check, before, after string) (map[string][]byte, map[string][]byt
 		r := fail(check, "the project after the step cannot be read: "+err.Error())
 		return nil, nil, &r
 	}
-	return b, a, nil
+	return HashTree(b), HashTree(a), nil
 }
 
 // Scope (ScopeKept): every file added, changed or removed between the two trees matches a
 // writable glob. One failing result per file outside them.
 func Scope(before, after string, writable []string) []CheckResult {
-	const check = "ScopeKept"
-	b, a, bad := readTrees(check, before, after)
+	b, a, bad := readTrees("ScopeKept", before, after)
 	if bad != nil {
 		return []CheckResult{*bad}
 	}
+	return ScopeOf(b, a, writable)
+}
+
+// ScopeOf is Scope over two Trees.
+func ScopeOf(b, a Tree, writable []string) []CheckResult {
+	const check = "ScopeKept"
 	var out []CheckResult
-	for _, p := range changedFiles(b, a) {
-		if !matchGlob(writable, p) {
+	for _, p := range changedPaths(b, a) {
+		if !MatchGlob(writable, p) {
 			out = append(out, fail(check, fmt.Sprintf("%s was %s, but the step may write only %s", p, change(b, a, p), strings.Join(writable, ", "))))
 		}
 	}
@@ -144,25 +156,35 @@ func Scope(before, after string, writable []string) []CheckResult {
 // TestsUnchanged: files under testGlobs are byte-identical in both trees, none changed, added or
 // removed. One failing result per file that differs.
 func TestsUnchanged(before, after string, testGlobs []string) []CheckResult {
-	const check = "TestsUnchanged"
-	b, a, bad := readTrees(check, before, after)
+	b, a, bad := readTrees("TestsUnchanged", before, after)
 	if bad != nil {
 		return []CheckResult{*bad}
 	}
+	return TestsUnchangedOf(b, a, testGlobs)
+}
+
+// TestsUnchangedOf is TestsUnchanged over two Trees.
+func TestsUnchangedOf(b, a Tree, testGlobs []string) []CheckResult {
+	return unchangedOf("TestsUnchanged", "test file", "tests", b, a, testGlobs)
+}
+
+// unchangedOf is the rule of TestsUnchanged and GeneratedCodeUnchanged: no path matching the
+// earlier step's globs is added, changed or removed. One failing result per path that differs.
+func unchangedOf(check, what, step string, b, a Tree, globs []string) []CheckResult {
 	var out []CheckResult
 	n := 0
 	for p := range b {
-		if matchGlob(testGlobs, p) {
+		if MatchGlob(globs, p) {
 			n++
 		}
 	}
-	for _, p := range changedFiles(b, a) {
-		if matchGlob(testGlobs, p) {
-			out = append(out, fail(check, fmt.Sprintf("test file %s was %s after the tests step", p, change(b, a, p))))
+	for _, p := range changedPaths(b, a) {
+		if MatchGlob(globs, p) {
+			out = append(out, fail(check, fmt.Sprintf("%s %s was %s after the %s step", what, p, change(b, a, p), step)))
 		}
 	}
 	if len(out) == 0 {
-		return []CheckResult{pass(check, fmt.Sprintf("the %d test files are unchanged", n))}
+		return []CheckResult{pass(check, fmt.Sprintf("the %d %ss are unchanged", n, what))}
 	}
 	return out
 }
@@ -320,7 +342,7 @@ func (g goRunner) Go(dir string, args ...string) (GoResult, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "go", args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local", "GOPROXY=off")
+	cmd.Env = CommandEnv()
 	// Its own process group, killed whole on timeout: killing only go would leave a test binary
 	// running and holding the output pipe open.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -340,9 +362,14 @@ func (g goRunner) Go(dir string, args ...string) (GoResult, error) {
 	return GoResult{Output: string(out)}, nil
 }
 
+// durations are the times go test prints: " (0.01s)" after a test, "\t0.123s" after a package.
+var durations = regexp.MustCompile(`( \([0-9]+(\.[0-9]+)?s\)|\t[0-9]+(\.[0-9]+)?s)`)
+
 // excerpt keeps the output lines that say what failed, or the last lines when none does, so a
 // reason stays short.
 func excerpt(output string, marks ...string) string {
+	// Durations vary between runs of the same code, and the same request gives the same answer.
+	output = durations.ReplaceAllString(output, "")
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	var keep []string
 	for _, l := range lines {
@@ -536,59 +563,9 @@ func ContractHash(project, approved string) []CheckResult {
 
 // Finding is a review finding.
 type Finding struct {
-	Rule            string `json:"rule"`
-	File            string `json:"file"`
-	Line            int    `json:"line"`
-	Text            string `json:"text"`
-	Blocking        bool   `json:"blocking"`
-	ConfirmingCheck string `json:"confirming_check"`
-}
-
-// FindingsCarryEvidence returns one result per blocking finding: it passes only with a rule id, a
-// file, a line > 0 and a confirming check found in confirmations with Passed == false.
-// Non-blocking findings are suggestions and yield no result.
-func FindingsCarryEvidence(findings []Finding, confirmations []CheckResult) []CheckResult {
-	const check = "FindingsCarryEvidence"
-	failed := map[string]bool{}
-	for _, c := range confirmations {
-		if !c.Passed {
-			failed[c.Check] = true
-		}
-	}
-	var out []CheckResult
-	for _, f := range findings {
-		if !f.Blocking {
-			continue
-		}
-		name := f.Rule
-		if name == "" {
-			name = "the finding on " + f.File
-			if f.File == "" {
-				name = "a finding with no rule or file"
-			}
-		}
-		var missing []string
-		if f.Rule == "" {
-			missing = append(missing, "no rule id")
-		}
-		if f.File == "" {
-			missing = append(missing, "no file")
-		}
-		if f.Line <= 0 {
-			missing = append(missing, "no line")
-		}
-		if f.ConfirmingCheck == "" {
-			missing = append(missing, "no confirming check")
-		} else if !failed[f.ConfirmingCheck] {
-			missing = append(missing, fmt.Sprintf("its confirming check %s did not fail", f.ConfirmingCheck))
-		}
-		r := CheckResult{Part: "findings", Check: check}
-		if len(missing) == 0 {
-			r.Passed, r.Reason = true, fmt.Sprintf("%s at %s:%d is confirmed by %s failing", f.Rule, f.File, f.Line, f.ConfirmingCheck)
-		} else {
-			r.Reason = fmt.Sprintf("blocking finding %s has %s", name, strings.Join(missing, ", "))
-		}
-		out = append(out, r)
-	}
-	return out
+	Rule     string `json:"rule"`
+	File     string `json:"file"`
+	Line     int    `json:"line"`
+	Text     string `json:"text"`
+	Blocking bool   `json:"blocking"`
 }

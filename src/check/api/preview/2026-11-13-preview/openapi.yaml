@@ -20,7 +20,8 @@ info:
     `Content-Type: application/json` (parameters such as `charset=utf-8` may follow); any other
     body, a body that does not match this contract, or one larger than
     `x-limits.request-body-max-bytes` returns 400 InvalidRequest. No response body is larger than
-    `x-limits.response-body-max-bytes`. At most `x-limits.calls-at-once` calls run at once; a call
+    `x-limits.response-body-max-bytes`: a response that would be is not sent, and the call returns
+    500 ResponseTooLarge instead (the limits below are derived so that this does not happen). At most `x-limits.calls-at-once` calls run at once; a call
     beyond that returns 503 Busy with `Retry-After` and runs nothing. A call still running after its
     `time_limit_seconds` is stopped with every process it started and returns 504
     TimeLimitExceeded. The engine's token may make at most `x-limits.requests-per-second-per-token`
@@ -34,7 +35,8 @@ info:
     the engine runs (engine contract, `pattern.schema.json`). Project paths. Every path in a request
     or a response is a ProjectPath. Every file the services read or write is reached without
     following a symbolic link: an entry of the project folder that is not a regular file or a
-    folder, or whose path is not a ProjectPath, is never read, listed or written; runCheck fails on
+    folder, a file larger than `x-limits.project-file-max-bytes`, or an entry whose path is not a
+    ProjectPath, is never read, listed or written; runCheck fails on
     it naming it, and readStepFiles and runProcedure answer 422 UnreadableProject. Writable paths.
     A step's `writable` entries follow the catalogue's glob dialect: `dir/**` matches every path
     below `dir`, and any other entry matches exactly one path. Artifacts. An input named
@@ -70,6 +72,12 @@ x-limits:
   idempotency-key-retention-hours: 1
   # Most characters of a ProjectPath; its characters are ASCII, so also its bytes.
   path-max-chars: 256
+  # Most bytes of one project file. A larger file is an entry no operation reads: runCheck fails
+  # naming it; readStepFiles answers 422 StepFilesTooLarge when it matches the step's writable
+  # entries and 422 UnreadableProject otherwise; runProcedure answers 422 UnreadableProject.
+  # Derived: no step may leave more than `step-files-max-bytes` or `procedure-output-max-bytes`
+  # (8 MiB) in its files together, so no file a step writes is larger.
+  project-file-max-bytes: 8388608
   # Most files `before`, `project_files`, `files` and `removed` may list. A list entry is at most
   # about 350 bytes of JSON (a 256-byte path, a 64-character hash), so a full list is at most
   # about 3.5 MB.
@@ -149,9 +157,24 @@ paths:
         undefined, pending or ambiguous step for any scenario of `features/slice.feature`.
         TestsFailAgainstStub, the tests build and fail against the generated stub. TestsUnchanged
         and GeneratedCodeUnchanged, see EarlierStep. AllTestsPass, every test passes, offline.
-        FindingsCarryEvidence, every blocking finding names a rule, a file, a line of at least 1 and
-        a confirming check that `confirmations` shows as failed. NoBlockingFindingOpen, no blocking
-        finding names a confirming check that `confirmations` shows as failed. Any other name,
+        FindingsCarryEvidence, every blocking finding names a rule, a file the project holds as a
+        regular file, and a line of at least 1, and the rerun of its rule's tests can be judged; the
+        rerun only decides whether a finding blocks, so a blocking finding it does not confirm is a
+        suggestion and leaves FindingsCarryEvidence passing. NoBlockingFindingOpen, no blocking
+        finding is confirmed by that rerun; a finding that is not blocking, or whose rule's tests
+        pass or fail at another file, is a suggestion and leaves it passing. The rerun (each of the
+        two checks, once per call that carries a blocking finding): `go test -json -count=1 ./...`
+        in the project, offline, against the code as it stands now. The tests of rule `R-<n>` are the godog scenarios of `features/slice.feature` that
+        carry the tag `@R-<n>` (on the scenario, its Rule, its Feature or its Examples), each found
+        as the subtest godog runs under the scenario's name, and the Go tests and subtests one of
+        whose name parts holds `R<n>`, `R_<n>` or `R-<n>` not preceded by an uppercase letter or a
+        digit and not followed by a digit. A finding is confirmed when one of its rule's tests ends
+        `fail` and the output go test attributes to that test or its subtests names the finding's
+        `file` followed by `:` and a line number, written as the project path itself (preceded by
+        nothing, `./` or a character that cannot be part of a path) or as the project folder's
+        absolute path, `/`, and the project path; a file named in any other way, or a bare base
+        name, confirms nothing. A `check` the finding names is not consulted. When the rerun runs,
+        tests that do not build, or a go command that fails to start, answer `passed: false`. Any other name,
         including the pattern's ContractLintPasses (which the engine judges with its contract-lint
         service), answers 404 UnknownCheck. 422 UnreadableProject when the project folder does not
         exist under the projects folder, is not a folder, cannot be read, or holds more than
@@ -166,6 +189,7 @@ paths:
         '404': [UnknownCheck]
         '422': [UnreadableProject, InputHashMismatch]
         '429': [RateLimited]
+        '500': [ResponseTooLarge]
         '503': [Busy]
         '504': [TimeLimitExceeded]
       parameters:
@@ -200,6 +224,8 @@ paths:
           $ref: '#/components/responses/Unprocessable'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/ResponseTooLarge'
         '503':
           $ref: '#/components/responses/Busy'
         '504':
@@ -222,7 +248,8 @@ paths:
         does not serve it (a procedure step's worker); 422 UnreadableProject as for runCheck, or
         when the folder holds an entry that is not a regular file or a folder, or a path that is not
         a ProjectPath (`detail` names it); 422 StepFilesTooLarge when the files hold more than
-        `x-limits.step-files-max-bytes` together; 504 TimeLimitExceeded when reading did not finish
+        `x-limits.step-files-max-bytes` together, or one of them alone more than
+        `x-limits.project-file-max-bytes`; 504 TimeLimitExceeded when reading did not finish
         within `time_limit_seconds`. A caller treats every response other than 200 as a rejected
         attempt.
       security:
@@ -233,6 +260,7 @@ paths:
         '404': [UnknownStep]
         '422': [UnreadableProject, StepFilesTooLarge]
         '429': [RateLimited]
+        '500': [ResponseTooLarge]
         '503': [Busy]
         '504': [TimeLimitExceeded]
       parameters:
@@ -260,6 +288,8 @@ paths:
           $ref: '#/components/responses/Unprocessable'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/ResponseTooLarge'
         '503':
           $ref: '#/components/responses/Busy'
         '504':
@@ -293,8 +323,11 @@ paths:
         422 UnreadableProject as for readStepFiles; 422 InputHashMismatch when an input's content
         does not have the SHA-256 it is sent with; 500 WriteFailed when writing or removing a file
         failed after the procedure produced its outputs, and 504 TimeLimitExceeded when the
-        procedure did not finish within `time_limit_seconds`; after either the step's writable paths
-        may hold partial files, and a repeat of the request converges them. A caller treats every
+        procedure did not finish within `time_limit_seconds`. Writing starts only while the time
+        limit has not passed; a limit that passes while writing stops it before the next file, and
+        the 504 may come before that file's write has ended. After a 500 or a 504 the step's
+        writable paths may hold partial files (some written, some stale ones not yet removed), and a
+        repeat of the request converges them. A caller treats every
         response other than 200, and `completed: false`, as a rejected attempt.
       security:
       - engineToken: []
@@ -304,7 +337,7 @@ paths:
         '404': [UnknownProcedure]
         '422': [UnreadableProject, InputHashMismatch]
         '429': [RateLimited]
-        '500': [WriteFailed]
+        '500': [WriteFailed, ResponseTooLarge]
         '503': [Busy]
         '504': [TimeLimitExceeded]
       parameters:
@@ -410,8 +443,17 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     WriteFailed:
-      description: Writing or removing a file in the step's writable paths failed after the procedure
-        produced its outputs; `detail` names the path. The paths may hold partial files.
+      description: WriteFailed, writing or removing a file in the step's writable paths failed after
+        the procedure produced its outputs; `detail` names the path, and the paths may hold partial
+        files. Or ResponseTooLarge, the result would be larger than
+        `x-limits.response-body-max-bytes` (see ResponseTooLarge).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ResponseTooLarge:
+      description: The response would be larger than `x-limits.response-body-max-bytes`, so it was
+        not sent; the call changed nothing it would not also change with a smaller response.
       content:
         application/problem+json:
           schema:
@@ -443,12 +485,14 @@ components:
         deployment serves no check or procedure of that name. UnknownStep: this deployment does not
         serve readStepFiles. UnreadableProject: the project folder does not exist, is not a folder,
         cannot be read, holds more than `x-limits.project-files-max` files, or holds an entry the
-        operation may not read or write (not a regular file or folder, a path that is not a
-        ProjectPath, or reached through a symbolic link). InputHashMismatch: an input's content does
+        operation may not read or write (not a regular file or folder, a file larger than
+        `x-limits.project-file-max-bytes`, a path that is not a ProjectPath, or reached through a
+        symbolic link). InputHashMismatch: an input's content does
         not have the SHA-256 it is sent with. StepFilesTooLarge: the step's files exceed
         `x-limits.step-files-max-bytes`. WriteFailed: a procedure's file could not be written or
-        removed. Busy: `x-limits.calls-at-once` calls are running. TimeLimitExceeded: the call did
-        not finish within its `time_limit_seconds`.
+        removed. ResponseTooLarge: the response would be larger than
+        `x-limits.response-body-max-bytes`, so it was not sent. Busy: `x-limits.calls-at-once` calls
+        are running. TimeLimitExceeded: the call did not finish within its `time_limit_seconds`.
       enum:
       - InvalidRequest
       - MissingApiVersionParameter
@@ -462,6 +506,7 @@ components:
       - InputHashMismatch
       - StepFilesTooLarge
       - WriteFailed
+      - ResponseTooLarge
       - Busy
       - TimeLimitExceeded
     Problem:
@@ -615,23 +660,6 @@ components:
           maxLength: 1398104
           description: The artifact's bytes, base64 encoded (RFC 4648, with padding), at most
             `x-limits.input-max-bytes` before encoding.
-    Confirmation:
-      type: object
-      description: The verdict of another check the engine ran on the project as this attempt left it.
-      required:
-      - check
-      - passed
-      - reason
-      additionalProperties: false
-      properties:
-        check:
-          $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/check_name
-        passed:
-          type: boolean
-        reason:
-          type: string
-          minLength: 1
-          maxLength: 65536
     Finding:
       description: A review finding as the worker reported it; its text is at most 4096 characters.
       allOf:
@@ -644,8 +672,9 @@ components:
           file:
             $ref: '#/components/schemas/ProjectPath'
             description: A finding whose `file` is not a ProjectPath makes the request 400
-              InvalidRequest; the engine fails such a finding's attempt (it counts as a failed
-              FindingsCarryEvidence) and never sends it.
+              InvalidRequest, so the engine never sends one. A blocking one names no file the
+              project holds, so the engine counts it as a failed FindingsCarryEvidence (the
+              check's own rule) and rejects the attempt; one that is not blocking it drops.
     ApprovedPart:
       type: object
       description: One approved part of the slice, from the engine's slice record. `sha256` is the
@@ -725,10 +754,8 @@ components:
         order. `outputs` are the attempt's outputs by hash,
         one per declared output, as readStepFiles or runProcedure returned them. `findings` and
         `changed_lines` are what the attempt's worker reported (the review step's findings; a fix's
-        changed lines); a check treats them as claims to verify, never as facts. `confirmations` are
-        the verdicts of the other checks the engine ran on the project as this attempt left it,
-        which a finding may name as its confirming check; a check named by no confirmation confirms
-        nothing.
+        changed lines); a check treats them as claims to verify, never as facts: FindingsCarryEvidence
+        and NoBlockingFindingOpen confirm a finding only by rerunning its rule's tests (runCheck).
       allOf:
       - $ref: '#/components/schemas/CallCommon'
       - type: object
@@ -769,11 +796,6 @@ components:
             maxItems: 2000
             items:
               $ref: ../../../../engine/api/preview/2026-11-12-preview/run-event.schema.json#/properties/changed_lines/items
-          confirmations:
-            type: array
-            maxItems: 64
-            items:
-              $ref: '#/components/schemas/Confirmation'
       unevaluatedProperties: false
     CheckVerdict:
       type: object

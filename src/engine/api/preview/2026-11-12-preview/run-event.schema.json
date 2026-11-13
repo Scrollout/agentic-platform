@@ -196,7 +196,7 @@
         },
         "check": {
           "$ref": "slice-defs.schema.json#/$defs/check_name",
-          "description": "The check that confirms the finding."
+          "description": "Informational: the check the reviewer names for the finding. No check consults it; a blocking finding is confirmed only by rerunning its rule's tests (check contract, runCheck, FindingsCarryEvidence)."
         }
       },
       "if": {
@@ -209,8 +209,7 @@
       "then": {
         "required": [
           "file",
-          "line",
-          "check"
+          "line"
         ]
       }
     },

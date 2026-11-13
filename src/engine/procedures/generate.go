@@ -10,13 +10,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/agentic-platform/engine/canonical"
+	"github.com/agentic-platform/engine/checks"
 )
 
 // GenerateConfig is where the generate procedure finds its tools. None of it is an input of the
@@ -26,9 +26,10 @@ type GenerateConfig struct {
 	OapiCodegen string
 	// Template is the pattern's module template folder (src/catalogue/api-feature-go/template).
 	Template string
-	// Env is added to the process's environment for every command the procedure runs, for
-	// example GOMODCACHE or GOCACHE; a later entry wins. The procedure's own settings come after
-	// it: no module proxy (GOPROXY=off), no workspace, the local toolchain only.
+	// Env is added to the minimal environment of every command the procedure runs
+	// (checks.CommandEnv: PATH, HOME and the Go caches and settings, never a token), for example
+	// GOMODCACHE or GOCACHE; a later entry wins. checks.OfflineGo comes after it: no module proxy,
+	// no workspace, the local toolchain only.
 	Env []string
 }
 
@@ -139,7 +140,7 @@ func generateOnce(ctx context.Context, cfg GenerateConfig, contract []byte) ([]F
 	}
 	gen := filepath.Join(dir, "gen")
 	run := func(what, workdir string, env []string, name string, args ...string) (string, error) {
-		out, err := command(ctx, workdir, append(append(os.Environ(), cfg.Env...), env...), name, args...)
+		out, err := command(ctx, workdir, checks.CommandEnv(append(append([]string{}, cfg.Env...), env...)...), name, args...)
 		var exit *exec.ExitError
 		if errors.As(err, &exit) {
 			return fmt.Sprintf("%s failed: %s", what, scrub(out, dir)), nil
@@ -149,8 +150,7 @@ func generateOnce(ctx context.Context, cfg GenerateConfig, contract []byte) ([]F
 		}
 		return "", nil
 	}
-	offline := []string{"GOPROXY=off", "GOWORK=off", "GOTOOLCHAIN=local"}
-	if reason, err := run("oapi-codegen on "+contractPath, gen, offline, cfg.OapiCodegen, directive...); err != nil || reason != "" {
+	if reason, err := run("oapi-codegen on "+contractPath, gen, nil, cfg.OapiCodegen, directive...); err != nil || reason != "" {
 		return nil, reason, err
 	}
 	stub, err := stubFor(gen)
@@ -162,7 +162,7 @@ func generateOnce(ctx context.Context, cfg GenerateConfig, contract []byte) ([]F
 	}
 	// -mod=mod lets go mod vendor read the module cache; go.sum then verifies every module, and
 	// any line the vendoring would add or change is caught below.
-	if reason, err := run("go mod vendor", dir, append(offline, "GOFLAGS=-mod=mod"), "go", "mod", "vendor"); err != nil || reason != "" {
+	if reason, err := run("go mod vendor", dir, []string{"GOFLAGS=-mod=mod"}, "go", "mod", "vendor"); err != nil || reason != "" {
 		return nil, reason, err
 	}
 	for _, p := range []string{"go.mod", "go.sum"} {
@@ -174,7 +174,7 @@ func generateOnce(ctx context.Context, cfg GenerateConfig, contract []byte) ([]F
 			return nil, fmt.Sprintf("go mod vendor changed %s, so the template's go.mod and go.sum do not cover the generated code's dependencies", p), nil
 		}
 	}
-	if reason, err := run("go build ./... from vendor/", dir, append(offline, "GOFLAGS=-mod=vendor"), "go", "build", "./..."); err != nil || reason != "" {
+	if reason, err := run("go build ./... from vendor/", dir, []string{"GOFLAGS=-mod=vendor"}, "go", "build", "./..."); err != nil || reason != "" {
 		return nil, reason, err
 	}
 	all, err := readFolder(dir)
@@ -257,14 +257,10 @@ func command(ctx context.Context, dir string, env []string, name string, args ..
 	return out, err
 }
 
-var hostPath = regexp.MustCompile(`(^|[\s'"(=])/[^\s'"():,]+`)
-
 // scrub keeps a tool's output to its last lines, with the work folder's paths made relative to
 // it and every other absolute path replaced, so a reason names project paths only.
 func scrub(out []byte, dir string) string {
-	s := strings.ReplaceAll(string(out), dir+string(filepath.Separator), "")
-	s = strings.ReplaceAll(s, dir, ".")
-	s = hostPath.ReplaceAllString(s, "${1}<host path>")
+	s := checks.HidePaths(string(out), dir)
 	var lines []string
 	sc := bufio.NewScanner(strings.NewReader(s))
 	for sc.Scan() {
