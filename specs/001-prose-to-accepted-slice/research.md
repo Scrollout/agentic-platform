@@ -521,9 +521,9 @@ page, none of which an existing project provides.
     but ContractLintPasses. Implemented in `engine/checks` today: ScopeKept (`Scope`),
     DependenciesAllowed (`Dependencies`), ContractMatchesApproval (`ContractHash`),
     GenerationRepeatable (`GenerationDrift`), EveryExampleBound (`GodogStrict`),
-    TestsFailAgainstStub, AllTestsPass, TestsUnchanged and FindingsCarryEvidence. T054c adds
+    TestsFailAgainstStub, AllTestsPass, TestsUnchanged and FindingsCarryEvidence. T054e added
     ExamplesMatchApproval, GeneratedCodeBuilds, TestsBuild, GeneratedCodeUnchanged and
-    NoBlockingFindingOpen, and makes the comparing checks work from `before`'s hash list.
+    NoBlockingFindingOpen, and made the comparing checks work from `before`'s hash list.
   - **The run as a process across components** (constitution, Reliable events and side
     effects): a run spans the engine, the step workers and the check service, and agent steps and
     `runProcedure` write project files.
@@ -557,8 +557,9 @@ page, none of which an existing project provides.
     module), `scripts/check.sh` (`GO_MODULES` gains `check`), `src/deploy/Dockerfile.check` (build
     and run `cmd/check`), `src/deploy/Dockerfile.engine` (the check module in its build context)
     and `src/deploy/compose.yaml` (the check service's command and its own token, the engine's
-    `AP_CHECK_URL` and `AP_CHECK_TOKEN`; the check container no longer needs the worker token; a
-    procedure step worker template like `step-agent`, running the same image's procedure mode).
+    `AP_CHECK_URL` and `AP_CHECK_TOKEN`; the check container no longer needs the worker token).
+    The procedure step worker template in `compose.yaml`, like `step-agent` but running the same
+    image as a `procedure-worker` deployment, was not added by T054c; it moved to T053a.
 - **Rationale**: an agent step is the same Docker Agent call the analyst already makes, tested
   under gVisor (D27), so the engine keeps one client for agents and no shim is needed. Checks
   run code an agent wrote and must not run in the engine (Principle VIII, D5, D13); a contract
@@ -588,7 +589,9 @@ page, none of which an existing project provides.
   build); a blocking finding the rerun does not confirm is a suggestion. NoBlockingFindingOpen
   fails on each confirmed one. `confirmations` is gone from the contract; the `check` a finding
   names is not consulted, and `run-event.schema.json` no longer requires it of a blocking finding
-  (informational; oasdiff finds no breaking change). **Known limits** (accepted, 2026-11-13): only a
+  (informational; oasdiff finds no breaking change). Removing `confirmations` within
+  `2026-11-13-preview` is accepted because the check service is internal and the engine is its
+  only client (plan, Constitution Check, XV). **Known limits** (accepted, 2026-11-13): only a
   path's last part is protected against a symbolic link swapped in after the folder is walked
   (`O_NOFOLLOW`); a child process that calls `setsid` leaves the process group the time limit
   kills, and the deployment's container (Principle VIII) contains it; and the rerun trusts the

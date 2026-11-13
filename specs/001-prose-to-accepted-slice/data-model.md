@@ -106,7 +106,8 @@ cost in USD, minutes), `status` (`approved`). A step: `name`, `worker` (`agent:<
   0), `changed_lines[]` (`file`, `line`: on `StepAccepted` or `ResultReused`, the lines a fix changed, which the next
   review round is given, also after a restart), `refs[]` (the `G-`, `R-`, `T-`,
   `R-<n>/E-<n>` or `contract/<operationId>` IDs it concerns), `check` (name, passed, reason),
-  `finding` (rule, file, line, text, blocking, confirming check), `detail`. Each kind requires the
+  `finding` (rule, file, line, text, blocking, `check`: informational, no check reads it; a
+  blocking finding is confirmed by rerunning its rule's tests, [ADR 0031](../../docs/decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md)), `detail`. Each kind requires the
   fields that explain it (see `run-event.schema.json`).
 - **Accepted result**: `key` (the reuse key), `artifacts[]`, `run`. Found under its key, it is
   reused (FR-019).
