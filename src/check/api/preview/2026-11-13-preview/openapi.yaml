@@ -109,18 +109,23 @@ info:
     `slice/<part>` (`slice/goals`, `slice/rules`, `slice/contract`) is an approved part of the slice:
     its `sha256` is the part hash the slice stores, the SHA-256 of the part's RFC 8785 canonical JSON
     (engine contract, `slice-defs.schema.json`), and its content, when sent, is that canonical JSON.
-    Any other input or output name is a step's output, a set of project files: its `sha256` is the
+    The output name `findings` is not a set of files: it is what the review step's worker reports,
+    has no hash recomputed from the folder, and takes no writable entry. Any other input or output
+    name is a step's output, a set of project files: its `sha256` is the
     SHA-256 of the files' framed form (for each file in byte order of its path: the path, a line
     feed, the file's length in bytes in decimal, a line feed, then its bytes; no files give the hash
     of no bytes), and its content, when sent, is that framed form. An output's files are the files
-    matching its step's `writable` entries when the step declares one output; when it declares
-    several, the output at position i holds the files matching writable entry i, and a step that
-    declares several outputs and a different number of writable entries is refused with 400
+    matching its step's `writable` entries when the step declares one file-set output (`findings`
+    not counted); when it declares several, the file-set output at position i (counting file-set
+    outputs only) holds the files matching writable entry i, and a step that declares several
+    file-set outputs and a different number of writable entries is refused with 400
     InvalidRequest. In the api-feature-go pattern this gives `contract` = `api/openapi.yaml`,
     `examples` = `features/slice.feature`, `generated-code` = `gen/**`, `go.mod`, `go.sum`,
-    `vendor/**`, `tests` = `tests/**` and `code` = `internal/**`, `cmd/**`. An agent step declares
-    exactly one output; the review step's output, `findings`, is what its worker reports, and it
-    writes no file.
+    `vendor/**`, `tests` = `tests/**`, `code` = `internal/**`, `cmd/**` and `witnesses` =
+    `review/**`. An agent step declares exactly one file-set output, except the review step,
+    which declares `findings` and may also declare one file-set output (`witnesses`, the witness
+    tests under its one writable entry, research D35); a review step that declares only
+    `findings` writes no file.
   contact:
     name: Agentic Platform maintainers
   license:
@@ -330,7 +335,8 @@ paths:
         matches the step's `writable` entries, with its content, and the paths matching them that
         `before` lists and the folder no longer holds. The engine calls it once per attempt of an
         agent step, after the worker has finished and before any runCheck, and stores the files'
-        framed form under `sha256` as the artifact of the step's one output. It returns all those
+        framed form under `sha256` as the artifact of the step's one file-set output (for the review
+        step, `witnesses`; its `findings` come from the worker). It returns all those
         files, not only the ones that differ from `before`, so the artifact holds the step's files on
         its own. A step with no writable entries gets no files. 404 UnknownStep when this deployment
         does not serve it (a procedure step's worker); 422 UnreadableProject as for runCheck, or

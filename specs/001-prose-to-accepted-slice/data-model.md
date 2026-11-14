@@ -83,7 +83,7 @@ title), `steps[]`, `limits` (`attempts`, `review_rounds`), `budgets` (run and pe
 cost in USD, minutes), `status` (`approved`). A step: `name`, `worker` (`agent:<definition>` or
 `procedure:<name>`), `agent_digest` (the agent definition's SHA-256, for an agent step),
 `writable[]` (globs relative to the project folder), `dependencies` (`allowed[]`, `forbidden[]`), `checks[]`,
-`inputs[]`, `outputs[]`. The catalogue is the set of approved patterns; this version holds one.
+`inputs[]`, `outputs[]` (each a set of project files, the i-th file-set output holding the files of the i-th writable entry when there are several, except `findings`, the review worker's report; an agent step has one file-set output, and the review step `findings` plus `witnesses` under `review/**`, research D35). The catalogue is the set of approved patterns; this version holds one.
 
 ## Run, run record and accepted result
 
