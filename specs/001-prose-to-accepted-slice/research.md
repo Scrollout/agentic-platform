@@ -1062,8 +1062,9 @@ page, none of which an existing project provides.
     non-converging review waits for its requirement to be fixed upstream.
   - **US2.10 at a fixed point**: US2.10's own set `steps/resume` (the engine numbers runs
     `RUN-<n>` per lab, so one set serves one lab) has the code answer hold its first turn for
-    30 s (WireMock's `fixedDelayMilliseconds`, which `recording write` must keep), and the test kills the engine once the replay server has received that request
-    (`l.WaitModelRequest`), so the kill always falls inside the same model call and both the
+    30 s (WireMock's `fixedDelayMilliseconds`, which `recording write` must keep), and the test kills the engine once the step model has received that request
+    (`l.WaitModelRequest`: the replay server's request journal, or in scripted mode the snapshot
+    the scripted server writes before it holds the answer), so the kill always falls inside the same model call and both the
     generating run and the replay make the same requests.
   - **Cleanup**: every container, network and volume a lab makes is named
     `aptest-lab-<what>-<pid>-<n>` and labelled `org.agentic-platform.lab=<pid>`, and removed by
