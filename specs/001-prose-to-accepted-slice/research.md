@@ -1047,9 +1047,10 @@ page, none of which an existing project provides.
     agent miss, as D26 intends; running the generator again makes them anew, free. The
     acceptance run itself always replays through WireMock with exact matching; it never uses the
     scripted server, and `l.Misses` is 0 at the end of each lab.
-  - **Recording sets**: `steps/happy` (the example slice answered correctly, for `TestUS2` and
-    US2.10) and `steps/planted/<scenario>` (each holding its own correct tests-step answer and its
-    planted answers, for all three trials). The file contents of correct answers start from the
+  - **Recording sets**: `steps/happy` (the example slice answered correctly, for `TestUS2`),
+    `steps/resume` (the same answers for US2.10, with the hold below) and
+    `steps/planted/<scenario>` (each holding its own correct tests-step answer and its planted
+    answers, for all three trials). The file contents of correct answers start from the
     step evals' reference outputs (`src/tests/evals/steps/testdata/ref`), checked against the
     lab's example slice. In trials 2 and 3 the earlier steps are reused (FR-019, T053e), so only
     the failing step's agent is asked again. About 115 exchanges, some 3 MB of mappings.
@@ -1059,9 +1060,9 @@ page, none of which an existing project provides.
     example (AllTestsPass); one that rewrites a file under `tests/` (TestsUnchanged) and one that
     writes `README.md` (ScopeKept), each with the test-only mount under "Owner's answers". The
     non-converging review waits for its requirement to be fixed upstream.
-  - **US2.10 at a fixed point**: the happy set's code answer of the run `notes-resume` holds its
-    first turn for 30 s (WireMock's `fixedDelayMilliseconds`, which `recording write` must keep),
-    and the test kills the engine once the replay server has received that request
+  - **US2.10 at a fixed point**: US2.10's own set `steps/resume` (the engine numbers runs
+    `RUN-<n>` per lab, so one set serves one lab) has the code answer hold its first turn for
+    30 s (WireMock's `fixedDelayMilliseconds`, which `recording write` must keep), and the test kills the engine once the replay server has received that request
     (`l.WaitModelRequest`), so the kill always falls inside the same model call and both the
     generating run and the replay make the same requests.
   - **Cleanup**: every container, network and volume a lab makes is named
