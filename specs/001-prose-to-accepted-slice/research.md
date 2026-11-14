@@ -898,3 +898,65 @@ page, none of which an existing project provides.
   <https://www.rfc-editor.org/rfc/rfc1035#section-2.3.4> (a label is at most 63 octets);
   <https://docs.docker.com/engine/network/#dns-services> (containers on a network resolve each
   other by container name).
+
+### D33. The terminal client's run commands: following, exit codes and output
+
+- **Decision** (T055 design, 2026-11-14, after the `/speckit-analyze` readiness check; the two
+  owner's decisions are marked): the full contract is in
+  [`src/cli/contract.md`](../../src/cli/contract.md). In short:
+  - **Following**: `build`, `resume` and `replay` print the run ID line first, right after the
+    202, then the whole record, one line per event in `seq` order, on standard output, then one
+    end line, and return when the run is no longer `running`. They read `listRunEvents` with its
+    page token, wait 100 ms doubling to 2 s between empty pages, and read `getRun` and then
+    `getOperation` to end. `run <run>` prints the same lines, and follows a run that is still
+    running. The launcher's own lines go to standard error.
+  - **Ctrl-C detaches** (owner, 2026-11-14): the run continues; the client names `run <run>` and
+    `cancel <run>` and exits 130 (128 + SIGINT, the shell convention); SIGTERM detaches the same
+    way and exits 143 (owner, 2026-11-14). Following any other operation detaches the same way, so
+    Story 1's "stopped following" changes from exit 1 to 130 or 143.
+  - **Exit codes per run state**: `done` 0; `waiting-for-developer`, `interrupted` and
+    `handed-over` 2; `expired` 5; `cancelled` 6; the run's operation `failed` 4 with its problem;
+    the engine lost or unreadable 1. `interrupted` is 2 because the run is kept and goes on only
+    when the developer acts, like a waiting run; the end line names the command. `take-over`
+    that succeeds exits 0 (the developer's own request, nothing left waiting).
+  - **`compare`**: 0 when the runs do not differ, **7** when they differ (owner, 2026-11-14; a new
+    general exit code), a table of step, field and both values otherwise.
+  - **Idempotency**: one random `Idempotency-Key` per invocation on its one mutating call; a
+    lost answer (no answer, 502, 503, 504) is resent with the same key and body up to 3 more times
+    with backoff and jitter (D7, D15), so a retry never starts a second run.
+  - **Store text** from a model is printed with control characters escaped, so it cannot drive
+    the terminal; `artifact` alone writes raw bytes.
+  - **`ap test <suite>`**: suites `planted` and `us2`, a `PASS`/`FAIL` line per trial and per
+    scenario (`stopped in 3 out of 3 trials`) and a total; 0 all pass, 1 one fails or the suite
+    does not build, 3 usage.
+- **Rationale**: one table maps every run state to one code, so a script can tell "done",
+  "needs me" and "lost" apart without parsing text, and the end line tells a person what to type
+  next. Retrying with the same key is how the contract makes a lost 202 safe (Principle X, D15).
+  Printing every event in full, with full hashes and refs, lets `run` answer US2.9 in the terminal
+  as the run page does in the browser (FR-023, FR-024).
+- **Alternatives rejected**: a separate exit code for `interrupted` (a third "needs the developer"
+  code that scripts would treat as 2 anyway); Ctrl-C cancelling the run (a run is long and costs
+  money; cancelling is its own explicit command); printing only new events on `resume` (needs the
+  last `seq` before the call; the whole record is the plainer rule); short hashes (US2.9 asks for
+  every artifact, and a short hash cannot be passed to `artifact`).
+- **`ap test` runs on the host** (owner, 2026-11-14, option (a) of two): the T046 suites start
+  their own labs with the container engine (`src/tests/lab`), so they cannot run in a container
+  without the container-engine socket. `ap test` builds the suite in the pinned Go container,
+  offline, and runs its test binary on the host, as `scripts/check.sh` runs its `docker` suites.
+  The binary uses the developer's own Docker access, which the constitution's test-security rule
+  ("no raw container-engine socket") does not allow: it is an owner-approved exception, recorded
+  in the plan's Exceptions to Engineering Principles (2026-11-14). No container ever holds the
+  socket. No tests image is built, the suites stay as written, and `ap test` needs no started
+  session, since the suites build the engine from source and use only `images.lock`'s pins. Each trial of
+  `TestPlanted` becomes a subtest `TestPlanted/<scenario>/trial-<n>` so the per-trial lines can be
+  read from its events. Rejected: (b) a tests image as a client of an engine, recorded model and
+  workers the launcher starts through Compose (a second deployment of the platform for tests, and
+  a rewrite of the suites).
+- **Recorded as** [ADR 0037](../../docs/decisions/0037-terminal-run-commands-exit-codes-and-test-on-host.md).
+- Sources: engine contract `listRunEvents`, `getRun`, `getOperation`, `compareRuns`,
+  `getArtifact`, `acceptHandOver`, `Idempotency-Key`, `RunStatus`, `RunOutcome`
+  (`src/engine/api/preview/2026-11-12-preview/openapi.yaml`); the T046 suites
+  `src/tests/acceptance/us2_test.go`, `planted_test.go`, `buildrig_test.go`;
+  <https://www.gnu.org/software/bash/manual/html_node/Exit-Status.html> (a command killed by
+  signal N exits 128 + N);
+  <https://pkg.go.dev/strconv#Quote>.
