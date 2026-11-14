@@ -32,6 +32,12 @@ state worker; *hand-over* is what ADR 0026 calls escalation.
 
 - Q: After the analyze review of 2026-11-13, when is a description "the same" as one submitted before (edge cases)? → A: When its text is the same, character for character; the previously approved slice is then offered for reuse.
 
+### Session 2026-11-14
+
+- Q: How can a review finding be confirmed so that it blocks, when the code step has already passed every derived test? → A: A blocking finding carries a new failing witness test for its rule, written by the review in its own folder; the check service runs it, and it confirms the finding when it fails at the named file and line; the fix step must make it pass without changing it.
+- Q: Once the fix step makes a witness test pass, does it stay in the delivered project? → A: Yes; witness tests stay in their own folder, named for their rule, and from the round that adds them every later step's checks treat them as unchangeable, like the derived tests.
+- Precise form of the first answer (after `/speckit-analyze` W1, 2026-11-14): printed text is no evidence, so "fails at the named file and line" means the witness test fails, having run the finding's line, as the coverage profile of that test's own run shows.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Describe a use case and approve its slice (Priority: P1)
@@ -98,8 +104,9 @@ Each failure is stopped by a check, and a replay of the same run gives byte-iden
    the step is checked, **Then** the step is rejected with that reason.
 5. **Given** a build in which an agent reports done without the work being complete, **When** the
    step is checked, **Then** the step is not accepted.
-6. **Given** a review that raises a new finding every round, **When** 3 rounds have run, **Then**
-   the run is handed over to the developer with the open findings.
+6. **Given** a review that raises a new finding every round, each confirmed by a new failing witness
+   test, **When** 3 rounds have run, **Then** the run is handed over to the developer with the open
+   findings.
 7. **Given** a step that keeps failing its checks, **When** 3 attempts have failed, **Then** the
    run is handed over to the developer with the reason.
 8. **Given** a run that has ended, **When** the developer replays it, **Then** every step reuses
@@ -181,8 +188,11 @@ Each failure is stopped by a check, and a replay of the same run gives byte-iden
 - **FR-016**: A step that fails its checks MUST be tried at most 3 times, and a review MUST run at
   most 3 rounds, before the run is handed over to the developer. Every run MUST stop within its
   declared budget of model tokens, cost and time.
-- **FR-017**: A review finding MUST block only when it carries evidence that a check confirms; any
-  other finding MUST be recorded as a suggestion.
+- **FR-017**: A review finding MUST block only when it carries evidence that a check confirms: a
+  new witness test for its rule, written by the review in its own folder, that fails, having run
+  the finding's line in a file the fix step may change; any other finding MUST be recorded as a suggestion. The fix step MUST
+  make the witness test pass without changing it, and witness tests stay in the delivered project,
+  unchangeable by every later step, like the derived tests.
 - **FR-018**: Every artifact, link, question, answer, check result, attempt and decision MUST be
   recorded in order with the model, agent definition and pattern version that produced it, so a
   run can be inspected, replayed and compared with another run.

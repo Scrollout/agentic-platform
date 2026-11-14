@@ -1,7 +1,7 @@
 ---
 type: Decision
 title: "ADR 0031: A review finding blocks only when its rule's tests, rerun against the current code, fail at the file it names"
-description: The check service confirms a blocking review finding by rerunning the tests of the rule it names and requiring a failure at the named file; this replaces passing the attempt's other check verdicts as confirmations.
+description: Superseded in part by ADR 0039 (how a finding is confirmed). The check service confirms a blocking review finding by rerunning the tests of the rule it names and requiring a failure at the named file; this replaces passing the attempt's other check verdicts as confirmations.
 tags: [decisions, engine, checks, review]
 status: draft
 decision: accepted
@@ -26,6 +26,9 @@ sources:
     title: "ADR 0030: Agent steps run on Docker Agent's API server; checks and procedures run in a check service with its own contract"
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-13T18:00:00Z }
 ---
+
+
+> Superseded in part by [ADR 0039](/decisions/0039-review-findings-confirmed-by-a-new-witness-test.md): a blocking finding is now confirmed by a new witness test the review writes, not by rerunning the rule's tests.
 
 # Origin
 

@@ -323,7 +323,7 @@ The planted-failure scenarios are test harness code in `src/tests/`, run with th
 | Suite | Runs |
 |-------|------|
 | `planted` | `TestPlanted` in `src/tests/acceptance` (SC-003): five scenarios, 3 trials each |
-| `us2` | the `TestUS2` tests in `src/tests/acceptance` (spec US2.1 to US2.10) |
+| `us2` | the `TestUS2` tests in `src/tests/acceptance` (spec US2.1 and US2.7 to US2.10; US2.2 to US2.6 are judged by `planted`) |
 
 Another name exits 3 with `test: unknown suite <name>; the suites are planted, us2`. For `planted`,
 standard output has one line per trial and one per scenario, then a total, for example:

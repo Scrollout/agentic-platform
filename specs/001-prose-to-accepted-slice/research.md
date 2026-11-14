@@ -960,3 +960,248 @@ page, none of which an existing project provides.
   <https://www.gnu.org/software/bash/manual/html_node/Exit-Status.html> (a command killed by
   signal N exits 128 + N);
   <https://pkg.go.dev/strconv#Quote>.
+
+### D34. The lab runs the build path as the platform does, with step agents answering from synthesised recordings
+
+- **Decision** (T054f design, 2026-11-14; the owner said go ahead and answered the three open
+  questions on 2026-11-14, under "Owner's answers"):
+  - **What the first `ap test planted` showed**: all five scenarios stopped at the readiness check
+    for three causes: the rig looks for `src/check/cmd/check` (the command is
+    `src/engine/cmd/check`, D29), no recording of a step agent exists, and the lab starts no check
+    service, project worker or step worker (`startStepWorkers` is a placeholder). A fourth cause
+    was hidden behind them: since T054c and T053e the engine refuses to start without
+    `AP_CHECK_URL`, `AP_CHECK_TOKEN`, `AP_PROJECT_URL` and `AP_PROJECT_TOKEN`
+    (`src/engine/cmd/engine/setup.go`), and `lab.Start` passes none, so every lab, the contract
+    suites (T030) and Story 1's acceptance (T031) included, cannot start its engine today. That is
+    a defect against agreed intent, fixed in the lab with a regression test (T054i).
+  - **The lab, not Compose**: the lab keeps starting its containers with `docker run` on one
+    internal network of its own, addressed by IP. It does not run `compose.yaml` or `ap
+    build-workers`: Compose's networks have fixed subnets in `10.231.0.0/16`, so a lab would
+    collide with the developer's running session and with another lab; `ap` needs signed images
+    and a session; and the lab must put the recorded model where the gateway is. What it reuses is
+    the declarations: the step workers are started from the same settings as the `step-agent`,
+    `procedure-worker`, `check` and `project-worker` services and `x-sandboxed` (gVisor when the
+    host has `runsc`, read-only root, all capabilities dropped, `no-new-privileges`, an executable
+    `/tmp` tmpfs of 1 GiB, 2 CPUs, 2 GiB and 512 processes, the developer's uid:gid, the same
+    environment and entrypoint), and the same mounts as `ap build-workers` (the project read-only,
+    each step's writable folders writable, the whole root for generate, `.git` read-only on top,
+    the review step wholly read-only, D30). A new test without Docker proves the agreement: it
+    reads `compose.yaml` and the pattern and compares them with the lab's settings and mounts
+    (constitution, "Prove agreement").
+  - **Images**: the lab builds `Dockerfile.agent`, `Dockerfile.check` and `Dockerfile.project`
+    with `docker buildx build --load` and the build arguments from `images.lock` that `build.sh`
+    passes, once per test process, tagged `aptest-<name>:lab`, never pushed or signed, so the
+    workers run the source under test as the engine does. The first build takes minutes
+    (`Dockerfile.check` downloads the template's modules); later ones are cache hits.
+  - **Containers a lab starts**: the existing client, replay server (`gateway`), analyst,
+    contract-lint and engine; with the build option `lab.Build()`, also the check service and the
+    project worker (each as its Compose service, the projects folder a host folder of the test,
+    read-only for the check service and read-write for the project worker, the project worker's
+    records on a lab volume). Without that option the engine gets addresses where nothing listens
+    for the check service and the project worker, which Story 1 never calls, so the contract and
+    Story 1 labs start no extra container. Per project, `l.StepWorkers(t, slice, project)` makes the
+    project's skeleton (an empty `.git` and each step's writable folders, as `build-workers` does),
+    starts one container per step of the pattern (three `serve api` step agents and the two
+    procedure workers), writes their grants and registers them, and waits until each answers its
+    health check. `l.StopStepWorkers` removes them once that project's run has ended. A planted
+    trial therefore uses 7 lab containers and 5 step containers at a time, 12 at most.
+  - **Grants, tokens and the engine's user**: the lab writes one grant file per step container
+    into a host folder mounted read-only at `ENGINE_GRANTS_DIR`, named by the SHA-256 of the
+    worker's token and holding the slice, step and call token, exactly as D31 says, and registers
+    each container with `registerWorker` through its client container. Every token is a lab
+    constant made for the test installation, never a session's or a provider's. The lab's engine
+    runs as the developer's uid:gid, as the project worker and the step containers do in a real
+    session, so the host-written grant files (mode 600) and store need no ownership helper; the
+    engine does not depend on its uid.
+  - **The durable `/store`**: the engine's store is a host folder of the test bind-mounted at
+    `/store`, not a tmpfs, because Docker empties a tmpfs mount when its container stops, so
+    US2.10's `docker kill` and `docker start` would lose every run. `l.RestartEngine(t)` kills and
+    starts the engine, reads its address again (Docker may give it another), waits until it
+    answers, and registers every running step container again, as `ap resume` does (D32), since
+    registrations are held in memory.
+  - **Recordings: synthesised, not recorded from the provider**: a step agent is a session of
+    several model turns, and each turn's request holds every earlier tool result. The live agents
+    run `go build` and `go test`, whose output carries elapsed times, so a live session's later
+    requests differ on every run and an exact recording (D26) would miss. A live recording is
+    therefore not replayable, whatever it costs, and planted failures cannot be had from the live
+    model on demand anyway. Every step recording is synthesised, at no model cost: no Haiku
+    recording session is needed for T046. The engine's message names the run, the step, the
+    attempt, the round and the project folder (`steps.worker.message`), so each run and project
+    needs its own exchanges, and a trial's exchanges are exact for that trial alone.
+  - **How they are made**: a new command `src/tests/recorded/scripted` serves the gateway's
+    `POST /v1/messages` from **answer scripts**, the reviewed source of every step recording.
+    A script `src/tests/recorded/steps/<set>/answers.json` lists, per step, attempt and round
+    (or any attempt), the turns of the answer: files to write (`write_file` tool calls, each path
+    relative to the project, prefixed with the folder the request's message names, each file's
+    content from a file beside the script), a structured-output answer (the review agent's
+    findings), or a final text, with an optional delay. The server picks the answer from the
+    first line of the message (`Run <run>, step <step>, attempt <n>[, review round <r>]`) and the
+    turn from the number of assistant messages in the request, answers with an Anthropic Messages
+    event stream, and writes each exchange as a WireMock snapshot that the existing `recording
+    write` turns into `mappings/<name>.json` and `__files/<name>.sse`, named
+    `<run>-<step>-a<attempt>[-r<round>]-t<turn>`. A request no script answers gets 404 and is
+    listed, as a miss is. `src/tests/recorded/synth-steps.sh <test pattern>` runs the acceptance
+    suite with the lab's model set to `scripted` (`AP_LAB_MODEL=scripted`) instead of the replay
+    server, and writes each lab's exchanges into the last recording set it names. A changed agent
+    definition, instruction, engine message or Docker Agent version makes every recording of that
+    agent miss, as D26 intends; running the generator again makes them anew, free. The
+    acceptance run itself always replays through WireMock with exact matching; it never uses the
+    scripted server, and `l.Misses` is 0 at the end of each lab.
+  - **Recording sets**: `steps/happy` (the example slice answered correctly, for `TestUS2` and
+    US2.10) and `steps/planted/<scenario>` (each holding its own correct tests-step answer and its
+    planted answers, for all three trials). The file contents of correct answers start from the
+    step evals' reference outputs (`src/tests/evals/steps/testdata/ref`), checked against the
+    lab's example slice. In trials 2 and 3 the earlier steps are reused (FR-019, T053e), so only
+    the failing step's agent is asked again. About 115 exchanges, some 3 MB of mappings.
+  - **The planted failures**: each is one answer of the step agent, repeated in each of its three
+    attempts: a code answer that imports `os/exec` (DependenciesAllowed); one that writes nothing
+    and says it is done (AllTestsPass); for US2.7, an implementation that builds but fails one
+    example (AllTestsPass); one that rewrites a file under `tests/` (TestsUnchanged) and one that
+    writes `README.md` (ScopeKept), each with the test-only mount under "Owner's answers". The
+    non-converging review waits for its requirement to be fixed upstream.
+  - **US2.10 at a fixed point**: the happy set's code answer of the run `notes-resume` holds its
+    first turn for 30 s (WireMock's `fixedDelayMilliseconds`, which `recording write` must keep),
+    and the test kills the engine once the replay server has received that request
+    (`l.WaitModelRequest`), so the kill always falls inside the same model call and both the
+    generating run and the replay make the same requests.
+  - **Cleanup**: every container, network and volume a lab makes is named
+    `aptest-lab-<what>-<pid>-<n>` and labelled `org.agentic-platform.lab=<pid>`, and removed by
+    `t.Cleanup`. A test binary that times out panics without running its cleanups, so `lab.Start`
+    first removes every lab resource whose process is no longer running. The host folders
+    (projects, store, grants) are the test's temporary folders, written only by the developer's
+    uid, so the test removes them.
+  - **Time limits**: `ap test` runs the test binary directly, whose `-test.timeout` is 0 (none),
+    so it gains a cap per suite: 60 minutes for `planted` and 75 for `us2`. Inside, a lab waits
+    at most 3 minutes for its containers (plus up to 10 minutes for a cold image build), a planted
+    trial at most 10 minutes (the suites' `waitRun` limit), and each step at most its budget (10
+    minutes, D14). Expected, to be measured in T054i and T054l (setup, test and teardown apart):
+    a lab starts in about 1 minute; a scenario's first trial takes about 4 minutes, its second and
+    third about 1.5 minutes each; `ap test planted` about 35 to 40 minutes; `ap test us2` about 20
+    to 25 minutes, without the five one-trial copies of the planted scenarios (owner, below).
+  - **Host resources**: scenarios and trials run one after another, never in parallel; at most 12
+    containers of a lab at a time plus a short-lived one-off; each step container is capped at 2
+    CPUs and 2 GiB as in Compose, and only one check runs at a time.
+- **Owner's answers** (2026-11-14, to the questions of the T054f report):
+  - **US2.2 and US2.3, a test-only mount**: the code step's container mounts only `internal/`
+    and `cmd/` writable (D5, D30), so a recorded answer that rewrites `tests/` or writes
+    `README.md` would fail at the tool before any check saw it. For these two scenarios only, the
+    lab mounts the code step's project root writable, `.git` still read-only, standing in for a
+    sandbox that let the write through, so TestsUnchanged and ScopeKept are what stop the run.
+    This is a test-only deviation that proves the second guard; the production mounts
+    (`compose.yaml`, `ap build-workers`) are unchanged, and the lab's agreement test still
+    compares every other scenario's mounts with them.
+  - **US2.6, a requirement and design gap**: the code step is accepted only when AllTestsPass
+    passes, and a review finding blocks only when its rule's tests, rerun, fail at its file
+    (ADR 0031), so after an accepted code step no finding can be confirmed and no review round
+    can fail. The gap is in FR-016 and ADR 0031 and is fixed upstream through `/speckit-clarify`,
+    which the coordinating session runs. The planted non-converging-review scenario waits until
+    then; no recording is made for it, and no contrived test stands in for it.
+  - **`ap test us2` drops its five one-trial copies** of the planted scenarios
+    (`TestUS2_2` to `TestUS2_6`), which replayed exactly `TestPlanted`'s first trials; US2.2 to
+    US2.6 are judged by `TestPlanted`. US2.7 (`attempts-exhausted`) stays in `us2`.
+- **Rationale**: the lab is the platform's build path with the model replaced and nothing else:
+  the same images from source, the same worker settings proved equal to `compose.yaml`, the same
+  grants, registrations and per-project containers, so a T046 pass says what a session would do.
+  The test-only mount keeps the second guard under test without widening
+  production. Synthesising is the only way to get exact, repeatable model exchanges for agents that use
+  tools, and an answer script is a small reviewable file where a planted failure is visible.
+  Generating the mappings in one run of the suite, instead of one lab run per miss, keeps the
+  cost of a changed prompt at one free generator run.
+- **Alternatives rejected**: running `compose.yaml` or `ap build-workers` from the lab (fixed
+  subnets collide with a running session and with other labs, and it needs signed images and a
+  session); recording the step agents live with the Haiku test key (not replayable: tool results
+  carry elapsed times; it would cost about $0.04 to $0.12 per run by the pattern's estimate, so a
+  few dollars for the suites, but buys nothing); WireMock matching that ignores the run, attempt
+  or project in the body, or answering through WireMock's response templates (a stale answer
+  would match, against D26; the event stream would be a template of escaped JSON); finding each
+  next request from misses, one lab run per turn (about 115 lab runs); one lab per trial so that
+  trials repeat each other's requests (about 10 more lab starts, and the trials lose the reuse
+  of earlier steps); the images `build.sh` signed (they may be older than the source under test);
+  a named volume for `/store` (needs an ownership helper, and the host folder is removed with the
+  test).
+- Sources: `src/engine/cmd/engine/setup.go` (required variables, read 2026-11-14);
+  `src/engine/steps/steps.go` (`message`); `src/deploy/compose.yaml` and `src/deploy/ap`
+  (`build_workers`, `register_worker`, `cmd_test`); `src/tests/lab/lab.go`;
+  `src/tests/recorded/` (README, `record.sh`, `recording/main.go`); the T046 suites;
+  <https://docs.docker.com/engine/storage/tmpfs/> (a tmpfs mount is removed when its container
+  stops); <https://wiremock.org/docs/simulating-faults/> (`fixedDelayMilliseconds`);
+  <https://pkg.go.dev/cmd/go#hdr-Testing_flags> (`go test` passes a 10-minute timeout; the
+  binary's own `-test.timeout` defaults to none);
+  <https://docs.anthropic.com/en/docs/build-with-claude/streaming> (the Messages event stream).
+
+### D35. A blocking review finding carries a new failing witness test in the review's own folder
+
+- **Decision** (owner, 2026-11-14, `/speckit-clarify`, spec Clarifications Session 2026-11-14,
+  FR-017 and US2.6; the design below is T074 to T077):
+  - **Why**: after D34 found it, the owner confirmed the gap: the code step is accepted only when
+    AllTestsPass passes, and ADR 0031 confirmed a finding only by rerunning the same rule tests, so
+    no finding could block and no review round could fail with deterministic tests.
+  - **The witness folder is `review/**`**, a top-level folder of the project, one folder per rule:
+    `review/r<n>/` for rule `R-<n>`. Not `tests/review/**`: every later step's checks recompute
+    the framed hash of the tests step's output `tests` (every file under `tests/**`) from the
+    folder (D29), so a witness under `tests/` would make that hash differ and fail every later
+    step with InputHashMismatch. `go test ./...` finds `review/r<n>/` as a package (a folder name
+    not starting with `.` or `_` and not `testdata`); godog runs only `features/slice.feature`
+    from `tests/`, so witnesses are plain Go tests and add no scenario to EveryExampleBound.
+  - **The review step's pattern entry**: `writable: [review/**]`, `outputs: [findings,
+    witnesses]` (`findings` from the agent's answer, `witnesses` the files under `review/**` that
+    readStepFiles returns; D29's "an agent step has exactly one output" becomes "one file output",
+    the review's `findings` being its non-file output), `dependencies` as the tests step's minus
+    godog (std, the oapi-codegen runtime; the project's own packages are always allowed), and the
+    checks ScopeKept, DependenciesAllowed, TestsBuild, TestsUnchanged, FindingsCarryEvidence and
+    NoBlockingFindingOpen. `ap build-workers` then mounts `review/` writable in the review
+    container (it is no longer wholly read-only) and makes the folder in the skeleton; every other
+    step's container sees it read-only, so the fix step cannot write it, and ScopeKept judges it.
+  - **A witness**: a new Go test file in `review/r<n>/` (a test-only package), declaring a test
+    function whose name starts with `TestR<n>` not followed by a digit, written by the review in
+    the round that raises the finding, absent from `before`. A blocking finding names it as
+    `witness: {file, test}` (engine run-event schema `finding.witness`, check contract `Finding`;
+    the review agent's findings schema requires it when `blocking` is true).
+  - **Confirmation** (replaces ADR 0031's rule-test rerun; amended after `/speckit-analyze` W1,
+    2026-11-14): FindingsCarryEvidence and NoBlockingFindingOpen run only the witness test,
+    `go test -json -count=1 -covermode=set -coverpkg=./... -coverprofile=<outside the project>
+    -run '^<test>$' ./review/r<n>/`, offline, against the code as it stands. The finding is
+    confirmed only when that test ends `fail` and the coverage profile of that run has a block of
+    the finding's file covering its line with a count above 0, and a baseline run of the same
+    package with `-run '^$'` does not cover it: the witness failed, having run the finding's
+    line. The baseline removes what package initialisation runs before any test (`init`,
+    package-level initialisers, `TestMain`; analyze round 2), so a witness that always fails
+    cannot claim an init-time line. Printed text is never evidence, since a witness could `t.Fatal("file:line")`;
+    the coverage profile is written by the go tool, not by the test. A witness that only prints
+    the location, or fails before it runs that line (an unconditional failure), confirms nothing,
+    so its finding is a suggestion. A blocking finding whose file no `writable` entry of the fix
+    step (the code step) matches is a suggestion, since the fix could not change it (analyze W2).
+    A blocking finding without a valid new witness, or whose witness passes, is a suggestion. A
+    witness that does not build fails FindingsCarryEvidence (it cannot be judged).
+  - **Unchangeable after its round**: TestsUnchanged also covers the witnesses in `before`: no
+    step may change or remove one, the review step of a later round included (it may only add new
+    ones), and no other step may add one. The fix step (the code step run again) must make the
+    witness pass without changing it, which its AllTestsPass judges, since `go test ./...` runs
+    `review/`. Witnesses stay in the delivered project and its commits. Generate runs before
+    the review with the project root writable (D30); if it wrote under `review/`, ScopeKept stops
+    it (no glob of its `writable` matches), not TestsUnchanged, which covers witnesses only once
+    the review has written them (analyze W4).
+- **Rationale**: a new test that fails having run the named line, as the go tool's coverage profile shows, is evidence a deterministic check
+  produces from the current code, while the derived tests have already passed; keeping it
+  unchangeable stops the fix step from passing by weakening it, as TestsUnchanged does for the
+  derived tests.
+- **Alternatives rejected**: `tests/review/**` (breaks the `tests` output's hash, above); a
+  witness only for the round, removed afterwards (the owner chose to keep them, FR-017); the
+  reviewer's word or other check verdicts as confirmation (ADR 0031's reasons).
+- **Known limits**: a witness can test something other than the rule it names; the check proves
+  only that it is new, is in that rule's folder, and failed having run the named line. A witness
+  that runs the line and then fails whatever the code does cannot be told apart from a real one;
+  the fix step then cannot make it pass, its attempts fail AllTestsPass, and the run is handed over
+  with that reason, so a false witness costs a hand-over, never an accepted wrong result. In
+  `set` mode the profile marks a whole block once it is entered, so a line in a block the witness
+  entered counts as run even when the block stopped (a panic or an early exit) before it. The review agent's
+  instructions and evals change, and the live step evals must pass again (T041, about $1 to $2
+  with Haiku on the test key).
+- **Recorded as** [ADR 0039](../../docs/decisions/0039-review-findings-confirmed-by-a-new-witness-test.md),
+  superseding the confirmation part of ADR 0031.
+- Sources: spec.md (Clarifications Session 2026-11-14, FR-017, US2.6); check contract
+  `src/check/api/preview/2026-11-13-preview/openapi.yaml` (runCheck, EarlierStep, Finding);
+  `run-event.schema.json` (`finding`); <https://pkg.go.dev/cmd/go#hdr-Testing_flags> (`-covermode`, `-coverpkg`,
+  `-coverprofile`); <https://go.dev/blog/cover> (the profile's blocks, lines and counts);
+  <https://pkg.go.dev/cmd/go#hdr-Package_lists_and_patterns>
+  (`./...` ignores folders starting with `.` or `_` and `testdata`).

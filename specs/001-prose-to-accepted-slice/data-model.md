@@ -106,8 +106,9 @@ cost in USD, minutes), `status` (`approved`). A step: `name`, `worker` (`agent:<
   0), `changed_lines[]` (`file`, `line`: on `StepAccepted` or `ResultReused`, the lines a fix changed, which the next
   review round is given, also after a restart), `refs[]` (the `G-`, `R-`, `T-`,
   `R-<n>/E-<n>` or `contract/<operationId>` IDs it concerns), `check` (name, passed, reason),
-  `finding` (rule, file, line, text, blocking, `check`: informational, no check reads it; a
-  blocking finding is confirmed by rerunning its rule's tests, [ADR 0031](../../docs/decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md)), `detail`. Each kind requires the
+  `finding` (rule, file, line, text, blocking, `check`: informational, no check reads it; `witness`: `file` and `test`, the new witness
+  test a blocking finding carries, which confirms it,
+  [ADR 0039](../../docs/decisions/0039-review-findings-confirmed-by-a-new-witness-test.md)), `detail`. Each kind requires the
   fields that explain it (see `run-event.schema.json`).
 - **Accepted result**: `key` (the reuse key), `artifacts[]`, `run`. Found under its key, it is
   reused (FR-019).
@@ -238,7 +239,17 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
   below `dir`, any other entry one exact path.
 - **Tests unchanged**: files the tests step wrote are byte-identical after every later step; the
   "unchanged" checks skip the current step's own writable paths (the seam `internal/app/app.go`,
-  which generate writes and code replaces).
+  which generate writes and code replaces). Witness tests (`review/**`) are covered too from the
+  round that adds them: no step changes or removes one, the review step of a later round
+  included, which may only add new ones. Generate, the one earlier step that could write under
+  `review/`, is stopped by ScopeKept (research D35).
+- **Witness tests**: the review step's only writable folder is `review/**` (output `witnesses`,
+  beside its non-file output `findings`), one folder per rule, `review/r<n>/` for `R-<n>`; a
+  witness is a new Go test file there declaring a test function whose name starts with
+  `TestR<n>` not followed by a digit. The fix step (the code step run again) cannot write
+  `review/` (its container mounts it read-only, ScopeKept judges it) and must make each witness
+  pass, which AllTestsPass judges, as `go test ./...` runs `review/`. Witnesses stay in the
+  delivered project.
 - **Dependencies**: imports in the step's own writable files (and `go.mod` when the step may
   write it) against the pattern's allowed and forbidden lists; forbidden wins over allowed.
 - **Tests fail against the stub**: before code, the derived tests build and fail; a test that does
@@ -250,5 +261,8 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
   dependencies inside the check container, with no network (D3, T050).
 - **Generation drift**: generated code equals a fresh generation from the approved contract.
 - **Contract hash**: the project's contract equals the approved contract's hash.
-- **Evidence-backed finding**: a review finding blocks only when it names a rule ID, file and line
-  and the rule test it names fails at that place; any other finding is a suggestion (FR-017, D11).
+- **Evidence-backed finding**: a review finding blocks only when it names a rule ID, a file the fix
+  step's `writable` matches, a line and a new witness test in that rule's folder, and that witness
+  test, run alone with coverage against the current code, fails and its coverage profile shows the
+  finding's line run; printed text is never evidence; any other finding is a suggestion (FR-017,
+  D11, D35).
