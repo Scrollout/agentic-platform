@@ -208,7 +208,7 @@ see run RUN-<n>`.
 **Ctrl-C and SIGTERM detach** (owner, 2026-11-14): the first SIGINT (Ctrl-C) or SIGTERM stops
 following, never the run. It exits 130 for SIGINT and 143 for SIGTERM (128 + the signal's number);
 below, "Ctrl-C" stands for either signal and "130" for its code. The client prints on standard error `stopped following RUN-<n>; it continues.
-Follow it with run RUN-<n>, cancel it with cancel RUN-<n>.` and exits 130. Ctrl-C after the
+Follow it with run RUN-<n>, cancel it with cancel RUN-<n>.` and exits 130. A signal that arrives after the command already has its result (an end line, a refusal, a comparison) does not replace it: the command keeps its own output and exit code. Ctrl-C after the
 mutating call was sent and before its answer arrived prints `stopped; the request may have been
 recorded: see runs` and exits 130. Ctrl-C while the client follows any other operation (a Story 1
 command, `take-over`, `cancel`) also detaches and exits 130, naming the operation.
