@@ -1,0 +1,48 @@
+{
+  "answers": [
+    {
+      "step": "tests",
+      "turns": [
+        {"write": [{"path": "tests/notes_test.go", "content": "files/notes_test.go.txt"}]},
+        {"text": "The tests are written."}
+      ]
+    },
+    {
+      "step": "tests",
+      "attempt": 2,
+      "turns": [
+        {"text": "Second attempt: nothing to add."}
+      ]
+    },
+    {
+      "step": "code",
+      "attempt": 1,
+      "turns": [
+        {
+          "delayMs": 300,
+          "write": [
+            {"path": "internal/notes/notes.go", "content": "files/notes.go.txt"},
+            {"path": "cmd/notes/main.go", "content": "files/main.go.txt"}
+          ]
+        },
+        {"text": "Done."}
+      ]
+    },
+    {
+      "step": "review",
+      "attempt": 1,
+      "round": 1,
+      "turns": [
+        {"output": {"findings": [{"rule": "R-1", "file": "internal/notes/notes.go", "line": 3, "text": "Listing drops the first note.", "blocking": true}]}}
+      ]
+    },
+    {
+      "step": "review",
+      "attempt": 1,
+      "round": 2,
+      "turns": [
+        {"output": {"findings": []}}
+      ]
+    }
+  ]
+}

@@ -7,8 +7,9 @@
 // `write` reads WireMock's own recording output (the JSON that POST /__admin/recordings/stop
 // returns, {"mappings": [...]}) and writes one mapping per exchange to <dir>/mappings/<name>.json
 // with its response body in <dir>/__files/<name>.sse. It keeps only the response's Content-Type
-// header, so provider headers such as request or organisation ids never reach the repository, and
-// it refuses a mapping that would proxy (pass a request through) instead of answering.
+// header (and a fixedDelayMilliseconds from 0 to 60000), so provider headers such as request or
+// organisation ids never reach the repository, and it refuses a mapping that would proxy (pass a
+// request through) instead of answering.
 //
 // `synth` builds the same snapshot shape without a model: the request body the agent sent (as the
 // replay server's journal shows it for a miss) and a proposal become one exchange whose response
@@ -105,8 +106,8 @@ func write(args []string) error {
 	return nil
 }
 
-// tidy keeps the request matcher, the status and the Content-Type of one exchange, and moves the
-// response body to its own file.
+// tidy keeps the request matcher, the status, the Content-Type and the fixedDelayMilliseconds (an
+// integer from 0 to 60000) of one exchange, and moves the response body to its own file.
 func tidy(m map[string]any, name string) ([]byte, []byte, error) {
 	req, ok := m["request"].(map[string]any)
 	if !ok {
@@ -160,14 +161,24 @@ func tidy(m map[string]any, name string) ([]byte, []byte, error) {
 			}
 		}
 	}
+	kept := map[string]any{
+		"status":       resp["status"],
+		"headers":      headers,
+		"bodyFileName": name + ".sse",
+	}
+	// A turn's delay is kept, so WireMock holds the answer as long as the exchange did.
+	if d, ok := resp["fixedDelayMilliseconds"]; ok {
+		n, isNum := d.(json.Number)
+		ms, err := n.Int64()
+		if !isNum || err != nil || ms < 0 || ms > 60000 {
+			return nil, nil, fmt.Errorf("fixedDelayMilliseconds %v is not an integer from 0 to 60000", d)
+		}
+		kept["fixedDelayMilliseconds"] = ms
+	}
 	out := map[string]any{
-		"name":    name,
-		"request": req,
-		"response": map[string]any{
-			"status":       resp["status"],
-			"headers":      headers,
-			"bodyFileName": name + ".sse",
-		},
+		"name":     name,
+		"request":  req,
+		"response": kept,
 	}
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)

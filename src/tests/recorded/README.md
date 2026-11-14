@@ -80,10 +80,62 @@ sh src/tests/recorded/record.sh stop <name>     # writes recordings/*/<name>.*, 
 WireMock recorder, alias `recorder`, that forwards to it and records each request body for exact
 matching and no request header. WireMock's recorder writes the path and each query parameter's
 exact values; `recording write` turns them into the one exact `url`. `stop` writes every exchange of the session (`<name>`, `<name>-2`,
-...) through `recording write`, which keeps only the response's `Content-Type`, so provider request
+...) through `recording write`, which keeps only the response's `Content-Type` (and a `fixedDelayMilliseconds`), so provider request
 and organisation ids never reach the repository. If writing fails, `stop` keeps the exchanges in a file in the recorder's state folder and leaves
 the lab running; run `stop` again after fixing the cause. Review the files before committing them. Every
 model request of the session is recorded, including retries after a refused answer.
+
+## Step recording sets and the generator (T054k)
+
+The step agents' recordings are never recorded from the provider: a live session's later requests
+carry `go test` output with elapsed times, so they would never match exactly (research D34,
+[ADR 0038](../../../docs/decisions/0038-lab-runs-the-build-path-with-synthesised-step-recordings.md)).
+They are synthesised, free, from reviewed **answer scripts**. A recording set is a folder
+`steps/<set>/` (`steps/happy`, `steps/planted/<scenario>`) holding:
+
+- `answers.json`, the answer script (the reviewed source), and its content files (`files/...`);
+- `mappings/<name>.json` and `__files/<name>.sse`, the exchanges the generator made from it, named
+  `<run>-<step>-a<attempt>[-r<round>]-t<turn>` (lowercase). Do not edit them by hand.
+
+```json
+{"answers": [
+  {"step": "code", "attempt": 1, "turns": [
+    {"delayMs": 30000, "write": [{"path": "internal/notes/notes.go", "content": "files/notes.go.txt"}]},
+    {"text": "Done."}]},
+  {"step": "review", "round": 1, "turns": [{"output": {"findings": []}}]}
+]}
+```
+
+- An answer is for one `step` and review `round` (absent or 0: none), and for one `attempt` or,
+  with `attempt` absent or 0, any attempt; an answer for the attempt wins. Turn k is `turns[k-1]`,
+  counted by the assistant messages in the request.
+- A turn is exactly one of: `write` (one `write_file` call per file, the path the project folder
+  the engine's message names plus the relative `path`, the content file's exact bytes, UTF-8),
+  `output` (the structured-output answer, any JSON) or `text` (the final text). `delayMs` (0 to
+  60000) holds the answer; it is kept in the mapping as WireMock's `fixedDelayMilliseconds`.
+- Unknown fields, two answers for the same step, attempt and round, an absolute or `..` path and
+  a missing content file are refused when the script loads.
+
+The scripted server `scripted` (`go run ./recorded/scripted -set <dir> -out <dir> [-listen :8080]`
+from `src/tests`) serves `POST /v1/messages` from the script, answers anything else with 404 and
+lists it at `GET /__scripted/misses`, and writes each answered exchange into `-out` as a snapshot
+that `recording write` accepts. It never calls a model or the network.
+
+The lab chooses the step workers' model with `AP_LAB_MODEL`: unset or `replay` is the replay
+server, which then also serves the set the test names with `lab.Steps(<set>)`; `scripted` runs
+the scripted server for that set as a lab container at `l.StepModel()` (the analyst keeps the
+replay server), counts its misses in `l.Misses`, and when the lab ends writes every exchange it
+answered into the set with `recording write`. To make a suite's recordings again:
+
+```sh
+rm -rf src/tests/recorded/steps/<set>/mappings src/tests/recorded/steps/<set>/__files   # when its answers changed
+sh src/tests/recorded/synth-steps.sh '<test pattern>'    # e.g. '^TestPlanted$'; Docker, no key
+```
+
+`synth-steps.sh` builds the acceptance suite in the pinned Go container and runs the tests matching
+the pattern with `AP_LAB_MODEL=scripted`. Review the new mappings with their scripts before
+committing them; the acceptance run itself always replays them through WireMock with exact
+matching and ends with no miss.
 
 ## Checks
 
@@ -92,5 +144,6 @@ that the analyst gets the recorded proposal for the example, that an unrecorded 
 with 404 and is listed by `misses`, that `count_tokens` without a recording gets 404, that the
 admin API refuses a request without the credential, and that `start` refuses a network with egress.
 It is a smoke check. The test suite is `replay_test.go` (Docker, no key; behind the `docker` build
-tag, which `scripts/check.sh` sets) and `recording/main_test.go` (no Docker). Run both with
+tag, which `scripts/check.sh` sets), `recording/main_test.go`, `recording/delay_test.go` and
+`scripted/scripted_test.go` (no Docker). Run both with
 `cd src/tests && go test -tags docker ./recorded/...`.

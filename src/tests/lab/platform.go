@@ -30,6 +30,7 @@ type Option func(*options)
 type options struct {
 	build        bool     // start the check service and the project worker from the lab's images
 	writableRoot []string // steps whose project root StepWorkers mounts writable (WritableRoot)
+	steps        string   // the step recording set (Steps), "" for none
 }
 
 // Build makes Start build the lab's images (once per test process) and start the check service

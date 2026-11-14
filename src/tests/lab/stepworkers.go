@@ -63,7 +63,7 @@ func (l *Lab) StepWorkers(t testing.TB, slice, project string) {
 			t.Fatal(err)
 		}
 	}
-	h := host(runtimeArgs(), map[string]string{"engine": l.EngineIP, "gateway": ip(t, l.gateway, l.Net)})
+	h := host(runtimeArgs(), map[string]string{"engine": l.EngineIP, "gateway": l.stepModelHost()})
 	agents := filepath.Join(l.root, "src", "agents")
 	type started struct{ name, ip string }
 	var all []started

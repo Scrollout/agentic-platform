@@ -119,6 +119,8 @@ type Lab struct {
 	// The host folders of the projects, the engine's store and the step worker grants.
 	projects, store, grants string
 	opts                    options // Start's options
+
+	model *labModel // the model switch: replay or scripted (AP_LAB_MODEL)
 }
 
 // BaseURL is the engine's address on the lab network.
@@ -199,6 +201,7 @@ func Start(t *testing.T, opts ...Option) *Lab {
 	for _, opt := range opts {
 		opt(&o)
 	}
+	model := modelOf(t, &o) // AP_LAB_MODEL: replay (unset) or scripted, which needs lab.Steps
 	sweep(t)
 	root := Root(t)
 	l := &Lab{root: root, projects: t.TempDir(), store: t.TempDir(), grants: t.TempDir(), opts: o}
@@ -215,8 +218,8 @@ func Start(t *testing.T, opts ...Option) *Lab {
 	rt := runtimeArgs()
 	alpine, node := Pin(t, "alpine"), Pin(t, "node")
 
-	// The replay server, as `gateway`.
-	l.gateway = l.replay(t, "start", l.Net, uniq("aptest-lab-replay"))
+	// The replay server, as `gateway`, and in scripted mode the step workers' scripted server.
+	l.gateway = l.startModel(t, model, bin)
 	t.Cleanup(func() { Run("sh", filepath.Join(root, "src/tests/recorded/replay.sh"), "stop", l.gateway) })
 
 	start := func(name string, args ...string) {
@@ -463,7 +466,8 @@ func (l *Lab) Create(t testing.TB, description string) string {
 	return op.Result.Slice
 }
 
-// Misses is how many requests the replay server has seen that no recording matched.
+// Misses is how many requests the replay server has seen that no recording matched, and in
+// scripted mode also those no script answered.
 func (l *Lab) Misses(t testing.TB) int {
 	t.Helper()
 	var m struct {
@@ -473,7 +477,7 @@ func (l *Lab) Misses(t testing.TB) int {
 	if err := json.Unmarshal([]byte(out), &m); err != nil {
 		t.Fatalf("misses output is not JSON: %v: %s", err, out)
 	}
-	return len(m.Requests)
+	return len(m.Requests) + l.scriptedMissCount(t)
 }
 
 // MissesJSON is the replay server's list of unmatched requests.
