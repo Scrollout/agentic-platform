@@ -93,7 +93,9 @@ cost in USD, minutes), `status` (`approved`). A step: `name`, `worker` (`agent:<
   `handed-over`, `expired`, `cancelled`), `reason`, `expires_at`. An interrupted run continues with
   resume. When the engine starts and finds a run whose last event is not an end, a hand-over or
   `RunInterrupted`, it appends `RunInterrupted` with the reason "the platform stopped during the
-  run", so the record shows the stop (owner, 2026-11-14). A run waiting for the developer ends `handed-over` when the developer accepts the
+  run", so the record shows the stop (owner, 2026-11-14). The event is stamped with the last
+  event's time, so the time the platform was stopped counts neither toward the run's time budget
+  nor toward its expiry. A run waiting for the developer ends `handed-over` when the developer accepts the
   hand-over, or `expired` 14 days after it stopped; cancelling its operation ends it `cancelled`.
   These are the terminal states Principle X requires: `done` is succeeded; `handed-over` is failed
   (the platform could not finish within its attempts, review rounds or budgets, and the developer
