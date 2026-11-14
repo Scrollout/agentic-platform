@@ -213,11 +213,13 @@ paths:
         it stands now, after the attempt, compared with `before`, and answers whether the attempt
         passes it. Call it once per check the step declares, after the attempt's worker has
         finished. Before judging, the check computes from the folder the framed hash of every entry
-        of `outputs`, and of every input that is an earlier step's output; when one differs from the
-        hash the request names, the verdict is `passed: false` naming that output or input, so a
-        verdict always concerns the files the engine stored. An output or input that is not a set
-        of project files (the review step's `findings`, a `slice/<part>`) is exempt: it is not
-        recomputed. A check that meets something it cannot
+        of `outputs`; when one differs from the hash the request names, the verdict is `passed:
+        false` naming that output. Every input that is an earlier step's output is bound through
+        `before`: each of its files in the folder must equal its entry in `before`, except a path
+        the step may itself write (judged as its output, such as the seam a code step replaces);
+        otherwise the verdict is `passed: false` naming that input. So a verdict always concerns
+        the files the engine stored. An output or input that is not a set of project files (the
+        review step's `findings`, a `slice/<part>`) is exempt. A check that meets something it cannot
         judge (an entry that is not a regular file or whose path is not a ProjectPath, a test binary
         that cannot be built, a go command that fails to start) answers `passed: false` with a
         reason naming it; it never passes by default. The checks served, by name: ScopeKept, every
@@ -1067,7 +1069,8 @@ components:
         round:
           type: integer
           minimum: 1
-          description: The review round, from 1; only for the review step.
+          description: The review round, from 1; only for the review step and the fix between
+            its rounds, which carries the round whose findings it fixes.
         project:
           $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/project_name
           description: The project folder's name under the projects folder.

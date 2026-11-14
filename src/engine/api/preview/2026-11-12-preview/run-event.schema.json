@@ -61,7 +61,7 @@
       "type": "integer",
       "minimum": 1,
       "maximum": 3,
-      "description": "The review round a finding belongs to."
+      "description": "The review round an event belongs to: a review round's events and findings, and the events of the fix after that round."
     },
     "worker": {
       "$ref": "slice-defs.schema.json#/$defs/worker_ref",
