@@ -86,12 +86,14 @@ Built for Story 2 (T053a, split into T053c to T053e, all done):
   every attempt, which is the run's compensation. The engine calls both (T053e). The engine runs
   no git and mounts no project, and the check service stays read-only
   ([ADR 0032](/decisions/0032-project-version-history-kept-by-a-project-worker.md)).
-- **Step containers** (T053d, T053g): `ap build-workers` starts the step containers of a slice
+- **Step containers** (T053d, T053g, T053j): `ap build-workers` starts the step containers of a slice
   and project when a build or replay is asked for, each with only its step's writable paths
   writable (research D5). It registers them with the engine and wires each procedure step worker's
   token. Each project keeps its own containers, named by slice, step and the project's hash and
   labelled with the project, until `ap down`; `build-workers` refuses while a run of the slice has
-  not ended, and `ap resume` registers the run's own containers again
+  not ended, and `ap resume` registers the run's own containers again; after `ap down` or a reboot,
+  `ap build-workers --resume <run>` rebuilds an interrupted run's containers for its own folder,
+  writing nothing there
   ([ADR 0036](/decisions/0036-step-containers-per-project-resume-reuses-them.md)).
 
 Still planned: T053a's end-to-end run through `ap build-workers`, a real build and the hand-over

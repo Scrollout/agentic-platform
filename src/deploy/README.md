@@ -244,11 +244,23 @@ agent and check images that `ap up` verified.
 interrupted run, every step's container of the run's slice and project must be running with the
 session's tokens; it registers each again and passes the command on. When one is missing or
 stopped, or the slice's tokens file is gone, it exits 3 naming `ap build-workers --resume <run>`
-(T053j, not built yet) and changes nothing. A run in another state is passed on for the engine to
+and changes nothing. A run in another state is passed on for the engine to
 refuse. `ap replay <run> <project>` reads the run's slice with `getRun`, runs `build-workers` for it
 into the new project, then passes the command on. For both, an unknown run is exit 4 (`NotFound`),
 and an answer that is missing, not 200 or cannot be read, or lacks the slice ID (for resume also the
 project name or status), is exit 1.
+
+`ap build-workers --resume <run>` (T053j, FR-020) rebuilds an interrupted run's step workers after
+`ap down` or a host reboot. It reads the run with `getRun`; the slice and project come only from the
+run, never the command line. A run that is not `interrupted` is exit 4 (`RunNotInterrupted`), an
+unknown run exit 4 (`NotFound`), and another run of the slice that has not ended exit 4
+(`RunActive`). It accepts only that run's existing folder, which must hold `.git` and every step's
+folder, each a folder and no symbolic link (else exit 3, naming it), and creates, changes or
+removes nothing in it. It then makes the slice's tokens if they are gone, writes the grants, starts
+the project's step containers with the same names, labels and mounts as `build-workers` and
+registers them; `.git` stays read-only in every container, so the project worker's history guard
+still sees a change made while the platform was down. Running it again changes nothing. An engine
+answer that is missing, not 200 or cannot be read is exit 1, changing nothing.
 
 To read the resolved configuration without starting anything, set the variables and run
 `docker compose -f src/deploy/compose.yaml --profile '*' config`.

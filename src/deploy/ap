@@ -92,6 +92,7 @@ usage: ap up --credentials <file> --projects <folder>
        ap down
        ap page
        ap build-workers <slice> <project>
+       ap build-workers --resume <run>
        ap test <suite>
        ap registry
        ap <terminal client command> [arguments]   (see src/cli/contract.md)
@@ -743,7 +744,7 @@ step_cname() { printf '%s-worker-%s-%s-%s' "$compose_project" "$(printf '%s' "$1
 # the session's client token (research D32). An answer that is missing, not 200 or cannot be read,
 # or a run in it without a run ID, slice ID or status, stops with exit 1 (fail closed).
 refuse_active_run() {
-  arslice=$1 ptoken='' pages=0
+  arslice=$1 arexcept=${2:-} ptoken='' pages=0
   while :; do
     pages=$((pages + 1))
     [ "$pages" -le 10000 ] || die 1 "build-workers: listRuns did not end after $pages pages"
@@ -761,7 +762,7 @@ refuse_active_run() {
       rid=$(flat_str "$flat" "items.$i.id") rsl=$(flat_str "$flat" "items.$i.slice") rst=$(flat_str "$flat" "items.$i.status")
       is_run_id "$rid" && is_slice_id "$rsl" && [ -n "$rst" ] && case $rst in *[!a-z-]*) false ;; *) true ;; esac ||
         die 1 "build-workers: the engine's list of runs cannot be read (a run without its ID, slice or status)"
-      [ "$rsl" != "$arslice" ] || [ "$rst" = ended ] ||
+      [ "$rsl" != "$arslice" ] || [ "$rst" = ended ] || [ "$rid" = "$arexcept" ] ||
         die 4 "build-workers: the run $rid of $arslice has not ended (RunActive); resume, take over or cancel it first"
       i=$((i + 1))
     done
@@ -826,7 +827,7 @@ token_of() { awk -v s="$1" -v f="$2" '$1 == s { print $f }' "$tokfile"; }
 # grant in the grants folder and its registration with the engine. A container started with the
 # same settings and still running is left alone, so running it again changes nothing.
 build_workers() {
-  slice=$1 project=$2
+  slice=$1 project=$2 resume_run=${3:-}
   is_slice_id "$slice" || die 3 "build-workers: '$slice' is not a slice ID (S-<n>)"
   is_project "$project" || die 3 "build-workers: '$project' is not a project name (lowercase letters, digits and hyphens, at most 63)"
   for n in agent check; do
@@ -843,7 +844,26 @@ build_workers() {
   # holding a file or a symbolic link at any depth, or anything in `.git`, is refused before
   # anything is granted, registered, made or started, and before the engine is asked anything.
   pdir=$AP_PROJECTS_DIR/$project
-  if [ -e "$pdir" ] || [ -L "$pdir" ]; then
+  if [ -n "$resume_run" ]; then
+    # --resume (T053j): the interrupted run's own folder, which that run made; it must hold its
+    # `.git` and every step's folder, each a folder and no symbolic link, and nothing is made in it.
+    need=". .git $(printf '%s\n' "$steps" | while read -r _ _ entries; do
+      # shellcheck disable=SC2086
+      step_folders $entries
+    done | sort -u | tr '\n' ' ')"
+    for f in $need; do
+      sub=$pdir prefix=''
+      for part in $(printf '%s' "$f" | tr '/' ' '); do
+        [ "$part" = . ] && continue
+        prefix=${prefix:+$prefix/}$part
+        sub=$pdir/$prefix
+        [ -d "$sub" ] && [ ! -L "$sub" ] ||
+          die 3 "build-workers: $sub of the run $resume_run is missing or not a folder; nothing was changed"
+      done
+      [ -d "$pdir" ] && [ ! -L "$pdir" ] ||
+        die 3 "build-workers: the project folder $pdir of the run $resume_run is missing or not a folder; nothing was changed"
+    done
+  elif [ -e "$pdir" ] || [ -L "$pdir" ]; then
     [ -d "$pdir" ] && [ ! -L "$pdir" ] || die 3 "build-workers: the project folder $pdir exists and is not a folder"
     if [ -n "$(find "$pdir" ! -type d 2>&1 | head -n 1)" ] ||
       { [ -e "$pdir/.git" ] && [ -n "$(find "$pdir/.git" -mindepth 1 2>&1 | head -n 1)" ]; }; then
@@ -853,7 +873,7 @@ build_workers() {
 
   # The engine keeps one registration per slice and step, so none is moved away from a run of the
   # slice that has not ended (research D32).
-  refuse_active_run "$slice"
+  refuse_active_run "$slice" "$resume_run"
 
   # Each project has its own containers (ADR 0036): a container of a wanted name whose project
   # label names another project (a hash collision) is refused, and never removed or replaced.
@@ -903,13 +923,15 @@ build_workers() {
 
   # The project folder, its empty `.git` (the project worker makes the repository in it, D30) and
   # the folders the steps mount writable; empty folders are no project files.
-  mkdir -p -- "$pdir/.git" || die 1 "cannot create the project folder $pdir"
-  printf '%s\n' "$steps" | while read -r st _ entries; do
-    # shellcheck disable=SC2086
-    for f in $(step_folders $entries); do
-      [ "$f" = . ] || mkdir -p -- "$pdir/$f" || die 1 "cannot create $pdir/$f"
-    done
-  done || exit $?
+  if [ -z "$resume_run" ]; then
+    mkdir -p -- "$pdir/.git" || die 1 "cannot create the project folder $pdir"
+    printf '%s\n' "$steps" | while read -r st _ entries; do
+      # shellcheck disable=SC2086
+      for f in $(step_folders $entries); do
+        [ "$f" = . ] || mkdir -p -- "$pdir/$f" || die 1 "cannot create $pdir/$f"
+      done
+    done || exit $?
+  fi
 
   inside=/projects/$project
   printf '%s\n' "$steps" | while read -r st worker entries; do
@@ -996,6 +1018,23 @@ cmd_resume() {
   compose_run cli resume "$run"
 }
 
+# `build-workers --resume <run>` (T053j, research D32, FR-020): rebuilds the step workers of an
+# interrupted run after `ap down` or a host reboot. The slice and project come only from the run
+# (getRun); its existing folder is accepted, nothing is made in it, and the rest is build-workers'.
+cmd_rebuild() {
+  run=$1
+  is_run_id "$run" || die 3 "build-workers: '$run' is not a run ID (RUN-<n>)"
+  engine_prereqs
+  read_run build-workers "$run"
+  if [ -z "$run_status" ] || case $run_status in *[!a-z-]*) true ;; *) false ;; esac; then
+    die 1 "build-workers: the engine's answer for the run $run has no status"
+  fi
+  is_project "$run_project" || die 1 "build-workers: the engine's answer for the run $run has no project name"
+  [ "$run_status" = interrupted ] ||
+    die 4 "build-workers: the run $run is $run_status, not interrupted (RunNotInterrupted); nothing was changed"
+  build_workers "$run_slice" "$run_project" "$run"
+}
+
 # `replay <run> <project>` (research D32): always into a new, empty project; the workers are those
 # of the run's slice, made by build-workers as for `build`.
 cmd_replay() {
@@ -1026,7 +1065,11 @@ case $cmd in
   up) cmd_up "$@" ;;
   down) cmd_down "$@" ;;
   page) cmd_page "$@" ;;
-  build-workers) load; [ $# -eq 2 ] || usage; build_workers "$1" "$2" ;;
+  build-workers)
+    load
+    [ $# -eq 2 ] || usage
+    if [ "$1" = --resume ]; then cmd_rebuild "$2"; else build_workers "$1" "$2"; fi
+    ;;
   test) cmd_test "$@" ;;
   registry) [ $# -eq 0 ] || usage; ensure_registry ;;
   build) [ $# -ge 2 ] || usage; load; build_workers "$1" "$2" || exit $?; compose_run cli build "$@" ;;
