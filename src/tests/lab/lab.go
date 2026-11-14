@@ -112,6 +112,12 @@ type Lab struct {
 	client   string // the client container's name
 	gateway  string
 	root     string
+
+	// With Build(): the check service's and the project worker's containers and addresses.
+	Check, ProjectWorker string
+	checkIP, projectIP   string
+	// The host folders of the projects, the engine's store and the step worker grants.
+	projects, store, grants string
 }
 
 // BaseURL is the engine's address on the lab network.
@@ -181,16 +187,23 @@ func (l *Lab) replay(t testing.TB, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// Start builds and starts the lab and waits until the engine answers. Everything is removed when t ends.
-func Start(t *testing.T) *Lab {
+// Start builds and starts the lab and waits until the engine answers. Everything is removed when t
+// ends; what a lab of an ended process left behind is removed first.
+func Start(t *testing.T, opts ...Option) *Lab {
 	t.Helper()
 	if out, code := Run("docker", "info", "--format", "{{.ServerVersion}}"); code != 0 {
 		t.Fatalf("Docker is required and is not available (no skip): %s", out)
 	}
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
+	sweep(t)
 	root := Root(t)
-	l := &Lab{root: root}
+	l := &Lab{root: root, projects: t.TempDir(), store: t.TempDir(), grants: t.TempDir()}
+	os.Chmod(l.projects, 0o755) // the check service reads it as 65532
 	l.Net = uniq("aptest-lab-net")
-	Docker(t, "network", "create", "--internal", "-o", "com.docker.network.bridge.gateway_mode_ipv4=isolated", l.Net)
+	Docker(t, append(append([]string{"network", "create", "--internal", "-o", "com.docker.network.bridge.gateway_mode_ipv4=isolated"}, labelArgs()...), l.Net)...)
 	t.Cleanup(func() { Run("docker", "network", "rm", l.Net) })
 
 	bin := t.TempDir()
@@ -206,7 +219,7 @@ func Start(t *testing.T) *Lab {
 	t.Cleanup(func() { Run("sh", filepath.Join(root, "src/tests/recorded/replay.sh"), "stop", l.gateway) })
 
 	start := func(name string, args ...string) {
-		a := []string{"run", "-d", "--name", name, "--network", l.Net}
+		a := append([]string{"run", "-d", "--name", name, "--network", l.Net}, labelArgs()...)
 		a = append(a, rt...)
 		a = append(a, hardened()...)
 		a = append(a, args...)
@@ -234,13 +247,26 @@ func Start(t *testing.T) *Lab {
 		"-e", "TOOLS=/tools", "-e", "LINT_TOKEN="+lintToken, "-e", "HOME=/tmp",
 		node, "node", "/app/server.mjs")
 
+	// Without Build() nothing listens at the check service's and project worker's addresses,
+	// which Story 1 never calls.
+	checkURL, projectURL := "http://check.invalid:8080", "http://project-worker.invalid:8080"
+	if o.build {
+		l.startServices(t, rt)
+		checkURL, projectURL = "http://"+l.checkIP+":8080", "http://"+l.projectIP+":8080"
+	}
+
+	// The engine runs as the developer (the later --user wins over hardened's), so it writes its
+	// store, a host folder that outlives a restart, and reads the grant files the lab writes.
 	l.Engine = uniq("aptest-lab-engine")
-	start(l.Engine, "--tmpfs", "/store:uid=65532,gid=65532", "-v", bin+":/e:ro",
+	start(l.Engine, "--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()),
+		"-v", l.store+":/store", "-v", l.grants+":/grants:ro", "-v", bin+":/e:ro",
 		"-e", "ENGINE_LISTEN_ADDRESS=:8080",
 		"-e", "ENGINE_CLIENT_TOKEN="+ClientToken, "-e", "ENGINE_PAGE_TOKEN="+PageToken, "-e", "ENGINE_WORKER_TOKEN="+WorkerToken,
 		"-e", "AP_LINT_URL=http://"+ip(t, lint, l.Net)+":8080", "-e", "AP_LINT_TOKEN="+lintToken,
 		"-e", "AP_ANALYST_URL=http://"+ip(t, analyst, l.Net)+":8080", "-e", "AP_ANALYST_TOKEN="+analystTok,
-		"-e", "ENGINE_STORE_DIR=/store",
+		"-e", "AP_CHECK_URL="+checkURL, "-e", "AP_CHECK_TOKEN="+CheckToken,
+		"-e", "AP_PROJECT_URL="+projectURL, "-e", "AP_PROJECT_TOKEN="+ProjectToken,
+		"-e", "ENGINE_STORE_DIR=/store", "-e", "ENGINE_GRANTS_DIR=/grants",
 		alpine, "/e/engine")
 	l.EngineIP = ip(t, l.Engine, l.Net)
 
@@ -250,7 +276,7 @@ func Start(t *testing.T) *Lab {
 			// The analyst and the lint service must be up too: their health is open.
 			a, _ := l.direct(ip(t, analyst, l.Net), "/health")
 			li, _ := l.direct(ip(t, lint, l.Net), "/health")
-			if a == 200 && li == 200 {
+			if a == 200 && li == 200 && (!o.build || l.servicesUp()) {
 				return l
 			}
 		}
