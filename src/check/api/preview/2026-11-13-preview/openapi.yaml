@@ -234,24 +234,35 @@ paths:
         the stub).
         TestsFailAgainstStub, the tests build and fail against the generated stub. TestsUnchanged
         and GeneratedCodeUnchanged, see EarlierStep. AllTestsPass, every test passes, offline.
-        FindingsCarryEvidence, every blocking finding names a rule, a file the project holds as a
-        regular file, and a line of at least 1, and the rerun of its rule's tests can be judged; the
-        rerun only decides whether a finding blocks, so a blocking finding it does not confirm is a
-        suggestion and leaves FindingsCarryEvidence passing. NoBlockingFindingOpen, no blocking
-        finding is confirmed by that rerun; a finding that is not blocking, or whose rule's tests
-        pass or fail at another file, is a suggestion and leaves it passing. The rerun (each of the
-        two checks, once per call that carries a blocking finding): `go test -json -count=1 ./...`
-        in the project, offline, against the code as it stands now. The tests of rule `R-<n>` are the godog scenarios of `features/slice.feature` that
-        carry the tag `@R-<n>` (on the scenario, its Rule, its Feature or its Examples), each found
-        as the subtest godog runs under the scenario's name, and the Go tests and subtests one of
-        whose name parts holds `R<n>`, `R_<n>` or `R-<n>` not preceded by an uppercase letter or a
-        digit and not followed by a digit. A finding is confirmed when one of its rule's tests ends
-        `fail` and the output go test attributes to that test or its subtests names the finding's
-        `file` followed by `:` and a line number, written as the project path itself (preceded by
-        nothing, `./` or a character that cannot be part of a path) or as the project folder's
-        absolute path, `/`, and the project path; a file named in any other way, or a bare base
-        name, confirms nothing. A `check` the finding names is not consulted. When the rerun runs,
-        tests that do not build, or a go command that fails to start, answer `passed: false`. Any other name,
+        FindingsCarryEvidence, every blocking finding names a rule `R-<n>`, a file the project holds
+        as a regular file that a `writable` entry of the earlier step whose outputs hold `code`
+        matches (the fix step, so the finding can be fixed), a line of at least 1, and a `witness` whose `file` is a ProjectPath in
+        the folder `review/r<n>/` of that rule, ends in `_test.go`, is one of the judged step's own
+        files and is not in `before` (a new witness test, added by this attempt), and whose `test`
+        is the name of a Go test function that file declares and that starts with `TestR<n>` not
+        followed by a digit; and the witness run of each such finding can be judged. The witness
+        run only decides whether a finding blocks, so a blocking finding it does not confirm is a
+        suggestion and leaves FindingsCarryEvidence passing; a blocking finding with no `witness`
+        is a suggestion too. NoBlockingFindingOpen, no blocking finding is confirmed by its
+        witness run; any other finding is a suggestion and leaves it passing. The witness run
+        (each of the two checks, once per finding that carries a witness): `go test -json
+        -count=1 -covermode=set -coverpkg=./... -coverprofile=<a file outside the project> -run
+        '^<test>$' ./review/r<n>/` in the project, offline, against the code as it stands now. A
+        finding is confirmed only when its witness test ends `fail` and the coverage profile of that
+        run has a block of the finding's `file` (its import path in the project's module) whose
+        lines include the finding's `line` with a count above 0, and the baseline profile does not:
+        the witness failed, having run the finding's line. The baseline is the same command with
+        `-run '^$'` (no test runs), so it holds what package initialisation runs (`init`
+        functions, package-level initialisers, `TestMain`); a line covered there counts for no
+        witness. In `set` mode a block counts as run once it is entered, so a line in a block the
+        witness entered counts even when the block stopped before it (a stated limit). What the test prints is never read as evidence, so a witness that only
+        prints the location, or fails before it runs that line (an unconditional failure), confirms
+        nothing and is a suggestion. A blocking finding on a file the fix step may not change is a
+        suggestion too. No other test of the project is run or read for a finding: the derived tests have
+        already passed AllTestsPass in the code step (research D35, ADR 0039, superseding the rule
+        tests of ADR 0031). A `check` the finding names is not consulted. When the witness run
+        runs, a witness that does not build, or a go command that fails to start, answers `passed:
+        false`. Any other name,
         including the pattern's ContractLintPasses (which the engine judges with its contract-lint
         service), answers 404 UnknownCheck. 422 UnreadableProject when the project folder does not
         exist under the projects folder, is not a folder, cannot be read, or holds more than
@@ -908,6 +919,13 @@ components:
         the one whose outputs hold `generated-code`: no path matching that step's `writable` may be
         added, changed or removed compared with `before`, unless the judged step's own `writable`
         matches it too (the seam `internal/app/app.go`, which generate writes and code replaces).
+        TestsUnchanged also reads the step whose outputs hold `witnesses` (the review step), earlier
+        or the judged step itself: no witness test in `before` (a path its `writable` matches) may
+        be changed or removed, by any step, the review step included; the review step may only add
+        witness tests. A step before the review that writes under `review/` (only generate, whose
+        project root is writable, could) is stopped by ScopeKept, since no glob of its `writable`
+        matches; TestsUnchanged covers witnesses only once the review has written them (research
+        D35).
       required:
       - name
       - writable
@@ -976,6 +994,14 @@ components:
               InvalidRequest, so the engine never sends one. A blocking one names no file the
               project holds, so the engine counts it as a failed FindingsCarryEvidence (the
               check's own rule) and rejects the attempt; one that is not blocking it drops.
+          witness:
+            type: object
+            description: The new witness test a blocking finding carries (FindingsCarryEvidence
+              states what it must be). A `file` that is not a ProjectPath makes the request 400
+              InvalidRequest.
+            properties:
+              file:
+                $ref: '#/components/schemas/ProjectPath'
     ApprovedPart:
       type: object
       description: One approved part of the slice, from the engine's slice record. `sha256` is the
@@ -1058,7 +1084,8 @@ components:
         one per declared output, as readStepFiles or runProcedure returned them. `findings` and
         `changed_lines` are what the attempt's worker reported (the review step's findings; a fix's
         changed lines); a check treats them as claims to verify, never as facts: FindingsCarryEvidence
-        and NoBlockingFindingOpen confirm a finding only by rerunning its rule's tests (runCheck).
+        and NoBlockingFindingOpen confirm a finding only by running the witness test it names
+        (runCheck).
       allOf:
       - $ref: '#/components/schemas/CallCommon'
       - type: object

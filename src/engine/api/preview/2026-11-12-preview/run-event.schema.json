@@ -173,7 +173,7 @@
         "blocking"
       ],
       "additionalProperties": false,
-      "description": "A review finding. It blocks only with a file, a line and the check that confirms it; otherwise it is a suggestion.",
+      "description": "A review finding. It blocks only with a file, a line and a new witness test that fails there (FR-017); otherwise it is a suggestion.",
       "properties": {
         "rule": {
           "$ref": "slice-defs.schema.json#/$defs/rule_id"
@@ -196,7 +196,29 @@
         },
         "check": {
           "$ref": "slice-defs.schema.json#/$defs/check_name",
-          "description": "Informational: the check the reviewer names for the finding. No check consults it; a blocking finding is confirmed only by rerunning its rule's tests (check contract, runCheck, FindingsCarryEvidence)."
+          "description": "Informational: the check the reviewer names for the finding. No check consults it; a blocking finding is confirmed only by running the witness test it carries (check contract, runCheck, FindingsCarryEvidence)."
+        },
+        "witness": {
+          "type": "object",
+          "required": [
+            "file",
+            "test"
+          ],
+          "additionalProperties": false,
+          "description": "The new failing witness test the review wrote for the finding's rule (FR-017): a Go test file in the rule's folder review/r<n>/ and the test function in it, named TestR<n>... A blocking finding without one is recorded but confirms nothing, so it is a suggestion.",
+          "properties": {
+            "file": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^review/r[0-9]+/[A-Za-z0-9_.-]+_test\\.go$",
+              "description": "Path relative to the project folder."
+            },
+            "test": {
+              "type": "string",
+              "pattern": "^TestR[0-9]+([^0-9][A-Za-z0-9_]*)?$",
+              "description": "The Go test function's name; it starts with TestR<n> for the finding's rule R-<n>."
+            }
+          }
         }
       },
       "if": {
