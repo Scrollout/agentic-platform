@@ -150,8 +150,9 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
     not compensated: they are the state later steps and resume build on. Run-record events are
     not undone (D8).
   - **A review round** (owner, 2026-11-14; D35): a review attempt for which every check but
-    NoBlockingFindingOpen passes is an accepted step even when it leaves blocking findings open
-    (the engine treats such a round as open), so the engine calls `commitStep` for it, committed with its
+    NoBlockingFindingOpen passes leaves an open round: it is recorded as `StepRejected` (NoBlockingFindingOpen failed),
+    that event carries the round's files (its witnesses), which become the project's, and the
+    engine calls `commitStep` for them before the fix's restore, committed with its
     witnesses like any accepted step; the fix step, and the next review round, start from that
     commit, and the fix's restore keeps the witnesses. Every step container mounts `review/`
     read-only except the review's, the generate worker's writable root included (as `.git`), so
