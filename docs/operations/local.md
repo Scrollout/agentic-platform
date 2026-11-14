@@ -111,6 +111,8 @@ accepts a hand-over. Each mutating call carries one `Idempotency-Key` per invoca
 again unchanged after a lost answer, at most 4 tries, so a retry never starts a second run. The
 first Ctrl-C or SIGTERM while a command follows a run or an operation detaches: the work goes on,
 the client says how to follow it (`run <run>`) or cancel it (`cancel <run>`) and exits 130 or 143.
+`ap` passes SIGINT and SIGTERM on to the client, also when only `ap` gets them, and exits with the
+client's code.
 A signal after the command has its result keeps that result. Text from the store is printed with
 control characters escaped.
 

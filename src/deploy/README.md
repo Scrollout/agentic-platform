@@ -137,6 +137,8 @@ run `ap down` first. A failed `up` (Compose failed) keeps its session until `ap 
 started before the `contract-lint` and `analyst` services were added lacks their tokens, so `up`
 says it is incomplete: run `ap down` once, then `ap up`. Client
 commands and `build` pass `-T` to `docker compose run` when standard input is not a terminal.
+They run `docker compose run` in the background with `ap`'s standard input, pass SIGINT and SIGTERM
+on to it, and exit with the client's code (130 or 143 when it detaches).
 
 `ap test <suite>` (`planted`, `us2`) needs no session and calls no Compose (research D33,
 [ADR 0037](../../docs/decisions/0037-terminal-run-commands-exit-codes-and-test-on-host.md)): it

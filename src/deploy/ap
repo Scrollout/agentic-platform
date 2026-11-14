@@ -111,9 +111,31 @@ EOF
 compose() { docker compose -f "$here/compose.yaml" "$@"; }
 
 # A one-off container of the session; without a terminal on stdin (a pipe, a script) Compose must
-# not allocate one.
+# not allocate one. Returns the container's exit code unchanged. SIGINT and SIGTERM sent to `ap`
+# alone reach the client too (src/cli/contract.md): `docker compose run` runs in the background, the
+# traps pass each signal on to it, and `ap` waits again until it ends, so the client's own exit code
+# (130 or 143 when it detaches) is returned. A background job's standard input is /dev/null in sh,
+# so the client gets `ap`'s through descriptor 3.
 compose_run() {
-  if [ -t 0 ]; then compose run --rm "$@"; else compose run --rm -T "$@"; fi
+  if [ -t 0 ]; then cr_tty=; else cr_tty=-T; fi
+  exec 3<&0
+  # shellcheck disable=SC2086
+  docker compose -f "$here/compose.yaml" run --rm $cr_tty "$@" <&3 3<&- &
+  cr_pid=$!
+  exec 3<&-
+  cr_sig=
+  trap 'cr_sig=INT; kill -INT "$cr_pid" 2>/dev/null' INT
+  trap 'cr_sig=TERM; kill -TERM "$cr_pid" 2>/dev/null' TERM
+  while :; do
+    cr_sig=
+    wait "$cr_pid"
+    cr_code=$?
+    # A wait cut short by a trap returns 128 + the signal; wait again for the client's own code.
+    [ -n "$cr_sig" ] || break
+    kill -0 "$cr_pid" 2>/dev/null || { wait "$cr_pid" 2>/dev/null; c=$?; [ "$c" -eq 127 ] || cr_code=$c; break; }
+  done
+  trap - INT TERM
+  return "$cr_code"
 }
 
 pin() { awk -v n="$1" '$1 == n { print $2 }' "$here/images.lock"; }
