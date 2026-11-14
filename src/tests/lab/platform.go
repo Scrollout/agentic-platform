@@ -28,7 +28,8 @@ func labelArgs() []string { return []string{"--label", labelKey + "=" + strconv.
 type Option func(*options)
 
 type options struct {
-	build bool // start the check service and the project worker from the lab's images
+	build        bool     // start the check service and the project worker from the lab's images
+	writableRoot []string // steps whose project root StepWorkers mounts writable (WritableRoot)
 }
 
 // Build makes Start build the lab's images (once per test process) and start the check service
@@ -164,6 +165,7 @@ func (l *Lab) RestartEngine(t testing.TB) {
 	deadline := time.Now().Add(120 * time.Second)
 	for time.Now().Before(deadline) {
 		if st, _, _ := l.Do("GET", "/providers/Agentic.Engine/operations", ClientToken, nil, nil); st == 200 {
+			l.registerStepWorkers(t) // registrations live in the engine's memory, as `ap resume` does
 			return
 		}
 		time.Sleep(300 * time.Millisecond)

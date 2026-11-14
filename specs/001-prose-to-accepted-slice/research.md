@@ -975,7 +975,7 @@ page, none of which an existing project provides.
     suites (T030) and Story 1's acceptance (T031) included, cannot start its engine today. That is
     a defect against agreed intent, fixed in the lab with a regression test (T054i).
   - **The lab, not Compose**: the lab keeps starting its containers with `docker run` on one
-    internal network of its own, addressed by IP. It does not run `compose.yaml` or `ap
+    internal network of its own, addressed by IP, except the step workers, which the engine (started without runsc, as in `compose.yaml`) reaches by container name, since worker addresses must be host names (T054j). It does not run `compose.yaml` or `ap
     build-workers`: Compose's networks have fixed subnets in `10.231.0.0/16`, so a lab would
     collide with the developer's running session and with another lab; `ap` needs signed images
     and a session; and the lab must put the recorded model where the gateway is. What it reuses is

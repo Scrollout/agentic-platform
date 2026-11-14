@@ -118,6 +118,7 @@ type Lab struct {
 	checkIP, projectIP   string
 	// The host folders of the projects, the engine's store and the step worker grants.
 	projects, store, grants string
+	opts                    options // Start's options
 }
 
 // BaseURL is the engine's address on the lab network.
@@ -200,7 +201,7 @@ func Start(t *testing.T, opts ...Option) *Lab {
 	}
 	sweep(t)
 	root := Root(t)
-	l := &Lab{root: root, projects: t.TempDir(), store: t.TempDir(), grants: t.TempDir()}
+	l := &Lab{root: root, projects: t.TempDir(), store: t.TempDir(), grants: t.TempDir(), opts: o}
 	os.Chmod(l.projects, 0o755) // the check service reads it as 65532
 	l.Net = uniq("aptest-lab-net")
 	Docker(t, append(append([]string{"network", "create", "--internal", "-o", "com.docker.network.bridge.gateway_mode_ipv4=isolated"}, labelArgs()...), l.Net)...)
@@ -220,7 +221,9 @@ func Start(t *testing.T, opts ...Option) *Lab {
 
 	start := func(name string, args ...string) {
 		a := append([]string{"run", "-d", "--name", name, "--network", l.Net}, labelArgs()...)
-		a = append(a, rt...)
+		if name != l.Engine { // the engine runs without gVisor, as compose.yaml's does, so Docker's DNS finds the step workers
+			a = append(a, rt...)
+		}
 		a = append(a, hardened()...)
 		a = append(a, args...)
 		t.Cleanup(func() { Run("docker", "rm", "-f", name) })
