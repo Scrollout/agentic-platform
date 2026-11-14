@@ -91,7 +91,9 @@ cost in USD, minutes), `status` (`approved`). A step: `name`, `worker` (`agent:<
   new folder name under the projects folder), `replay_of` (a run ID, for a replay), `status`
   (`running`, `interrupted`, `waiting-for-developer`, `ended`), `outcome` once ended (`done`,
   `handed-over`, `expired`, `cancelled`), `reason`, `expires_at`. An interrupted run continues with
-  resume. A run waiting for the developer ends `handed-over` when the developer accepts the
+  resume. When the engine starts and finds a run whose last event is not an end, a hand-over or
+  `RunInterrupted`, it appends `RunInterrupted` with the reason "the platform stopped during the
+  run", so the record shows the stop (owner, 2026-11-14). A run waiting for the developer ends `handed-over` when the developer accepts the
   hand-over, or `expired` 14 days after it stopped; cancelling its operation ends it `cancelled`.
   These are the terminal states Principle X requires: `done` is succeeded; `handed-over` is failed
   (the platform could not finish within its attempts, review rounds or budgets, and the developer
@@ -123,7 +125,10 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
   accepted, and the run is handed over with the budget it crossed as the reason (FR-016).
 - **Review rounds**: between review rounds the code step runs again with the open blocking findings
   as its input; a later round sees only those findings and the lines the fix changed (FR-016,
-  Review converges).
+  Review converges). A fix carries the round whose findings it fixes (round 1 for the fix after
+  round 1): its events, its check calls, its commit (`Round: <n>`) and its agent message (`Run
+  <run>, step code, attempt <n>, review round <r>`) name it, and its attempts count from 1 in each
+  round (owner, 2026-11-14).
 - **Refs**: every event names the refs it concerns: a check's own refs, otherwise the run's refs
   (the slice's goals, rules and examples) (SC-006).
 - **Reuse key**: deterministic and different whenever any of its ingredients differs (pattern

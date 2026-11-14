@@ -517,9 +517,14 @@ page, none of which an existing project provides.
     agent step has exactly one output.
   - **Binding verdicts to stored files** (Principle XX): the engine takes an attempt's files once,
     from `readStepFiles` (agent step) or `runProcedure` (procedure step), and stores them by hash;
-    each `runCheck` recomputes the framed hash of every output and every earlier-output input from
-    the folder and fails on a mismatch, (outputs that are not file sets, such as the review step's `findings`, are exempt), and the
-    engine accepts the attempt only when every
+    each `runCheck` recomputes the framed hash of every output from the folder and fails on a
+    mismatch (outputs that are not file sets, such as the review step's `findings`, are exempt).
+    An earlier step's output given as an input is bound through `before`, the engine's stored list
+    of the last accepted step: each of the input's files in the folder must equal its entry there,
+    except a path the judged step may itself write, which is judged as its output. Recomputing
+    the input's hash instead could never pass once the code step replaced the seam
+    `internal/app/app.go`, which generate's output holds (found by T054l; owner, 2026-11-14).
+    The engine accepts the attempt only when every
     verdict's `project_files` equals the list that first call returned. That list becomes the next
     step's `before`.
   - **Paths**: every path is ASCII letters, digits and `._~+@=,-` in parts joined by single `/`,
