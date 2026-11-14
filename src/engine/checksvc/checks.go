@@ -55,7 +55,13 @@ var checkByName = map[string]func(c *call) []checks.CheckResult{
 		if !ok {
 			return []checks.CheckResult{{Check: "TestsUnchanged", Reason: "no earlier step has the output tests"}}
 		}
-		return checks.TestsUnchangedOf(c.notOwn(c.before), c.notOwn(c.project.tree()), w)
+		out := checks.TestsUnchangedOf(c.notOwn(c.before), c.notOwn(c.project.tree()), w)
+		// The witnesses (contract, EarlierStep): the review step's, earlier or the judged step
+		// itself; none in before changes or goes, and only the review step adds one.
+		if ww, own := c.witnessWritable(); ww != nil {
+			out = append(out, checks.WitnessesUnchangedOf(c.before, c.project.tree(), ww, own)...)
+		}
+		return out
 	},
 	"GeneratedCodeUnchanged": func(c *call) []checks.CheckResult {
 		w, ok := c.earlierWritable("generated-code")
@@ -65,10 +71,10 @@ var checkByName = map[string]func(c *call) []checks.CheckResult{
 		return checks.GeneratedCodeUnchangedOf(c.notOwn(c.before), c.notOwn(c.project.tree()), w)
 	},
 	"FindingsCarryEvidence": func(c *call) []checks.CheckResult {
-		return checks.FindingsRerun(c.runner, c.dir, c.findings())
+		return checks.FindingsCarryEvidence(c.runner, c.dir, c.review(), c.findings())
 	},
 	"NoBlockingFindingOpen": func(c *call) []checks.CheckResult {
-		return checks.NoBlockingFindingOpen(c.runner, c.dir, c.findings())
+		return checks.NoBlockingFindingOpen(c.runner, c.dir, c.review(), c.findings())
 	},
 }
 
@@ -99,6 +105,28 @@ func (c *call) earlierWritable(output string) ([]string, bool) {
 	return nil, false
 }
 
+// witnessWritable is the writable entries of the step whose outputs hold `witnesses`: the judged
+// step itself (own is true) or an earlier one; nil when no step has that output.
+func (c *call) witnessWritable() (writable []string, own bool) {
+	for _, o := range c.req.Step.Outputs {
+		if o == witnessesOutput {
+			return c.req.Step.Writable, true
+		}
+	}
+	if w, ok := c.earlierWritable(witnessesOutput); ok {
+		return w, false
+	}
+	return nil, false
+}
+
+// review is what the witness rule reads: `before`, the judged step's writable entries and those
+// of the earlier step whose outputs hold `code` (none when there is no such step, so every
+// finding is a suggestion).
+func (c *call) review() checks.Review {
+	fixable, _ := c.earlierWritable("code")
+	return checks.Review{Before: c.before, Own: c.req.Step.Writable, Fixable: fixable}
+}
+
 func (c *call) findings() []checks.Finding {
 	if c.req.Findings == nil {
 		return nil
@@ -111,6 +139,15 @@ func (c *call) findings() []checks.Finding {
 		}
 		if f.Line != nil {
 			cf.Line = *f.Line
+		}
+		if w := f.Witness; w != nil {
+			cf.Witness = &checks.Witness{}
+			if w.File != nil {
+				cf.Witness.File = *w.File
+			}
+			if w.Test != nil {
+				cf.Witness.Test = *w.Test
+			}
 		}
 		out = append(out, cf)
 	}

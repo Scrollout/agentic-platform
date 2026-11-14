@@ -140,8 +140,8 @@ func (e Env) GradeReview(before, after, answer string, plant *Plant) []Result {
 		}
 		return rs
 	}
-	rs = append(rs, fold(GEvidence, checks.FindingsRerun(e.Runner, after, findings)))
-	open := checks.NoBlockingFindingOpen(e.Runner, after, findings)
+	rs = append(rs, fold(GEvidence, checks.LegacyFindingsRerun(e.Runner, after, findings)))
+	open := checks.LegacyNoBlockingFindingOpen(e.Runner, after, findings)
 	if plant == nil {
 		// Clean code: no blocking finding may be confirmed by its rule's tests failing at its file.
 		rs = append(rs, fold(GNoneOpen, open))

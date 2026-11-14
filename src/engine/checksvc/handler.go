@@ -254,8 +254,9 @@ func (c *cappedWriter) Write(b []byte) (int, error) {
 	return c.body.Write(b)
 }
 
-// stepShape refuses a step that declares several outputs and a different number of writable
-// entries (contract, Artifacts), which the schema cannot say.
+// stepShape refuses a step that declares several file-set outputs and a different number of
+// writable entries (contract, Artifacts; `findings` is not a set of files, so the review step may
+// declare it with one file-set output), which the schema cannot say.
 func stepShape(body []byte) string {
 	var b struct {
 		Step struct {
@@ -266,8 +267,8 @@ func stepShape(body []byte) string {
 	if json.Unmarshal(body, &b) != nil {
 		return "the body does not match the contract"
 	}
-	if n := len(b.Step.Outputs); n > 1 && n != len(b.Step.Writable) {
-		return fmt.Sprintf("the step declares %d outputs and %d writable entries; with several outputs, output i holds writable entry i", n, len(b.Step.Writable))
+	if n := fileSetOutputs(b.Step.Outputs); n > 1 && n != len(b.Step.Writable) {
+		return fmt.Sprintf("the step declares %d file-set outputs and %d writable entries; with several, file-set output i holds writable entry i", n, len(b.Step.Writable))
 	}
 	return ""
 }

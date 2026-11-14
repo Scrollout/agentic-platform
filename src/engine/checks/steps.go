@@ -669,4 +669,7 @@ type Finding struct {
 	Line     int    `json:"line"`
 	Text     string `json:"text"`
 	Blocking bool   `json:"blocking"`
+	// Witness is the new witness test a blocking finding carries (witness.go); nil when it names
+	// none, which makes it a suggestion.
+	Witness *Witness `json:"witness,omitempty"`
 }

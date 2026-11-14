@@ -17,3 +17,11 @@ actions:
   description: The bundled run-event changed line, named `items` by bundling.
   update:
     x-go-name: ChangedLine
+- target: $.components.schemas.Finding.allOf[1].properties.witness.properties
+  description: >-
+    The check contract's `witness` repeats only `file` (to make it a ProjectPath) and inherits
+    `test` from the run-event `finding`; oapi-codegen merges allOf by property, so without this the
+    Go type would drop `test`. The contract's validation of the body is unchanged.
+  update:
+    test:
+      type: string

@@ -25,33 +25,34 @@ func TestChildProcessesDoNotInheritServiceSettings(t *testing.T) {
 	for k, v := range settings {
 		t.Setenv(k, v)
 	}
-	root, dir := fixture(t, "review")
+	root, dir := fixture(t, "witness")
 	var names []string
 	for k := range settings {
 		names = append(names, k)
 	}
-	// A rule test (R-9) that fails, saying where and printing every setting it can see.
-	write(t, dir, "tests/env_test.go", []byte(fmt.Sprintf(`package tests
+	// A witness (R-9) that runs greet.go:23 and fails, printing every setting it can see.
+	write(t, dir, "review/r9/env_test.go", []byte(fmt.Sprintf(`package r9
 
 import (
 	"os"
 	"strings"
 	"testing"
+
+	"example.com/w/internal/greet"
 )
 
 func TestR9Env(t *testing.T) {
+	greet.Greet("Ada")
 	var seen []string
 	for _, k := range strings.Split(%q, ",") {
 		seen = append(seen, k+"="+os.Getenv(k))
 	}
-	t.Errorf("internal/greet/greet.go:7: %%s", strings.Join(seen, " "))
+	t.Errorf("internal/greet/greet.go:23: %%s", strings.Join(seen, " "))
 }
 `, strings.Join(names, ","))))
 	base := serve(t, checkConfig(t, root))
-	st := step("review", nil, []string{"findings"}, nil, nil)
 	for _, check := range []string{"NoBlockingFindingOpen", "FindingsCarryEvidence", "AllTestsPass"} {
-		b := checkBody(t, dir, st, listFiles(t, dir), "c", reviewExamples(t))
-		b["findings"] = []any{finding("R-9", "internal/greet/greet.go", 7, true)}
+		b := witBody(t, dir, false, witFinding("R-9", witGreet, 23, "review/r9/env_test.go", "TestR9Env"))
 		r := post(t, base, "/checks/"+check+"/run", b)
 		if r.status != 200 {
 			t.Fatalf("%s: %d %.300s", check, r.status, r.body)

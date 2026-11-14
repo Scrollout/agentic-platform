@@ -169,8 +169,8 @@ func verdict(name string, results []checks.CheckResult) (bool, string) {
 
 // binding recomputes, from the folder, the framed hash of every output and of every input that is
 // an earlier step's output, and names each that differs from the hash the request gives (Principle
-// XX: a verdict concerns the files the engine stored). An output of a step with no writable
-// entries (the review step's findings) and a slice/<part> input are not sets of files.
+// XX: a verdict concerns the files the engine stored). The review step's findings, an output of
+// a step with no writable entries and a slice/<part> input are not sets of files.
 func (s *service) binding(p *project, body gen.CheckRequest) []string {
 	var faults []string
 	st := body.Step
@@ -179,7 +179,7 @@ func (s *service) binding(p *project, body gen.CheckRequest) []string {
 		switch {
 		case !ok:
 			faults = append(faults, "the output "+o.Name+" is not one the step "+st.Name+" declares")
-		case len(st.Writable) == 0:
+		case o.Name == findingsOutput || len(st.Writable) == 0:
 		case canonical.FramedHash(p.matching(entries)) != o.HashValue:
 			faults = append(faults, fmt.Sprintf("the output %s in the folder hashes to %s, not %s", o.Name, canonical.FramedHash(p.matching(entries)), o.HashValue))
 		}
@@ -195,7 +195,7 @@ func (s *service) binding(p *project, body gen.CheckRequest) []string {
 				continue
 			}
 			found = true
-			if len(e.Writable) > 0 {
+			if in.Name != findingsOutput && len(e.Writable) > 0 {
 				if h := canonical.FramedHash(p.matching(entries)); h != in.HashValue {
 					faults = append(faults, fmt.Sprintf("the input %s in the folder hashes to %s, not %s", in.Name, h, in.HashValue))
 				}

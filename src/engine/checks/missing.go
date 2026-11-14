@@ -1,9 +1,10 @@
 package checks
 
-// The step checks T054e added: ExamplesMatchApproval, GeneratedCodeBuilds, TestsBuild,
-// GeneratedCodeUnchanged and the review checks that rerun a finding's rule tests
-// (NoBlockingFindingOpen, and FindingsCarryEvidence as FindingsRerun). The check
-// contract's runCheck states each rule; these are its one implementation.
+// The step checks T054e added: ExamplesMatchApproval, GeneratedCodeBuilds, TestsBuild and
+// GeneratedCodeUnchanged, and ADR 0031's rerun of a finding's rule tests, kept only as
+// LegacyNoBlockingFindingOpen and LegacyFindingsRerun for the step evals' grader (the check
+// service judges findings by their witness tests, witness.go). The check contract's runCheck
+// states each rule; these are its one implementation.
 
 import (
 	"bufio"
@@ -279,14 +280,17 @@ func (run *testRun) confirmedBy(rule, file string) string {
 // claimed reports whether a finding claims to block at a file: blocking, with a rule and a file.
 func claimed(f Finding) bool { return f.Blocking && f.Rule != "" && f.File != "" }
 
-// NoBlockingFindingOpen (owner, 2026-11-13): a review finding is confirmed by rerunning the
+// LegacyNoBlockingFindingOpen is ADR 0031's NoBlockingFindingOpen (owner, 2026-11-13): a review finding is confirmed by rerunning the
 // tests of the rule it names (godog scenarios tagged @R-<n>, and Go tests that name the rule)
 // against the current code; it blocks only if one of them fails with output naming the file it
 // names. One failing result per confirmed blocking finding, naming its rule and file; a finding
 // whose rule's tests pass, fail somewhere else or do not exist, or that is not blocking, is a
 // suggestion. Without a confirmed one, one passing result. The tests run only when some finding
 // claims to block.
-func NoBlockingFindingOpen(r GoRunner, project string, findings []Finding) []CheckResult {
+//
+// Deprecated: ADR 0039 superseded it with the witness rule (NoBlockingFindingOpen). Only the
+// step evals' grader calls it; T077 removes it.
+func LegacyNoBlockingFindingOpen(r GoRunner, project string, findings []Finding) []CheckResult {
 	const check = "NoBlockingFindingOpen"
 	if !slices.ContainsFunc(findings, claimed) {
 		return []CheckResult{pass(check, "no finding claims to block")}
@@ -312,14 +316,17 @@ func NoBlockingFindingOpen(r GoRunner, project string, findings []Finding) []Che
 	return out
 }
 
-// FindingsRerun is FindingsCarryEvidence as the check service judges it (owner, 2026-11-13):
+// LegacyFindingsRerun is ADR 0031's FindingsCarryEvidence (owner, 2026-11-13):
 // every blocking finding names a rule, a file the project holds as a regular file and a line of at
 // least 1, and the rerun of its rule's tests (as NoBlockingFindingOpen reruns them) can be judged.
 // The rerun decides whether a finding blocks: one it does not confirm is a suggestion and does not
 // fail this check, and the `check` a finding names is not consulted. One failing result per
 // blocking finding without that evidence, or one for a rerun that cannot be judged; else one
 // passing result saying which findings the rerun confirmed. No blocking finding passes.
-func FindingsRerun(r GoRunner, project string, findings []Finding) []CheckResult {
+//
+// Deprecated: ADR 0039 superseded it with the witness rule (FindingsCarryEvidence). Only the
+// step evals' grader calls it; T077 removes it.
+func LegacyFindingsRerun(r GoRunner, project string, findings []Finding) []CheckResult {
 	const check = "FindingsCarryEvidence"
 	var blocking []Finding
 	for _, f := range findings {

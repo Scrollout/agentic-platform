@@ -22,14 +22,6 @@
 //	// generated code (gen/**, go.mod, go.sum, vendor/**): none added, changed or removed.
 //	func GeneratedCodeUnchanged(before, after string, genGlobs []string) []CheckResult
 //
-//	// NoBlockingFindingOpen: the owner's choice of 2026-11-13: a review finding is confirmed by
-//	// rerunning the tests of the rule it names (godog scenarios tagged @R-<n>, and Go tests that
-//	// name the rule) against the current code in project; it blocks only if they fail at the file
-//	// it names. A blocking finding so confirmed fails the check, naming its rule and file. A finding
-//	// whose rule's tests pass, or fail somewhere else, or one that is not blocking, is a
-//	// suggestion and does not fail it. No blocking finding at all passes (one passing result).
-//	func NoBlockingFindingOpen(r GoRunner, project string, findings []Finding) []CheckResult
-//
 // Fixtures: testdata/missing/. The real Go runs are offline (needGo sets GOPROXY=off through the
 // runner) and fail, never skip, when the toolchain or module cache is missing.
 package checks_test
@@ -130,67 +122,5 @@ func TestGeneratedCodeUnchangedMissing(t *testing.T) {
 	rs = checks.GeneratedCodeUnchanged(mcDir("unchanged", "planted"), before, globs)
 	if allPassed(rs) || !strings.Contains(reasons(rs), "gen/extra.go") {
 		t.Fatalf("a removed generated file passed, or the reason does not name it: %+v", rs)
-	}
-}
-
-// A finding is a suggestion unless it is blocking and the tests of its rule fail at its file.
-func TestNoBlockingFindingOpenMissing(t *testing.T) {
-	r := needGo(t)
-	t.Setenv("GOPROXY", "off")
-	t.Setenv("GOFLAGS", "-mod=readonly")
-	project := mcDir("review")
-	const file = "internal/greet/greet.go"
-	f := func(rule, path string, blocking bool) checks.Finding {
-		return checks.Finding{Rule: rule, File: path, Line: 7, Text: "the greeting leaves the name out", Blocking: blocking}
-	}
-
-	rs := checks.NoBlockingFindingOpen(r, project, []checks.Finding{f("R-1", file, true)})
-	if allPassed(rs) {
-		t.Fatalf("a blocking finding whose rule's tests fail at its file did not block: %+v", rs)
-	}
-	if got := reasons(rs); !strings.Contains(got, "R-1") || !strings.Contains(got, file) {
-		t.Fatalf("the reason names neither the rule R-1 nor %s: %s", file, got)
-	}
-
-	for name, fs := range map[string][]checks.Finding{
-		"no findings":                         nil,
-		"a blocking finding whose tests pass": {f("R-2", file, true)},
-		"a non-blocking finding, tests fail":  {f("R-1", file, false)},
-		// R-1's tests fail at internal/greet/greet.go, not at this file: not confirmed.
-		"a blocking finding naming another file": {f("R-1", "internal/other/other.go", true)},
-		// R10 is not R-1 and XR3 is not R-3: TestR10Collides and TestXR3Collides fail at other.go.
-		"R-3 at the file its test does not fail at": {f("R-3", file, true)},
-		"a rule no test names":                      {f("R-99", file, true)},
-	} {
-		if rs := checks.NoBlockingFindingOpen(r, project, fs); !allPassed(rs) {
-			t.Errorf("%s must not block: %+v", name, rs)
-		}
-	}
-
-	// A Go test named for the rule (TestR3Names fails at other.go:3, the subtest R_4_sub at greet.go:9).
-	for rule, path := range map[string]string{"R-3": "internal/other/other.go", "R-4": file} {
-		rs := checks.NoBlockingFindingOpen(r, project, []checks.Finding{f(rule, path, true)})
-		if allPassed(rs) || !strings.Contains(reasons(rs), rule) || !strings.Contains(reasons(rs), path) {
-			t.Errorf("a Go test that names %s fails at %s, so the finding blocks, naming both: %+v", rule, path, rs)
-		}
-	}
-
-	// One confirmed blocking finding among suggestions still blocks, and only it is named.
-	rs = checks.NoBlockingFindingOpen(r, project, []checks.Finding{f("R-2", file, true), f("R-1", file, true)})
-	if allPassed(rs) || !strings.Contains(reasons(rs), "R-1") || strings.Contains(reasons(rs), "R-2") {
-		t.Fatalf("expected R-1 alone to block: %+v", rs)
-	}
-}
-
-// The same findings over the same code give the same verdict (no model, no clock).
-func TestNoBlockingFindingOpenRepeats(t *testing.T) {
-	r := needGo(t)
-	t.Setenv("GOPROXY", "off")
-	t.Setenv("GOFLAGS", "-mod=readonly")
-	fs := []checks.Finding{{Rule: "R-2", File: "internal/greet/greet.go", Line: 7, Text: "t", Blocking: true}}
-	a := checks.NoBlockingFindingOpen(r, mcDir("review"), fs)
-	b := checks.NoBlockingFindingOpen(r, mcDir("review"), fs)
-	if allPassed(a) != allPassed(b) || reasons(a) != reasons(b) {
-		t.Fatalf("two runs differ: %+v vs %+v", a, b)
 	}
 }

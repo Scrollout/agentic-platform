@@ -20,6 +20,9 @@ sources:
   - id: adr-0032
     resource: /decisions/0032-project-version-history-kept-by-a-project-worker.md
     title: "ADR 0032: The new project's version history is a git repository kept by a project worker"
+  - id: adr-0039
+    resource: /decisions/0039-review-findings-confirmed-by-a-new-witness-test.md
+    title: "ADR 0039: A blocking review finding is confirmed by a new failing witness test the review writes"
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-13T20:00:00Z }
 ---
 
@@ -69,8 +72,11 @@ Shipped by Story 2 so far:
   one per attempt, as it calls the analyst but with `safety_policy: autonomous` (the analyst stays
   `restricted`; the step container is the boundary), and calls each procedure step's registered worker. It
   sends every check to the check service, except ContractLintPasses, which goes to contract-lint.
-  A review finding blocks only when its rule's tests, rerun by the check service, fail at the file
-  it names ([ADR 0031](/decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md)).
+  A review finding blocks only when the new witness test it names, run alone by the check
+  service with coverage, fails having run the line it names, in a file the fix step may change;
+  any other finding is a suggestion
+  ([ADR 0039](/decisions/0039-review-findings-confirmed-by-a-new-witness-test.md), superseding the
+  rule-test rerun of [ADR 0031](/decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md)).
   Before every attempt it calls the project worker's `restoreStep`, and after every accepted or
   reused step its `commitStep`, retried with backoff with jitter and otherwise interrupting the
   run (T053e).
@@ -109,7 +115,8 @@ Sources: [Feature 001 research](../../specs/001-prose-to-accepted-slice/research
 [ADR 0028](/decisions/0028-sign-platform-images-locally.md),
 [ADR 0030](/decisions/0030-agent-steps-on-docker-agent-checks-in-a-check-service.md),
 [ADR 0031](/decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md),
-[ADR 0032](/decisions/0032-project-version-history-kept-by-a-project-worker.md).
+[ADR 0032](/decisions/0032-project-version-history-kept-by-a-project-worker.md),
+[ADR 0039](/decisions/0039-review-findings-confirmed-by-a-new-witness-test.md).
 
 Each further building block gets its own concept:
 
@@ -134,4 +141,5 @@ Each further building block gets its own concept:
 - [ADR 0030: Agent steps on Docker Agent's API server; checks and procedures in a check service](/decisions/0030-agent-steps-on-docker-agent-checks-in-a-check-service.md)
 - [ADR 0031: A review finding blocks only when its rule's tests fail at the file it names](/decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md)
 - [ADR 0032: The new project's version history is a git repository kept by a project worker](/decisions/0032-project-version-history-kept-by-a-project-worker.md)
+- [ADR 0039: A blocking review finding is confirmed by a new failing witness test the review writes](/decisions/0039-review-findings-confirmed-by-a-new-witness-test.md)
 - ADRs 0005 to 0025: why each constitution principle exists, starting with [ADR 0005](/decisions/0005-principle-i-needs-before-solutions.md)

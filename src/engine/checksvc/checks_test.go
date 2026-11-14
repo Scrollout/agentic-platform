@@ -209,9 +209,17 @@ var patternCases = []pcase{
 		change: func(t *testing.T, dir string, planted bool) string {
 			return map[bool]string{true: "internal/missing.go"}[planted]
 		}},
-	{check: "NoBlockingFindingOpen", step: step("review", nil, []string{"findings"}, nil, nil),
-		base: fromTestdata("review"),
+	// The witness fixture less review/, which the attempt adds, so every witness is new; the step,
+	// its outputs and earlier steps are the review's (witness_test.go), set per variant below.
+	{check: "NoBlockingFindingOpen", step: step("review", []string{"review/**"}, []string{"findings"}, nil, nil),
+		base: func(t *testing.T, dir string, _ bool) {
+			copyTree(t, filepath.Join("testdata", "witness"), dir)
+			if err := os.RemoveAll(filepath.Join(dir, "review")); err != nil {
+				t.Fatal(err)
+			}
+		},
 		change: func(t *testing.T, dir string, planted bool) string {
+			copyTree(t, filepath.Join("testdata", "witness", "review"), filepath.Join(dir, "review"))
 			return map[bool]string{true: "R-1"}[planted]
 		}},
 }
@@ -267,11 +275,19 @@ func TestPatternChecksCleanPassPlantedFail(t *testing.T) {
 					mut = withFindings(f)
 				}
 				if pc.check == "NoBlockingFindingOpen" {
-					f := finding("R-2", "internal/greet/greet.go", 7, true)
+					f := witFinding("R-2", witGreet, 23, "review/r2/print_test.go", "TestR2PrintsOnly")
 					if planted {
-						f = finding("R-1", "internal/greet/greet.go", 7, true)
+						f = witFinding("R-1", witGreet, 23, witR1, witT1)
 					}
-					mut = withFindings(f)
+					mut = func(t *testing.T, dir string, b map[string]any) {
+						withFindings(f)(t, dir, b)
+						b["step"] = witReviewStep()
+						b["outputs"] = []any{
+							map[string]any{"name": "findings", "sha256": sum(nil)},
+							map[string]any{"name": "witnesses", "sha256": sum(framed(stepFiles(t, dir, witReviewWritable)))},
+						}
+						b["earlier_steps"] = witEarlierOfReview()
+					}
 				}
 				c := checkConfig(t, root)
 				if pc.oapi {
@@ -826,96 +842,5 @@ func TestSameRequestSameResponse(t *testing.T) {
 	b["run"], b["attempt"] = "RUN-9", 2
 	if a2 := post(t, base, "/step-files", b); string(a1.body) != string(a2.body) {
 		t.Error("readStepFiles: the same request gave another response")
-	}
-}
-
-// ---- 10. review: a finding is confirmed by rerunning the rule's tests ----
-
-func TestReviewFindingConfirmedByTheRulesTests(t *testing.T) {
-	const file, other = "internal/greet/greet.go", "internal/other/other.go"
-	root, dir := fixture(t, "review")
-	base := serve(t, checkConfig(t, root))
-	st := step("review", nil, []string{"findings"}, nil, nil)
-	run := func(check string, _ []any, fs ...map[string]any) verdict {
-		b := checkBody(t, dir, st, listFiles(t, dir), "c", reviewExamples(t))
-		l := []any{}
-		for _, f := range fs {
-			l = append(l, f)
-		}
-		b["findings"] = l
-		return runCheck(t, base, check, b)
-	}
-	type fs = []map[string]any
-	named := func(f map[string]any, check string) map[string]any { f["check"] = check; return f }
-	cases := []struct {
-		name        string
-		findings    fs
-		carry, open bool // FindingsCarryEvidence passes, NoBlockingFindingOpen passes
-	}{
-		{"R-1's godog scenarios fail at the named file: blocks", fs{finding("R-1", file, 7, true)}, true, false},
-		{"R-2's scenarios pass: a suggestion", fs{finding("R-2", file, 7, true)}, true, true},
-		{"non-blocking: a suggestion", fs{finding("R-1", file, 7, false)}, true, true},
-		{"no findings", nil, true, true},
-		{"the named check is not consulted: a check that does not exist still blocks", fs{named(finding("R-1", file, 7, true), "NoSuchCheck")}, true, false},
-		{"the named check is not consulted: AllTestsPass on a passing rule is a suggestion", fs{named(finding("R-2", file, 7, true), "AllTestsPass")}, true, true},
-		{"a Go test named R3 fails at the named file: blocks", fs{finding("R-3", other, 3, true)}, true, false},
-		{"R-3's test fails at another file: a suggestion", fs{finding("R-3", file, 3, true)}, true, true},
-		{"a subtest named R_4_sub fails at the named file: blocks", fs{finding("R-4", file, 9, true)}, true, false},
-		{"the project's absolute path names the file: blocks", fs{finding("R-5", file, 5, true)}, true, false},
-		{"a bare base name confirms nothing", fs{finding("R-6", file, 5, true)}, true, true},
-		{"./ before the project path is a boundary: blocks", fs{finding("R-7", file, 5, true)}, true, false},
-		{"a path character before the name is no boundary", fs{finding("R-8", file, 5, true)}, true, true},
-		{"R10 is not R-1 and XR3 is not R-3", fs{finding("R-1", other, 3, true)}, true, true},
-		{"a rule no test names", fs{finding("R-99", file, 7, true)}, true, true},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			carry := run("FindingsCarryEvidence", nil, c.findings...)
-			if carry.Passed != c.carry {
-				t.Errorf("FindingsCarryEvidence passed=%v, want %v: %s", carry.Passed, c.carry, carry.Reason)
-			}
-			open := run("NoBlockingFindingOpen", nil, c.findings...)
-			if open.Passed != c.open {
-				t.Fatalf("NoBlockingFindingOpen passed=%v, want %v: %s", open.Passed, c.open, open.Reason)
-			}
-			if !c.open {
-				f := c.findings[0]
-				if !strings.Contains(open.Reason, f["rule"].(string)) || !strings.Contains(open.Reason, f["file"].(string)) {
-					t.Errorf("the reason must name the rule and the file: %s", open.Reason)
-				}
-			}
-			noHost(t, open.Reason, root)
-		})
-	}
-	t.Run("only the confirmed finding is named", func(t *testing.T) {
-		v := run("NoBlockingFindingOpen", nil, finding("R-2", file, 7, true), finding("R-1", file, 7, true))
-		if v.Passed || !strings.Contains(v.Reason, "R-1") || strings.Contains(v.Reason, "R-2") {
-			t.Errorf("R-1 alone blocks: %+v", v)
-		}
-	})
-	t.Run("the project is not written", func(t *testing.T) {
-		snap := snapshot(t, dir)
-		run("NoBlockingFindingOpen", nil, finding("R-1", file, 7, true))
-		if d := sameSnapshot(snap, snapshot(t, dir)); d != "" {
-			t.Errorf("rerunning the rule's tests wrote the project folder: %s", d)
-		}
-	})
-}
-
-// Tests that do not build, or a project whose tests cannot be run, judge nothing: passed false, never
-// a pass by default.
-func TestReviewRerunNeedsTestsThatBuild(t *testing.T) {
-	root, dir := fixture(t, "review")
-	write(t, dir, "tests/broken_test.go", readTestdata(t, "testsnobuild", "tests", "broken_test.go"))
-	base := serve(t, checkConfig(t, root))
-	st := step("review", nil, []string{"findings"}, nil, nil)
-	for _, check := range []string{"FindingsCarryEvidence", "NoBlockingFindingOpen"} {
-		b := checkBody(t, dir, st, listFiles(t, dir), "c", reviewExamples(t))
-		b["findings"] = []any{finding("R-2", "internal/greet/greet.go", 7, true)}
-		if v := runCheck(t, base, check, b); v.Passed {
-			t.Errorf("%s passed although the tests do not build: %s", check, v.Reason)
-		} else {
-			noHost(t, v.Reason, root)
-		}
 	}
 }

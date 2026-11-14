@@ -201,18 +201,48 @@ func (p *project) matching(entries []string) []canonical.File {
 	return out
 }
 
+// findingsOutput is the review step's output that is not a set of files (contract, Artifacts);
+// witnessesOutput its file-set output, the witness tests.
+const (
+	findingsOutput  = "findings"
+	witnessesOutput = "witnesses"
+)
+
+// fileSetOutputs counts the outputs that are sets of files (all but findings).
+func fileSetOutputs(outputs []string) int {
+	n := 0
+	for _, o := range outputs {
+		if o != findingsOutput {
+			n++
+		}
+	}
+	return n
+}
+
 // outputEntries is the writable entries whose files make up the step's output name: all of them
-// for a step with one output, entry i for output i otherwise. ok is false for a name the step
+// for a step with one file-set output, entry i for file-set output i otherwise (findings not
+// counted), and none for findings, which is not a set of files. ok is false for a name the step
 // does not declare.
 func outputEntries(outputs, writable []string, name string) ([]string, bool) {
-	for i, o := range outputs {
-		if o != name {
+	sets := fileSetOutputs(outputs)
+	i := 0
+	for _, o := range outputs {
+		if o == findingsOutput {
+			if name == o {
+				return nil, true
+			}
 			continue
 		}
-		if len(outputs) == 1 {
-			return writable, true
+		if o == name {
+			if sets == 1 {
+				return writable, true
+			}
+			if i >= len(writable) {
+				return nil, true
+			}
+			return writable[i : i+1], true
 		}
-		return writable[i : i+1], true
+		i++
 	}
 	return nil, false
 }
