@@ -167,16 +167,13 @@ type Question struct {
 }
 
 // Answer is the developer's answer to one question (slice-defs.schema.json `answer`): exactly one
-// of Option, the position of a chosen option from 0, or Text, a free answer of at most 200
-// characters.
+// of Option, the position of a chosen option from 0, or Text, a free answer no longer
+// than the schema's limit (Schemas.MaxAnswerText).
 type Answer struct {
 	Question string
 	Option   *int
 	Text     string
 }
-
-// maxAnswerText is the longest free answer, in characters (slice-defs.schema.json `answer`).
-const maxAnswerText = 200
 
 // LintFinding is one Spectral finding on a contract. Level is "error", "warn" or "info"; only
 // "error" fails the lint check. Code is the rule's name.

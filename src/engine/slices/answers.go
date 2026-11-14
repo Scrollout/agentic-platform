@@ -19,9 +19,9 @@ import (
 // fails a check loses its approval too, recorded as "withdrawn".
 //
 // No answers, an answer with neither or both of an option and a text, an option out of range or
-// a text longer than 200 characters give InvalidRequest; an answer to a question that is
-// answered or does not exist gives QuestionNotOpen; more than 10 questions in total give
-// TooManyQuestions. A refused Answer changes nothing.
+// a text longer than the schemas allow (200 characters today) give InvalidRequest; an answer to a
+// question that is answered or does not exist gives QuestionNotOpen; more questions in total than
+// the slice schema allows (10 today) give TooManyQuestions. A refused Answer changes nothing.
 //
 // The analyst runs without the lock. When the slice changed meanwhile, the revision is dropped:
 // QuestionNotOpen when one of the questions is no longer open, else OperationFailed.
@@ -36,7 +36,7 @@ func (s *Service) Answer(ctx context.Context, id string, answers []Answer) (Slic
 	base := record{baseline: r.baseline, compat: slices.Clone(r.compat), lint: slices.Clone(r.lint), dropped: maps.Clone(r.dropped), examplesBase: r.examplesBase}
 	s.mu.Unlock()
 
-	if err := answerable(cur.Questions, answers); err != nil {
+	if err := s.answerable(cur.Questions, answers); err != nil {
 		return Slice{}, err
 	}
 	now := s.now()
@@ -97,7 +97,7 @@ func (s *Service) Answer(ctx context.Context, id string, answers []Answer) (Slic
 		return Slice{}, err
 	}
 	if latest != r || len(latest.slice.History) != len(cur.History) {
-		if err := answerable(latest.slice.Questions, answers); err != nil {
+		if err := s.answerable(latest.slice.Questions, answers); err != nil {
 			return Slice{}, err
 		}
 		return Slice{}, &Error{Code: "OperationFailed", Detail: "the slice changed while the analyst revised it; answer again"}
@@ -117,13 +117,15 @@ func (s *Service) CheckAnswers(id string, answers []Answer) error {
 	if err != nil {
 		return err
 	}
-	return answerable(r.slice.Questions, answers)
+	return s.answerable(r.slice.Questions, answers)
 }
 
 // answerable checks answers against the slice's questions: the shape of each answer first
 // (InvalidRequest), then that its question is open (QuestionNotOpen), then that a chosen option
-// exists (InvalidRequest).
-func answerable(qs []Question, answers []Answer) error {
+// exists (InvalidRequest). The longest free answer is the schemas' (slice-defs.schema.json
+// `answer`).
+func (s *Service) answerable(qs []Question, answers []Answer) error {
+	maxText := s.schemas.MaxAnswerText()
 	invalid := func(format string, a ...any) error {
 		return &Error{Code: "InvalidRequest", Detail: fmt.Sprintf(format, a...)}
 	}
@@ -141,8 +143,8 @@ func answerable(qs []Question, answers []Answer) error {
 			return invalid("the answer to %s gives both an option and a text; give one", a.Question)
 		case a.Option == nil && strings.TrimSpace(a.Text) == "":
 			return invalid("the answer to %s is blank", a.Question)
-		case utf8.RuneCountInString(a.Text) > maxAnswerText:
-			return invalid("the answer to %s is longer than %d characters", a.Question, maxAnswerText)
+		case utf8.RuneCountInString(a.Text) > maxText:
+			return invalid("the answer to %s is longer than %d characters", a.Question, maxText)
 		}
 		seen[a.Question] = true
 	}
@@ -177,8 +179,9 @@ func copyInt(p *int) *int {
 }
 
 // Delete erases a slice and its records (deleteSlice); its ID is not given out again. An unknown
-// slice gives NotFound. Runs, and the refusal while one has not ended, come with the run store.
-// The slice's stored record is removed before the slice is.
+// slice gives NotFound. The refusal while a run of the slice is active (RunActive) is not made
+// here: the API builds it before it calls Delete (api/slices.go, DeleteSlice). The slice's stored
+// record is removed before the slice is.
 func (s *Service) Delete(_ context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

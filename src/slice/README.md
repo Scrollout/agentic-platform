@@ -20,11 +20,22 @@ the slice against it first.
 `Trace(doc)` takes the JSON of a slice or slice proposal and returns every broken link between its
 IDs, each as a `Finding` naming the part to fix (`goals`, `rules` or `contract`), the offending ID
 and a reason: a goal no rule serves, a rule naming a goal or term that does not exist, a rule with
-no scenario tagged `@R-<n>` under its `Rule: R-<n>` block, and an operation whose `x-rules` names a
-rule that does not exist. It returns nil when every link holds. Shape is not its concern: the
-schemas decide that, so run `CheckSlice` or `CheckProposal` first. Examples that are not valid
-Gherkin are a `rules` finding, a contract that cannot be read a `contract` finding, and a document
-that is not JSON one finding with an empty part.
+no scenario tagged `@R-<n>` under its `Rule: R-<n>` block, an example whose `Rule:` block or
+`@R-<n>` tag names a rule that is not in `rules` (a `rules` finding naming the example's `E-<n>`
+and the rule), an operation with no `operationId` (named by its method and path) or with a missing
+or empty `x-rules`, and an operation whose `x-rules` names a rule that does not exist. It returns
+nil when every link holds. Shape is mostly the schemas' concern, so run `CheckSlice` or
+`CheckProposal` first, but Trace fails closed on a contract shape it cannot follow: a root,
+`paths`, path item or operation that is not a mapping, an `x-rules` that is not a list or holds a
+non-scalar entry, and any YAML alias or merge key are each a `contract` finding. Every finding on a
+part has a non-empty ID. Examples that are not valid Gherkin are a `rules` finding with ID
+`examples`, a contract that YAML cannot parse a `contract` finding with ID `contract`; both have
+`Syntax` set, since the links inside were not followed. A document that is not JSON gives one
+finding with an empty part.
+
+`Schemas.MaxAnswerText()` and `MaxQuestions()` return the free answer's `maxLength`
+(`slice-defs.schema.json` `$defs/answer`) and the slice's `questions` `maxItems`
+(`slice.schema.json`), read from the compiled schemas, or 0 when a schema sets none.
 
 `ExampleTags(text)` parses Gherkin examples with the same parser and returns a `rules` finding for
 each scenario without exactly one `@R-<n>` tag matching its `Rule: R-<n>` block, or without exactly

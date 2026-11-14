@@ -305,7 +305,13 @@ func TestGenerateWritesExactlyTheWritableSetAndRemovesStaleFiles(t *testing.T) {
 
 func TestProcedureTimeLimit(t *testing.T) {
 	root, dir := fixture(t)
-	base := serve(t, withOapi(t, workerConfig(t, root, "generate", "generate")))
+	c := withOapi(t, workerConfig(t, root, "generate", "generate"))
+	slow := filepath.Join(t.TempDir(), "oapi-codegen")
+	if err := os.WriteFile(slow, []byte("#!/bin/sh\nsleep 2\nexec '"+c.OapiCodegen+"' \"$@\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c.OapiCodegen = slow
+	base := serve(t, c)
 	wantProblem(t, post(t, base, "/procedures/generate/run", generateBody(dir, readTestdata(t, "contract.yaml"), 1)), 504, "TimeLimitExceeded")
 	// A repeat converges: with enough time it completes.
 	p := wantProcedure(t, post(t, base, "/procedures/generate/run", generateBody(dir, readTestdata(t, "contract.yaml"), 300)), "generate")

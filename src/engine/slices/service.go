@@ -68,11 +68,14 @@ type record struct {
 	examplesBase string
 }
 
-// New returns a service. Schemas, Analyst and Diff are required.
+// New returns a service. Schemas, Analyst and Diff are required; the schemas must set the free
+// answer's maxLength and the slice's questions maxItems, the limits the service enforces.
 func New(cfg Config) (*Service, error) {
 	switch {
 	case cfg.Schemas == nil:
 		return nil, errors.New("slices: no contract schemas")
+	case cfg.Schemas.MaxAnswerText() <= 0 || cfg.Schemas.MaxQuestions() <= 0:
+		return nil, errors.New("slices: the contract schemas set no answer length or question limit")
 	case cfg.Analyst == nil:
 		return nil, errors.New("slices: no analyst")
 	case cfg.Diff == nil:
@@ -259,10 +262,6 @@ func (s *Service) build(ctx context.Context, description string) (Result, *recor
 	return Result{}, rec, nil
 }
 
-// maxQuestions is the most questions a slice may have (FR-006; slice.schema.json questions
-// maxItems, which the proposal schema also gives).
-const maxQuestions = 10
-
 // propose asks the analyst for a proposal from base (a description, and when revising the
 // current proposal and the questions) and builds the slice from it; asked is the number of
 // questions the slice already has, which count against the limit with the new ones. An unusable
@@ -285,7 +284,8 @@ func (s *Service) propose(ctx context.Context, base AnalystInput, asked int) (Pr
 			Goals: p.Goals, Terms: p.Terms, Rules: p.Rules,
 		})
 		normalise(&sl)
-		if asked+len(p.Questions) > maxQuestions {
+		// The most questions a slice may have is the schemas' (FR-006; slice.schema.json questions).
+		if maxQuestions := s.schemas.MaxQuestions(); asked+len(p.Questions) > maxQuestions {
 			return Proposal{}, Slice{}, 0, &Error{Code: "TooManyQuestions",
 				Detail: fmt.Sprintf("the slice would need %d questions, more than %d; narrow the description", asked+len(p.Questions), maxQuestions)}
 		}
@@ -336,7 +336,7 @@ func (s *Service) unusable(sl *Slice, questions []QuestionDraft) ([]string, erro
 		switch {
 		case f.Part == "": // the engine wrote the document, so this is a fault
 			return nil, fmt.Errorf("slices: traceability: %s", f.Reason)
-		case f.ID == "": // a syntax finding: the examples or the contract text does not parse
+		case f.Syntax: // the examples or the contract text does not parse
 			out = append(out, f.Reason)
 			contractRead = contractRead && f.Part != string(PartContract)
 		}

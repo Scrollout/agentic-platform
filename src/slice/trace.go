@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"slices"
 	"strings"
 
 	gherkin "github.com/cucumber/gherkin/go/v42"
@@ -13,8 +15,13 @@ import (
 
 // Finding is one broken link between the IDs of a slice: the part the developer must fix
 // ("goals", "rules" or "contract"; "" when the document itself cannot be read), the offending ID,
-// and a reason that names it.
-type Finding struct{ Part, ID, Reason string }
+// and a reason that names it. Syntax marks a finding that the examples or the contract text does
+// not parse at all, so the links in it were not followed; its ID names the field ("examples",
+// "contract").
+type Finding struct {
+	Part, ID, Reason string
+	Syntax           bool
+}
 
 // The parts of a slice or proposal that Trace reads. Their shape is the schemas' rule
 // (CheckSlice, CheckProposal); Trace only follows the IDs.
@@ -62,122 +69,224 @@ func Trace(doc []byte) []Finding {
 	}
 	for _, g := range d.Goals {
 		if !served[g.ID] {
-			out = append(out, Finding{"goals", g.ID, fmt.Sprintf("goal %s has no rule", g.ID)})
+			out = append(out, Finding{Part: "goals", ID: g.ID, Reason: fmt.Sprintf("goal %s has no rule", g.ID)})
 		}
 	}
 
-	scenarios, err := scenariosByRule(d.Examples)
+	refs, err := scenarioRefs(d.Examples)
 	if err != nil {
-		out = append(out, Finding{Part: "rules", Reason: "the examples are not valid Gherkin: " + err.Error()})
+		out = append(out, Finding{Part: "rules", ID: "examples", Reason: "the examples are not valid Gherkin: " + err.Error(), Syntax: true})
 	}
+	scenarios, unknown := exampleLinks(refs, rules)
+	out = append(out, unknown...)
 	for _, r := range d.Rules {
 		if !goals[r.Goal] {
-			out = append(out, Finding{"rules", r.ID, fmt.Sprintf("rule %s names goal %s, which does not exist", r.ID, r.Goal)})
+			out = append(out, Finding{Part: "rules", ID: r.ID, Reason: fmt.Sprintf("rule %s names goal %s, which does not exist", r.ID, r.Goal)})
 		}
 		for _, t := range r.Terms {
 			if !terms[t] {
-				out = append(out, Finding{"rules", t, fmt.Sprintf("rule %s uses term %s, which is not in terms", r.ID, t)})
+				out = append(out, Finding{Part: "rules", ID: t, Reason: fmt.Sprintf("rule %s uses term %s, which is not in terms", r.ID, t)})
 			}
 		}
 		if err == nil && !scenarios[r.ID] {
-			out = append(out, Finding{"rules", r.ID, fmt.Sprintf("rule %s has no scenario tagged @%s under a \"Rule: %s\" block", r.ID, r.ID, r.ID)})
+			out = append(out, Finding{Part: "rules", ID: r.ID, Reason: fmt.Sprintf("rule %s has no scenario tagged @%s under a \"Rule: %s\" block", r.ID, r.ID, r.ID)})
 		}
 	}
 
-	ops, err := operationRules(d.Contract)
-	if err != nil {
-		return append(out, Finding{Part: "contract", Reason: "the contract cannot be read: " + err.Error()})
-	}
-	for _, op := range ops {
-		for _, id := range op.rules {
-			if !rules[id] {
-				out = append(out, Finding{"contract", id, fmt.Sprintf("operation %s names rule %s in x-rules, which does not exist", op.name, id)})
-			}
-		}
-	}
+	out = append(out, contractLinks(d.Contract, rules)...)
 	return out
 }
 
 func set() map[string]bool { return map[string]bool{} }
 
-// scenariosByRule returns the rule IDs that have at least one scenario under the Rule: block of
-// that name, tagged with the same ID.
-func scenariosByRule(text string) (map[string]bool, error) {
-	has := set()
+// scenarioRef is what Trace reads of one scenario: the name of the "Rule:" block it sits under
+// ("" for none), its name, and the IDs of its @R-<n> and @E-<n> tags.
+type scenarioRef struct {
+	block, name string
+	rules, exs  []string
+}
+
+// scenarioRefs returns every scenario of Gherkin examples, in document order. An error means the
+// text is not Gherkin.
+func scenarioRefs(text string) ([]scenarioRef, error) {
 	if strings.TrimSpace(text) == "" {
-		return has, nil
+		return nil, nil
 	}
 	gd, err := gherkin.ParseGherkinDocument(strings.NewReader(text), (&messages.Incrementing{}).NewId)
 	if err != nil {
 		return nil, err
 	}
 	if gd.Feature == nil {
-		return has, nil
+		return nil, nil
+	}
+	var out []scenarioRef
+	add := func(sc *messages.Scenario, block string) {
+		r := scenarioRef{block: block, name: strings.TrimSpace(sc.Name)}
+		for _, t := range sc.Tags {
+			if m := ruleTag.FindStringSubmatch(t.Name); m != nil {
+				r.rules = append(r.rules, m[1])
+			} else if m := exampleTag.FindStringSubmatch(t.Name); m != nil {
+				r.exs = append(r.exs, m[1])
+			}
+		}
+		out = append(out, r)
 	}
 	for _, fc := range gd.Feature.Children {
-		if fc.Rule == nil {
-			continue
-		}
-		id := strings.TrimSpace(fc.Rule.Name)
-		for _, rc := range fc.Rule.Children {
-			if rc.Scenario == nil {
-				continue
-			}
-			for _, tag := range rc.Scenario.Tags {
-				if tag.Name == "@"+id {
-					has[id] = true
+		switch {
+		case fc.Scenario != nil:
+			add(fc.Scenario, "")
+		case fc.Rule != nil:
+			for _, rc := range fc.Rule.Children {
+				if rc.Scenario != nil {
+					add(rc.Scenario, strings.TrimSpace(fc.Rule.Name))
 				}
 			}
 		}
 	}
-	return has, nil
+	return out, nil
 }
 
-type operation struct {
-	name  string
-	rules []string
+// ruleID matches a rule ID as a "Rule:" block names it.
+var ruleID = regexp.MustCompile(`^R-[0-9]+$`)
+
+// exampleLinks returns the rule IDs that have a scenario under the "Rule:" block of that name,
+// tagged with the same ID, and a finding for each scenario whose block or @R-<n> tag names a rule
+// that is not in rules, naming the scenario's example and the rule.
+func exampleLinks(scs []scenarioRef, rules map[string]bool) (map[string]bool, []Finding) {
+	has := set()
+	var out []Finding
+	for _, sc := range scs {
+		for _, r := range sc.rules {
+			if r == sc.block {
+				has[r] = true
+			}
+		}
+		named := sc.rules
+		if ruleID.MatchString(sc.block) && !slices.Contains(named, sc.block) {
+			named = append([]string{sc.block}, named...)
+		}
+		what := fmt.Sprintf("scenario %q", sc.name)
+		id := ""
+		if len(sc.exs) > 0 {
+			what = fmt.Sprintf("example %s (%s)", sc.exs[0], what)
+			id = sc.exs[0]
+		}
+		for _, r := range named {
+			if !rules[r] {
+				fid := id
+				if fid == "" {
+					fid = r
+				}
+				out = append(out, Finding{Part: "rules", ID: fid, Reason: fmt.Sprintf("%s serves rule %s, which is not in rules", what, r)})
+			}
+		}
+	}
+	return has, out
 }
 
 // The fields of an OpenAPI path item that hold operations.
 var methods = []string{"get", "put", "post", "delete", "options", "head", "patch", "trace"}
 
-// operationRules returns each operation of the OpenAPI document (under paths and webhooks), in
-// document order, with the rule IDs of its x-rules.
-func operationRules(text string) ([]operation, error) {
+// contractLinks checks the operations of the OpenAPI document (under paths and webhooks), in
+// document order: each has a non-empty operationId and a non-empty x-rules list of scalar rule IDs,
+// each naming a rule in rules. It fails closed: a shape it cannot follow (a root, paths, path item
+// or operation that is not a mapping, YAML aliases or merge keys) is a finding, never skipped.
+func contractLinks(text string, rules map[string]bool) []Finding {
+	fail := func(id, format string, a ...any) Finding {
+		return Finding{Part: "contract", ID: id, Reason: fmt.Sprintf(format, a...)}
+	}
 	var root yaml.Node
 	if err := yaml.NewDecoder(bytes.NewReader([]byte(text))).Decode(&root); err != nil {
-		return nil, err
+		f := fail("contract", "the contract cannot be read: %v", err)
+		f.Syntax = true
+		return []Finding{f}
 	}
 	if len(root.Content) == 0 {
-		return nil, nil
+		return nil
 	}
-	var ops []operation
+	if out := aliases(&root); len(out) > 0 {
+		return out
+	}
+	doc := root.Content[0]
+	if doc.Kind != yaml.MappingNode {
+		return []Finding{fail("contract", "the contract is not a mapping (line %d); it must be an OpenAPI document", doc.Line)}
+	}
+	var out []Finding
 	for _, section := range []string{"paths", "webhooks"} {
-		items := field(root.Content[0], section)
-		if items == nil || items.Kind != yaml.MappingNode {
+		items := field(doc, section)
+		if items == nil {
+			continue
+		}
+		if items.Kind != yaml.MappingNode {
+			out = append(out, fail(section, "the contract's %s is not a mapping (line %d)", section, items.Line))
 			continue
 		}
 		for i := 0; i+1 < len(items.Content); i += 2 {
+			path, item := items.Content[i].Value, items.Content[i+1]
+			if item.Kind != yaml.MappingNode {
+				out = append(out, fail(path, "path item %s is not a mapping (line %d)", path, item.Line))
+				continue
+			}
 			for _, m := range methods {
-				op := field(items.Content[i+1], m)
+				op := field(item, m)
 				if op == nil {
 					continue
 				}
-				name := strings.ToUpper(m) + " " + items.Content[i].Value
-				if id := field(op, "operationId"); id != nil && id.Value != "" {
-					name = id.Value
+				name := strings.ToUpper(m) + " " + path
+				if op.Kind != yaml.MappingNode {
+					out = append(out, fail(name, "operation %s is not a mapping (line %d)", name, op.Line))
+					continue
 				}
-				var ids []string
-				if xr := field(op, "x-rules"); xr != nil && xr.Kind == yaml.SequenceNode {
-					for _, n := range xr.Content {
-						ids = append(ids, n.Value)
+				if id := field(op, "operationId"); id != nil && id.Kind == yaml.ScalarNode && id.Value != "" {
+					name = id.Value
+				} else {
+					out = append(out, fail(name, "operation %s has no operationId", name))
+				}
+				xr := field(op, "x-rules")
+				switch {
+				case xr == nil:
+					out = append(out, fail(name, "operation %s has no x-rules; list the rules it serves", name))
+					continue
+				case xr.Kind != yaml.SequenceNode:
+					out = append(out, fail(name, "operation %s has an x-rules that is not a list (line %d)", name, xr.Line))
+					continue
+				case len(xr.Content) == 0:
+					out = append(out, fail(name, "operation %s has an empty x-rules; list the rules it serves", name))
+					continue
+				}
+				for _, n := range xr.Content {
+					switch {
+					case n.Kind != yaml.ScalarNode:
+						out = append(out, fail(name, "operation %s has an x-rules entry that is not a rule ID (line %d)", name, n.Line))
+					case !rules[n.Value]:
+						out = append(out, fail(n.Value, "operation %s names rule %s in x-rules, which does not exist", name, n.Value))
 					}
 				}
-				ops = append(ops, operation{name, ids})
 			}
 		}
 	}
-	return ops, nil
+	return out
+}
+
+// aliases returns a finding for each YAML alias and merge key in the tree under n: they let one
+// node stand for another, which the checks do not follow.
+func aliases(n *yaml.Node) []Finding {
+	var out []Finding
+	var walk func(*yaml.Node)
+	walk = func(n *yaml.Node) {
+		switch {
+		case n.Kind == yaml.AliasNode:
+			out = append(out, Finding{Part: "contract", ID: "*" + n.Value, Reason: fmt.Sprintf("the contract uses YAML alias *%s (line %d); write the value out", n.Value, n.Line)})
+			return
+		case n.Kind == yaml.ScalarNode && n.Tag == "!!merge":
+			out = append(out, Finding{Part: "contract", ID: "<<", Reason: fmt.Sprintf("the contract uses a YAML merge key (line %d); write the fields out", n.Line)})
+		}
+		for _, c := range n.Content {
+			walk(c)
+		}
+	}
+	walk(n)
+	return out
 }
 
 // field returns the value of key in the mapping n, or nil.

@@ -23,6 +23,7 @@ import (
 type Schemas struct {
 	slice, proposal *jsonschema.Schema
 	ids             idRules
+	limits          limits
 }
 
 // LoadSchemas compiles slice.schema.json, slice-proposal.schema.json and the value rules of
@@ -57,7 +58,11 @@ func load(fsys fs.FS, base string) (*Schemas, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Schemas{slice: s, proposal: p, ids: ids}, nil
+	lim, err := compileLimits(c, s, base+"slice-defs.schema.json")
+	if err != nil {
+		return nil, err
+	}
+	return &Schemas{slice: s, proposal: p, ids: ids, limits: lim}, nil
 }
 
 // fsLoader loads the schema files under base from fsys, and nothing else.
