@@ -6,14 +6,49 @@ Two names, two jobs:
   Its own commands are `up --credentials <file> --projects <folder>`, `down`, `build-workers
   <slice> <project>`, `page`, `test <suite>` (runs the test harness in its own container) and `registry`
   (starts the local image registry if it isn't running; `src/deploy/build.sh` calls it). It intercepts
-  `build`, `resume` and `replay`: it runs `build-workers` for the slice and project (for a run, the
-  run's slice) first, then passes the command on (for `resume` and `replay` this waits on T053g:
-  `build-workers` refuses a project folder that already holds files). `build-workers <slice> <project>` makes the
+  `build`, `resume` and `replay` (research D32):
+  - `build <slice> <project>` runs `build-workers <slice> <project>` first, then passes the command on.
+  - `replay <run> <project>` reads the run (`getRun`) for its slice, runs `build-workers <slice>
+    <project>` unchanged, then passes the command on. A replay always builds into a new, empty
+    project: a folder that holds a file, a symbolic link or a non-empty `.git` is refused by
+    `build-workers` (exit 3) as for `build`. An unknown run is exit 4 (`NotFound`).
+  - `resume <run>` never runs `build-workers`. It reads the run (`getRun`), which gives its slice and
+    project; an unknown run is exit 4 (`NotFound`), and a run that is not `interrupted` is passed on
+    unchanged for the engine to refuse (`RunNotInterrupted`). For an interrupted run, every step of
+    the pattern must have its step container for that slice and project running (by the labels
+    below and this session's tokens); the launcher then registers each with the engine again and
+    passes the command on. When one is missing or stopped, or the slice's tokens are gone (after
+    `ap down` or a host reboot), it changes nothing and exits 3 with `resume: the step workers of
+    <slice> for the project <project> are not running; run ap build-workers --resume <run>, then ap
+    resume <run>`.
+
+  `build-workers <slice> <project>` makes the
   project folder with an empty `.git` and the folders the steps write, starts one step container per
   step of the pattern (each with only its step's paths writable), writes each container's grant
-  for the engine and registers it; running it again changes nothing. It exits 3 for a slice or
+  for the engine and registers it; running it again changes nothing. A step container is named
+  `<compose project>-worker-<slice>-<step>-<p>` (`<compose project>` is `compose.yaml`'s `name`,
+  `agentic-platform` in a real session; the slice in lowercase; `<p>` the first 12 hex
+  digits of the SHA-256 of the project name, so the name fits one 63-character DNS label) and
+  labelled `org.agentic-platform.slice`, `org.agentic-platform.step` and
+  `org.agentic-platform.project` with the slice, step and project in full. Each project has its own
+  containers: `build-workers` never removes or replaces a container whose project label names
+  another project, and every step container stays up until `ap down`. It exits 3 for a slice or
   project name that is not one, for a project folder that already holds a file or symlink at any depth or a non-empty `.git` (naming it, and changing nothing), or without the agent and check images, 4 when the engine has no
-  such slice (`NotFound`), and 1 when Docker or the engine fails. Every other command is passed unchanged to the terminal
+  such slice (`NotFound`) or while a run of the slice has not ended (`build-workers: the run <run>
+  of <slice> has not ended (RunActive); resume, take over or cancel it first`, found with
+  `listRuns` and the session's client token, before anything changes), and 1 when Docker or the
+  engine fails, when the engine's answer cannot be read, or when a container with the name it wants
+  is labelled with another project.
+
+  `build-workers --resume <run>` (T053j) rebuilds the step workers of an interrupted run after `ap
+  down` or a host reboot. It reads the run (`getRun`) for its slice and project and accepts that
+  run's existing project folder only, creating nothing in it; it makes the slice's tokens if they
+  are gone, writes the grants, starts the project's step containers (same names, labels and mounts)
+  and registers them; running it again changes nothing. It exits 4 for an unknown run (`NotFound`)
+  or one that is not `interrupted` (`RunNotInterrupted`), 3 when the project folder, its `.git` or
+  a step's folder is missing or not a folder (naming it), and 1 as `build-workers` does.
+
+  Every other command is passed unchanged to the terminal
   client, which never calls the launcher.
 
   `up` refuses (exit 3) a credentials file that is missing, empty, not owned by the developer or

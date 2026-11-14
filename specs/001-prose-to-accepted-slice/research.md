@@ -808,7 +808,93 @@ page, none of which an existing project provides.
   variable the engine does not start (the bind source is missing). Docker Agent takes the call
   token as its `--auth-token` flag, so inside an agent step's sandbox it is on docker-agent's
   command line, readable by the agent's shell tool. Re-running `build-workers` for another
-  project replaces the slice's containers, also during a run (a follow-up task).
+  project replaces the slice's containers, also during a run (a follow-up task; resolved by D32).
 - **Recorded as** [ADR 0034](../../docs/decisions/0034-step-worker-grants-as-files-read-at-each-authentication.md).
 - Sources: owner's decisions, 2026-11-13; <https://docs.docker.com/engine/storage/bind-mounts/>
   (a bind source must exist).
+
+### D32. Step containers are kept per project; resume reuses them and replay builds a new project
+
+- **Decision** (owner, 2026-11-14; T053g, after the T053d review):
+  - **Per-project containers**: a step container's name holds the slice, the step and the project:
+    `<compose project>-worker-<slice, lowercase>-<step>-<p>`, where `<compose project>` is the
+    Compose project name from `compose.yaml` (`agentic-platform` in a real session; tests may run
+    under another) and `<p>` is the first 12 hex digits of the SHA-256 of the project name. A project name may be 63 characters, and the name is
+    the host name the engine calls, which must fit one DNS label of at most 63 characters, so the
+    name holds the project's hash and the labels hold the project in full:
+    `org.agentic-platform.slice`, `org.agentic-platform.step` and `org.agentic-platform.project`, beside
+    the existing `org.agentic-platform.worker` (which already holds the project). `build-workers`
+    for project B starts B's own containers and leaves project A's running; it never removes or
+    replaces a container whose project label names another project. A container with the name it
+    wants whose project label names another project (a hash collision) is refused with exit 1,
+    changing nothing. Every step container stays up until `ap down`.
+  - **One registration per slice and step**: the engine keeps one worker address per slice and step,
+    in memory, and registering again replaces it (registerWorker, D29, D31). The engine is not
+    changed. So that a registration never moves away from a run that still needs it, `build-workers`
+    refuses while a run of the slice is active (has not ended, data-model "Active run", FR-021),
+    before it writes a grant, registers, makes a folder or starts a container: exit 4,
+    `build-workers: the run <run> of <slice> has not ended (RunActive); resume, take over or cancel
+    it first`. It learns this from the engine's `listRuns` (`GET /runs`, every page) with the
+    session's client token, which `ap` already holds (`AP_CLIENT_TOKEN`, the token the terminal
+    client gets), sent from a one-off container on the `agents` network as `register_worker`
+    does: a run whose `slice` is the slice and whose `status` is not `ended` is active. An answer
+    it cannot read, or no answer, refuses with exit 1 (fail closed).
+  - **Resume**: `ap resume <run>` reads the run with `getRun` (`GET /runs/{runId}`, client token),
+    which gives its `slice`, `project` and `status`. An unknown run is exit 4 `NotFound`. A run whose
+    status is not `interrupted` is passed on unchanged, and the engine refuses it
+    (`RunNotInterrupted`). For an interrupted run, every step of the pattern must have its
+    container for that slice and project running, with the labels above and the session's tokens
+    id; then the launcher registers each again with its worker token (the same `registerWorker`
+    call `build-workers` makes, not `build-workers` itself, so no folder is made or checked and no
+    grant is written) and passes `resume <run>` on. A run is interrupted when the platform stopped,
+    such as an engine restart, which loses the engine's in-memory registrations, so registering
+    again is what makes the workers ready. When a container is missing or stopped, or the slice's
+    tokens file is gone, resume refuses with exit 3 and changes nothing: `resume: the step workers
+    of <slice> for the project <project> are not running; run ap build-workers --resume <run>,
+    then ap resume <run>`.
+  - **Rebuilding for resume** (owner, 2026-11-14, after `/speckit-analyze` finding G1, FR-020; task
+    T053j): a run interrupted by `ap down` or a host reboot must stay resumable, so `ap
+    build-workers --resume <run>` rebuilds its workers. It reads the run with `getRun` for its
+    slice, project and status, and refuses (exit 4, `RunNotInterrupted`, changing nothing) a run
+    that is not `interrupted`, an unknown run with exit 4 `NotFound`, and, by the active-run rule,
+    any other run of the slice that has not ended. It accepts the existing project folder only for
+    that run: the folder named by the run's `project`, never one given on the command line. It
+    then makes the slice's tokens if they are gone, writes the grants, starts the project's step
+    containers as `build-workers` does (same names, labels and mounts) and registers them. It
+    creates nothing in the project folder: a missing or non-folder project folder, `.git` or step
+    folder is refused with exit 3, naming it. Running it again changes nothing; then `ap resume
+    <run>` finds the containers running.
+  - **Why it is safe under FR-025**: it touches only the folder of the interrupted run it names,
+    which that run created as a new project, and it writes nothing there itself. Its containers
+    mount `.git` read-only as always, and the project worker's history guard (D30) still checks
+    `.git` against the worker's record, kept on the `project-worker-state` volume, which `ap down`
+    keeps; a history changed while the platform was down stops the run with 409 HistoryChanged.
+    It reads the run's record through `getRun`, not the project worker's record, so it adds no
+    record-reading path.
+  - **Replay**: `ap replay <run> <project>` reads the run with `getRun` for its slice, then runs
+    `build-workers <slice> <project>` unchanged and passes the command on. The project must be new
+    and empty by the ProjectExists rule (D31); an existing folder holding a file, a symbolic link or
+    a non-empty `.git` is refused by `build-workers` (exit 3) as now.
+- **Rationale**: keeping one container set per project means building a second project of a slice
+  never stops the first one's containers, and the active-run refusal keeps the engine's single
+  registration on the only run that can use it, since a slice has at most one active run. Resume
+  then needs only a registration, which needs no folder check, so the "folder already holds files"
+  refusal of `build-workers` does not apply to it. Replay always writes a new project, so it fits
+  `build-workers` as it is. No engine or contract change is needed.
+- **Alternatives rejected**: a `build-workers --resume <run>` that reads the project worker's
+  record through a one-off container to learn the run's project (more launcher code and a new path
+  for reading that record; the adopted T053j reads the run with `getRun` instead); registrations
+  per slice, step and project in the engine (a change to the engine, the grant files and
+  registerWorker for a case the active-run refusal already covers); the project's full name in the
+  container name (does not fit one DNS label for long project names).
+- **Known limits**: step containers of every project built in the session use resources until
+  `ap down`. Until T053j is done, an interrupted run whose containers are gone cannot be resumed
+  (it can be cancelled, or it expires after 14 days). `build-workers` for another slice while a run
+  of a different slice is active starts that slice's containers, which then wait: the active-run
+  refusal is per slice, and the following `startRun` is refused with `RunActive` (FR-021).
+- **Recorded as** [ADR 0036](../../docs/decisions/0036-step-containers-per-project-resume-reuses-them.md).
+- Sources: owner's decisions, 2026-11-14; engine contract `registerWorker`, `listRuns`, `getRun`
+  (`src/engine/api/preview/2026-11-12-preview/openapi.yaml`);
+  <https://www.rfc-editor.org/rfc/rfc1035#section-2.3.4> (a label is at most 63 octets);
+  <https://docs.docker.com/engine/network/#dns-services> (containers on a network resolve each
+  other by container name).
