@@ -1,15 +1,16 @@
 # The review agent: a fresh review of a built slice that reports findings, each citing a rule of
 # the slice, a file and a line (spec US2, FR-016, FR-017; research D9, D11, D13, D29; pattern step
 # `review` in src/catalogue/api-feature-go/pattern.yaml). Its findings are claims: a finding
-# blocks only when rerunning the tests of the rule it names fails at the file it names
-# (FindingsCarryEvidence, NoBlockingFindingOpen; ADR 0031). Docker Agent config, schema version
-# 16, for the docker-agent pin in src/deploy/images.lock. How the platform runs it: README.md here.
+# blocks only when the new witness test it names, which this agent writes under review/r<n>/,
+# fails having run the line it names (FindingsCarryEvidence, NoBlockingFindingOpen; research D35,
+# ADR 0039). Docker Agent config, schema version 16, for the docker-agent pin in
+# src/deploy/images.lock. How the platform runs it: README.md here.
 #
 # What this definition does not decide (the platform owns it, constitution XIV): the safety mode
-# (the engine opens each session with its own policy), what is writable (the review step's
-# container mounts the project read-only, D5), egress (the only route is the model gateway) and
-# telemetry (TELEMETRY_ENABLED=false in the image; --otel is never passed). Nothing here widens
-# them: no permissions, hooks, sandbox or safety key.
+# (the engine opens each session with its own policy), which paths are writable (the review
+# step's container mounts only `review/` writable, D5, D35), egress (the only route is the model
+# gateway) and telemetry (TELEMETRY_ENABLED=false in the image; --otel is never passed). Nothing
+# here widens them: no permissions, hooks, sandbox or safety key.
 version: "16"
 
 metadata:
@@ -40,21 +41,24 @@ models:
 agents:
   root:
     model: haiku
-    description: Reviews the built slice and answers with its findings as JSON.
+    description: Reviews the built slice, writes a failing witness test under review/ for each blocking finding, and answers with its findings as JSON.
     instruction_file: review/instruction.md
     add_date: false
     add_environment_info: false
     skills: false
     session_compaction: false
-    # Read the slice, the tests and the code, run the tests, answer: about 10 model turns; the
-    # rest is room for the runtime's schema-rejection retries.
-    max_iterations: 30
+    # Read the slice, the tests and the code, run the tests, write and run a witness per blocking
+    # finding, answer: about 10 to 20 model turns; the rest is room for fixing a witness that does
+    # not build and for the runtime's schema-rejection retries.
+    max_iterations: 40
     toolsets:
-      # Reading only: the review step writes nothing (its writable list is empty).
+      # Reading and writing files, as the tests and code agents (T049). No remove_directory.
+      # Which files it can change is decided by the container's mounts (only review/ writable)
+      # and judged by ScopeKept and TestsUnchanged (no earlier witness changed), not by this list.
       - type: filesystem
-        readonly: true
-      # For `go test` and `go vet` only, to see whether a rule's tests fail before calling a
-      # finding blocking. Offline, from vendor/.
+        tools: [read_file, read_multiple_files, list_directory, directory_tree, search_files_content, write_file, edit_file, create_directory]
+      # For `go test`, `go vet` and `go build` only, to see a witness fail before calling a finding
+      # blocking. Offline: modules come from vendor/, never from the network.
       - type: shell
         env:
           GOFLAGS: -mod=vendor -buildvcs=false
@@ -67,7 +71,8 @@ agents:
       # Tool mode: the model answers by calling the internal tool, and the runtime validates the
       # arguments against `schema` before it accepts them, so the answer is bare JSON
       # `{"findings":[...]}`, which the engine requires (src/engine/steps: agentAnswer, T054h).
-      # The engine reads `rule`, `file`, `line`, `text` and `blocking` (machine.Finding).
+      # The engine reads `rule`, `file`, `line`, `text`, `blocking` and `witness`
+      # (machine.Finding); the schema requires `witness` when `blocking` is true.
       mode: tool
       # The schema is review/findings.schema.json, which Docker Agent takes only inline, so
       # scripts/generate.sh writes it here, and `scripts/generate.sh --check-committed` (run by
@@ -79,7 +84,7 @@ agents:
         {
           "$schema": "https://json-schema.org/draft/2020-12/schema",
           "title": "ReviewFindings",
-          "description": "The review agent's whole answer: its findings, each citing a rule of the slice, a file and a line. Each finding's fields are the engine's machine.Finding.",
+          "description": "The review agent's whole answer: its findings, each citing a rule of the slice, a file and a line, and each blocking one the new witness test that confirms it. Each finding's fields are the engine's machine.Finding.",
           "type": "object",
           "required": [
             "findings"
@@ -114,7 +119,7 @@ agents:
                   "line": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "The line in that file, counted from 1."
+                    "description": "The line in that file, counted from 1: a statement the witness test runs, not a func, blank or comment line."
                   },
                   "text": {
                     "type": "string",
@@ -123,8 +128,45 @@ agents:
                   },
                   "blocking": {
                     "type": "boolean",
-                    "description": "True only when the code breaks the rule and a test of that rule fails at this file."
+                    "description": "True only when the code breaks the rule and the finding's new witness test fails having run this line; otherwise false (a suggestion)."
+                  },
+                  "witness": {
+                    "type": "object",
+                    "required": [
+                      "file",
+                      "test"
+                    ],
+                    "additionalProperties": false,
+                    "description": "The new witness test this review wrote for the finding: a Go test file in the rule's folder review/r<n>/ (rule R-<n>) and the test function in it. Required when blocking is true.",
+                    "properties": {
+                      "file": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": "^review/r[0-9]+/[A-Za-z0-9_.-]+_test\\.go$",
+                        "description": "The witness file, relative to the project folder, for example review/r1/list_test.go."
+                      },
+                      "test": {
+                        "type": "string",
+                        "pattern": "^TestR[0-9]+([^0-9][A-Za-z0-9_]*)?$",
+                        "description": "The test function's name: TestR<n> for the finding's rule R-<n>, then a name not starting with a digit, for example TestR1ListKeepsEveryNote."
+                      }
+                    }
                   }
+                },
+                "if": {
+                  "properties": {
+                    "blocking": {
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "blocking"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "witness"
+                  ]
                 }
               }
             }

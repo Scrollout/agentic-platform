@@ -159,7 +159,7 @@ steps:
   - name: review
     worker: agent:review
     # The digest of src/agents/review.yaml and src/agents/review/ (as for tests).
-    agent_digest: "7ae46ba3c221b8edc614defd0d6a2cabe35a143051d4510a72ee30e42afca1c5"
+    agent_digest: "661f0ef7c87c11671018c525b06334ef50fe0bff258789be407c43fa7eec234f"
     inputs: [contract, examples, generated-code, tests, code, slice/rules]
     # Its witness tests (research D35, ADR 0039): each blocking finding's new failing test under
     # review/r<n>/, in the module (so no godog); committed with the round and kept by every step.

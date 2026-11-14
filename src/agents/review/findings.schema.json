@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "findings.schema.json",
   "title": "ReviewFindings",
-  "description": "The review agent's whole answer: its findings, each citing a rule of the slice, a file and a line. Each finding's fields are the engine's machine.Finding.",
+  "description": "The review agent's whole answer: its findings, each citing a rule of the slice, a file and a line, and each blocking one the new witness test that confirms it. Each finding's fields are the engine's machine.Finding.",
   "type": "object",
   "required": ["findings"],
   "additionalProperties": false,
@@ -29,7 +29,7 @@
           "line": {
             "type": "integer",
             "minimum": 1,
-            "description": "The line in that file, counted from 1."
+            "description": "The line in that file, counted from 1: a statement the witness test runs, not a func, blank or comment line."
           },
           "text": {
             "type": "string",
@@ -38,9 +38,33 @@
           },
           "blocking": {
             "type": "boolean",
-            "description": "True only when the code breaks the rule and a test of that rule fails at this file."
+            "description": "True only when the code breaks the rule and the finding's new witness test fails having run this line; otherwise false (a suggestion)."
+          },
+          "witness": {
+            "type": "object",
+            "required": ["file", "test"],
+            "additionalProperties": false,
+            "description": "The new witness test this review wrote for the finding: a Go test file in the rule's folder review/r<n>/ (rule R-<n>) and the test function in it. Required when blocking is true.",
+            "properties": {
+              "file": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^review/r[0-9]+/[A-Za-z0-9_.-]+_test\\.go$",
+                "description": "The witness file, relative to the project folder, for example review/r1/list_test.go."
+              },
+              "test": {
+                "type": "string",
+                "pattern": "^TestR[0-9]+([^0-9][A-Za-z0-9_]*)?$",
+                "description": "The test function's name: TestR<n> for the finding's rule R-<n>, then a name not starting with a digit, for example TestR1ListKeepsEveryNote."
+              }
+            }
           }
-        }
+        },
+        "if": {
+          "properties": { "blocking": { "const": true } },
+          "required": ["blocking"]
+        },
+        "then": { "required": ["witness"] }
       }
     }
   }

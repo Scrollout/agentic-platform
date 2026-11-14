@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -17,8 +18,8 @@ import (
 // DockerRunner is a checks.GoRunner that runs the go toolchain in a throwaway container with no
 // network, a read-only project and a read-only root, for projects a model wrote: the live evals
 // grade code the agent produced, and a hostile test must not run on the host. The project is
-// mounted at its own absolute path, so the paths in a stack trace are the ones the engine's rerun
-// (checks.FindingsRerun) looks for. Image is any image with go on its PATH (the step agent image).
+// mounted at its own absolute path, so the paths the engine's checks read (go.mod, a finding's
+// file) and those in the go command's output are the same inside and out. Image is any image with go on its PATH (the step agent image).
 type DockerRunner struct {
 	Image   string
 	Timeout time.Duration
@@ -29,7 +30,9 @@ type DockerRunner struct {
 var runnerSeq atomic.Int64
 
 // Go runs `go args...` in dir. An argument that follows -o is a folder outside the project the go
-// command writes to (TestsBuild's test binaries); it is mounted writable.
+// command writes to (TestsBuild's test binaries), and the folder of a -coverprofile= file is where
+// a witness run writes its coverage profile (checks.NoBlockingFindingOpen); both are mounted
+// writable.
 func (d DockerRunner) Go(dir string, args ...string) (checks.GoResult, error) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
@@ -52,6 +55,10 @@ func (d DockerRunner) Go(dir string, args ...string) (checks.GoResult, error) {
 	for i, x := range args {
 		if x == "-o" && i+1 < len(args) {
 			out := filepath.Clean(args[i+1])
+			a = append(a, "-v", out+":"+out)
+		}
+		if p, ok := strings.CutPrefix(x, "-coverprofile="); ok {
+			out := filepath.Dir(filepath.Clean(p))
 			a = append(a, "-v", out+":"+out)
 		}
 	}

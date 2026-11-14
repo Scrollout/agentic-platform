@@ -1,7 +1,9 @@
 package steps
 
-// Grading the review agent: bare JSON in the check contract's shape, and what the findings say
-// about a planted rule violation, judged by the engine's own rerun of the rule's tests (ADR 0031).
+// Grading the review agent: bare JSON in the check contract's shape, the review step's pattern
+// checks, and what the findings say about a planted rule violation, judged by the engine's own
+// witness rule (ADR 0039, research D35): a blocking finding is confirmed only by the new witness
+// test it names under review/r<n>/, failing having run the finding's line.
 
 import (
 	"encoding/json"
@@ -63,13 +65,19 @@ type reviewFinding struct {
 	Line     *int    `json:"line"`
 	Text     *string `json:"text"`
 	Blocking *bool   `json:"blocking"`
+	Witness  *struct {
+		File *string `json:"file"`
+		Test *string `json:"test"`
+	} `json:"witness"`
 }
 
 var ruleID = regexp.MustCompile(`^R-[0-9]+$`)
 
 // ParseFindings reads the review agent's whole answer as `{"findings":[...]}`: bare JSON, no fence,
 // no prose before or after (the engine rejects a fenced answer), no field the contract does not
-// have, every finding with all five fields. It returns the findings, or why the answer is not that.
+// have, every finding with all five fields, and a witness (its file and test) on every blocking
+// finding; whether the witness is in its rule's folder and named TestR<n> is the engine's to judge
+// (a finding whose witness is not is a suggestion). It returns the findings, or why the answer is not that.
 func ParseFindings(answer string) ([]checks.Finding, error) {
 	s := strings.TrimSpace(answer)
 	if !strings.HasPrefix(s, "{") {
@@ -103,7 +111,20 @@ func ParseFindings(answer string) ([]checks.Finding, error) {
 		if *f.File != "" && !procedures.IsProjectPath(*f.File) {
 			return nil, fmt.Errorf("finding %d names the file %q, which is not a project path", i+1, *f.File)
 		}
-		out = append(out, checks.Finding{Rule: *f.Rule, File: *f.File, Line: *f.Line, Text: *f.Text, Blocking: *f.Blocking})
+		var w *checks.Witness
+		if f.Witness != nil {
+			if f.Witness.File == nil || f.Witness.Test == nil || *f.Witness.File == "" || *f.Witness.Test == "" {
+				return nil, fmt.Errorf("finding %d has a witness without its file or test", i+1)
+			}
+			if !procedures.IsProjectPath(*f.Witness.File) {
+				return nil, fmt.Errorf("finding %d names the witness %q, which is not a project path", i+1, *f.Witness.File)
+			}
+			w = &checks.Witness{File: *f.Witness.File, Test: *f.Witness.Test}
+		}
+		if *f.Blocking && w == nil {
+			return nil, fmt.Errorf("blocking finding %d names no witness test", i+1)
+		}
+		out = append(out, checks.Finding{Rule: *f.Rule, File: *f.File, Line: *f.Line, Text: *f.Text, Blocking: *f.Blocking, Witness: w})
 	}
 	return out, nil
 }
@@ -117,8 +138,10 @@ func head(s string) string {
 }
 
 // GradeReview judges the review agent's answer on the project it reviewed. before and after are
-// the project as the agent got it and as it left it (a review writes nothing). plant is the
-// planted violation, or nil for clean code.
+// the project as the agent got it and as it left it (a review writes only its witnesses under
+// review/**). plant is the planted violation, or nil for clean code. The review step's pattern
+// checks (ScopeKept, DependenciesAllowed, TestsBuild, TestsUnchanged) need no findings and are
+// always judged.
 func (e Env) GradeReview(before, after, answer string, plant *Plant) []Result {
 	st := e.step("review")
 	rs := []Result{}
@@ -128,7 +151,8 @@ func (e Env) GradeReview(before, after, answer string, plant *Plant) []Result {
 	} else {
 		rs = append(rs, Result{Grader: GBareJSON, Passed: true, Reason: fmt.Sprintf("the answer is bare JSON with %d findings", len(findings))})
 	}
-	rs = append(rs, e.scope(st, before, after))
+	rs = append(rs, e.scope(st, before, after), e.deps(st, after), fold(GTestsBuild, checks.TestsBuild(e.Runner, after)))
+	rs = append(rs, e.reviewUnchanged(st, before, after))
 	if perr != nil {
 		// Nothing below can be judged without findings; each grader fails closed.
 		graders := []string{GEvidence, GNoneOpen}
@@ -140,10 +164,18 @@ func (e Env) GradeReview(before, after, answer string, plant *Plant) []Result {
 		}
 		return rs
 	}
-	rs = append(rs, fold(GEvidence, checks.LegacyFindingsRerun(e.Runner, after, findings)))
-	open := checks.LegacyNoBlockingFindingOpen(e.Runner, after, findings)
+	rv, err := e.review(before)
+	if err != nil {
+		rs = append(rs, fail(GEvidence, "the project before cannot be read: %v", err))
+		if plant == nil {
+			return append(rs, fail(GNoneOpen, "the project before cannot be read: %v", err))
+		}
+		return append(rs, plantNamed(findings, *plant), fail(GPlantedOpen, "the project before cannot be read: %v", err))
+	}
+	rs = append(rs, fold(GEvidence, checks.FindingsCarryEvidence(e.Runner, after, rv, findings)))
+	open := checks.NoBlockingFindingOpen(e.Runner, after, rv, findings)
 	if plant == nil {
-		// Clean code: no blocking finding may be confirmed by its rule's tests failing at its file.
+		// Clean code: no blocking finding may be confirmed by its witness.
 		rs = append(rs, fold(GNoneOpen, open))
 		return rs
 	}
@@ -167,13 +199,38 @@ func plantNamed(fs []checks.Finding, p Plant) Result {
 		p.Rule, p.File, p.Lines[0], p.Lines[1], p.What, strings.Join(near, ", "))
 }
 
-// plantConfirmed: the engine's rerun confirms a blocking finding for the planted rule and file,
-// which NoBlockingFindingOpen reports as a failing result naming both.
+// review is the checks.Review the check service builds for the review step: before, the review
+// step's writable entries and the code step's (the fix step's).
+func (e Env) review(before string) (checks.Review, error) {
+	f, err := Read(before)
+	if err != nil {
+		return checks.Review{}, err
+	}
+	b := map[string][]byte{}
+	for p, c := range f {
+		b[p] = []byte(c)
+	}
+	return checks.Review{Before: checks.HashTree(b), Own: e.step("review").Writable, Fixable: e.step("code").Writable}, nil
+}
+
+// reviewUnchanged is TestsUnchanged for the review step, as the check service runs it: the tests
+// step's files unchanged (the review's own files dropped first), and the witness rule, under which
+// no witness in before changes or goes and the review step may add one.
+func (e Env) reviewUnchanged(st PatternStep, before, after string) Result {
+	r := e.unchanged(GTestsSame, before, after, st.Writable, e.step("tests").Writable, checks.TestsUnchangedOf)
+	w := e.unchanged(GTestsSame, before, after, nil, st.Writable, func(b, a checks.Tree, globs []string) []checks.CheckResult {
+		return checks.WitnessesUnchangedOf(b, a, globs, true)
+	})
+	return Result{Grader: GTestsSame, Passed: r.Passed && w.Passed, Reason: r.Reason + "; " + w.Reason}
+}
+
+// plantConfirmed: the engine's witness rule confirms a blocking finding for the planted rule and
+// file, which NoBlockingFindingOpen reports as a failing result naming both.
 func plantConfirmed(open []checks.CheckResult, p Plant) Result {
 	for _, c := range open {
 		if !c.Passed && strings.Contains(c.Reason, "blocking finding "+p.Rule+" at "+p.File+":") {
-			return Result{Grader: GPlantedOpen, Passed: true, Reason: "the rerun of the rule's tests confirms it: " + c.Reason}
+			return Result{Grader: GPlantedOpen, Passed: true, Reason: "its witness confirms it: " + c.Reason}
 		}
 	}
-	return fail(GPlantedOpen, "the rerun of %s's tests does not confirm a blocking finding at %s: %s", p.Rule, p.File, fold(GPlantedOpen, open).Reason)
+	return fail(GPlantedOpen, "no witness confirms a blocking finding %s at %s: %s", p.Rule, p.File, fold(GPlantedOpen, open).Reason)
 }
