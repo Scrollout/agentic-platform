@@ -5,8 +5,8 @@ info:
   description: >-
     Judges one attempt of a build step by running one named check, returns the files an attempt
     left in its step's writable paths, and produces one procedure step's files by running its fixed
-    procedure, and keeps the project's version history: one commit per accepted step, and the
-    project restored to its last commit before each attempt. One program serves this contract in
+    procedure, and keeps the project's version history: one commit per accepted step or open review round, and
+    the project restored to its last commit before each attempt. One program serves this contract in
     three deployments. The check service reads the
     project folder and never writes it; it serves runCheck and readStepFiles, and answers every
     runProcedure with 404 UnknownProcedure. A procedure step's worker, which the launcher starts for
@@ -198,7 +198,8 @@ tags:
 - name: procedures
   description: Produce one step's files by a fixed procedure.
 - name: versions
-  description: Keep the project's version history, one commit per accepted step.
+  description: Keep the project's version history, one commit per accepted step or open review
+    round.
 paths:
   /checks/{checkName}/run:
     post:
@@ -480,15 +481,19 @@ paths:
       - versions
       operationId: commitStep
       x-operation-name: Agentic.Check/project-versions/write
-      summary: Record an accepted step as the project's next commit
+      summary: Record an accepted step, or an open review round, as the project's next commit
       description: >-
         Served by the project worker. Records the files the project folder `project` holds after an
         accepted step as one new commit of the project's version history (info.description, Version
         history) and answers with it. The engine calls it once per accepted step, after the run
         record holds the event that accepted the step (StepAccepted, with `attempt`) or reused an
         earlier run's result for it (ResultReused, with `reused_from`), and before it calls anything
-        for the next step or records the run's outcome. Exactly one of `attempt` and `reused_from`
-        is sent, and `outputs` only with `reused_from`; any other combination is 400 InvalidRequest.
+        for the next step or records the run's outcome. It also records an open review round: a
+        review attempt recorded as StepRejected because only NoBlockingFindingOpen failed, whose
+        files (its witness tests) become the project's; the engine sends `open_round: true` with
+        that round's `attempt` and `round` and calls it before the fix's restoreStep. Exactly one
+        of `attempt` and `reused_from` is sent, `outputs` only with `reused_from`, and
+        `open_round` only with `attempt` and `round`; any other combination is 400 InvalidRequest.
         In order: (0) A new project (FR-025; info.description, A new project). With no record, a
         call with `reused_from` (a replay's first write) answers 409 ProjectExists, its `detail`
         naming the first path found, and changes nothing when the folder holds any file or
@@ -520,14 +525,15 @@ paths:
         contract-check), with the one branch `main`; `.git` is emptied only here, in step (5),
         after the starting-state check of step (2) passed, and the folder is committed on `main` as one commit whose parent
         is the last commit (none for the first). A step that changed no file still gets its commit,
-        so the history holds one commit per accepted step. What a commit holds: every file
+        so the history holds one commit per accepted step or open review round. What a commit holds: every file
         `project_files` lists and nothing else, each with exactly the bytes the folder holds (no
         `.gitattributes`, `.gitignore` or other project file changes what is committed: no
         line-ending, filter or encoding conversion), each as a non-executable regular file. Author
         and committer are both `agentic-platform <noreply@localhost>`, both dated `accepted_at`, in
         whole seconds, in UTC. No hook, signing, or git configuration from outside the repository is
         used. The message is the subject `Step <step> accepted in <run>` (with `reused_from`: `Step
-        <step> reused in <run>`), an empty line, and the trailers `Run: <run>`, `Step: <step>`, then
+        <step> reused in <run>`; with `open_round`: `Step <step> round <round> left open in
+        <run>`), an empty line, and the trailers `Run: <run>`, `Step: <step>`, then
         `Round: <round>` when sent, then `Attempt: <attempt>` or `Reused-from: <reused_from>`, one per
         line in this order, each line ending in a line feed. So equal requests over an equal folder
         and an equal last commit give the same commit, and equal `project_files` give the same tree
@@ -596,7 +602,8 @@ paths:
       description: >-
         Served by the project worker. Makes the project folder `project` hold exactly the files
         `before` lists, taken from the last commit of its version history, so an attempt starts from
-        the files the last accepted step left. The engine calls it before every attempt of every
+        the files the last committed step left (the last accepted step, or an open review round
+        after it). The engine calls it before every attempt of every
         step: it undoes whatever a rejected or interrupted attempt wrote (the run's compensation),
         and changes nothing when the folder already holds `before`. In order: (0) A new project
         (FR-025; info.description, A new project). With no record, a call for attempt 1 (the
@@ -1353,10 +1360,11 @@ components:
     CommitRequest:
       type: object
       description: >-
-        One accepted step to record. `before` is the files the project held when the step's
-        accepted attempt started (the previous accepted step's `project_files`, empty for the first
-        step), and `project_files` the files it holds after it: the `project_files` of the accepted
-        attempt, or for a reused result the `project_files` the run that accepted it recorded.
+        One accepted step, or one open review round, to record. `before` is the files the project
+        held when the attempt started (the `project_files` of the previous commit, empty for the
+        first step), and `project_files` the files it holds after it: the `project_files` of the
+        accepted attempt or of the open round's attempt, or for a reused result the
+        `project_files` the run that accepted it recorded.
       required:
       - run
       - step
@@ -1374,7 +1382,8 @@ components:
         attempt:
           type: integer
           minimum: 1
-          description: The accepted attempt, from 1; not sent for a reused result.
+          description: The accepted attempt, or with `open_round` the open round's attempt, from
+            1; not sent for a reused result.
         round:
           type: integer
           minimum: 1
@@ -1393,9 +1402,13 @@ components:
         accepted_at:
           type: string
           format: date-time
-          description: The `at` of the run event that accepted or reused the step; the commit's
-            author and committer date, in whole seconds (a fraction of a second is dropped, never
-            rounded).
+          description: The `at` of the run event that accepted or reused the step, or with
+            `open_round` of the StepRejected that left the round open; the commit's author and
+            committer date, in whole seconds (a fraction of a second is dropped, never rounded).
+        open_round:
+          type: boolean
+          description: Sent, as `true`, only for an open review round (the review step, with
+            `attempt` and `round`); the commit's subject then says the round was left open.
         outputs:
           type: array
           maxItems: 16
