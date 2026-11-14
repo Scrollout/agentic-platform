@@ -73,7 +73,7 @@ func (s *sliceServer) ListSlices(_ context.Context, req gen.ListSlicesRequestObj
 	}
 	list := gen.SliceList{Items: make([]gen.SliceSummary, 0, to-from), NextPageToken: next}
 	for _, sl := range all[from:to] {
-		list.Items = append(list.Items, gen.SliceSummary{Id: sl.ID, Title: title(sl), State: gen.State(sl.State)})
+		list.Items = append(list.Items, gen.SliceSummary{Id: sl.ID, Title: title(sl), State: gen.State(sl.State), LatestRun: s.latestRun(sl.ID)})
 	}
 	return gen.ListSlices200JSONResponse{SliceListJSONResponse: gen.SliceListJSONResponse{Body: list}}, nil
 }
@@ -87,7 +87,25 @@ func (s *sliceServer) GetSlice(_ context.Context, req gen.GetSliceRequestObject)
 	if err != nil {
 		return nil, fmt.Errorf("artifact count of %s: %w", sl.ID, err)
 	}
-	return gen.GetSlice200JSONResponse{SliceJSONResponse: gen.SliceJSONResponse{Body: sliceView(sl, n)}}, nil
+	v := sliceView(sl, n)
+	v.LatestRun = s.latestRun(sl.ID)
+	return gen.GetSlice200JSONResponse{SliceJSONResponse: gen.SliceJSONResponse{Body: v}}, nil
+}
+
+// latestRun is the ID of the slice's latest run (the highest run number the record holds for
+// it), nil before its first run or when Store keeps no run record.
+func (s *sliceServer) latestRun(slice string) *gen.RunId {
+	if s.runs == nil {
+		return nil
+	}
+	var latest *gen.RunId
+	for _, e := range s.runs.st.Runs() { // by run number, lowest first
+		if e.Slice == slice {
+			id := e.Run
+			latest = &id
+		}
+	}
+	return latest
 }
 
 func (s *sliceServer) DeleteSlice(_ context.Context, req gen.DeleteSliceRequestObject) (gen.DeleteSliceResponseObject, error) {
@@ -353,7 +371,7 @@ func title(sl slices.Slice) string {
 }
 
 // sliceView is the slice as the contract shows it (slice.schema.json), with artifactCount
-// distinct artifacts stored for its runs. No run exists yet, so latest_run is never set.
+// distinct artifacts stored for its runs; GetSlice sets latest_run.
 func sliceView(sl slices.Slice, artifactCount int) gen.Slice {
 	v := gen.Slice{Id: sl.ID, Title: title(sl), Description: sl.Description, State: gen.SliceSchemaState(sl.State),
 		Examples: sl.Examples, Contract: sl.Contract, ArtifactCount: &artifactCount, Checks: checkResults(sl.Checks),

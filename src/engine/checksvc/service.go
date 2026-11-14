@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -167,10 +168,15 @@ func verdict(name string, results []checks.CheckResult) (bool, string) {
 	return true, strings.Join(passed, "; ")
 }
 
-// binding recomputes, from the folder, the framed hash of every output and of every input that is
-// an earlier step's output, and names each that differs from the hash the request gives (Principle
-// XX: a verdict concerns the files the engine stored). The review step's findings, an output of
-// a step with no writable entries and a slice/<part> input are not sets of files.
+// binding names each output and each earlier step's output given as an input that does not
+// concern the files the engine stored (Principle XX; research, "Binding verdicts to stored
+// files"). Every output's framed hash is recomputed from the folder and must equal the request's.
+// An input is bound through `before`: each of its files in the folder equals its entry in
+// `before`, by path and hash, none missing or added, except a path the judged step may write;
+// and when no step after its producer (in earlier_steps' order) nor the judged step may write any
+// of its paths, its framed hash is also recomputed and must equal the request's. The review
+// step's findings, an output of a step with no writable entries and a slice/<part> input are not
+// sets of files.
 func (s *service) binding(p *project, body gen.CheckRequest) []string {
 	var faults []string
 	st := body.Step
@@ -184,21 +190,20 @@ func (s *service) binding(p *project, body gen.CheckRequest) []string {
 			faults = append(faults, fmt.Sprintf("the output %s in the folder hashes to %s, not %s", o.Name, canonical.FramedHash(p.matching(entries)), o.HashValue))
 		}
 	}
+	before := beforeTree(body.Before)
 	for _, in := range body.Inputs {
 		if strings.HasPrefix(in.Name, "slice/") {
 			continue
 		}
 		found := false
-		for _, e := range body.EarlierSteps {
+		for i, e := range body.EarlierSteps {
 			entries, ok := outputEntries(e.Outputs, e.Writable, in.Name)
 			if !ok {
 				continue
 			}
 			found = true
 			if in.Name != findingsOutput && len(e.Writable) > 0 {
-				if h := canonical.FramedHash(p.matching(entries)); h != in.HashValue {
-					faults = append(faults, fmt.Sprintf("the input %s in the folder hashes to %s, not %s", in.Name, h, in.HashValue))
-				}
+				faults = append(faults, bindInput(p, before, in, entries, st.Writable, laterWritable(body.EarlierSteps[i+1:], st.Writable))...)
 			}
 			break
 		}
@@ -207,6 +212,71 @@ func (s *service) binding(p *project, body gen.CheckRequest) []string {
 		}
 	}
 	return faults
+}
+
+// laterWritable is the writable entries of the steps after an input's producer and of the judged
+// step.
+func laterWritable(later []gen.EarlierStep, judged []string) []string {
+	out := append([]string{}, judged...)
+	for _, e := range later {
+		out = append(out, e.Writable...)
+	}
+	return out
+}
+
+// bindInput binds one input whose files match entries: through before, except the paths the
+// judged step may write, and by its framed hash when no path of it is in later.
+func bindInput(p *project, before checks.Tree, in gen.ArtifactRef, entries, judged, later []string) []string {
+	var changed []string
+	written := false
+	paths := map[string]bool{}
+	for path := range before {
+		if checks.MatchGlob(entries, path) {
+			paths[path] = true
+		}
+	}
+	for path := range p.files {
+		if checks.MatchGlob(entries, path) {
+			paths[path] = true
+		}
+	}
+	for _, path := range sortedSet(paths) {
+		if checks.MatchGlob(later, path) {
+			written = true
+		}
+		if checks.MatchGlob(judged, path) {
+			continue
+		}
+		want, was := before[path]
+		content, is := p.files[path]
+		switch {
+		case was && !is:
+			changed = append(changed, path+" is missing")
+		case !was && is:
+			changed = append(changed, path+" was added")
+		case was && is && sum(content) != want:
+			changed = append(changed, path+" was changed")
+		}
+	}
+	var faults []string
+	if len(changed) > 0 {
+		faults = append(faults, fmt.Sprintf("the input %s differs from before: %s", in.Name, strings.Join(changed, ", ")))
+	}
+	if !written {
+		if h := canonical.FramedHash(p.matching(entries)); h != in.HashValue {
+			faults = append(faults, fmt.Sprintf("the input %s in the folder hashes to %s, not %s", in.Name, h, in.HashValue))
+		}
+	}
+	return faults
+}
+
+func sortedSet(set map[string]bool) []string {
+	out := make([]string, 0, len(set))
+	for k := range set {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func beforeTree(before gen.ProjectFiles) checks.Tree {

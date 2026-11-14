@@ -121,7 +121,7 @@ func TestResumeAfterAnOpenReviewRoundKeepsItsWitnesses(t *testing.T) {
 	if len(fixes) != 1 || !hasFile(fixes[0].Before, witnessPath) {
 		t.Fatalf("the fix's restore after resume does not start from the witness: %+v", fixes)
 	}
-	if x.log.index("commit review") > x.log.index("restore code 1 0") {
+	if x.log.index("commit review") > x.log.index("restore code 1 1") {
 		t.Errorf("the fix was restored before the round's commit: %v", x.log.all())
 	}
 }

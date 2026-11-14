@@ -71,7 +71,7 @@ func (m *Machine) load(events []Event) (*run, error) {
 				r.fixing, r.open = true, slices.Clone(openOf[r.round])
 			}
 		case "FindingRecorded":
-			if e.Finding != nil && e.Finding.Blocking {
+			if review && e.Finding != nil && e.Finding.Blocking {
 				openOf[e.Round] = append(openOf[e.Round], *e.Finding)
 			}
 		case "StepRejected":

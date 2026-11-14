@@ -156,7 +156,7 @@ type Request struct {
 	Run          string
 	Step         Step
 	Attempt      int
-	Round        int       // review rounds only, from 1
+	Round        int       // review rounds and the fix after round r (r), from 1
 	Open         []Finding // the open blocking findings: for a fix of the code, and review rounds after the first
 	ChangedLines []Line    // review rounds after the first: the lines the fix changed
 	Inputs       []string  // hashes of the step's declared inputs, in order
@@ -198,7 +198,7 @@ type CheckRequest struct {
 	Attempt int
 	Name    string
 	Result  Result
-	Round   int      // review rounds only, from 1
+	Round   int      // review rounds and the fix after round r (r), from 1
 	Inputs  []string // hashes of the step's declared inputs, in order
 	Slice   string   // the slice the run builds
 	Project string   // the project folder the run builds into
@@ -320,7 +320,7 @@ type RestoreRequest struct {
 	Run       string
 	Step      Step
 	Attempt   int // from 1
-	Round     int // review rounds only, from 1; 0 otherwise
+	Round     int // review rounds and the fix after round r (r), from 1; 0 otherwise
 	Project   string
 	Before    []File        // the files the last accepted step left; empty before the first
 	TimeLimit time.Duration // what is left of the run's time budget
@@ -477,8 +477,21 @@ func (m *Machine) lookup(id string) (*run, error) {
 	if err != nil {
 		return nil, err
 	}
+	if last := events[len(events)-1]; stoppedDuring(last.Kind) {
+		// The platform stopped during the run (T085; data-model, Run): the record says so once,
+		// stamped with the last event's time, so the downtime counts toward neither the time
+		// budget nor the expiry. A failed append leaves the run interrupted in memory only; the
+		// next start appends it.
+		_ = m.emitAt(r, &Event{Kind: "RunInterrupted", Refs: r.refs, Detail: r.Reason}, last.At)
+	}
 	m.runs[id] = r
 	return r, nil
+}
+
+// stoppedDuring reports whether a run whose last event is of kind was stopped by the platform: the
+// kind is no end, no hand-over and no RunInterrupted.
+func stoppedDuring(kind string) bool {
+	return terminalOutcome[kind] == "" && kind != "RunHandedOver" && kind != "RunInterrupted"
 }
 
 // SliceInputs are the inputs no step produces (the slice's parts, such as `slice/contract`),
@@ -678,11 +691,14 @@ func (m *Machine) ExpireDue() error {
 func (m *Machine) emit(r *run, e Event) error { return m.emitp(r, &e) }
 
 // emitp is emit, filling in the event's seq, time and run.
-func (m *Machine) emitp(r *run, e *Event) error {
+func (m *Machine) emitp(r *run, e *Event) error { return m.emitAt(r, e, m.cfg.Clock.Now()) }
+
+// emitAt is emitp with the event stamped at, not the clock's time.
+func (m *Machine) emitAt(r *run, e *Event, at time.Time) error {
 	if r.Status == StatusEnded {
 		return errHalt
 	}
-	e.Seq, e.At, e.Run = r.seq+1, m.cfg.Clock.Now(), r.ID
+	e.Seq, e.At, e.Run = r.seq+1, at, r.ID
 	if err := m.cfg.Events.Append(*e); err != nil {
 		return fmt.Errorf("machine: run %s: the run record could not be written: %w", r.ID, err)
 	}

@@ -111,8 +111,8 @@ func (x *driver) review(ctx context.Context, fix, review Step) error {
 		x.r.round = 1
 	}
 	for {
-		if x.r.fixing {
-			fixed, _, err := x.step(ctx, fix, 0, x.r.open, nil)
+		if x.r.fixing { // the fix carries the round whose findings it fixes (data-model, Review rounds)
+			fixed, _, err := x.step(ctx, fix, x.r.round, x.r.open, nil)
 			if err != nil {
 				return err
 			}
