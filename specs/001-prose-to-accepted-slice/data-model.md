@@ -144,7 +144,8 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
     last attempt).
   - **Compensation**: the project worker's `restoreStep` (check contract), called by the engine
     before every attempt of every step, makes the project folder hold `before` (the files the
-    last accepted step left) from the last commit: files the commit holds are written back, every
+    last committed step left: the last accepted step, or an open review round after it) from the
+    last commit: files the commit holds are written back, every
     other file outside `.git` is removed, no folder is removed. It undoes a rejected attempt's
     and an interrupted attempt's writes alike, and changes nothing otherwise. Accepted steps are
     not compensated: they are the state later steps and resume build on. Run-record events are
@@ -154,14 +155,16 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
     that event carries the round's files (its witnesses), which become the project's, and,
     when the review step has `writable` entries (a review that writes nothing leaves no files),
     the engine calls `commitStep` for them before the fix's restore, committed with its
-    witnesses like any accepted step; the fix step, and the next review round, start from that
+    witnesses like any accepted step but with `open_round` set, so its subject says the round
+    was left open, never accepted (check contract, commitStep; owner, 2026-11-14); the fix step, and the next review round, start from that
     commit, and the fix's restore keeps the witnesses. Every step container mounts `review/`
     read-only except the review's, the generate worker's writable root included (as `.git`), so
     the mount and ScopeKept both guard it.
-  - **Commits**: after recording `StepAccepted` or `ResultReused`, the engine calls `commitStep`
-    and calls nothing for the next step, and records no outcome, until it answers 200; on
-    resume it calls it again for the last accepted step, which a repeat makes safe. One commit
-    per accepted step, a step that changed no file included, on the branch `main`; its tree is
+  - **Commits**: after recording `StepAccepted` or `ResultReused`, or a review round's
+    `StepRejected` that carries files (A review round), the engine calls `commitStep` and calls
+    nothing for the next step or attempt, and records no outcome, until it answers 200; on
+    resume it calls it again for the last such event, which a repeat makes safe. One commit
+    per accepted step, a step that changed no file included, and one per open review round, on the branch `main`; its tree is
     exactly the accepted `project_files`, each file with its bytes as a non-executable regular
     file. For a reused result (`reused_from`), `commitStep` first writes the reused outputs'
     stored artifacts into the step's writable paths; this is how a replay's new project gets its
