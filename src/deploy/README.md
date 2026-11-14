@@ -211,10 +211,15 @@ engine, page or client.
 
 `ap build-workers <slice> <project>` (research D29, D30, D31) reads the steps and their writable
 entries from `src/catalogue/api-feature-go/pattern.yaml` and the Compose project name from
-`compose.yaml`, then: writes the slice's grants and registers each step's endpoint
-`http://<compose project>-worker-<slice>-<step>:8080` with the engine (`registerWorker`, sent by a
-one-off busybox `nc` container on the `agents` network with the request on standard input, so no
-token is on a command line; a 404 stops it with exit 4 before any folder or container is made; the grant files are already written by then); makes the
+`compose.yaml`, then: refuses a taken project folder (below) before it asks the engine anything;
+reads every page of `listRuns` with the session's client token and refuses with exit 4
+(`RunActive`) while a run of the slice has not ended, changing nothing (an answer that is missing,
+not 200 or cannot be read is exit 1; research D32); refuses with exit 1 a container of a wanted name
+labelled with another project; writes the slice's grants and registers each step's endpoint
+`http://<compose project>-worker-<slice>-<step>-<p>:8080` with the engine (`<p>` the first 12 hex
+digits of the SHA-256 of the project name, so the name fits one 63-character DNS label;
+`registerWorker`, sent by a one-off busybox `nc` container on the `agents` network with the request
+on standard input, so no token is on a command line, as the engine reads are; a 404 stops it with exit 4 before any folder or container is made; the grant files are already written by then); makes the
 project folder, an empty `.git` and the folders of each step's entries (`dir/**` its folder, an
 exact path its folder); and starts one container per step with `docker compose run -d` from
 `step-agent` or `procedure-worker`. Each container mounts only its project, at
@@ -225,11 +230,25 @@ is bound read-only on top in every container. The container holds only its call 
 token, used only by the launcher to register it, stays in
 `${XDG_STATE_HOME:-~/.local/state}/agentic-platform/workers/<slice>` (mode 600) for the session.
 A container carries a label of what it was started with, so one that is running with the same
-settings is left alone and any other is replaced: running it twice changes nothing. An existing
+settings is left alone and any other of the same project is replaced: running it twice changes
+nothing. It is also labelled `org.agentic-platform.slice`, `org.agentic-platform.step` and
+`org.agentic-platform.project` with the slice, step and project in full. Each project has its own
+containers ([ADR 0036](../../docs/decisions/0036-step-containers-per-project-resume-reuses-them.md)):
+building another project of the slice leaves them running, and they stay up until `ap down`. An existing
 project folder that holds a file or symbolic link at any depth, or anything in `.git`, is refused
 with exit 3 before anything is granted, registered, made or started (the engine's `ProjectExists`
 rule); one of empty folders only, such as the skeleton it made, is accepted. `ap down` removes the workers, their grants and their tokens. It needs built
 agent and check images that `ap up` verified.
+
+`ap resume <run>` reads the run with `getRun` (client token) and never runs `build-workers`. For an
+interrupted run, every step's container of the run's slice and project must be running with the
+session's tokens; it registers each again and passes the command on. When one is missing or
+stopped, or the slice's tokens file is gone, it exits 3 naming `ap build-workers --resume <run>`
+(T053j, not built yet) and changes nothing. A run in another state is passed on for the engine to
+refuse. `ap replay <run> <project>` reads the run's slice with `getRun`, runs `build-workers` for it
+into the new project, then passes the command on. For both, an unknown run is exit 4 (`NotFound`),
+and an answer that is missing, not 200 or cannot be read, or lacks the slice ID (for resume also the
+project name or status), is exit 1.
 
 To read the resolved configuration without starting anything, set the variables and run
 `docker compose -f src/deploy/compose.yaml --profile '*' config`.

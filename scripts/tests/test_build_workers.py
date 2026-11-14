@@ -109,6 +109,10 @@ http.createServer((req, res) => {
           out = { slice: found.grant.slice, step: found.grant.step, endpoint: ep };
         }
       }
+    } else if (req.method === 'GET' && req.url.split('?')[0] === '/runs') {
+      // listRuns (T053g, owner 2026-11-14): no runs, for the session's client token only
+      if (token && token === (process.env.ENGINE_CLIENT_TOKEN || '')) { status = 200; out = { items: [] }; }
+      else { status = 401; out = problem(401, 'Unauthorized', 'Unauthorized'); }
     }
     entry.status = status;
     log(entry);
@@ -470,7 +474,7 @@ class BuildWorkersRig:
         cls.engine_inspect = json.loads(docker("inspect", cls.engine).stdout)[0]
         others = [c for c in cls.inspect_all() if cls.ours(c) and c["Id"] != cls.engine]
         cls.step_containers = others
-        regs = [e for e in cls.log() if e.get("status") == 200]
+        regs = [e for e in cls.log() if e.get("status") == 200 and "grant" in e]
         cls.registrations = {}
         for e in regs:
             cls.registrations[e["grant"]["step"]] = e

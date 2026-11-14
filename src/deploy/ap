@@ -29,7 +29,10 @@
 # grant the engine reads from the grants folder, and a registration with the engine. Running it
 # again changes nothing. The worker tokens of the session are kept in
 # ${XDG_STATE_HOME:-$HOME/.local/state}/agentic-platform/workers/<slice> (mode 600) and the grants in
-# .../agentic-platform/grants (the engine's user's, mode 700); `down` removes both.
+# .../agentic-platform/grants (the engine's user's, mode 700); `down` removes both. Each project has
+# its own step containers, named by slice, step and the project's hash and labelled with all three
+# (research D32, ADR 0036); `resume` registers an interrupted run's own containers again and
+# `replay` builds a new project, both after reading the run with getRun.
 set -u
 
 here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
@@ -608,52 +611,192 @@ register_worker() {
   printf '%s\n' "$resp" | head -n 1 | tr -d '\r' | awk '$1 ~ /^HTTP\// { print $2 }'
 }
 
-# Make the slice's step workers ready for a build into the new project folder (research D5, D29,
-# D30): the project folder with an empty `.git` and the folders of each step's writable entries;
-# one container per step of the pattern, from the step-agent or procedure-worker template under
-# gVisor, with only that step's project mounted (read-only, its writable folders writable, `.git`
-# read-only; the review step's wholly read-only); a worker token and a call token per container, its
-# grant in the grants folder and its registration with the engine. A container started with the
-# same settings and still running is left alone, so running it again changes nothing.
-build_workers() {
-  slice=$1 project=$2
-  case $slice in S-[0-9]*) ;; *) die 3 "build-workers: '$slice' is not a slice ID (S-<n>)" ;; esac
-  case ${slice#S-} in *[!0-9]*) die 3 "build-workers: '$slice' is not a slice ID (S-<n>)" ;; esac
-  case $project in
-    [a-z0-9]*) ;;
-    *) die 3 "build-workers: '$project' is not a project name (lowercase letters, digits and hyphens, at most 63)" ;;
-  esac
-  case $project in *[!a-z0-9-]*) die 3 "build-workers: '$project' is not a project name (lowercase letters, digits and hyphens, at most 63)" ;; esac
-  [ "${#project}" -le 63 ] || die 3 "build-workers: '$project' is not a project name (lowercase letters, digits and hyphens, at most 63)"
-  for n in agent check; do
-    eval "val=\$AP_IMAGE_$(upper "$n")"
-    [ "$val" != "$(placeholder "$n")" ] ||
-      die 3 "build-workers needs the $n image: build it with src/deploy/build.sh $n, then run ap up again"
-  done
-  case $AP_PROJECTS_DIR in *:* | *,*) die 1 "the projects folder $AP_PROJECTS_DIR has a ':' or ',' in its path, which a bind mount cannot name" ;; esac
+# What engine reads need: the alpine pin (the one-off container), the API version and Compose's
+# project name (its networks). Sets alpine_image, api_version and compose_project, or stops.
+engine_prereqs() {
   alpine_image=$(pin alpine)
   [ -n "$alpine_image" ] || die 1 "no alpine pin in $here/images.lock"
   # shellcheck disable=SC2012
   api_version=$(ls -- "$here/../engine/api/preview" 2>/dev/null)
   case $api_version in '' | *[!0-9a-z-]*) die 1 "cannot tell the engine's API version from $here/../engine/api/preview" ;; esac
-  steps=$(read_pattern) || exit $?
-
-  # The project must be new, by the engine's ProjectExists rule (owner, 2026-11-13): an existing
-  # folder may hold only empty folders and an empty `.git` (the skeleton build-workers makes); one
-  # holding a file or a symbolic link at any depth, or anything in `.git`, is refused before
-  # anything is granted, registered, made or started.
-  pdir=$AP_PROJECTS_DIR/$project
-  if [ -e "$pdir" ] || [ -L "$pdir" ]; then
-    [ -d "$pdir" ] && [ ! -L "$pdir" ] || die 3 "build-workers: the project folder $pdir exists and is not a folder"
-    if [ -n "$(find "$pdir" ! -type d 2>&1 | head -n 1)" ] ||
-      { [ -e "$pdir/.git" ] && [ -n "$(find "$pdir/.git" -mindepth 1 2>&1 | head -n 1)" ]; }; then
-      die 3 "build-workers: the project folder $pdir already holds files or a version history (ProjectExists); build into a new project"
-    fi
-  fi
   case $compose_project in '' | *[!a-z0-9_-]*) die 1 "cannot read Compose's project name from $here/compose.yaml" ;; esac
-  lower_slice=$(printf '%s' "$slice" | tr '[:upper:]' '[:lower:]')
+}
 
-  # The slice's tokens: kept while the session lasts, made when missing or incomplete.
+# One GET to the engine with the session's client token, sent as register_worker sends its call
+# (research D32). HTTP/1.0, so the answer is never chunked and ends when the engine closes. Sets
+# get_status (empty for no answer) and get_body.
+engine_get() {
+  resp=$(printf 'GET %s HTTP/1.0\r\nHost: engine\r\nAuthorization: Bearer %s\r\nAccept: application/json\r\n\r\n' \
+    "$1" "$AP_CLIENT_TOKEN" |
+    docker run --rm -i --network "${compose_project}_agents" --read-only --cap-drop ALL \
+      --security-opt no-new-privileges --user 65532:65532 "$alpine_image" nc -w 30 engine 8080) || resp=''
+  get_status=$(printf '%s\n' "$resp" | head -n 1 | tr -d '\r' | awk '$1 ~ /^HTTP\// && $2 ~ /^[0-9][0-9][0-9]$/ { print $2 }')
+  # A chunked answer is not one this request asks for; it is not read.
+  if printf '%s\n' "$resp" | awk '/^\r?$/ { exit } tolower($0) ~ /^transfer-encoding:/ { f = 1 } END { exit !f }'; then
+    get_body=''
+  else
+    get_body=$(printf '%s\n' "$resp" | awk 'h { print; next } /^\r?$/ { h = 1 }')
+  fi
+}
+
+# A JSON document on standard input, flattened to one line per value: `<path>\t<kind>\t<raw>`, the
+# path its keys and indices joined by `.` (empty for the document), the kind o, a, s, n, b or z
+# (null), and for a string its content as written (escapes kept). Exits 1, printing nothing, for
+# anything that is not one well-formed JSON document, has a key twice, or nests deeper than 16.
+json_flat() {
+  awk '
+    function fail() { bad = 1; exit 1 }
+    function ws() { while (pos <= n && index(" \t\n\r", substr(s, pos, 1)) > 0) pos++ }
+    function emit(p, k, v) { if (p in seen) fail(); seen[p] = 1; out[++no] = p "\t" k "\t" v }
+    function str(   c, v, h) {
+      pos++; v = ""
+      while (1) {
+        if (pos > n) fail()
+        c = substr(s, pos, 1)
+        if (c == "\"") { pos++; return v }
+        if (c == "\t" || c == "\n" || c == "\r") fail()
+        if (c == "\\") {
+          h = substr(s, pos + 1, 1)
+          if (h == "u") { if (substr(s, pos + 2, 4) !~ /^[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]$/) fail(); v = v substr(s, pos, 6); pos += 6; continue }
+          if (index("\"\\/bfnrt", h) == 0 || h == "") fail()
+          v = v c h; pos += 2; continue
+        }
+        v = v c; pos++
+      }
+    }
+    function key(p, k) { return p == "" ? k : p "." k }
+    function value(p, d,   c, k, i, t) {
+      if (d > 16) fail()
+      ws(); if (pos > n) fail()
+      c = substr(s, pos, 1)
+      if (c == "{") {
+        emit(p, "o", ""); pos++; ws()
+        if (substr(s, pos, 1) == "}") { pos++; return }
+        while (1) {
+          ws(); if (substr(s, pos, 1) != "\"") fail()
+          k = str(); ws()
+          if (substr(s, pos, 1) != ":") fail()
+          pos++; value(key(p, k), d + 1); ws()
+          c = substr(s, pos, 1); pos++
+          if (c == "}") return
+          if (c != ",") fail()
+        }
+      }
+      if (c == "[") {
+        emit(p, "a", ""); pos++; ws(); i = 0
+        if (substr(s, pos, 1) == "]") { pos++; return }
+        while (1) {
+          value(key(p, i), d + 1); i++; ws()
+          c = substr(s, pos, 1); pos++
+          if (c == "]") return
+          if (c != ",") fail()
+        }
+      }
+      if (c == "\"") { emit(p, "s", str()); return }
+      if (substr(s, pos, 4) == "true") { pos += 4; emit(p, "b", "true"); return }
+      if (substr(s, pos, 5) == "false") { pos += 5; emit(p, "b", "false"); return }
+      if (substr(s, pos, 4) == "null") { pos += 4; emit(p, "z", ""); return }
+      t = substr(s, pos)
+      if (match(t, /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][-+]?[0-9]+)?/) == 0) fail()
+      emit(p, "n", substr(t, 1, RLENGTH)); pos += RLENGTH
+    }
+    { s = s (NR > 1 ? "\n" : "") $0 }
+    END {
+      if (bad) exit 1
+      n = length(s); pos = 1
+      value("", 0); ws()
+      if (pos <= n) fail()
+      for (i = 1; i <= no; i++) print out[i]
+    }
+  '
+}
+
+# A string value of a flattened document (json_flat), or nothing when it is missing or no string.
+flat_str() { printf '%s\n' "$1" | awk -F '\t' -v p="$2" '$1 == p && $2 == "s" { print $3; exit }'; }
+flat_kind() { printf '%s\n' "$1" | awk -F '\t' -v p="$2" '$1 == p { print $2; exit }'; }
+
+is_slice_id() { case $1 in S-[0-9]*) case ${1#S-} in *[!0-9]*) return 1 ;; esac ;; *) return 1 ;; esac; }
+is_run_id() { case $1 in RUN-[0-9]*) case ${1#RUN-} in *[!0-9]*) return 1 ;; esac ;; *) return 1 ;; esac; }
+is_project() {
+  case $1 in [a-z0-9]*) ;; *) return 1 ;; esac
+  case $1 in *[!a-z0-9-]*) return 1 ;; esac
+  [ "${#1}" -le 63 ]
+}
+
+# The first 12 hex digits of the SHA-256 of a project name: part of its step containers' names.
+project_hash() {
+  if command -v sha256sum >/dev/null 2>&1; then h=$(printf '%s' "$1" | sha256sum)
+  elif command -v shasum >/dev/null 2>&1; then h=$(printf '%s' "$1" | shasum -a 256)
+  else h=$(printf '%s' "$1" | docker run --rm -i --network none --read-only --cap-drop ALL \
+    --security-opt no-new-privileges --user 65532:65532 "$alpine_image" sha256sum)
+  fi
+  h=$(printf '%s' "$h" | cut -c1-12)
+  case $h in ????????????) case $h in *[!0-9a-f]*) die 1 "cannot compute the SHA-256 of '$1'" ;; esac ;;
+    *) die 1 "cannot compute the SHA-256 of '$1'" ;; esac
+  printf '%s' "$h"
+}
+
+# A step container's name (research D32, ADR 0036): one DNS label of at most 63 characters.
+step_cname() { printf '%s-worker-%s-%s-%s' "$compose_project" "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" "$2" "$3"; }
+
+# Refuse (exit 4, RunActive) while a run of the slice has not ended, by every page of listRuns with
+# the session's client token (research D32). An answer that is missing, not 200 or cannot be read,
+# or a run in it without a run ID, slice ID or status, stops with exit 1 (fail closed).
+refuse_active_run() {
+  arslice=$1 ptoken='' pages=0
+  while :; do
+    pages=$((pages + 1))
+    [ "$pages" -le 10000 ] || die 1 "build-workers: listRuns did not end after $pages pages"
+    engine_get "/runs?api-version=$api_version${ptoken:+&page_token=$ptoken}"
+    case $get_status in
+      200) ;;
+      '') die 1 "build-workers: no answer from the engine listing the runs; is the platform up (ap up)?" ;;
+      *) die 1 "build-workers: the engine answered $get_status listing the runs" ;;
+    esac
+    flat=$(printf '%s\n' "$get_body" | json_flat) || die 1 "build-workers: the engine's list of runs cannot be read"
+    [ "$(flat_kind "$flat" '')" = o ] && [ "$(flat_kind "$flat" items)" = a ] ||
+      die 1 "build-workers: the engine's list of runs cannot be read (no items)"
+    i=0
+    while [ -n "$(flat_kind "$flat" "items.$i")" ]; do
+      rid=$(flat_str "$flat" "items.$i.id") rsl=$(flat_str "$flat" "items.$i.slice") rst=$(flat_str "$flat" "items.$i.status")
+      is_run_id "$rid" && is_slice_id "$rsl" && [ -n "$rst" ] && case $rst in *[!a-z-]*) false ;; *) true ;; esac ||
+        die 1 "build-workers: the engine's list of runs cannot be read (a run without its ID, slice or status)"
+      [ "$rsl" != "$arslice" ] || [ "$rst" = ended ] ||
+        die 4 "build-workers: the run $rid of $arslice has not ended (RunActive); resume, take over or cancel it first"
+      i=$((i + 1))
+    done
+    case $(flat_kind "$flat" next_page_token) in
+      '') break ;;
+      s) ptoken=$(flat_str "$flat" next_page_token)
+        case $ptoken in '' | *[!A-Za-z0-9_-]*) die 1 "build-workers: the engine's list of runs has a page token that cannot be read" ;; esac ;;
+      *) die 1 "build-workers: the engine's list of runs cannot be read (its page token)" ;;
+    esac
+  done
+}
+
+# Read a run with getRun and the session's client token (research D32). Sets run_slice,
+# run_project and run_status (each empty when missing or no string). An unknown run exits 4
+# (NotFound); an answer that is missing, not 200 or cannot be read exits 1.
+read_run() {
+  rcmd=$1 rrun=$2
+  engine_get "/runs/$rrun?api-version=$api_version"
+  case $get_status in
+    200) ;;
+    404) die 4 "$rcmd: the engine has no run $rrun (NotFound)" ;;
+    '') die 1 "$rcmd: no answer from the engine reading the run $rrun; is the platform up (ap up)?" ;;
+    *) die 1 "$rcmd: the engine answered $get_status reading the run $rrun" ;;
+  esac
+  flat=$(printf '%s\n' "$get_body" | json_flat) && [ "$(flat_kind "$flat" '')" = o ] ||
+    die 1 "$rcmd: the engine's answer for the run $rrun cannot be read"
+  run_slice=$(flat_str "$flat" slice) run_project=$(flat_str "$flat" project) run_status=$(flat_str "$flat" status)
+  is_slice_id "$run_slice" || die 1 "$rcmd: the engine's answer for the run $rrun has no slice ID"
+}
+
+# The slice's worker tokens file, if any: sets tokfile, tokens_id (empty when missing) and complete
+# (no unless it holds a well-formed line for every step in $steps). One that is not a regular file
+# of the developer's with mode 600 stops with exit 1.
+read_tokens() {
+  slice=$1
   tokfile=$workers_dir/$slice
   if [ -e "$tokfile" ] || [ -L "$tokfile" ]; then
     set -f
@@ -670,6 +813,63 @@ build_workers() {
     line=$(awk -v s="$st" '$1 == s && NF == 3 && $2 ~ /^[0-9a-f]+$/ && $3 ~ /^[0-9a-f]+$/ && length($2) == 64 && length($3) == 64' "$tokfile" 2>/dev/null)
     [ -n "$line" ] || complete=no
   done
+}
+
+# A field of a step's line in the tokens file: 2 its worker token, 3 its call token.
+token_of() { awk -v s="$1" -v f="$2" '$1 == s { print $f }' "$tokfile"; }
+
+# Make the slice's step workers ready for a build into the new project folder (research D5, D29,
+# D30): the project folder with an empty `.git` and the folders of each step's writable entries;
+# one container per step of the pattern, from the step-agent or procedure-worker template under
+# gVisor, with only that step's project mounted (read-only, its writable folders writable, `.git`
+# read-only; the review step's wholly read-only); a worker token and a call token per container, its
+# grant in the grants folder and its registration with the engine. A container started with the
+# same settings and still running is left alone, so running it again changes nothing.
+build_workers() {
+  slice=$1 project=$2
+  is_slice_id "$slice" || die 3 "build-workers: '$slice' is not a slice ID (S-<n>)"
+  is_project "$project" || die 3 "build-workers: '$project' is not a project name (lowercase letters, digits and hyphens, at most 63)"
+  for n in agent check; do
+    eval "val=\$AP_IMAGE_$(upper "$n")"
+    [ "$val" != "$(placeholder "$n")" ] ||
+      die 3 "build-workers needs the $n image: build it with src/deploy/build.sh $n, then run ap up again"
+  done
+  case $AP_PROJECTS_DIR in *:* | *,*) die 1 "the projects folder $AP_PROJECTS_DIR has a ':' or ',' in its path, which a bind mount cannot name" ;; esac
+  engine_prereqs
+  steps=$(read_pattern) || exit $?
+
+  # The project must be new, by the engine's ProjectExists rule (owner, 2026-11-13): an existing
+  # folder may hold only empty folders and an empty `.git` (the skeleton build-workers makes); one
+  # holding a file or a symbolic link at any depth, or anything in `.git`, is refused before
+  # anything is granted, registered, made or started, and before the engine is asked anything.
+  pdir=$AP_PROJECTS_DIR/$project
+  if [ -e "$pdir" ] || [ -L "$pdir" ]; then
+    [ -d "$pdir" ] && [ ! -L "$pdir" ] || die 3 "build-workers: the project folder $pdir exists and is not a folder"
+    if [ -n "$(find "$pdir" ! -type d 2>&1 | head -n 1)" ] ||
+      { [ -e "$pdir/.git" ] && [ -n "$(find "$pdir/.git" -mindepth 1 2>&1 | head -n 1)" ]; }; then
+      die 3 "build-workers: the project folder $pdir already holds files or a version history (ProjectExists); build into a new project"
+    fi
+  fi
+
+  # The engine keeps one registration per slice and step, so none is moved away from a run of the
+  # slice that has not ended (research D32).
+  refuse_active_run "$slice"
+
+  # Each project has its own containers (ADR 0036): a container of a wanted name whose project
+  # label names another project (a hash collision) is refused, and never removed or replaced.
+  phash=$(project_hash "$project")
+  for st in $(printf '%s\n' "$steps" | awk '{ print $1 }'); do
+    cname=$(step_cname "$slice" "$st" "$phash")
+    if docker container inspect "$cname" >/dev/null 2>&1; then
+      other=$(docker container inspect -f '{{index .Config.Labels "org.agentic-platform.project"}}' "$cname" 2>/dev/null) ||
+        die 1 "cannot inspect the container $cname"
+      [ "$other" = "$project" ] ||
+        die 1 "build-workers: the container $cname belongs to the project '$other', not $project; nothing was changed"
+    fi
+  done
+
+  # The slice's tokens: kept while the session lasts, made when missing or incomplete.
+  read_tokens "$slice"
   if [ "$complete" = no ] || [ -z "$tokens_id" ]; then
     old_umask=$(umask)
     umask 077
@@ -683,8 +883,6 @@ build_workers() {
     tokens_id=$(awk '$1 == "id" { print $2 }' "$tokfile")
     say "made new worker tokens for $slice"
   fi
-  token_of() { awk -v s="$1" -v f="$2" '$1 == s { print $f }' "$tokfile"; }
-
   # The grants, then the registrations: a slice the engine does not have stops here, before any
   # folder or container is made.
   [ -d "$grants_dir" ] || die 1 "no grants folder $grants_dir; run: ap up"
@@ -693,7 +891,7 @@ build_workers() {
   done | as_engine_in_grants sh -c "$grants_script" sh "$slice" ||
     die 1 "cannot write the step worker grants of $slice in $grants_dir"
   for st in $(printf '%s\n' "$steps" | awk '{ print $1 }'); do
-    cname=$compose_project-worker-$lower_slice-$st
+    cname=$(step_cname "$slice" "$st" "$phash")
     code=$(register_worker "$(token_of "$st" 2)" "http://$cname:8080")
     case $code in
       200) ;;
@@ -715,7 +913,7 @@ build_workers() {
 
   inside=/projects/$project
   printf '%s\n' "$steps" | while read -r st worker entries; do
-    cname=$compose_project-worker-$lower_slice-$st
+    cname=$(step_cname "$slice" "$st" "$phash")
     # shellcheck disable=SC2086
     folders=$(step_folders $entries)
     case " $(printf '%s ' $folders)" in
@@ -743,11 +941,70 @@ build_workers() {
     call=$(token_of "$st" 3)
     # shellcheck disable=SC2086
     (STEP_TOKEN=$call CHECK_TOKEN=$call && export STEP_TOKEN CHECK_TOKEN &&
-      compose run -d -T --no-deps --name "$cname" -l "$worker_label=$want" $mounts $env "$service" >/dev/null) ||
+      compose run -d -T --no-deps --name "$cname" -l "$worker_label=$want" -l "org.agentic-platform.slice=$slice" \
+        -l "org.agentic-platform.step=$st" -l "org.agentic-platform.project=$project" $mounts $env "$service" >/dev/null) ||
       die 1 "cannot start the $st worker $cname"
     say "started the $st worker $cname ($service) for $project"
   done || exit $?
   say "the step workers of $slice are ready for the project $project"
+}
+
+# `resume <run>` (research D32, ADR 0036): never runs build-workers. For an interrupted run, every
+# step's container of the run's slice and project must be running with this session's tokens; each
+# is registered with the engine again and the command is passed on. A run in another state is passed
+# on unchanged for the engine to refuse.
+cmd_resume() {
+  run=$1
+  is_run_id "$run" || die 3 "resume: '$run' is not a run ID (RUN-<n>)"
+  engine_prereqs
+  read_run resume "$run"
+  if [ -z "$run_status" ] || case $run_status in *[!a-z-]*) true ;; *) false ;; esac; then
+    die 1 "resume: the engine's answer for the run $run has no status"
+  fi
+  is_project "$run_project" || die 1 "resume: the engine's answer for the run $run has no project name"
+  if [ "$run_status" = interrupted ]; then
+    steps=$(read_pattern) || exit $?
+    gone="resume: the step workers of $run_slice for the project $run_project are not running; run ap build-workers --resume $run, then ap resume $run"
+    read_tokens "$run_slice"
+    [ "$complete" = yes ] && [ -n "$tokens_id" ] || die 3 "$gone"
+    phash=$(project_hash "$run_project")
+    for st in $(printf '%s\n' "$steps" | awk '{ print $1 }'); do
+      cname=$(step_cname "$run_slice" "$st" "$phash")
+      have=$(docker container inspect -f "{{.State.Running}} {{index .Config.Labels \"org.agentic-platform.slice\"}} {{index .Config.Labels \"org.agentic-platform.step\"}} {{index .Config.Labels \"org.agentic-platform.project\"}} {{index .Config.Labels \"$worker_label\"}}" "$cname" 2>/dev/null) ||
+        die 3 "$gone"
+      # Running, labelled with the slice, step and project, and started with this session's tokens
+      # (the worker label: service, image, project, step, settings checksum, tokens id).
+      set -f
+      # shellcheck disable=SC2086
+      set -- $have
+      set +f
+      [ $# -eq 10 ] && [ "$1" = true ] && [ "$2" = "$run_slice" ] && [ "$3" = "$st" ] && [ "$4" = "$run_project" ] &&
+        [ "$7" = "$run_project" ] && [ "$8" = "$st" ] && [ "${10}" = "$tokens_id" ] || die 3 "$gone"
+    done
+    for st in $(printf '%s\n' "$steps" | awk '{ print $1 }'); do
+      cname=$(step_cname "$run_slice" "$st" "$phash")
+      code=$(register_worker "$(token_of "$st" 2)" "http://$cname:8080")
+      case $code in
+        200) ;;
+        404) die 4 "resume: the engine has no slice $run_slice with a step $st (NotFound)" ;;
+        '') die 1 "resume: no answer from the engine registering $cname; is the platform up (ap up)?" ;;
+        *) die 1 "resume: the engine answered $code registering $cname" ;;
+      esac
+    done
+    say "registered the step workers of $run_slice for the project $run_project again"
+  fi
+  compose_run cli resume "$run"
+}
+
+# `replay <run> <project>` (research D32): always into a new, empty project; the workers are those
+# of the run's slice, made by build-workers as for `build`.
+cmd_replay() {
+  run=$1 project=$2
+  is_run_id "$run" || die 3 "replay: '$run' is not a run ID (RUN-<n>)"
+  is_project "$project" || die 3 "replay: '$project' is not a project name (lowercase letters, digits and hyphens, at most 63)"
+  engine_prereqs
+  read_run replay "$run"
+  build_workers "$run_slice" "$project"
 }
 
 cmd_test() {
@@ -773,11 +1030,7 @@ case $cmd in
   test) cmd_test "$@" ;;
   registry) [ $# -eq 0 ] || usage; ensure_registry ;;
   build) [ $# -ge 2 ] || usage; load; build_workers "$1" "$2" || exit $?; compose_run cli build "$@" ;;
-  resume | replay)
-    # The workers are those of the run's slice; finding it needs the run's record from the engine.
-    [ $# -ge 1 ] || usage
-    load
-    die 3 "$cmd: not available yet: T053 (workers for the run's slice)"
-    ;;
+  resume) [ $# -eq 1 ] || usage; load; cmd_resume "$1" ;;
+  replay) [ $# -ge 2 ] || usage; load; cmd_replay "$1" "$2" || exit $?; compose_run cli replay "$@" ;;
   *) load; compose_run cli "$cmd" "$@" ;;
 esac
