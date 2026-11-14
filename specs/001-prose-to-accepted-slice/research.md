@@ -521,8 +521,10 @@ page, none of which an existing project provides.
     mismatch (outputs that are not file sets, such as the review step's `findings`, are exempt).
     An earlier step's output given as an input is bound through `before`, the engine's stored list
     of the last accepted step: each of the input's files in the folder must equal its entry there,
-    except a path the judged step may itself write, which is judged as its output. Recomputing
-    the input's hash instead could never pass once the code step replaced the seam
+    except a path the judged step may itself write, which is judged as its output; and when no
+    step from the input's producer through the judged step may write any of its paths, its framed
+    hash is also recomputed from the folder and must equal the one the request names (owner,
+    2026-11-14). Recomputing the hash of every input could never pass once the code step replaced the seam
     `internal/app/app.go`, which generate's output holds (found by T054l; owner, 2026-11-14).
     The engine accepts the attempt only when every
     verdict's `project_files` equals the list that first call returned. That list becomes the next
