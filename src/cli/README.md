@@ -8,8 +8,16 @@ Layout: `cli.go` holds `Run` (arguments, environment and streams in, exit code o
 session and the following of operations; `slices.go` the Story 1 commands (`describe`, `questions`,
 `show`, `edit`, `approve`, `slices`, `cancel`, `delete`); `cmd/cli/main.go` the binary, which reads
 `ENGINE_URL`, `ENGINE_TOKEN` and `EDITOR` and exits with `Run`'s code. Every engine call goes through
-the generated client. The run commands (`build`, `resume`, `replay`, `take-over`, `compare`, `runs`,
-`run`, `artifact`) exit 3 with `not available yet: T055`.
+the generated client. `runs.go` holds the run commands (`build`, `resume`, `replay`, `take-over`,
+`runs`, `run`, `compare`, `artifact`): each mutating call carries one `Idempotency-Key` per
+invocation and is resent unchanged after a lost answer (no reply, 502, 503, 504, 429) up to 3 more
+times after 1, 2 and 4 s with jitter; following reads every page of `listRunEvents`, prints one line
+per event and an end line, and exits by the run's state; store text is printed with its control
+characters escaped, except `artifact`, which writes the raw bytes.
+
+Signals reach `Run` through `Env.Signals`, which `main` fills with `signal.Notify` for SIGINT and
+SIGTERM: the first one stops following, never the work, prints how to follow or cancel it, and
+exits 130 or 143.
 
 `describe` and `show` say the pattern does not fit when a check result with `pattern` true fails (contract.md); the client keeps no list of the pattern's conditions.
 

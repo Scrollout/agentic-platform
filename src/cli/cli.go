@@ -11,8 +11,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/agentic-platform/cli/api/gen"
@@ -30,8 +33,13 @@ const (
 	exitCancelled = 6
 )
 
-// Env is what the client takes from its environment: ENGINE_URL, ENGINE_TOKEN and EDITOR.
-type Env struct{ EngineURL, EngineToken, Editor string }
+// Env is what the client takes from its environment: ENGINE_URL, ENGINE_TOKEN and EDITOR, and the
+// signals it receives. The first SIGINT or SIGTERM on Signals stops following, never the work, and
+// Run exits 130 or 143 (contract.md, "Following a run"); nil means no signal arrives.
+type Env struct {
+	EngineURL, EngineToken, Editor string
+	Signals                        <-chan os.Signal
+}
 
 var (
 	sliceID     = regexp.MustCompile(`^S-[0-9]+$`)
@@ -41,12 +49,14 @@ var (
 
 // failure is an error that carries the exit code it ends the command with.
 type failure struct {
-	code int
-	msg  string
-	prob *gen.Problem
+	code  int
+	msg   string
+	prob  *gen.Problem
+	cause error // the context's error when the context's cancellation stopped the command
 }
 
 func (f *failure) Error() string { return f.msg }
+func (f *failure) Unwrap() error { return f.cause }
 
 func usagef(format string, a ...any) error {
 	return &failure{code: exitUsage, msg: fmt.Sprintf(format, a...) + "\n" + usageText}
@@ -65,16 +75,16 @@ func refused(p *gen.Problem) error {
 
 func problemText(p *gen.Problem) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "refused: %s", p.Code)
+	fmt.Fprintf(&b, "refused: %s", esc(string(p.Code)))
 	if p.Title != "" && p.Title != string(p.Code) {
-		fmt.Fprintf(&b, ": %s", p.Title)
+		fmt.Fprintf(&b, ": %s", esc(p.Title))
 	}
 	if p.Detail != nil && *p.Detail != "" {
-		fmt.Fprintf(&b, ": %s", *p.Detail)
+		fmt.Fprintf(&b, ": %s", esc(*p.Detail))
 	}
 	if p.Failures != nil {
 		for _, f := range *p.Failures {
-			fmt.Fprintf(&b, "\n  failed  %s (%s): %s", f.Check, f.Part, f.Reason)
+			fmt.Fprintf(&b, "\n  failed  %s (%s): %s", esc(f.Check), esc(f.Part), esc(f.Reason))
 		}
 	}
 	return b.String()
@@ -88,21 +98,56 @@ const usageText = `usage:
   approve <slice> goals|rules|contract approve a part at the hash shown
   slices                               list slices
   cancel <run|operation>               cancel a run or other running work
-  delete <slice> [--yes]               erase a slice and its records after confirmation`
-
-// Commands of the contract that later tasks implement.
-var notYet = map[string]string{
-	"build": "T055", "resume": "T055", "replay": "T055", "take-over": "T055",
-	"compare": "T055", "runs": "T055", "run": "T055", "artifact": "T055",
-}
+  delete <slice> [--yes]               erase a slice and its records after confirmation
+  build <slice> <project>              build the slice into the new project folder and follow the run
+  resume <run>                         continue an interrupted run and follow it
+  replay <run> <project>               replay an ended run into the new project folder and follow it
+  take-over <run>                      accept the hand-over of a run waiting for the developer
+  runs                                 list runs
+  run <run>                            show a run's record and follow it while it runs
+  compare <run> <other>                show the differences between two runs
+  artifact <run> <hash>                write an artifact's content to standard output`
 
 // Run runs one command and returns its exit code.
 func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, stderr io.Writer) int {
-	err := run(ctx, args, env, stdin, stdout)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var mu sync.Mutex
+	var got os.Signal
+	if env.Signals != nil {
+		go func() {
+			select {
+			case sig, ok := <-env.Signals:
+				if ok {
+					mu.Lock()
+					got = sig
+					mu.Unlock()
+					cancel()
+				}
+			case <-ctx.Done():
+			}
+		}()
+	}
+	detach := "stopped"
+	err := run(ctx, args, env, stdin, stdout, &detach)
 	if err == nil {
 		return exitOK
 	}
-	fmt.Fprintln(stderr, err.Error())
+	mu.Lock()
+	sig := got
+	mu.Unlock()
+	// A signal detaches only when it stopped the command; a command that already had its own result
+	// (an end line, a refusal, a compare table) keeps it.
+	if sig != nil && errors.Is(err, context.Canceled) {
+		fmt.Fprintln(stderr, detach)
+		if n, ok := sig.(syscall.Signal); ok {
+			return 128 + int(n)
+		}
+		return 130
+	}
+	if msg := err.Error(); msg != "" {
+		fmt.Fprintln(stderr, msg)
+	}
 	var f *failure
 	if errors.As(err, &f) {
 		return f.code
@@ -116,10 +161,11 @@ type session struct {
 	in     *bufio.Reader
 	stdin  io.Reader
 	out    io.Writer
-	follow time.Duration // first wait between reads of an operation
+	follow time.Duration // first wait between reads of an operation or of a run's record
+	detach *string       // what a signal prints: what the client stopped and how to go on
 }
 
-func run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout io.Writer) error {
+func run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout io.Writer, detach *string) error {
 	if len(args) == 0 {
 		return usagef("no command")
 	}
@@ -147,10 +193,23 @@ func run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout io
 		do, err = parseCancel(rest)
 	case "delete":
 		do, err = parseDelete(rest)
+	case "build":
+		do, err = parseBuild(rest)
+	case "resume":
+		do, err = parseResume(rest)
+	case "replay":
+		do, err = parseReplay(rest)
+	case "take-over":
+		do, err = parseTakeOver(rest)
+	case "runs":
+		do, err = parseRuns(rest)
+	case "run":
+		do, err = parseRun(rest)
+	case "compare":
+		do, err = parseCompare(rest)
+	case "artifact":
+		do, err = parseArtifact(rest)
 	default:
-		if task, ok := notYet[cmd]; ok {
-			return failf(exitUsage, "not available yet: %s", task)
-		}
 		return usagef("unknown command %q", cmd)
 	}
 	if err != nil {
@@ -159,14 +218,14 @@ func run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout io
 	if env.EngineURL == "" || env.EngineToken == "" {
 		return failf(exitUsage, "ENGINE_URL and ENGINE_TOKEN must be set (the launcher sets them)")
 	}
-	s, err := newSession(env, stdin, stdout)
+	s, err := newSession(env, stdin, stdout, detach)
 	if err != nil {
 		return err
 	}
 	return do(ctx, s)
 }
 
-func newSession(env Env, stdin io.Reader, stdout io.Writer) (*session, error) {
+func newSession(env Env, stdin io.Reader, stdout io.Writer, detach *string) (*session, error) {
 	token := env.EngineToken
 	api, err := gen.NewClientWithResponses(env.EngineURL,
 		gen.WithHTTPClient(&http.Client{Timeout: 2 * time.Minute}),
@@ -178,7 +237,7 @@ func newSession(env Env, stdin io.Reader, stdout io.Writer) (*session, error) {
 		return nil, failf(exitUsage, "ENGINE_URL: %v", err)
 	}
 	return &session{api: api, env: env, in: bufio.NewReader(stdin), stdin: stdin, out: stdout,
-		follow: 100 * time.Millisecond}, nil
+		follow: 100 * time.Millisecond, detach: detach}, nil
 }
 
 // response is what every generated response offers.
@@ -191,7 +250,11 @@ type response interface {
 // body becomes a refusal carrying its code.
 func expect(r response, err error, want int) error {
 	if err != nil {
-		return failf(exitFailed, "engine: %v", err)
+		f := &failure{code: exitFailed, msg: fmt.Sprintf("engine: %v", err)}
+		if errors.Is(err, context.Canceled) {
+			f.cause = context.Canceled
+		}
+		return f
 	}
 	if r.StatusCode() == want {
 		return nil
@@ -208,13 +271,15 @@ func (s *session) wait(ctx context.Context, op *gen.Operation) (*gen.Operation, 
 	if op == nil {
 		return nil, failf(exitFailed, "engine: no operation in the response")
 	}
+	*s.detach = fmt.Sprintf("stopped following %s; it continues. Cancel it with cancel %s.", op.Id, op.Id)
 	delay := s.follow
 	for op.Status == gen.OperationStatusAccepted || op.Status == gen.OperationStatusRunning {
 		t := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
 			t.Stop()
-			return nil, failf(exitFailed, "stopped following %s: %v (it continues; `cancel %s` stops it)", op.Id, ctx.Err(), op.Id)
+			return nil, &failure{code: exitFailed, cause: ctx.Err(),
+				msg: fmt.Sprintf("stopped following %s: %v (it continues; `cancel %s` stops it)", op.Id, ctx.Err(), op.Id)}
 		case <-t.C:
 		}
 		if delay < 2*time.Second {

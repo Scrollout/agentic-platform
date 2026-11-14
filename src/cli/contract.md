@@ -347,9 +347,10 @@ usage error. A trial is `TestPlanted/<scenario>/trial-<n>`, a subtest of its sce
 How the suites run (owner, 2026-11-14, research D33, ADR 0037): `test <suite>` builds the suite's
 test binary in the pinned Go container (`images.lock`'s `golang`), offline (`--network none`,
 `GOPROXY=off`, `GOFLAGS=-mod=readonly`), with the module cache in
-`${XDG_CACHE_HOME:-~/.cache}/agentic-platform/go`, as `scripts/check.sh` builds its `docker`
-suites, then runs that binary on the host, in the suite's package folder of the repository the
-launcher is in, with `-test.run` selecting the suite and `-test.v=test2json`, and prints the lines
+`${XDG_CACHE_HOME:-~/.cache}/agentic-platform/go`, with `-tags docker`, as `scripts/check.sh` builds
+its `docker` suites, then runs that binary on the host, in the suite's package folder of the
+repository the launcher is in, with `-test.run` selecting the suite (`^TestPlanted$` for `planted`,
+`^TestUS2` for `us2`) and `-test.v=test2json`, and prints the lines
 above from its events. The suites start their own labs with the container engine, so no container
 holds the container engine's socket and no tests image is built. The binary uses the developer's
 own Docker access on the host, an owner-approved exception to the constitution's test-security

@@ -366,7 +366,8 @@ func parseEdit(args []string, env Env) (func(context.Context, *session) error, e
 		cmd := exec.CommandContext(ctx, editor[0], append(editor[1:], file)...)
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = s.stdin, s.out, s.out
 		if err := cmd.Run(); err != nil {
-			return failf(exitFailed, "edit: the editor failed (%v); nothing was replaced", err)
+			return &failure{code: exitFailed, cause: ctx.Err(),
+				msg: fmt.Sprintf("edit: the editor failed (%v); nothing was replaced", err)}
 		}
 		after, err := os.ReadFile(file)
 		if err != nil {

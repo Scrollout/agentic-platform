@@ -99,6 +99,21 @@ scenario and a total (`planted`), or one per test (`us2`), with a failing test's
 below it. It exits 0 when everything passes, 1 for a failing trial or test or a suite that does not
 build (the build's error on standard error), and 3 for an unknown suite.
 
+The run commands go to the terminal client through `ap` (T055, `src/cli/contract.md`). `ap build
+<slice> <project>`, `ap resume <run>` and `ap replay <run> <project>` print the run ID line, then
+one line per event of the run's record from its first event, then an end line, all on standard
+output, and exit by the run's state: done 0; waiting for the developer, interrupted or handed over
+2; expired 5; cancelled 6; a failed run operation or a refusal 4, with the problem on standard
+error; the engine lost 1. `ap run <run>` prints the record the same way and follows it while it
+runs, `ap runs` lists the runs, `ap compare <run> <other>` exits 7 with a table when the runs
+differ, `ap artifact <run> <hash>` writes the artifact's bytes unchanged, and `ap take-over <run>`
+accepts a hand-over. Each mutating call carries one `Idempotency-Key` per invocation and is sent
+again unchanged after a lost answer, at most 4 tries, so a retry never starts a second run. The
+first Ctrl-C or SIGTERM while a command follows a run or an operation detaches: the work goes on,
+the client says how to follow it (`run <run>`) or cancel it (`cancel <run>`) and exits 130 or 143.
+A signal after the command has its result keeps that result. Text from the store is printed with
+control characters escaped.
+
 # Observability
 
 `docker compose logs`. The gateway logs nginx errors only, never headers or bodies.
