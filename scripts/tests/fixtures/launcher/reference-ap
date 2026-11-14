@@ -100,9 +100,7 @@ up)
 down) load; compose down; rm -f "$sess" ;;
 build-workers) [ $# -eq 1 ] || usage; load; build_workers "$1" ;;
 page) load; echo "http://127.0.0.1:$AP_PAGE_PORT" ;;
-test) load
-  case $AP_IMAGE_TESTS in *@sha256:*) ;; *) echo "ap: test: not available yet" >&2; exit 3 ;; esac
-  compose run $tflag --rm tests "$@" ;;
+test) usage ;;
 build) load; build_workers "${1:-}" || exit 1; compose run $tflag --rm cli build "$@" ;;
 *) load; compose run $tflag --rm cli "$cmd" "$@" ;;
 esac

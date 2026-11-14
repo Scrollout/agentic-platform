@@ -1,7 +1,8 @@
 #!/bin/sh
 # ap: starts, stops and drives the platform on this machine (src/cli/contract.md, research D6).
 #
-# Runs on the host and calls nothing but `docker` (Compose) and POSIX utilities. Its own commands
+# Runs on the host and calls nothing but `docker` (Compose) and POSIX utilities, except `test`, which
+# also runs a test binary it built in the pinned Go container (ADR 0037). Its own commands
 # are up, down, build-workers, page, test and registry; build, resume and replay first make the slice's
 # workers ready; every other command goes unchanged to the terminal client container, and its exit
 # code is returned. Exit codes are the terminal contract's: 3 is a usage error or a command that is
@@ -41,7 +42,8 @@ sess=$state_dir/session.env
 images_env=$state_dir/images.env
 pub=${XDG_CONFIG_HOME:-$HOME/.config}/agentic-platform/signing/cosign.pub
 # Images `up` needs (it starts the engine; every client command runs cli) and images it passes
-# only when built (their profiles are started later, by build-workers and test). lint, check and
+# only when built (their profiles are started later, by build-workers). tests is no longer used:
+# `test` runs on the host (ADR 0037); removing it waits for the owner's approval. lint, check and
 # project (the project worker) are started by `up` too, but stay optional until their first signed build (T038g): without it, `compose up` stops
 # with "No such image ap-lint:not-built". page stays optional until the run page exists (T056):
 # without it, `up` starts neither page nor page-proxy (--scale ...=0) and says so.
@@ -1046,14 +1048,122 @@ cmd_replay() {
   build_workers "$run_slice" "$project"
 }
 
+# The test harness (src/cli/contract.md "The test harness", research D33, ADR 0037). `test <suite>`
+# builds the acceptance suite's test binary in the pinned golang container, offline, with the module
+# cache in ${XDG_CACHE_HOME:-~/.cache}/agentic-platform/go (as scripts/check.sh builds its docker
+# suites), runs it on the host in src/tests/acceptance of this repository with `-test.v=test2json`,
+# converts its stream with `go tool test2json` in the same pinned container, and prints the
+# contract's lines from the events. No session, no Compose, no tests image: the suites start their
+# own labs with the developer's own Docker access on the host (plan, Exceptions to Engineering
+# Principles), and no container holds the container engine's socket.
 cmd_test() {
-  [ $# -ge 1 ] && [ -n "$1" ] || usage
-  load
-  case $AP_IMAGE_TESTS in
-    *@sha256:*) ;;
-    *) die 3 "test: not available yet: the test harness image (T024, T046); once built with src/deploy/build.sh tests, run ap up again" ;;
+  [ $# -eq 1 ] || usage
+  suite=$1
+  case $suite in
+    planted) pattern='^TestPlanted$' ;;
+    us2) pattern='^TestUS2' ;;
+    *) die 3 "test: unknown suite $suite; the suites are planted, us2" ;;
   esac
-  compose_run tests "$@"
+  repo=$(CDPATH='' cd -- "$here/../.." && pwd -P)
+  pkg=$repo/src/tests/acceptance
+  [ -d "$pkg" ] || die 1 "test: no acceptance suite in $pkg"
+  go_image=$(pin golang)
+  [ -n "$go_image" ] || die 1 "test: no golang pin in $here/images.lock"
+  need_docker
+  go_cache=${XDG_CACHE_HOME:-$HOME/.cache}/agentic-platform/go
+  mkdir -p "$go_cache" || die 1 "test: cannot make the module cache $go_cache"
+  name=ap-test-$suite-$$.test
+  bin=$go_cache/$name
+  work=$(mktemp -d) || die 1 "test: cannot make a temporary folder"
+  trap 'rm -rf "$work"; rm -f "$bin"' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  say "test: building the $suite suite in $go_image"
+  docker run --rm --network none -v "$repo/src:/src" -w /src/tests -v "$go_cache:/gopath" \
+    --user "$(id -u):$(id -g)" -e GOPATH=/gopath -e GOCACHE=/gopath/cache -e GOTOOLCHAIN=local \
+    -e GOPROXY=off -e GOFLAGS=-mod=readonly -e CGO_ENABLED=0 \
+    "$go_image" sh -ec "go test -c -tags docker -o /gopath/$name ./acceptance/" >&2 ||
+    die 1 "test: the $suite suite does not build (the error is above)"
+  [ -x "$bin" ] || die 1 "test: the build made no test binary at $bin"
+  # The binary's exit code is kept in a file: in a pipeline sh returns only the last command's.
+  { (cd "$pkg" && "$bin" -test.run "$pattern" -test.v=test2json); echo $? >"$work/code"; } |
+    docker run --rm -i --network none -e GOTOOLCHAIN=local "$go_image" go tool test2json >"$work/events" ||
+    die 1 "test: cannot convert the test binary's output with go tool test2json"
+  code=$(cat "$work/code" 2>/dev/null) || code=1
+  test_report "$suite" "$code" <"$work/events"
+}
+
+# The contract's lines from a test2json event stream on standard input; exits 0 only when every
+# test passed (for planted: every scenario stopped in 3 out of 3 trials) and the binary exited 0.
+test_report() {
+  awk -v suite="$1" -v code="$2" '
+    function field(name,   t, i, c, v, h) {
+      t = "\"" name "\":\""
+      i = index($0, t); if (i == 0) return ""
+      t = substr($0, i + length(t)); v = ""
+      for (i = 1; i <= length(t); i++) {
+        c = substr(t, i, 1)
+        if (c == "\"") break
+        if (c == "\\") {
+          h = substr(t, i + 1, 1); i++
+          if (h == "n") v = v "\n"; else if (h == "t") v = v "\t"; else if (h == "r") v = v "\r"
+          else if (h == "u") { v = v uni(substr(t, i + 1, 4)); i += 4 }
+          else v = v h
+          continue
+        }
+        v = v c
+      }
+      return v
+    }
+    function uni(x,   n, k) {
+      n = 0
+      for (k = 1; k <= 4; k++) n = n * 16 + index("0123456789abcdef", tolower(substr(x, k, 1))) - 1
+      return n >= 32 && n < 127 ? sprintf("%c", n) : "\\u" x
+    }
+    # A test output line that is no framing of the testing package: one of the messages of the test.
+    function message(o) {
+      sub(/\n$/, "", o)
+      if (o ~ /^(=== (RUN|NAME|PAUSE|CONT)|--- (PASS|FAIL|SKIP))/ || o ~ /^[ \t]*$/) return
+      sub(/^[ \t]+/, "", o)
+      msgs[test] = msgs[test] "    " o "\n"
+    }
+    function verdict(a) { return a == "pass" ? "PASS" : a == "fail" ? "FAIL" : "SKIP" }
+    {
+      action = field("Action"); test = field("Test")
+      if (test == "") { if (action == "output") stray = stray field("Output"); next }
+      ran = 1
+      if (action == "output") { message(field("Output")); next }
+      if (action != "pass" && action != "fail" && action != "skip") next
+      if (action == "fail") failed = 1
+      depth = split(test, p, "/")
+      if (suite == "planted") {
+        if (depth == 3 && p[3] ~ /^trial-[0-9]+$/) {
+          printf "%s  %s  trial %s\n%s", verdict(action), p[2], substr(p[3], 7), msgs[test]
+          trials[p[2]]++; if (action == "pass") stopped[p[2]]++
+        } else if (depth == 2) {
+          k = stopped[p[2]] + 0; n = trials[p[2]] + 0
+          ok = action == "pass" && k == 3 && n == 3
+          printf "%s  %s  stopped in %d out of 3 trials\n%s", ok ? "PASS" : "FAIL", p[2], k, msgs[test]
+          scenarios++; if (ok) good++
+        } else if (msgs[test] != "") {
+          printf "%s  %s\n%s", verdict(action), test, msgs[test]
+        }
+      } else if (depth == 1) {
+        printf "%s  %s\n%s", verdict(action), test, msgs[test]
+      } else if (action == "fail") {
+        msgs[p[1]] = msgs[p[1]] "    " test ":\n" msgs[test]
+      }
+    }
+    END {
+      if (suite == "planted") printf "planted: %d of %d scenarios stopped in 3 out of 3 trials\n", good, scenarios
+      if (!ran) { printf "ap: test: no test of the %s suite ran\n", suite > "/dev/stderr"; exit 1 }
+      if (suite == "planted" && (scenarios == 0 || good != scenarios)) exit 1
+      if (failed) exit 1
+      if (code != 0) {
+        printf "%sap: test: the test binary exited %s\n", stray, code > "/dev/stderr"; exit 1
+      }
+    }
+  '
 }
 
 [ $# -ge 1 ] || usage

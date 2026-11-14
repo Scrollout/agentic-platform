@@ -136,8 +136,17 @@ file records the credentials file and projects folder; a second `up` with others
 run `ap down` first. A failed `up` (Compose failed) keeps its session until `ap down`. A session
 started before the `contract-lint` and `analyst` services were added lacks their tokens, so `up`
 says it is incomplete: run `ap down` once, then `ap up`. Client
-commands, `build` and `test` pass `-T` to `docker compose run` when standard input is not a
-terminal.
+commands and `build` pass `-T` to `docker compose run` when standard input is not a terminal.
+
+`ap test <suite>` (`planted`, `us2`) needs no session and calls no Compose (research D33,
+[ADR 0037](../../docs/decisions/0037-terminal-run-commands-exit-codes-and-test-on-host.md)): it
+builds `src/tests/acceptance` with `go test -c -tags docker` in `images.lock`'s `golang`
+container (`--network none`, `GOPROXY=off`, `GOFLAGS=-mod=readonly`, `CGO_ENABLED=0`, `src/`
+mounted, the module cache `${XDG_CACHE_HOME:-~/.cache}/agentic-platform/go` at `/gopath`), runs
+the binary on the host in `src/tests/acceptance` with `-test.run` (`^TestPlanted$` or `^TestUS2`)
+and `-test.v=test2json`, converts its output with `go tool test2json` in the same pinned container
+(`--network none`), and prints the contract's lines. Exit 0 when every test passes, 1 for a failing
+trial or test or a failed build, 3 for an unknown suite. The binary is removed afterwards.
 
 A missing variable stops Compose with a message naming it. Every service runs non-root with a
 read-only root file system, all capabilities dropped, `no-new-privileges`, CPU, memory and process
@@ -152,7 +161,7 @@ limits, and writable `tmpfs` only where it needs one; no service mounts a contai
 | `page` | `ap up`, when its image is recorded (T056) | `clients`, `page` | Reached only through `page-proxy`; checks the Host header |
 | `page-proxy` | `ap up`, with `page` | `page`, `page-host` | The `nginx` pin with the fixed `page-proxy/nginx.conf`; publishes the page's port on `127.0.0.1` only and passes each request, Host header unchanged, to the page |
 | `cli` | each client command (`run --rm`, profile `client`) | `clients` | Client token |
-| `tests` | `ap test <suite>` (profile `tests`) | `clients` | Client token; no `Dockerfile.tests` yet |
+| `tests` | nothing (profile `tests`) | `clients` | Unused since `ap test` runs on the host (ADR 0037); its removal waits for the owner's approval |
 | `step-agent` | `ap build-workers` (profile `workers`) | `agents` | The template of each agent step's container: Docker Agent `serve api /agents/$STEP_AGENT.yaml` with `--auth-token "$STEP_TOKEN"` through `sh -c` (it refuses to start without either; the token is then on docker-agent's command line inside the sandbox, a known limit); `ENGINE_TOKEN` empty, so the template holds no session token; gVisor, `/tmp` executable, `src/agents` read-only at `/agents`, a placeholder `ANTHROPIC_API_KEY`; finds `engine` and `gateway` through `extra_hosts` |
 | `procedure-worker` | `ap build-workers` (profile `workers`) | `checks` | The template of each procedure step's container: `/check` from the check image as `CHECK_DEPLOYMENT=procedure-worker`, run as `AP_HOST_USER`; the template holds no token (`CHECK_TOKEN` empty, so it does not start alone), and `build-workers` sets `CHECK_PROCEDURE`, `CHECK_STEP` and `CHECK_TOKEN`, the container's call token; gVisor; finds `engine` through `extra_hosts`; cannot reach the gateway |
 | `check` | `ap up`, like `contract-lint` (no profile; its image stays optional until built) | `checks` | The check service (`CHECK_DEPLOYMENT=check-service`): runs `/check`, answers only the engine's `AP_CHECK_TOKEN` (`CHECK_TOKEN`), holds no worker token; gVisor, `/tmp` executable, projects read-only; finds `engine` through `extra_hosts`; cannot reach the gateway |

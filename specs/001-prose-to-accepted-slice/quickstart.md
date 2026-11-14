@@ -85,4 +85,8 @@ src/deploy/ap test planted
 
 Expected: five scenarios, each stopped by a check in 3 out of 3 trials: test edits are impossible,
 out-of-scope changes are rejected, a forbidden import is rejected, a false "done" is not accepted,
-and a non-converging review stops after 3 rounds and waits for the developer.
+and a non-converging review stops after 3 rounds and waits for the developer. `ap test` needs no
+started session: it builds the suite in the pinned `golang` container, offline, and runs its test
+binary on the host with your Docker access (ADR 0037). Standard output has one line per trial and
+per scenario, then `planted: 5 of 5 scenarios stopped in 3 out of 3 trials`, and the exit code is
+0; a failing trial prints its messages indented below it and exits 1.

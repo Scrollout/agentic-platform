@@ -25,7 +25,7 @@ Ten services, declared once in `src/deploy/compose.yaml`, plus the local image r
   each on its own internal network with the engine; the analyst's network also has the gateway, its
   only way out.
 - The read-only run page, and its forwarder, which publishes the page's port on `127.0.0.1` only.
-- The terminal client and the test harness, run per command.
+- The terminal client, run per command. The test harness is no service (see Deployment).
 - The step agent workers and the check service (the project folder read-only, the Go toolchain, the pinned oapi-codegen and the template's module cache in its image, so it runs offline), under gVisor with CPU, memory and process limits; the check service answers only the engine, with its own session token, and `ap up` starts it with the engine. The step workers are started per slice and project by `ap build-workers <slice> <project>` (run by `ap build` first): one container per step of the pattern from the `step-agent` or `procedure-worker` template, each mounting only its project, read-only except its step's writable folders (the whole root for generate) and with `.git` always read-only; each gets its own call token, its grant is a file in `${XDG_STATE_HOME:-~/.local/state}/agentic-platform/grants` (owned by the engine's user, mounted only by the engine, read-only; research D31), and the launcher registers it with the engine. Each project has its own step containers, named `agentic-platform-worker-<slice>-<step>-<p>` (`<p>` the first 12 hex digits of the SHA-256 of the project name) and labelled with the slice, step and project, so building another project of the slice leaves the first one's running; `build-workers` refuses with exit 4 (`RunActive`) while a run of the slice has not ended. `ap resume <run>` registers the run's own running containers again and passes the command on; when they or the slice's tokens are gone (after `ap down` or a host reboot) it exits 3 naming `ap build-workers --resume <run>`, which rebuilds that interrupted run's containers in its existing folder, creating nothing in it; then `ap resume <run>` continues the run. `ap replay <run> <project>` builds the run's slice into a new, empty project. Running `build-workers` again changes nothing, and `ap down` removes the workers, their grants and their tokens ([ADR 0036](/decisions/0036-step-containers-per-project-resume-reuses-them.md)).
 - The project worker, the check program's third deployment, in its own small image with git (git pinned by exact Alpine package version), under gVisor and the only service with the projects folder writable: it keeps each new project's git version history and restores the project before each attempt, runs as the developer so they own the files and the repository, keeps its records on the volume `project-worker-state`, answers only the engine with its own session token, and `ap up` starts it with the check service.
 
@@ -85,6 +85,19 @@ Upstream images (nginx, Docker Agent, Go) are pinned by digest only; their publi
 `ap up` starts contract-lint, the check service and the project worker, so build them first with
 `src/deploy/build.sh lint`, `src/deploy/build.sh check` and `src/deploy/build.sh project` (the check image fetches the pinned
 oapi-codegen and the template's modules while it is built, so that build needs the network).
+
+`src/deploy/ap test <suite>` (`planted` or `us2`) runs a T046 acceptance suite without a session,
+Compose or a tests image ([ADR 0037](/decisions/0037-terminal-run-commands-exit-codes-and-test-on-host.md)).
+It builds the suite's test binary in the pinned `golang` container with `--network none`,
+`-tags docker`, `GOPROXY=off` and `-mod=readonly`, the module cache in
+`${XDG_CACHE_HOME:-~/.cache}/agentic-platform/go` (shared with `scripts/check.sh`), then runs the
+binary on the host in `src/tests/acceptance` with `-test.run` and `-test.v=test2json`. The suites
+start their own labs with the developer's own Docker access, an owner-approved exception to the
+test-security rule; no container holds the container engine's socket. `go tool test2json`, in the
+same pinned container, converts the binary's output, and `ap` prints one line per trial, per
+scenario and a total (`planted`), or one per test (`us2`), with a failing test's messages indented
+below it. It exits 0 when everything passes, 1 for a failing trial or test or a suite that does not
+build (the build's error on standard error), and 3 for an unknown suite.
 
 # Observability
 

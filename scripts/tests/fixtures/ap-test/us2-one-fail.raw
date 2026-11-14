@@ -1,0 +1,15 @@
+=== RUN   TestUS2
+=== RUN   TestUS2/US2.1
+    record_test.go:33: US2.1: the run page shows no accepted step
+--- FAIL: TestUS2/US2.1 (0.00s)
+=== NAME  TestUS2
+--- FAIL: TestUS2 (0.00s)
+=== NAME  
+=== RUN   TestUS2_2_EditingTheJudgingTestsIsStopped
+    record_test.go:40: edit-judging-tests: step code was accepted 1 time(s) with the failure planted
+--- FAIL: TestUS2_2_EditingTheJudgingTestsIsStopped (0.00s)
+=== NAME  
+=== RUN   TestUS2_10_AnInterruptedRunResumesWithoutRepeatingAcceptedSteps
+--- PASS: TestUS2_10_AnInterruptedRunResumesWithoutRepeatingAcceptedSteps (0.00s)
+=== NAME  
+FAIL

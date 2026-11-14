@@ -328,14 +328,6 @@ class LauncherContract:
         self.assertTrue(all(any(x == y for y in it) for x in bw_calls),
                         "build-workers calls %s not all before the client call; got %s" % (bw_calls, prefix))
 
-    def test_test_command_runs_in_a_container(self):
-        self.up()
-        self.clear()
-        r = self.ap("test", "planted")
-        self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertTrue(any(c["argv"][:1] == ["compose"] and "run" in c["argv"] and "planted" in c["argv"]
-                            for c in self.calls()))
-
     # image signatures (ADR 0028, research D24): verified before anything starts; fail closed
     def test_up_verifies_every_image_it_passes_to_compose_before_compose_up(self):
         r = self.up()
@@ -452,20 +444,18 @@ class LauncherContract:
                     self.assertNotIn("@sha256:", x, "an image reached Compose on a command line")
                     self.assertNotIn("AP_IMAGE", x)
 
-    def test_client_and_test_commands_run_the_recorded_images(self):
+    def test_client_commands_run_the_recorded_images(self):
         self.up()
         self.clear()
         self.ap("describe")
-        self.ap("test", "planted")
         env_by_service = {}
         for c in self.calls():
             if c["argv"][:1] == ["compose"] and "run" in c["argv"]:
                 env_by_service[tuple(c["argv"])] = c["env"]
-        self.assertEqual(len(env_by_service), 2)
+        self.assertEqual(len(env_by_service), 1)
         rec = self.recorded()
         for env in env_by_service.values():
             self.assertEqual(env.get("AP_IMAGE_CLI"), rec["AP_IMAGE_CLI"])
-            self.assertEqual(env.get("AP_IMAGE_TESTS"), rec["AP_IMAGE_TESTS"])
 
     # images not built (agent, check, tests) and images.env that is not what build.sh writes
     def test_images_not_built_are_placeholders_and_not_verified(self):
@@ -482,14 +472,6 @@ class LauncherContract:
         self.assertEqual(len(vcalls), 3, [x["argv"] for _, x in vcalls])
         for _, x in vcalls:
             self.assertFalse(any("not-built" in a for a in x["argv"]))
-
-    def test_test_command_with_a_placeholder_tests_image_is_not_available(self):
-        self.write_images(["engine", "page", "cli"])
-        self.assertEqual(self.up().returncode, 0)
-        self.clear()
-        r = self.ap("test", "planted")
-        self.assertEqual(r.returncode, 3, r.stderr)
-        self.assertEqual([x for x in self.calls() if x["argv"][:1] == ["compose"] and "run" in x["argv"]], [])
 
     def test_each_of_engine_cli_is_required(self):
         # the run page is optional until it exists (Story 2, T056); test_engine_store_and_page covers it
@@ -551,7 +533,7 @@ class LauncherContract:
         """The session file is read as shell code by every later command, so a loose one stops them too."""
         self.assertEqual(self.up().returncode, 0)
         self.session.chmod(0o666)
-        for args in (["page"], ["describe"], ["test", "planted"]):
+        for args in (["page"], ["describe"]):
             with self.subTest(args=args):
                 self.clear()
                 r = self.ap(*args)
@@ -584,12 +566,12 @@ class LauncherContract:
 
     def compose_run_flags(self, argv):
         i = argv.index("run")
-        stop = next(k for k, x in enumerate(argv) if k > i and x in ("cli", "tests"))
+        stop = next(k for k, x in enumerate(argv) if k > i and x == "cli")
         return argv[i + 1:stop]
 
     def test_compose_run_gets_T_when_stdin_is_not_a_terminal(self):
         self.assertEqual(self.up().returncode, 0)
-        for args in (["describe", "x"], ["test", "planted"]):
+        for args in (["describe", "x"],):
             with self.subTest(args=args):
                 self.clear()
                 self.assertEqual(self.ap(*args).returncode, 0)
@@ -601,7 +583,7 @@ class LauncherContract:
         self.assertEqual(self.up().returncode, 0)
         master, slave = pty.openpty()
         try:
-            for args in (["describe", "x"], ["test", "planted"]):
+            for args in (["describe", "x"],):
                 with self.subTest(args=args):
                     self.clear()
                     self.assertEqual(self.ap(*args, stdin=slave).returncode, 0)
@@ -792,7 +774,7 @@ class RealLauncherTest(LauncherContract, unittest.TestCase):
         self.clear()
         r = self.ap("page", STUB_LS_OWNER=str(os.getuid()))
         self.assertEqual(r.returncode, 0, r.stderr)
-        for args in (["page"], ["describe"], ["test", "planted"], ["build-workers", "slice1"],
+        for args in (["page"], ["describe"], ["build-workers", "slice1"],
                      ["up", "--credentials", str(self.cred), "--projects", str(self.proj)]):
             with self.subTest(args=args):
                 self.clear()
@@ -941,7 +923,7 @@ MUTANTS = [
     ("missing_images_not_named", 'run: src/deploy/build.sh $n', 'run the build',
      {"test_up_without_recorded_images_stops_and_names_build_sh"}),
     ("images_not_in_environment", '  [ ! -f "$imgs" ] || . "$imgs"\n', '',
-     {"test_client_and_test_commands_run_the_recorded_images",
+     {"test_client_commands_run_the_recorded_images",
       "test_compose_gets_the_recorded_images_through_the_environment_only"}),
     ("placeholders_verified_too", '      continue\n', '      v=ap-$n:not-built\n',
      {"test_images_not_built_are_placeholders_and_not_verified"}),
@@ -950,8 +932,6 @@ MUTANTS = [
      {"test_each_of_engine_cli_is_required", "test_up_without_recorded_images_stops_and_names_build_sh"}),
     ("garbage_images_env_accepted", "grep -Evx", "grep -Ex",
      {"test_images_env_that_is_not_what_build_sh_writes_stops_up"}),
-    ("test_runs_with_placeholder", '*@sha256:*) ;; *) echo "ap: test: not available yet" >&2; exit 3 ;; esac', '*) ;; esac',
-     {"test_test_command_with_a_placeholder_tests_image_is_not_available"}),
     ("no_placeholders", 'eval "[ -n \\"\\${AP_IMAGE_$N:-}\\" ] || AP_IMAGE_$N=ap-$n:not-built"', ':',
      {"test_images_not_built_are_placeholders_and_not_verified"}),
     ("verifies_only_engine", 'for n in $names; do\n    N=$(echo "$n" | tr a-z A-Z)\n    v=', 'for n in engine; do\n    N=$(echo "$n" | tr a-z A-Z)\n    v=',

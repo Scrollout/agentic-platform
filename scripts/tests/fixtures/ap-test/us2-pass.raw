@@ -1,0 +1,13 @@
+=== RUN   TestUS2
+=== RUN   TestUS2/US2.1
+--- PASS: TestUS2/US2.1 (0.00s)
+=== NAME  TestUS2
+--- PASS: TestUS2 (0.00s)
+=== NAME  
+=== RUN   TestUS2_2_EditingTheJudgingTestsIsStopped
+--- PASS: TestUS2_2_EditingTheJudgingTestsIsStopped (0.00s)
+=== NAME  
+=== RUN   TestUS2_10_AnInterruptedRunResumesWithoutRepeatingAcceptedSteps
+--- PASS: TestUS2_10_AnInterruptedRunResumesWithoutRepeatingAcceptedSteps (0.00s)
+=== NAME  
+PASS
