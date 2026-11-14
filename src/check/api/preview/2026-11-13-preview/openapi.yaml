@@ -217,6 +217,8 @@ paths:
         false` naming that output. Every input that is an earlier step's output is bound through
         `before`: each of its files in the folder must equal its entry in `before`, except a path
         the step may itself write (judged as its output, such as the seam a code step replaces);
+        and when neither its producer's later steps nor this step may write any of its paths, its
+        framed hash is also computed from the folder and must equal the one the request names;
         otherwise the verdict is `passed: false` naming that input. So a verdict always concerns
         the files the engine stored. An output or input that is not a set of project files (the
         review step's `findings`, a `slice/<part>`) is exempt. A check that meets something it cannot
