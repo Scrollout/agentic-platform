@@ -87,6 +87,9 @@ type stamp struct {
 	Round      *int   `json:"round,omitempty"`
 	Attempt    *int   `json:"attempt,omitempty"`
 	ReusedFrom string `json:"reused_from,omitempty"`
+	// OpenRound: the commit of a review round left with blocking findings open (contract,
+	// CommitRequest.open_round); only its subject differs.
+	OpenRound bool `json:"open_round,omitempty"`
 }
 
 // message is the commit message for the stamp (contract, commitStep): a subject, an empty line,
@@ -94,9 +97,12 @@ type stamp struct {
 // commits have the same trailers exactly when they have the same message.
 func (t stamp) message() string {
 	var b strings.Builder
-	if t.ReusedFrom != "" {
+	switch {
+	case t.ReusedFrom != "":
 		fmt.Fprintf(&b, "Step %s reused in %s\n\n", t.Step, t.Run)
-	} else {
+	case t.OpenRound && t.Round != nil:
+		fmt.Fprintf(&b, "Step %s round %d left open in %s\n\n", t.Step, *t.Round, t.Run)
+	default:
 		fmt.Fprintf(&b, "Step %s accepted in %s\n\n", t.Step, t.Run)
 	}
 	fmt.Fprintf(&b, "Run: %s\nStep: %s\n", t.Run, t.Step)
@@ -748,6 +754,10 @@ func (s *service) CommitStep(ctx context.Context, req gen.CommitStepRequestObjec
 	case body.Outputs != nil && !reused:
 		return nil, fault(400, gen.ErrorCodeInvalidRequest, "send outputs only with reused_from")
 	}
+	openRound := body.OpenRound != nil && *body.OpenRound
+	if openRound && (reused || body.Attempt == nil || body.Round == nil) {
+		return nil, fault(400, gen.ErrorCodeInvalidRequest, "send open_round only with attempt and round, never with reused_from")
+	}
 	var outputs []gen.ReusedOutput
 	if body.Outputs != nil {
 		outputs = *body.Outputs
@@ -760,7 +770,7 @@ func (s *service) CommitStep(ctx context.Context, req gen.CommitStepRequestObjec
 		seen[o.Name] = true
 	}
 	w := wanted{
-		stamp:  stamp{Run: body.Run, Step: body.Step.Name, Round: body.Round, Attempt: body.Attempt},
+		stamp:  stamp{Run: body.Run, Step: body.Step.Name, Round: body.Round, Attempt: body.Attempt, OpenRound: openRound},
 		before: body.Before, files: body.ProjectFiles, date: body.AcceptedAt.Unix(),
 	}
 	if reused {

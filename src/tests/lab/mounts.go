@@ -71,8 +71,10 @@ func writableFolders(writable []string) []string {
 
 // StepMounts is the mounts of each step of the pattern, by step name, as `ap build-workers` makes
 // them: projectsDir/project at /projects/<project> read-only, each writable folder writable (the
-// whole root instead when one is the root), and `.git` read-only on top. A step named in
-// writableRoot (test-only, research D34) gets its root writable, `.git` still read-only.
+// whole root instead when one is the root, with review/ read-only on top), and `.git` read-only on
+// top. Only the review step, whose writable folder it is, writes review/ (owner, 2026-11-14). A
+// step named in writableRoot (test-only, research D34) gets its root writable, `.git` and
+// review/ still read-only.
 func StepMounts(root, projectsDir, project string, writableRoot ...string) (map[string][]Mount, error) {
 	steps, err := patternSteps(root)
 	if err != nil {
@@ -84,7 +86,7 @@ func StepMounts(root, projectsDir, project string, writableRoot ...string) (map[
 		folders := writableFolders(s.Writable)
 		var m []Mount
 		if slices.Contains(writableRoot, s.Name) || slices.Contains(folders, ".") {
-			m = append(m, Mount{pdir, inside, false})
+			m = append(m, Mount{pdir, inside, false}, Mount{filepath.Join(pdir, "review"), inside + "/review", true})
 		} else {
 			m = append(m, Mount{pdir, inside, true})
 			for _, f := range folders {
@@ -97,13 +99,14 @@ func StepMounts(root, projectsDir, project string, writableRoot ...string) (map[
 }
 
 // SkeletonFolders is every folder, relative to the project and sorted, that `ap build-workers`
-// makes before the step containers start: `.git`, each step's writable folders and their parents.
+// makes before the step containers start: `.git`, `review` (which a writable root mounts
+// read-only), each step's writable folders and their parents.
 func SkeletonFolders(root string) ([]string, error) {
 	steps, err := patternSteps(root)
 	if err != nil {
 		return nil, err
 	}
-	set := map[string]bool{".git": true}
+	set := map[string]bool{".git": true, "review": true}
 	for _, s := range steps {
 		for _, f := range writableFolders(s.Writable) {
 			for ; f != "." && f != "/" && f != ""; f = path.Dir(f) {

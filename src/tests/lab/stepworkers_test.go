@@ -103,7 +103,8 @@ func wantMounts(projects, project string, folders []string, rootWritable bool) [
 		}
 	}
 	if rootWritable {
-		m = append(m, Mount{pdir, inside, false})
+		// review/ stays read-only for a step whose root is writable (generate; owner, 2026-11-14).
+		m = append(m, Mount{pdir, inside, false}, Mount{filepath.Join(pdir, "review"), inside + "/review", true})
 	} else {
 		m = append(m, Mount{pdir, inside, true})
 		for _, f := range folders {
@@ -121,7 +122,7 @@ func byTarget(m []Mount) []Mount {
 
 // TestStepMountsAreBuildWorkers: each step's mounts are the ones `ap build-workers` makes: the
 // project read-only, each writable folder writable, the root for generate, `.git` read-only on
-// top, and the review step (writable: [] today) wholly read-only.
+// top, and the review step with review/ writable.
 func TestStepMountsAreBuildWorkers(t *testing.T) {
 	root := repoRoot(t)
 	projects := "/host/projects"
@@ -148,8 +149,8 @@ func TestStepMountsAreBuildWorkers(t *testing.T) {
 				t.Errorf("generate's writable folders are %v; this test expects the root among them", f)
 			}
 		case "review":
-			if len(f) != 0 {
-				t.Errorf("review's writable folders are %v; this test expects none (T076 adds review/)", f)
+			if !reflect.DeepEqual(f, []string{"review"}) {
+				t.Errorf("review's writable folders are %v; this test expects [review]", f)
 			}
 		}
 	}

@@ -82,6 +82,10 @@ func (h *history) Commit(ctx context.Context, r machine.CommitRequest) (bool, er
 	} else {
 		attempt := r.Attempt
 		body.Attempt = &attempt
+		if r.OpenRound { // an open review round's commit says so (check contract, CommitRequest)
+			open := true
+			body.OpenRound = &open
+		}
 	}
 	resp, err := h.project.CommitStepWithResponse(ctx, &gen.CommitStepParams{ApiVersion: checksvc.APIVersion()}, body)
 	if err != nil {

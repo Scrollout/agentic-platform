@@ -825,8 +825,8 @@ class ProjectWithHistoryTest(BuildWorkersRig, unittest.TestCase):
     def git_state(self):
         return tree(self.project / ".git")
 
-    def test_the_review_container_cannot_write_anything_in_the_project(self):
-        self.assertEqual(self.writable["review"], [])
+    def test_the_review_container_writes_only_its_witness_folder(self):
+        self.assertEqual(self.writable["review"], ["review/**"])
         before = self.git_state()
         self.assertEqual(self.probe("review"), [])
         self.assertEqual(tree_diff(before, self.git_state()), [])

@@ -847,7 +847,8 @@ token_of() { awk -v s="$1" -v f="$2" '$1 == s { print $f }' "$tokfile"; }
 # D30): the project folder with an empty `.git` and the folders of each step's writable entries;
 # one container per step of the pattern, from the step-agent or procedure-worker template under
 # gVisor, with only that step's project mounted (read-only, its writable folders writable, `.git`
-# read-only; the review step's wholly read-only); a worker token and a call token per container, its
+# read-only; `review/`, the review step's witness tests, writable only for the review step and
+# read-only for every other, generate's writable root included); a worker token and a call token per container, its
 # grant in the grants folder and its registration with the engine. A container started with the
 # same settings and still running is left alone, so running it again changes nothing.
 build_workers() {
@@ -948,7 +949,7 @@ build_workers() {
   # The project folder, its empty `.git` (the project worker makes the repository in it, D30) and
   # the folders the steps mount writable; empty folders are no project files.
   if [ -z "$resume_run" ]; then
-    mkdir -p -- "$pdir/.git" || die 1 "cannot create the project folder $pdir"
+    mkdir -p -- "$pdir/.git" "$pdir/review" || die 1 "cannot create the project folder $pdir"
     printf '%s\n' "$steps" | while read -r st _ entries; do
       # shellcheck disable=SC2086
       for f in $(step_folders $entries); do
@@ -963,7 +964,8 @@ build_workers() {
     # shellcheck disable=SC2086
     folders=$(step_folders $entries)
     case " $(printf '%s ' $folders)" in
-      *' . '*) mounts="-v $pdir:$inside" ;;
+      # the root writable (generate): review/ stays read-only on top, as .git (owner, 2026-11-14)
+      *' . '*) mounts="-v $pdir:$inside -v $pdir/review:$inside/review:ro" ;;
       *)
         mounts="-v $pdir:$inside:ro"
         for f in $folders; do mounts="$mounts -v $pdir/$f:$inside/$f"; done

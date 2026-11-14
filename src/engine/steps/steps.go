@@ -263,8 +263,8 @@ func (w *worker) agent(ctx context.Context, r machine.Request, agent, url, token
 	if want == "" {
 		return machine.Result{}, fmt.Errorf("no pinned model is known for step %s (its agent definition is missing)", r.Step.Name)
 	}
-	if len(r.Step.Outputs) != 1 {
-		return machine.Result{}, fmt.Errorf("agent step %s declares %d outputs; an agent step has exactly one", r.Step.Name, len(r.Step.Outputs))
+	if !agentOutputs(r.Step) {
+		return machine.Result{}, fmt.Errorf("agent step %s declares %d outputs; an agent step has exactly one, except the review step, which declares findings and at most one set of files", r.Step.Name, len(r.Step.Outputs))
 	}
 	before := w.before(r)
 	ans, err := agentcall.New(url, token, agentcall.Autonomous).Ask(ctx, agent, "ap-step-"+r.Step.Name, w.message(r))
@@ -299,21 +299,43 @@ func (w *worker) agent(ctx context.Context, r machine.Request, agent, url, token
 	if sum(framed) != sf.HashValue {
 		return spent, errors.New("readStepFiles: the files do not have the hash the service gave")
 	}
-	out := r.Step.Outputs[0]
-	content := framed
-	if r.Step.Reviews() { // the output is not a file set: the review step's findings
-		if content, err = json.Marshal(nonNilFindings(claims.Findings)); err != nil {
+	outputs, contents := map[string]string{}, map[string][]byte{}
+	for _, out := range r.Step.Outputs {
+		content := framed                              // a set of files: the step's files readStepFiles returned
+		if r.Step.Reviews() && out == findingsOutput { // not a file set: the review step's findings
+			if content, err = json.Marshal(nonNilFindings(claims.Findings)); err != nil {
+				return spent, err
+			}
+		}
+		hash, err := w.store(content)
+		if err != nil {
 			return spent, err
 		}
+		outputs[out], contents[out] = hash, content
 	}
-	hash, err := w.store(content)
-	if err != nil {
-		return spent, err
-	}
-	return machine.Result{Model: ans.Model, Outputs: map[string]string{out: hash}, Findings: claims.Findings,
+	return machine.Result{Model: ans.Model, Outputs: outputs, Findings: claims.Findings,
 		Usage:        machine.Usage{Tokens: ans.Tokens, CostUSD: ans.CostUSD},
 		ChangedLines: changedLines(files, before, w.earlier(r.Artifacts)), Before: before, ProjectFiles: machineFiles(sf.ProjectFiles),
-		Content: map[string][]byte{out: content}}, nil
+		Content: contents}, nil
+}
+
+// findingsOutput is the review step's output that is not a set of files (check contract,
+// Artifacts).
+const findingsOutput = "findings"
+
+// agentOutputs reports whether an agent step's outputs are ones the engine can make: exactly one,
+// or, for the review step, its findings and at most one set of files (its witnesses, research D35).
+func agentOutputs(s machine.Step) bool {
+	if !s.Reviews() {
+		return len(s.Outputs) == 1
+	}
+	sets := 0
+	for _, o := range s.Outputs {
+		if o != findingsOutput {
+			sets++
+		}
+	}
+	return slices.Contains(s.Outputs, findingsOutput) && sets <= 1 && len(s.Outputs) == sets+1
 }
 
 func nonNilFindings(f []machine.Finding) []machine.Finding {
@@ -524,8 +546,15 @@ func (c *checker) Check(ctx context.Context, r machine.CheckRequest) (machine.Ch
 		approved = append(approved, gen.ApprovedPart{Part: p, HashValue: sum(b), Content: b})
 	}
 	var earlier []gen.EarlierStep
-	for _, s := range c.c.Pattern.Steps {
+	ps := c.c.Pattern.Steps
+	for i, s := range ps {
 		if s.Name == r.Step.Name {
+			// The fix step (the one before the review) runs after review rounds, so the review is
+			// among its earlier steps: TestsUnchanged covers its witnesses (contract, EarlierStep).
+			if i+1 < len(ps) && ps[i+1].Reviews() {
+				n := ps[i+1]
+				earlier = append(earlier, gen.EarlierStep{Name: n.Name, Outputs: nonNil(n.Outputs), Writable: nonNil(n.Writable)})
+			}
 			break
 		}
 		earlier = append(earlier, gen.EarlierStep{Name: s.Name, Outputs: nonNil(s.Outputs), Writable: nonNil(s.Writable)})
@@ -606,6 +635,15 @@ func projectFindings(in []machine.Finding) (kept []gen.Finding, dropped []string
 		if f.Check != "" {
 			check := f.Check
 			g.Check = &check
+		}
+		// The witness goes to the check service as given; one whose file is not a project path
+		// is left out (the contract refuses it), so the finding is a suggestion.
+		if w := f.Witness; w != nil && procedures.IsProjectPath(w.File) {
+			file, test := w.File, w.Test
+			g.Witness = &struct {
+				File *gen.ProjectPath `json:"file,omitempty"`
+				Test *string          `json:"test,omitempty"`
+			}{File: &file, Test: &test}
 		}
 		kept = append(kept, g)
 	}

@@ -81,6 +81,11 @@ Shipped by Story 2 so far:
   reused step its `commitStep`, retried with backoff with jitter and otherwise interrupting the
   run (T053e).
   A reused result is reused in any project: `commitStep` writes its stored files there.
+  A review round that leaves blocking findings open, with every check but NoBlockingFindingOpen
+  passing, is recorded as rejected and carries its files, the witnesses among them; when the
+  review step has writable entries, the engine commits them with `commitStep` before the fix's
+  `restoreStep`, so the fix and the next round start from them (data-model, "A review round";
+  T076).
 
 Built for Story 2 (T053a, split into T053c to T053e, all done):
 
@@ -94,7 +99,9 @@ Built for Story 2 (T053a, split into T053c to T053e, all done):
   ([ADR 0032](/decisions/0032-project-version-history-kept-by-a-project-worker.md)).
 - **Step containers** (T053d, T053g, T053j): `ap build-workers` starts the step containers of a slice
   and project when a build or replay is asked for, each with only its step's writable paths
-  writable (research D5). It registers them with the engine and wires each procedure step worker's
+  writable (research D5). The review container has `review/`, its witness tests, writable and
+  nothing else; every other container mounts `review/` read-only, generate included, on top of its
+  writable project root, as `.git` (research D35, T076). It registers them with the engine and wires each procedure step worker's
   token. Each project keeps its own containers, named by slice, step and the project's hash and
   labelled with the project, until `ap down`; `build-workers` refuses while a run of the slice has
   not ended, and `ap resume` registers the run's own containers again; after `ap down` or a reboot,

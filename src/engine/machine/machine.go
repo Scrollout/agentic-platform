@@ -133,6 +133,16 @@ type Finding struct {
 	Text     string `json:"text"`
 	Blocking bool   `json:"blocking"`
 	Check    string `json:"check,omitempty"`
+	// Witness is the new witness test the review wrote for a blocking finding (research D35);
+	// the check service decides from it whether the finding blocks.
+	Witness *Witness `json:"witness,omitempty"`
+}
+
+// Witness is a review finding's witness test: a Go test file under review/r<n>/ and the test
+// function TestR<n>... it declares (run-event.schema.json finding.witness).
+type Witness struct {
+	File string `json:"file"`
+	Test string `json:"test"`
 }
 
 // Line is one line of a file in the project folder.
@@ -323,10 +333,13 @@ type CommitRequest struct {
 	Attempt      int    // the accepted attempt (StepAccepted); 0 for a reused result
 	Round        int    // the event's round, 0 when it has none
 	ReusedFrom   string // ResultReused only: the run that accepted the result
+	// OpenRound is true only for a review round left with blocking findings open (data-model, "A
+	// review round"): Attempt and Round are that round's, AcceptedAt its StepRejected's `at`.
+	OpenRound bool
 	Project      string
 	Before       []File     // the previous accepted step's project files, empty for the first
 	ProjectFiles []File     // the event's Files
-	AcceptedAt   time.Time  // the `at` of the StepAccepted or ResultReused event
+	AcceptedAt   time.Time  // the `at` of the StepAccepted or ResultReused event (StepRejected for an open round)
 	Outputs      []Artifact // ResultReused only: each declared output that is a set of project files
 	TimeLimit    time.Duration
 }

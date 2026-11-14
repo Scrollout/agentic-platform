@@ -58,6 +58,7 @@ budgets:
 #   internal/app/app.go                         generate (the seam), then code
 #   tests/**                                    tests
 #   internal/**, cmd/**                         code
+#   review/**                                   review (witness tests, research D35)
 # The seam (owner, 2026-11-13): the tests always serve gen.Handler(app.New()) from package
 # example.com/service/internal/app. Generate writes internal/app/app.go with New returning the
 # generated stub, so the tests build and fail before any code exists; the code step replaces it
@@ -160,12 +161,20 @@ steps:
     # The digest of src/agents/review.yaml and src/agents/review/ (as for tests).
     agent_digest: "7ae46ba3c221b8edc614defd0d6a2cabe35a143051d4510a72ee30e42afca1c5"
     inputs: [contract, examples, generated-code, tests, code, slice/rules]
-    outputs: [findings]
-    writable: []
+    # Its witness tests (research D35, ADR 0039): each blocking finding's new failing test under
+    # review/r<n>/, in the module (so no godog); committed with the round and kept by every step.
+    outputs: [findings, witnesses]
+    writable:
+      - review/**
     checks:
       - ScopeKept
+      - DependenciesAllowed
+      - TestsBuild
+      - TestsUnchanged
       - FindingsCarryEvidence
       - NoBlockingFindingOpen
     dependencies:
-      allowed: []
-      forbidden: []
+      allowed:
+        - std
+        - github.com/oapi-codegen/runtime/...
+      forbidden: *forbidden

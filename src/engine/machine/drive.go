@@ -22,8 +22,12 @@ func (x *driver) pattern() Pattern { return x.m.cfg.Pattern }
 
 func isReview(s Step) bool { return s.Reviews() }
 
+// findingsOutput is the review step's output that is not a set of project files.
+const findingsOutput = "findings"
+
 // Reviews reports whether the step is the review step, the one run in rounds: its checks include
-// NoBlockingFindingOpen. Its output is its findings, not a set of files.
+// NoBlockingFindingOpen. Its outputs are its findings, not a set of files, and, when it has
+// writable entries, its witness tests (research D35).
 func (s Step) Reviews() bool { return slices.Contains(s.Checks, noBlockingFindingOpen) }
 
 func isAgent(s Step) bool { return strings.HasPrefix(s.Worker, "agent:") }
@@ -187,6 +191,16 @@ func (x *driver) accept(s Step, e Event, reusedFrom string) {
 	if !slices.Contains(x.r.Accepted, s.Name) {
 		x.r.Accepted = append(x.r.Accepted, s.Name)
 	}
+}
+
+// keepOpenRound makes the files a review round with open findings left the run's, and their
+// commit the one to make next (flush, before the fix's restore). e is the round's recorded
+// StepRejected, which carries the files. The round is not accepted: no artifact or reuse.
+func (x *driver) keepOpenRound(s Step, e Event) {
+	x.r.commit, x.r.committed = commitOf(x.r, s, e, ""), false
+	x.m.mu.Lock()
+	defer x.m.mu.Unlock()
+	x.r.before = slices.Clone(e.Files)
 }
 
 // step reuses an accepted result for the step's key, or runs its attempts until one is accepted
@@ -400,7 +414,20 @@ func (x *driver) attempt(ctx context.Context, s Step, at attemptOf) (Result, ver
 		return res, accepted, "", nil
 	case open:
 		why := fmt.Sprintf("review round %d left blocking findings open", at.round)
-		return res, findingsOpen, why, x.reject(base, why)
+		rej := base
+		rej.Kind, rej.Detail = "StepRejected", why
+		// A review that writes witnesses (data-model, "A review round"): the open round's files
+		// are committed like an accepted step's, so the fix and the next round start from them.
+		if len(s.Writable) > 0 {
+			rej.Files = slices.Clone(res.ProjectFiles)
+		}
+		if err := x.recordp(&rej); err != nil {
+			return res, findingsOpen, why, err
+		}
+		if rej.Files != nil {
+			x.keepOpenRound(s, rej)
+		}
+		return res, findingsOpen, why, nil
 	}
 	why := "failed checks: " + strings.Join(failed, ", ")
 	return res, rejected, why, x.reject(base, why)
@@ -454,18 +481,23 @@ func historyBackoff(n int) time.Duration {
 // historyMinLeft is the least of the run's time budget a History call is made with.
 const historyMinLeft = time.Second
 
-// commitOf is the commit of the step a StepAccepted or ResultReused event accepted, made on the
-// files r held before it (r.before, not yet replaced).
+// commitOf is the commit of the step a StepAccepted or ResultReused event accepted, or of the
+// review round a StepRejected left open, made on the files r held before it (r.before, not yet
+// replaced).
 func commitOf(r *run, s Step, e Event, reusedFrom string) *CommitRequest {
 	c := &CommitRequest{Run: r.ID, Step: s, Attempt: e.Attempt, Round: e.Round, Project: r.Project,
 		Before: slices.Clone(r.before), ProjectFiles: slices.Clone(e.Files), AcceptedAt: e.At}
+	if e.Kind == "StepRejected" { // an open review round (keepOpenRound)
+		c.OpenRound = true
+	}
 	if e.Kind == "ResultReused" {
 		c.Attempt, c.ReusedFrom = 0, reusedFrom
-		if !s.Reviews() { // the review's findings are not a set of project files
-			for i, o := range s.Outputs {
-				if i < len(e.Artifacts) {
-					c.Outputs = append(c.Outputs, Artifact{Name: o, SHA256: e.Artifacts[i]})
-				}
+		for i, o := range s.Outputs {
+			if s.Reviews() && o == findingsOutput { // the review's findings are not a set of project files
+				continue
+			}
+			if i < len(e.Artifacts) {
+				c.Outputs = append(c.Outputs, Artifact{Name: o, SHA256: e.Artifacts[i]})
 			}
 		}
 	}

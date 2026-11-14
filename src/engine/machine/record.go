@@ -74,6 +74,13 @@ func (m *Machine) load(events []Event) (*run, error) {
 			if e.Finding != nil && e.Finding.Blocking {
 				openOf[e.Round] = append(openOf[e.Round], *e.Finding)
 			}
+		case "StepRejected":
+			// A review round left open with its witnesses (drive.go, keepOpenRound): its files
+			// are the project's, and their commit is made again first.
+			if review && e.Files != nil {
+				r.commit = commitOf(r, p.Steps[si], e, "")
+				r.before = slices.Clone(e.Files)
+			}
 		case "StepAccepted", "ResultReused":
 			s := p.Steps[si]
 			if len(e.Artifacts) != len(s.Outputs) {

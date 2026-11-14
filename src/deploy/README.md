@@ -231,13 +231,15 @@ labelled with another project; writes the slice's grants and registers each step
 digits of the SHA-256 of the project name, so the name fits one 63-character DNS label;
 `registerWorker`, sent by a one-off busybox `nc` container on the `agents` network with the request
 on standard input, so no token is on a command line, as the engine reads are; a 404 stops it with exit 4 before any folder or container is made; the grant files are already written by then); makes the
-project folder, an empty `.git` and the folders of each step's entries (`dir/**` its folder, an
-exact path its folder); and starts one container per step with `docker compose run -d` from
+project folder, an empty `.git`, `review/` and the folders of each step's entries (`dir/**` its
+folder, an exact path its folder); and starts one container per step with `docker compose run -d` from
 `step-agent` or `procedure-worker`. Each container mounts only its project, at
 `/projects/<project>`: read-only, with only its step's folders writable (contract-check `api/` and
-`features/`, tests `tests/`, code `internal/` and `cmd/`, review nothing), except generate, whose
-whole project root is writable because its `go.mod` and `go.sum` are in it (a stated limit); `.git`
-is bound read-only on top in every container. The container holds only its call token; its worker
+`features/`, tests `tests/`, code `internal/` and `cmd/`, review `review/`, for its witness tests
+(research D35)), except generate, whose whole project root is writable because its `go.mod` and
+`go.sum` are in it (a stated limit), with `review/` bound read-only on top (owner, 2026-11-14);
+`.git` is bound read-only on top in every container, so only the review container writes
+`review/`. The container holds only its call token; its worker
 token, used only by the launcher to register it, stays in
 `${XDG_STATE_HOME:-~/.local/state}/agentic-platform/workers/<slice>` (mode 600) for the session.
 A container carries a label of what it was started with, so one that is running with the same
