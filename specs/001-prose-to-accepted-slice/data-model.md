@@ -263,6 +263,6 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
 - **Contract hash**: the project's contract equals the approved contract's hash.
 - **Evidence-backed finding**: a review finding blocks only when it names a rule ID, a file the fix
   step's `writable` matches, a line and a new witness test in that rule's folder, and that witness
-  test, run alone with coverage against the current code, fails and its coverage profile shows the
-  finding's line run; printed text is never evidence; any other finding is a suggestion (FR-017,
+  test, run alone with coverage against the current code, fails and its coverage profile, less a `-run '^$'` baseline of the same package
+  (lines run at package init never count), shows the finding's line run; printed text is never evidence; any other finding is a suggestion (FR-017,
   D11, D35).
