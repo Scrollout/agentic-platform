@@ -143,7 +143,10 @@ the pattern with `AP_LAB_MODEL=scripted`. Review the new mappings with their scr
 committing them; the acceptance run itself always replays them through WireMock with exact
 matching and ends with no miss.
 
-## Suite times (T054l, measured 2026-11-15)
+## Suite times (T054l and T100, measured 2026-11-15)
+
+The caps are 60 minutes for `ap test planted` and 75 minutes for `ap test us2`; a time within 10
+minutes of its cap goes to the owner.
 
 On the development host, images already built (the lab's image builds took 3 s; a cold
 `aptest-check:lab` build takes about 80 s), one suite at a time:
@@ -152,6 +155,9 @@ On the development host, images already built (the lab's image builds took 3 s; 
 |-----|-----------|-------|
 | `src/deploy/ap test planted` (replay) | 20 min 16 s | test binary build, 5 labs, 15 trials, teardown; 5 of 5 scenarios stopped in 3 of 3 trials, no miss |
 | `src/deploy/ap test us2` (replay) | 9 min 16 s | build, 5 labs; 5 of 5 tests passed, no miss (an earlier run, 7 min 20 s, failed `TestUS2` on two test checks since corrected) |
+| `src/deploy/ap test planted` (replay, after T094 and T100, 2026-11-15) | 24 min 12 s | as above; each check call now compiles in its own folder from the warm base (T094), and `non-converging-review` starts a lab per trial (T100); 5 of 5 scenarios stopped in 3 of 3 trials, no miss |
+| `src/deploy/ap test us2` (replay, after T094 and T100, 2026-11-15) | 7 min 37 s | 5 of 5 tests passed, no miss |
+| `synth-steps.sh '^TestPlanted$/^non-converging-review$'` (T100) | 5 min 47 s | one scenario, 3 trials of 1.8 to 2.0 min, each its own lab; one 18-exchange `RUN-1` set serves all three |
 | `synth-steps.sh '^TestPlanted$'` | 19 min 23 s | per scenario 2.7 to 4.5 min (lab start and slice approval about 15 s, first trial 0.9 to 1.3 min, later trials 0.6 to 2.2 min) |
 | `synth-steps.sh '^(TestUS2\|TestUS2_7_.*\|TestUS2_10_.*)$'` | 8 min 20 s | `TestUS2` 3.9 min, US2.7 1.5 min, US2.10 3.0 min |
 

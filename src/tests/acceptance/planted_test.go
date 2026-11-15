@@ -8,7 +8,8 @@
 // set fails the test and names the file; nothing is skipped.
 //
 // Each scenario has its own lab, and its three trials are runs of the same slice into different
-// projects, each with its own step workers. A stopped run waits for the developer, so each trial
+// projects, each with its own step workers; a scenario with freshLabPerTrial instead starts a new
+// lab, with a new result store, for each trial. A stopped run waits for the developer, so each trial
 // ends by accepting the hand-over (which the next build needs: one active run at a time, FR-021).
 package acceptance
 
@@ -29,6 +30,11 @@ type scenario struct {
 	step         string // the step whose check must stop it
 	check        string // the check that must fail (code steps)
 	writableCode bool   // the code step's project root is writable, `.git` read-only (lab.WritableRoot)
+	// freshLabPerTrial starts a new lab, with a new result store, for each trial, so each trial is
+	// RUN-1 of its own lab, and the trials share one project name so one recording set serves them.
+	// In one lab, trials 2 and 3 would reuse trial 1's kept open review rounds (research D36) and
+	// make no review attempt (T100).
+	freshLabPerTrial bool
 }
 
 var plantedScenarios = []scenario{
@@ -42,7 +48,7 @@ var plantedScenarios = []scenario{
 		spec: "the code step's answer imports os/exec, which the pattern forbids (US2.4)"},
 	{name: "claims-done", step: "code", check: "AllTestsPass",
 		spec: "the code step's answer says the work is done and writes no implementation (US2.5)"},
-	{name: "non-converging-review", step: "review",
+	{name: "non-converging-review", step: "review", freshLabPerTrial: true,
 		spec: "each of review rounds 1 to 3 writes a new witness test that fails at a line of the code and names it; the code agent fixes after rounds 1 and 2 so that round's witness passes, and a new confirmed finding opens the next round (US2.6, research D35)"},
 }
 
@@ -175,17 +181,36 @@ func TestPlanted(t *testing.T) {
 	for _, sc := range plantedScenarios {
 		sc := sc
 		t.Run(sc.name, func(t *testing.T) {
-			l, slice := plantedLab(t, sc)
+			noMisses := func(t *testing.T, l *lab.Lab) {
+				if n := l.Misses(t); n != 0 {
+					t.Errorf("%s: the replay server saw %d request(s) no recording matched:\n%s", sc.name, n, l.MissesJSON(t))
+				}
+			}
+			var l *lab.Lab
+			var slice string
+			if !sc.freshLabPerTrial {
+				l, slice = plantedLab(t, sc)
+			}
 			// Each trial is a subtest TestPlanted/<scenario>/trial-<n>, so `ap test planted` reads
 			// its result from the test events (src/cli/contract.md, research D33).
 			for trial := 1; trial <= 3; trial++ {
 				project := fmt.Sprintf("%s-%d", sc.name, trial)
+				if sc.freshLabPerTrial {
+					project = fmt.Sprintf("%s-1", sc.name)
+				}
 				t.Run(fmt.Sprintf("trial-%d", trial), func(t *testing.T) {
+					if sc.freshLabPerTrial {
+						// The trial's own lab, stopped when the trial ends.
+						l, slice := plantedLab(t, sc)
+						plantedTrial(t, l, slice, sc, project)
+						noMisses(t, l)
+						return
+					}
 					plantedTrial(t, l, slice, sc, project)
 				})
 			}
-			if n := l.Misses(t); n != 0 {
-				t.Errorf("%s: the replay server saw %d request(s) no recording matched:\n%s", sc.name, n, l.MissesJSON(t))
+			if !sc.freshLabPerTrial {
+				noMisses(t, l)
 			}
 		})
 	}
