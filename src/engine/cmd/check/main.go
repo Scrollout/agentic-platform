@@ -9,7 +9,9 @@
 // deployment; CHECK_PROJECTS_DIR, the existing projects folder; and CHECK_DEPLOYMENT,
 // `check-service`, `procedure-worker` or `project-worker`. The check service and a procedure
 // worker also need CHECK_OAPI_CODEGEN, the pinned oapi-codegen binary, and CHECK_TEMPLATE_DIR, the
-// existing folder of the pattern's module template. A procedure worker also needs CHECK_PROCEDURE,
+// existing folder of the pattern's module template, and may name in CHECK_GOCACHE_BASE the
+// read-only warm base Go cache each call copies as its GOCACHE (the image sets /opt/gocache-base;
+// unset, each call starts from an empty cache; set but not a folder, every call fails). A procedure worker also needs CHECK_PROCEDURE,
 // the procedure it serves (the step's worker is `procedure:<name>`), and CHECK_STEP, the step it
 // serves; the other deployments refuse both. The project worker needs CHECK_HISTORY_DIR, the
 // existing folder, outside every project, where it keeps its record of each project's last
@@ -87,6 +89,7 @@ func config(getenv func(string) string) (checksvc.Config, string, error) {
 			}
 		}
 		c.OapiCodegen, c.Template = env["CHECK_OAPI_CODEGEN"], env["CHECK_TEMPLATE_DIR"]
+		c.GoCacheBase = getenv("CHECK_GOCACHE_BASE")
 		folders = append(folders, "CHECK_TEMPLATE_DIR")
 		if fi, err := os.Stat(c.OapiCodegen); err != nil || !fi.Mode().IsRegular() || fi.Mode().Perm()&0o111 == 0 {
 			return checksvc.Config{}, "", errors.New("CHECK_OAPI_CODEGEN is not an executable file")

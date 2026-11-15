@@ -31,8 +31,12 @@ type GenerateConfig struct {
 	// Env is added to the minimal environment of every command the procedure runs
 	// (checks.CommandEnv: PATH, HOME and the Go caches and settings, never a token), for example
 	// GOMODCACHE or GOCACHE; a later entry wins. checks.OfflineGo comes after it: no module proxy,
-	// no workspace, the local toolchain only.
+	// no workspace, the local toolchain only. The check program gives its call's variables here
+	// (checks.CallFolder.Env), last.
 	Env []string
+	// TempDir is where the procedure makes its scratch folders: the call's folder in the check
+	// program (checks.CallFolder.Scratch), so they go with the call; empty means os.TempDir().
+	TempDir string
 }
 
 // vendorOnlyDir is the template folder whose package lists what to vendor besides the packages
@@ -126,7 +130,7 @@ func New() gen.ServerInterface { return gen.Stub{} }
 
 // generateOnce runs one generation in a fresh folder and returns the output's files, or a reason.
 func generateOnce(ctx context.Context, cfg GenerateConfig, contract []byte) ([]File, string, error) {
-	dir, err := os.MkdirTemp("", "generate-")
+	dir, err := os.MkdirTemp(cfg.TempDir, "generate-")
 	if err != nil {
 		return nil, "", err
 	}

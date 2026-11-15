@@ -676,7 +676,7 @@ func genOnly(tree map[string][]byte) map[string][]byte {
 // itself is not touched.
 func GenerationDrift(r GoRunner, project string) []CheckResult {
 	const check = "GenerationRepeatable"
-	tmp, err := os.MkdirTemp("", "drift-")
+	tmp, err := scratch(r, "drift-")
 	if err != nil {
 		return []CheckResult{fail(check, "no folder for a fresh generation: "+err.Error())}
 	}

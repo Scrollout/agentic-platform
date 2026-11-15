@@ -475,7 +475,6 @@ func TestBusyBeyondTwoCalls(t *testing.T) {
 	env := []string{"AP_TEST_PIDDIR=" + pids}
 	c := checkConfig(t, root)
 	c.Env = append(c.Env, env...)
-	warm(t, filepath.Join(root, "p1"), c.Env)
 	base := serve(t, c)
 
 	var wg sync.WaitGroup
@@ -484,7 +483,7 @@ func TestBusyBeyondTwoCalls(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			results[i] = post(t, base, "/checks/AllTestsPass/run", sleepCheckBody(t, filepath.Join(root, p), 8))
+			results[i] = post(t, base, "/checks/AllTestsPass/run", sleepCheckBody(t, filepath.Join(root, p), 60))
 		}()
 	}
 	deadline := time.Now().Add(60 * time.Second)
@@ -520,10 +519,9 @@ func TestTimeLimitKillsProcessTree(t *testing.T) {
 	pids := t.TempDir()
 	c := checkConfig(t, root)
 	c.Env = append(c.Env, "AP_TEST_PIDDIR="+pids)
-	warm(t, dir, c.Env)
 	base := serve(t, c)
 	start := time.Now()
-	r := post(t, base, "/checks/AllTestsPass/run", sleepCheckBody(t, dir, 5))
+	r := post(t, base, "/checks/AllTestsPass/run", sleepCheckBody(t, dir, 30))
 	took := time.Since(start)
 	wantProblem(t, r, 504, "TimeLimitExceeded")
 	if took > 40*time.Second {

@@ -66,6 +66,11 @@ type Config struct {
 	// example GOMODCACHE, GOCACHE or GOFLAGS; a later entry wins. The service's own settings come
 	// after it: no module proxy, no workspace, the local toolchain only.
 	Env []string
+	// GoCacheBase is the read-only warm base Go cache (the image's /opt/gocache-base, from
+	// CHECK_GOCACHE_BASE): each call copies it into its own folder as its GOCACHE. Empty means no
+	// base, each call starting from an empty cache; set but not an existing folder, every call
+	// fails before it runs a command.
+	GoCacheBase string
 }
 
 // NewHandler returns the deployment's whole HTTP handler. With History set it is the project

@@ -121,6 +121,11 @@ func (s *service) RunCheck(ctx context.Context, req gen.RunCheckRequestObject) (
 		}
 	}
 	return bounded(ctx, body.TimeLimitSeconds, func(ctx context.Context) (gen.RunCheckResponseObject, error) {
+		cf, err := s.callFolder()
+		if err != nil {
+			return nil, err
+		}
+		defer cf.Remove()
 		dir, err := s.projectDir(body.Project)
 		if err != nil {
 			return nil, err
@@ -136,7 +141,7 @@ func (s *service) RunCheck(ctx context.Context, req gen.RunCheckRequestObject) (
 		} else if faults := s.binding(p, body); len(faults) > 0 {
 			results = []checks.CheckResult{{Check: name, Reason: strings.Join(faults, "; ")}}
 		} else {
-			c := &call{dir: dir, req: body, project: p, before: beforeTree(body.Before), runner: s.runner(ctx)}
+			c := &call{dir: dir, req: body, project: p, before: beforeTree(body.Before), runner: s.runner(ctx, cf)}
 			results = impl(c)
 		}
 		if err := ctx.Err(); err != nil {
@@ -356,6 +361,11 @@ func (s *service) RunProcedure(ctx context.Context, req gen.RunProcedureRequestO
 		inputs = append(inputs, procedures.Input{Name: in.Name, SHA256: in.HashValue, Content: in.Content})
 	}
 	return bounded(ctx, body.TimeLimitSeconds, func(ctx context.Context) (gen.RunProcedureResponseObject, error) {
+		cf, err := s.callFolder()
+		if err != nil {
+			return nil, err
+		}
+		defer cf.Remove()
 		dir, err := s.projectDir(body.Project)
 		if err != nil {
 			return nil, err
@@ -367,7 +377,7 @@ func (s *service) RunProcedure(ctx context.Context, req gen.RunProcedureRequestO
 		if err := p.strict(body.Project); err != nil {
 			return nil, err
 		}
-		res, err := run(ctx, s, inputs)
+		res, err := run(ctx, s, cf, inputs)
 		switch {
 		case ctx.Err() != nil:
 			return nil, ctx.Err()
@@ -443,22 +453,37 @@ func (s *service) takeOutputs(st gen.StepFacts, res procedures.Result) ([]gen.Pr
 
 // procedureByName maps each fixed procedure's name (a step's worker `procedure:<name>`) to its
 // implementation in engine/procedures.
-var procedureByName = map[string]func(ctx context.Context, s *service, in []procedures.Input) (procedures.Result, error){
-	"contract-check": func(ctx context.Context, _ *service, in []procedures.Input) (procedures.Result, error) {
+var procedureByName = map[string]func(ctx context.Context, s *service, cf *checks.CallFolder, in []procedures.Input) (procedures.Result, error){
+	"contract-check": func(ctx context.Context, _ *service, _ *checks.CallFolder, in []procedures.Input) (procedures.Result, error) {
 		return procedures.ContractCheck(ctx, in)
 	},
-	"generate": func(ctx context.Context, s *service, in []procedures.Input) (procedures.Result, error) {
-		return procedures.Generate(ctx, procedures.GenerateConfig{OapiCodegen: s.cfg.OapiCodegen, Template: s.cfg.Template, Env: s.env()}, in)
+	"generate": func(ctx context.Context, s *service, cf *checks.CallFolder, in []procedures.Input) (procedures.Result, error) {
+		return procedures.Generate(ctx, procedures.GenerateConfig{OapiCodegen: s.cfg.OapiCodegen, Template: s.cfg.Template, Env: s.env(cf), TempDir: cf.TempDir()}, in)
 	},
 }
 
 // ---- running go ----
 
+// callFolder makes the call's own new folder (checks.CallFolder), its GOCACHE a copy of
+// Config.GoCacheBase when set, the module cache resolved from Config.Env and this process before
+// the call sets its own GOPATH. A GoCacheBase that is not a folder fails the call before any
+// command runs (500). The call removes
+// it when it ends, whether it passes, fails, times out or is cancelled.
+func (s *service) callFolder() (*checks.CallFolder, error) {
+	cf, err := checks.NewCallFolder(s.cfg.Env, s.cfg.GoCacheBase)
+	if err != nil {
+		return nil, fmt.Errorf("no folder for the call: %w", err)
+	}
+	return cf, nil
+}
+
 // env is the environment of every command a check or procedure runs, never the process's own
 // (which holds CHECK_TOKEN and the other settings): checks.CommandEnv of Config.Env with the
-// oapi-codegen binary's folder first on PATH (GenerationRepeatable runs it through go generate).
-// No CHECK_* variable and no entry holding the token is passed, whatever Config.Env says.
-func (s *service) env() []string {
+// oapi-codegen binary's folder first on PATH (GenerationRepeatable runs it through go generate),
+// then the call's own variables (cf.Env: GOCACHE, GOTMPDIR, TMPDIR, HOME and GOPATH in its folder,
+// GOMODCACHE the shared module cache), which win over every earlier entry. No CHECK_* variable
+// and no entry holding the token is passed, whatever Config.Env says.
+func (s *service) env(cf *checks.CallFolder) []string {
 	extra := append([]string{}, s.cfg.Env...)
 	if s.cfg.OapiCodegen != "" {
 		path := os.Getenv("PATH")
@@ -469,6 +494,7 @@ func (s *service) env() []string {
 		}
 		extra = append(extra, "PATH="+filepath.Dir(s.cfg.OapiCodegen)+string(os.PathListSeparator)+path)
 	}
+	extra = append(extra, cf.Env()...)
 	var env []string
 	for _, e := range checks.CommandEnv(extra...) {
 		if !strings.HasPrefix(e, "CHECK_") && !strings.Contains(e, s.cfg.Token) {
@@ -479,15 +505,20 @@ func (s *service) env() []string {
 }
 
 // runner is the go toolchain for one call: offline, outside any workspace, the local toolchain
-// only, each command in its own process group, killed whole when the call's context ends.
+// only, with the call's own folder (its variables, and the checks' scratch folders through
+// Scratch), each command in its own process group, killed whole when the call's context ends.
 type runner struct {
 	ctx context.Context
 	env []string
+	cf  *checks.CallFolder
 }
 
-func (s *service) runner(ctx context.Context) checks.GoRunner {
-	return runner{ctx: ctx, env: s.env()}
+func (s *service) runner(ctx context.Context, cf *checks.CallFolder) checks.GoRunner {
+	return runner{ctx: ctx, env: s.env(cf), cf: cf}
 }
+
+// Scratch makes a check's scratch folder inside the call's folder (checks.Scratcher).
+func (r runner) Scratch(prefix string) (string, error) { return r.cf.Scratch(prefix) }
 
 func (r runner) Go(dir string, args ...string) (checks.GoResult, error) {
 	cmd := exec.CommandContext(r.ctx, "go", args...)

@@ -139,7 +139,7 @@ func witnessRun(check string, r GoRunner, project string, f Finding, dir string)
 	if module == "" {
 		return false, failf("cannot be run: go.mod names no module")
 	}
-	tmp, err := os.MkdirTemp("", "witness-")
+	tmp, err := scratch(r, "witness-")
 	if err != nil {
 		return false, failf("cannot be run: no folder for its coverage profile: %v", err)
 	}

@@ -5,6 +5,7 @@ package checks
 // reason names project paths only, and the environment of every command they run.
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -79,7 +80,8 @@ var hostVariables = []string{
 var OfflineGo = []string{"GOPROXY=off", "GOWORK=off", "GOTOOLCHAIN=local"}
 
 // CommandEnv is the environment of a command a check or a procedure runs: the hostVariables this
-// process has, then extra in order (a later entry wins), then OfflineGo.
+// process has, then extra in order (a later entry wins, so a call's own variables, CallFolder.Env,
+// given last win over the host's), then OfflineGo.
 func CommandEnv(extra ...string) []string {
 	var env []string
 	for _, name := range hostVariables {
@@ -89,4 +91,131 @@ func CommandEnv(extra ...string) []string {
 	}
 	env = append(env, extra...)
 	return append(env, OfflineGo...)
+}
+
+// CallFolder is one call's own new, empty temporary folder below os.TempDir() (research D37, ADR
+// 0041): every command of the call has GOCACHE, GOTMPDIR, TMPDIR, HOME and GOPATH inside it, and
+// every scratch folder of the call is made in it (Scratch), so nothing a check writes there
+// survives the call. The module cache is the one exception: it is resolved before the call sets
+// its own GOPATH and passed as GOMODCACHE, outside the folder, shared and read-only in the image.
+type CallFolder struct {
+	dir string
+	env []string
+}
+
+// callDirs are the folders a call's variables name, below its folder.
+var callDirs = []struct{ name, dir string }{
+	{"GOCACHE", "gocache"}, {"GOTMPDIR", "tmp"}, {"TMPDIR", "tmp"}, {"HOME", "home"}, {"GOPATH", "gopath"},
+}
+
+// NewCallFolder makes a call's folder. extra is the environment the call's commands are given
+// besides the host's (a later entry wins); the module cache is its last GOMODCACHE, else the
+// first entry of its last GOPATH with /pkg/mod, else the same read from this process, else go's
+// default $HOME/go/pkg/mod. cacheBase, when not empty, is the read-only warm base cache (the
+// image's /opt/gocache-base): its entries are copied into the call's GOCACHE, as files of the
+// call's own, so the call starts warm and nothing it writes reaches the base or another call. A
+// cacheBase that is not an existing folder is an error and no folder is left: an image whose base
+// is missing is built wrong, and the call runs nothing. The caller removes the folder with Remove
+// when the call ends.
+func NewCallFolder(extra []string, cacheBase string) (*CallFolder, error) {
+	modcache := ModuleCache(extra)
+	if cacheBase != "" {
+		if fi, err := os.Stat(cacheBase); err != nil || !fi.IsDir() {
+			return nil, fmt.Errorf("the base Go cache %s is not an existing folder", cacheBase)
+		}
+	}
+	dir, err := os.MkdirTemp("", "check-call-")
+	if err != nil {
+		return nil, err
+	}
+	c := &CallFolder{dir: dir}
+	for _, v := range callDirs {
+		p := filepath.Join(dir, v.dir)
+		if err := os.MkdirAll(p, 0o700); err != nil {
+			c.Remove()
+			return nil, err
+		}
+		c.env = append(c.env, v.name+"="+p)
+	}
+	if cacheBase != "" {
+		// os.CopyFS gives every copy a new modification time and owner-writable modes, so go's
+		// cache trimming keeps the entries and a check may use and replace them in its own copy.
+		if err := os.CopyFS(filepath.Join(dir, "gocache"), os.DirFS(cacheBase)); err != nil {
+			c.Remove()
+			return nil, fmt.Errorf("the base Go cache cannot be copied into the call's folder: %w", err)
+		}
+	}
+	if modcache != "" {
+		c.env = append(c.env, "GOMODCACHE="+modcache)
+	}
+	return c, nil
+}
+
+// Dir is the call's folder.
+func (c *CallFolder) Dir() string { return c.dir }
+
+// Env is the call's variables, to be given after every other entry so that they win.
+func (c *CallFolder) Env() []string { return append([]string{}, c.env...) }
+
+// TempDir is the call's TMPDIR, where its scratch folders are made.
+func (c *CallFolder) TempDir() string { return filepath.Join(c.dir, "tmp") }
+
+// Scratch makes a new scratch folder inside the call's folder (its TMPDIR).
+func (c *CallFolder) Scratch(prefix string) (string, error) {
+	return os.MkdirTemp(c.TempDir(), prefix)
+}
+
+// Remove removes the call's folder and everything in it, also what a test made read-only.
+func (c *CallFolder) Remove() error {
+	if err := os.RemoveAll(c.dir); err == nil {
+		return nil
+	}
+	filepath.WalkDir(c.dir, func(p string, d os.DirEntry, err error) error {
+		if err == nil && d.IsDir() {
+			os.Chmod(p, 0o700)
+		}
+		return nil
+	})
+	return os.RemoveAll(c.dir)
+}
+
+// ModuleCache is the module cache the commands given extra use: extra's last GOMODCACHE, else the
+// first entry of its last GOPATH with /pkg/mod, else the same from this process's environment,
+// else $HOME/go/pkg/mod (go's default GOPATH). Empty when none can be found.
+func ModuleCache(extra []string) string {
+	lookup := func(name string) (string, bool) {
+		for i := len(extra) - 1; i >= 0; i-- {
+			if v, ok := strings.CutPrefix(extra[i], name+"="); ok {
+				return v, true
+			}
+		}
+		return os.LookupEnv(name)
+	}
+	if m, _ := lookup("GOMODCACHE"); m != "" {
+		return m
+	}
+	if p, _ := lookup("GOPATH"); p != "" {
+		if first, _, _ := strings.Cut(p, string(os.PathListSeparator)); first != "" {
+			return filepath.Join(first, "pkg", "mod")
+		}
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, "go", "pkg", "mod")
+	}
+	return ""
+}
+
+// Scratcher is a GoRunner whose call has its own folder for scratch folders (the check service's
+// runner, CallFolder.Scratch).
+type Scratcher interface {
+	Scratch(prefix string) (string, error)
+}
+
+// scratch makes a check's scratch folder: inside the runner's call folder when it has one, else
+// a new folder in os.TempDir().
+func scratch(r GoRunner, prefix string) (string, error) {
+	if s, ok := r.(Scratcher); ok {
+		return s.Scratch(prefix)
+	}
+	return os.MkdirTemp("", prefix)
 }

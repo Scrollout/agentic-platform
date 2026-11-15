@@ -64,7 +64,7 @@ func GeneratedCodeBuilds(r GoRunner, project string) []CheckResult {
 // project); no test is run. A project with no test package fails: there is nothing to judge.
 func TestsBuild(r GoRunner, project string) []CheckResult {
 	const check = "TestsBuild"
-	out, err := os.MkdirTemp("", "testsbuild-")
+	out, err := scratch(r, "testsbuild-")
 	if err != nil {
 		return []CheckResult{fail(check, "no folder for the test binaries: "+err.Error())}
 	}
