@@ -428,9 +428,10 @@ paths:
         does not match RunRequest is InvalidRequest, or InvalidProject when only its project name
         breaks the folder-name rule; then an unknown slice is NotFound; then PatternDoesNotFit while the slice fails a pattern condition, even when
         no part is approved; then NotApproved while a part is not approved at its current hash; then
-        WorkersNotReady while a step of the pattern has no ready worker; then RunActive while another
-        run of the slice has not ended; then ProjectExists when the folder exists. The operation's
-        target is the new run; it lasts until the run ends.
+        WorkersNotReady while a step of the pattern has no ready worker; then RunActive while any
+        run, of any slice, has not ended (at most one active run on the platform, FR-021); then
+        ProjectExists when the folder exists. The operation's target is the new run; it lasts until
+        the run ends.
       security:
       - clientToken: []
       x-error-codes:
@@ -649,7 +650,7 @@ paths:
       x-operation-name: Agentic.Engine/runs/resume/action
       summary: Resume an interrupted run
       description: Continues an `interrupted` run without repeating its accepted steps. Returns the run's
-        operation; its target is the run.
+        operation; its target is the run. RunActive while any other run, of any slice, has not ended.
       security:
       - clientToken: []
       x-error-codes:
@@ -687,7 +688,7 @@ paths:
       summary: Replay an ended run
       description: Starts a new run of the same slice and pattern version into a new project folder. It
         reuses every accepted result of the earlier run, so its artifacts are identical. The operation's
-        target is the new run.
+        target is the new run. RunActive while any other run, of any slice, has not ended.
       security:
       - clientToken: []
       x-error-codes:
