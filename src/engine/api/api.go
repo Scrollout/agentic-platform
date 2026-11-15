@@ -63,6 +63,11 @@ type Config struct {
 	// Context bounds every operation's work: when it is done, running operations are
 	// cancelled. nil means context.Background().
 	Context context.Context
+	// Running, when set, counts every operation's work, of every kind: added before the work
+	// starts, done when it has ended. After cancelling Context, Running.Wait returns once no
+	// operation can record anything more. Limit: no request may start an operation while Wait
+	// is called, so the caller stops serving requests first. nil means nothing is counted.
+	Running *sync.WaitGroup
 	// Slices holds the slices. With it the engine serves the slice operations itself and Work
 	// does only other kinds of operation; nil means no slices: lists are empty, a slice is never
 	// found, and createSlice's operation is Work's.
@@ -118,7 +123,7 @@ func NewHandler(cfg Config) http.Handler {
 		base = context.Background()
 	}
 	c := engineContract
-	srv := &server{contract: c, ops: &operations{base: base, now: now, sleep: sleep, work: cfg.Work, ops: map[string]*operation{}},
+	srv := &server{contract: c, ops: &operations{base: base, now: now, sleep: sleep, work: cfg.Work, running: cfg.Running, ops: map[string]*operation{}},
 		pages: newPageKeys(), analyst: make(chan struct{}, analystCallsAtOnce)}
 	var impl gen.StrictServerInterface = srv
 	if cfg.Slices != nil {

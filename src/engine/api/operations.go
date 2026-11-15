@@ -61,6 +61,8 @@ type operations struct {
 	now   func() time.Time
 	sleep func(ctx context.Context, d time.Duration)
 	work  func(ctx context.Context, job Job) (WorkResult, error)
+	// running, when set, counts each operation's work until it has ended (Config.Running).
+	running *sync.WaitGroup
 
 	mu   sync.Mutex
 	ops  map[string]*operation
@@ -117,7 +119,15 @@ func (s *operations) launch(op *operation, work func(ctx context.Context) (WorkR
 	s.ops[op.view.Id] = op
 	view := op.view
 	s.mu.Unlock()
-	go s.run(ctx, op, work)
+	if s.running != nil {
+		s.running.Add(1)
+	}
+	go func() {
+		if s.running != nil {
+			defer s.running.Done()
+		}
+		s.run(ctx, op, work)
+	}()
 	return view
 }
 

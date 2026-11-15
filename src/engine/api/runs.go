@@ -81,6 +81,8 @@ type runs struct {
 	clock   machine.Clock
 	results *machine.Results
 	base    context.Context
+	// running counts the machine calls driving runs (Config.Running), nil when not counted.
+	running *sync.WaitGroup
 
 	mu sync.Mutex // one start, resume, replay or hand-over at a time
 
@@ -101,7 +103,7 @@ func newRuns(cfg Config, svc *sl.Service, now func() time.Time, base context.Con
 	if !ok {
 		return nil
 	}
-	r := &runs{st: st, worker: cfg.StepWorker, checker: cfg.StepChecker, history: cfg.History, model: cfg.Model, clock: clockFunc(now),
+	r := &runs{running: cfg.Running, st: st, worker: cfg.StepWorker, checker: cfg.StepChecker, history: cfg.History, model: cfg.Model, clock: clockFunc(now),
 		base: base, machines: map[string]*machine.Machine{}, pending: map[string]*runInfo{},
 		changed: map[string]chan struct{}{}, current: map[string]string{}}
 	switch p, err := svc.Pattern(); {
@@ -459,7 +461,15 @@ func (s *sliceServer) canRun() error {
 func (r *runs) begin(id string, call func(ctx context.Context) error) error {
 	recorded := r.next(id)
 	done := make(chan error, 1)
-	go func() { done <- call(r.base) }()
+	if r.running != nil {
+		r.running.Add(1) // the machine drives the run: its work is counted as the operation's
+	}
+	go func() {
+		if r.running != nil {
+			defer r.running.Done()
+		}
+		done <- call(r.base)
+	}()
 	select {
 	case <-recorded:
 		return nil

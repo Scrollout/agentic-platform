@@ -135,12 +135,17 @@ func setup(getenv func(string) string) (http.Handler, func() error, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cfg.Context = ctx
+	var running sync.WaitGroup
+	cfg.Running = &running
 	h := api.NewHandler(cfg)
 	var once sync.Once
 	var closeErr error
 	closeFn := func() error {
 		once.Do(func() {
+			// Cancel every operation and wait until each has ended, so nothing writes the store
+			// once it is closed; a run cut off this way is interrupted and resumes (FR-020).
 			cancel()
+			running.Wait()
 			closeErr = st.Close()
 		})
 		return closeErr
