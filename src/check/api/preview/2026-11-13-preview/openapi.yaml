@@ -224,10 +224,11 @@ paths:
         review step's `findings`, a `slice/<part>`) is exempt. A check that meets something it cannot
         judge (an entry that is not a regular file or whose path is not a ProjectPath, a test binary
         that cannot be built, a go command that fails to start) answers `passed: false` with a
-        reason naming it; it never passes by default. Each call gets a new, empty temporary
+        reason naming it; it never passes by default. Each call gets a new temporary
         folder, removed when it ends; every command of the call has `GOCACHE`, `GOTMPDIR`,
         `TMPDIR`, `HOME` and `GOPATH` inside it, and every `go test` carries `-count=1`, so
-        nothing a check writes there survives the call. The pinned modules' cache is shared
+        nothing a check writes there survives the call. Its `GOCACHE` starts as a copy of the
+        image's read-only warm base cache, the rest empty. The pinned modules' cache is shared
         read-only. The checks served, by name: ScopeKept, every
         path added, changed or removed between `before` and now matches the step's `writable`.
         DependenciesAllowed, the project has no symbolic link, and in the step's own files (those its
@@ -438,10 +439,11 @@ paths:
         writable paths may hold partial files (some written, some stale ones not yet removed), and a
         repeat of the request converges them. A caller treats every
         response other than 200, and `completed: false`, as a rejected attempt.
-        Each call gets a new, empty temporary folder, removed when it ends; every command of the
-        call has `GOCACHE`, `GOTMPDIR`, `TMPDIR`, `HOME` and `GOPATH` inside it, and every
-        `go test` carries `-count=1`, so nothing a check writes there survives the call. The
-        pinned modules' cache is shared read-only.
+        Each call gets a new temporary folder, removed when it ends; every command of the call has
+        `GOCACHE`, `GOTMPDIR`, `TMPDIR`, `HOME` and `GOPATH` inside it, and every `go test` carries
+        `-count=1`, so nothing a check writes there survives the call. Its `GOCACHE` starts as a
+        copy of the image's read-only warm base cache, the rest empty. The pinned modules' cache
+        is shared read-only.
       security:
       - engineToken: []
       x-error-codes:
