@@ -156,7 +156,9 @@ src/deploy/ap down
 ```
 
 The replay is identical when `compare` exits 0 and the two logs list equal trees (`%T`), commit
-by commit; commit IDs differ, since each commit names its own run and times. Measured on
+by commit; commit IDs differ, since each commit names its own run and times. Until T088, a
+replay of a run with more than one review round differs (research D36); the measured run
+below found it (compare exit 7). Measured on
 2026-11-15: the images, cached, 93 s; `up` 10 s; the slice 33 s; `build-workers` 8 s; `build`
 419 s; `replay` 229 s; `compare` 1 s; `down` 3 s. With Haiku 5.5 the whole flow cost about
 $0.01 (RUN-1 used 115,595 tokens, $0.0084).

@@ -241,7 +241,7 @@ Each failure is stopped by a check, and a replay of the same run gives byte-iden
 - **Check**: a deterministic test that decides whether a step or artifact is accepted.
 - **Run record**: the ordered history of a run, from which it can be inspected, replayed and
   compared.
-- **Accepted result**: a step's output that passed its checks, reused for the same input.
+- **Accepted result**: a step's output that passed its checks, reused for the same input; a review round left with blocking findings open is kept and reused the same way, marked open (FR-019; data-model, An open round reused).
 
 ## Success Criteria *(mandatory)*
 
