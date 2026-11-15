@@ -15,7 +15,7 @@ Routes, GET only (any other method gets 405):
 
 | Route | Shows |
 |-------|-------|
-| `/runs/{runId}` | The run's events in order (engine `listRunEvents`, every page up to the page's limit) |
+| `/runs/{runId}` | The run's events in order (engine `listRunEvents`, every page up to the page's limit), each row with every field the event carries, as the terminal's event lines give them ([terminal contract](../cli/contract.md), "Event lines"): step, attempt, round, check, finding (with its check and witness), the kind's fields (slice, pattern, worker, model, agent digest, inputs, artifacts, reuse key, open round, changed lines, tokens and cost), refs and detail; hashes in full, a field the event does not carry left empty |
 | `/compare?run={a}&with={b}` | How run a differs from run b (engine `compareRuns`) |
 
 Engine errors become a plain error page: 404 for an unknown run, 400 for a refused request, 503 when the engine is busy, 502 otherwise.

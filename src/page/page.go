@@ -6,9 +6,11 @@ package page
 
 import (
 	"context"
+	"fmt"
 	"html/template"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/agentic-platform/page/api/gen"
@@ -171,6 +173,13 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 		}
 		return *s
 	},
+	"record": record,
+	"joined": func(refs *[]gen.Ref) string {
+		if refs == nil {
+			return ""
+		}
+		return strings.Join(*refs, ",")
+	},
 }).Parse(`
 {{define "head"}}<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>{{.}}</title>
@@ -182,8 +191,8 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 {{define "run"}}{{template "head" (print "Run " .Run)}}
 <h1>Run {{.Run}}</h1>
 {{if .Events}}<table>
-<tr><th>Seq</th><th>At</th><th>Kind</th><th>Step</th><th>Attempt</th><th>Check</th><th>Finding</th><th>Detail</th></tr>
-{{range .Events}}<tr><td>{{.Seq}}</td><td>{{.At.UTC.Format "2006-01-02 15:04:05Z"}}</td><td>{{.Kind}}</td><td>{{text .Step}}</td><td>{{with .Attempt}}{{.}}{{end}}</td><td>{{with .Check}}{{.Name}}: {{if .Passed}}passed{{else}}failed{{end}}{{with .Reason}} ({{.}}){{end}}{{end}}</td><td>{{with .Finding}}{{.Rule}}{{if .Blocking}} (blocking){{end}}: {{.Text}}{{with .File}} at {{.}}{{end}}{{with .Line}}:{{.}}{{end}}{{end}}</td><td>{{with .Detail}}{{.}}{{end}}</td></tr>
+<tr><th>Seq</th><th>At</th><th>Kind</th><th>Step</th><th>Attempt</th><th>Round</th><th>Check</th><th>Finding</th><th>Record</th><th>Refs</th><th>Detail</th></tr>
+{{range .Events}}<tr><td>{{.Seq}}</td><td>{{.At.UTC.Format "2006-01-02 15:04:05Z"}}</td><td>{{.Kind}}</td><td>{{with .Step}}{{.}}{{end}}</td><td>{{with .Attempt}}{{.}}{{end}}</td><td>{{with .Round}}{{.}}{{end}}</td><td>{{with .Check}}{{.Name}}: {{if .Passed}}passed{{else}}failed{{end}}{{with .Reason}} ({{.}}){{end}}{{end}}</td><td>{{with .Finding}}{{.Rule}}{{if .Blocking}} (blocking){{else}} (suggestion){{end}}: {{.Text}}{{with .File}} at {{.}}{{end}}{{with .Line}}:{{.}}{{end}}{{with .Check}} check {{.}}{{end}}{{with .Witness}} witness {{.File}} {{.Test}}{{end}}{{end}}</td><td>{{record .}}</td><td>{{joined .Refs}}</td><td>{{with .Detail}}{{.}}{{end}}</td></tr>
 {{end}}</table>{{else}}<p>The run has no events.</p>{{end}}
 {{template "truncated" .}}
 </body></html>{{end}}
@@ -202,3 +211,51 @@ var pages = template.Must(template.New("").Funcs(template.FuncMap{
 <p>{{.Message}}</p>
 </body></html>{{end}}
 `))
+
+// record is the fields of an event's kind, as the terminal's event lines give them
+// (src/cli/contract.md, "Event lines"): each field the event carries, labelled, separated by two
+// spaces, hashes in full and lists comma-separated in their recorded order; empty when it
+// carries none. The template escapes it.
+func record(e gen.RunEventSchema) string {
+	var f []string
+	add := func(label, value string) { f = append(f, label+" "+value) }
+	if e.Slice != nil {
+		add("slice", *e.Slice)
+	}
+	if e.Pattern != nil {
+		add("pattern", *e.Pattern)
+	}
+	if e.Worker != nil {
+		add("worker", *e.Worker)
+	}
+	if e.Model != nil {
+		add("model", *e.Model)
+	}
+	if e.AgentDigest != nil {
+		add("agent", *e.AgentDigest)
+	}
+	if e.Inputs != nil && len(*e.Inputs) > 0 {
+		add("inputs", strings.Join(*e.Inputs, ","))
+	}
+	if e.Artifacts != nil && len(*e.Artifacts) > 0 {
+		add("artifacts", strings.Join(*e.Artifacts, ","))
+	}
+	if e.ReuseKey != nil {
+		add("reuse", *e.ReuseKey)
+	}
+	if e.OpenRound != nil && bool(*e.OpenRound) {
+		f = append(f, "open round")
+	}
+	if e.ChangedLines != nil && len(*e.ChangedLines) > 0 {
+		lines := make([]string, len(*e.ChangedLines))
+		for i, c := range *e.ChangedLines {
+			lines[i] = fmt.Sprintf("%s:%d", c.File, c.Line)
+		}
+		add("changed", strings.Join(lines, ","))
+	}
+	if e.Usage != nil {
+		add("tokens", fmt.Sprint(e.Usage.Tokens))
+		add("cost", fmt.Sprintf("$%.4f", e.Usage.CostUsd))
+	}
+	return strings.Join(f, "  ")
+}
