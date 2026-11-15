@@ -1,5 +1,9 @@
 # Directory Update Log
 
+## 2026-11-16
+
+* **Convergence**: Feature 001, T069 done (Story 2): `/speckit-converge` round 2 found nothing new after T103 and T104; every other gap is an open task. Next: T024 (`scripts/e2e.sh`) for the Story 2 checkpoint.
+
 ## 2026-11-15
 
 * **Implementation**: Feature 001, T104 (Story 2, SC-006): a failing check names the slice items it concerns in its verdict's `refs`. AllTestsPass names the `R-<n>/E-<n>` of each scenario whose godog subtest failed, EveryExampleBound of each with an undefined, pending or ambiguous step, FindingsCarryEvidence and NoBlockingFindingOpen the rule of each finding at fault; once each, in order, at most 256. A passing check names none, so its event names the run's refs. Tests by a separate author.
