@@ -77,7 +77,9 @@ Sources: [Feature 001 research, D37](../../specs/001-prose-to-accepted-slice/res
 - Nothing a check writes through those variables survives its call; a test that writes to an
   absolute path elsewhere under `/tmp` still can (a stated limit).
 - With an empty cache a call took about 13 s instead of 0.6 s (T094's measurement), so the image
-  carries a warm base cache that each call copies; only the project itself is compiled per call.
+  carries a warm base cache of the standard library that each call copies; the project and its
+  vendored modules still compile per call (about 3 s a call). Calls that run at the same time can
+  reach each other's folder, a stated limit with hardening in T097.
 - The check contract's runCheck wording changes first (T092); the checks, the check service and
   `Dockerfile.check` follow (T093, T094).
 

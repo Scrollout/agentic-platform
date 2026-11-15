@@ -1323,11 +1323,17 @@ page, none of which an existing project provides.
   scratch: T094 measured one AllTestsPass call on the lab's example project at 0.6 s with the old
   shared cache and about 13 s with an empty one, too slow for the planted and us2 suites (caps 60
   and 75 minutes). So (owner, 2026-11-15) the image holds a **warm base cache**: `Dockerfile.check`
-  builds, from the pinned sources only, the standard library and the pinned modules the pattern
-  uses into `/opt/gocache-base`, owned by root on the read-only root file system; each call
+  builds, from the pinned sources only, the standard library packages the pattern's tests and
+  vendored tools use into `/opt/gocache-base` (the vendored modules themselves cannot be shared:
+  without `-trimpath` their cache keys hold the project's own folder, so they compile per call;
+  T094 measured about 3 s per call with the base), owned by root on the read-only root file system; each call
   copies it into its own folder as its `GOCACHE` and discards the copy with the folder. Nothing a
   check writes reaches another call, and the base holds only what the image build compiled from
   pinned sources. T094 measures one call and both suites again, and the caps are checked then.
+- **Known limit** (T094's review, 2026-11-15): calls that run at the same time share one user and
+  one `/tmp`, so a test in one call can reach a concurrent call's folder and write into its cache;
+  this falls under the deliberate-forgery limit below, and hardening (a user or a mount namespace
+  per call) is a follow-up (T097).
 - **Known limit** (T093's review, 2026-11-15): the events are what test2json makes of the test
   binary's output, so code in the binary can still print lines that become events, or write to the
   go command's own output, and forge a result. Deliberate forgery is not stopped; it adds nothing
