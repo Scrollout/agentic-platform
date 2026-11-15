@@ -424,7 +424,9 @@ func FindingsCarryEvidence(r GoRunner, project string, rv Review, findings []Fin
 			missing = append(missing, "no line of at least 1")
 		}
 		if len(missing) > 0 {
-			out = append(out, fail(check, fmt.Sprintf("blocking finding %s carries no evidence: %s", findingName(f), strings.Join(missing, ", "))))
+			res := fail(check, fmt.Sprintf("blocking finding %s carries no evidence: %s", findingName(f), strings.Join(missing, ", ")))
+			res.Refs = ruleRefs(f)
+			out = append(out, res)
 			continue
 		}
 		judged = append(judged, f)
@@ -454,7 +456,7 @@ func NoBlockingFindingOpen(r GoRunner, project string, rv Review, findings []Fin
 		}
 		if confirmed[i] {
 			pos := i
-			out = append(out, CheckResult{Part: "findings", Check: check, Confirmed: &pos, Reason: fmt.Sprintf("blocking finding %s at %s:%d is open: its witness %s (%s) fails having run that line", f.Rule, f.File, f.Line, f.Witness.Test, f.Witness.File)})
+			out = append(out, CheckResult{Part: "findings", Check: check, Confirmed: &pos, Refs: ruleRefs(f), Reason: fmt.Sprintf("blocking finding %s at %s:%d is open: its witness %s (%s) fails having run that line", f.Rule, f.File, f.Line, f.Witness.Test, f.Witness.File)})
 		}
 	}
 	if len(out) == 0 {

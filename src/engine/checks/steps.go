@@ -523,7 +523,7 @@ func AllTestsPass(r GoRunner, project string) []CheckResult {
 		out = append(out, fail(check, "the project declares no test under tests/ or review/, so nothing shows the code works"))
 	}
 	if len(out) > 0 {
-		return out
+		return withRefs(out, failedScenarioRefs(project, res.Output, false))
 	}
 	return []CheckResult{pass(check, fmt.Sprintf("every one of the %d declared tests passes", len(declared)))}
 }
@@ -563,38 +563,39 @@ func GodogStrict(r GoRunner, project string) []CheckResult {
 		return []CheckResult{*bad}
 	}
 	ev := readEvents(res.Output)
+	refs := failedScenarioRefs(project, res.Output, true)
 	text := ansiColour.ReplaceAllString(ev.text, "") // godog colours its counts
 	switch {
 	case ev.buildFailed || strings.Contains(text, "[build failed]") || strings.Contains(text, "[setup failed]"):
-		return []CheckResult{fail(check, "the tests do not build, so no example is bound: "+excerpt(text, "failed", ".go:"))}
+		return withRefs([]CheckResult{fail(check, "the tests do not build, so no example is bound: "+excerpt(text, "failed", ".go:"))}, refs)
 	case strings.Contains(text, "undefined"):
-		return []CheckResult{fail(check, "godog --strict found undefined steps: "+excerpt(text, "undefined"))}
+		return withRefs([]CheckResult{fail(check, "godog --strict found undefined steps: "+excerpt(text, "undefined"))}, refs)
 	case unboundSteps.MatchString(text):
-		return []CheckResult{fail(check, "godog --strict found pending or ambiguous steps: "+excerpt(text, "pending", "ambiguous"))}
+		return withRefs([]CheckResult{fail(check, "godog --strict found pending or ambiguous steps: "+excerpt(text, "pending", "ambiguous"))}, refs)
 	}
 	none, some := scenarioCounts(text)
 	if none {
-		return []CheckResult{fail(check, "godog ran no scenario, so no example was checked: "+excerpt(text, "scenarios"))}
+		return withRefs([]CheckResult{fail(check, "godog ran no scenario, so no example was checked: "+excerpt(text, "scenarios"))}, refs)
 	}
 	if !some {
 		declared, err := declaredTests(project, declaredInTests...)
 		switch {
 		case err != nil:
-			return []CheckResult{fail(check, "godog printed no scenario count, and the declared tests cannot be read: "+err.Error())}
+			return withRefs([]CheckResult{fail(check, "godog printed no scenario count, and the declared tests cannot be read: "+err.Error())}, refs)
 		case len(declared) == 0:
-			return []CheckResult{fail(check, "godog ran no scenario and tests/ declares no test, so no example was checked: "+excerpt(text, "no test files", "no packages", "no tests to run"))}
+			return withRefs([]CheckResult{fail(check, "godog ran no scenario and tests/ declares no test, so no example was checked: "+excerpt(text, "no test files", "no packages", "no tests to run"))}, refs)
 		}
 		if gone := withoutResult(declared, ev); len(gone) > 0 {
-			return []CheckResult{fail(check, "godog printed no scenario count, and declared tests have no result event, so they never ran: "+names(gone))}
+			return withRefs([]CheckResult{fail(check, "godog printed no scenario count, and declared tests have no result event, so they never ran: "+names(gone))}, refs)
 		}
 	}
 	want, ok, err := featureScenarios(project)
 	if err != nil {
-		return []CheckResult{fail(check, "features/slice.feature is not Gherkin, so its scenarios cannot be counted: "+err.Error())}
+		return withRefs([]CheckResult{fail(check, "features/slice.feature is not Gherkin, so its scenarios cannot be counted: "+err.Error())}, refs)
 	}
 	if ok {
 		if got := scenariosRun(text); got < want {
-			return []CheckResult{fail(check, fmt.Sprintf("godog ran %d scenarios, and features/slice.feature has %d, so not every example ran", got, want))}
+			return withRefs([]CheckResult{fail(check, fmt.Sprintf("godog ran %d scenarios, and features/slice.feature has %d, so not every example ran", got, want))}, refs)
 		}
 	}
 	return []CheckResult{pass(check, "every scenario runs with no undefined, pending or ambiguous step: "+excerpt(text, "scenarios ("))}

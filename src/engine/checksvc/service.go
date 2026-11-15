@@ -159,8 +159,33 @@ func (s *service) RunCheck(ctx context.Context, req gen.RunCheckRequestObject) (
 			sort.Ints(confirmed)
 			v.Confirmed = &confirmed
 		}
+		v.Refs = verdictRefs(results)
 		return gen.RunCheck200JSONResponse(v), nil
 	})
+}
+
+// maxVerdictRefs is the check contract's maxItems of CheckVerdict.refs.
+const maxVerdictRefs = 256
+
+// verdictRefs are the slice items a verdict concerns (data-model "Refs", T104): the refs of its
+// failing results, once each, in the order the results give them, at most maxVerdictRefs (the
+// first ones); empty when none names any.
+func verdictRefs(results []checks.CheckResult) []gen.Ref {
+	refs := []gen.Ref{}
+	seen := map[string]bool{}
+	for _, r := range results {
+		if r.Passed {
+			continue
+		}
+		for _, ref := range r.Refs {
+			if seen[ref] || len(refs) == maxVerdictRefs {
+				continue
+			}
+			seen[ref] = true
+			refs = append(refs, ref)
+		}
+	}
+	return refs
 }
 
 // verdict joins a check's results: passed only when there is a result and every one passed, the

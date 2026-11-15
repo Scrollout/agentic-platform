@@ -159,3 +159,21 @@ func scenarioDigest(sc *messages.Scenario, rule string) string {
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
+
+// ScenarioRef is the ref of the example a scenario of Gherkin examples stands for, `R-<n>/E-<n>`
+// from its one @R-<n> tag and its one @E-<n> tag (data-model "Refs"); empty when it carries no
+// tag or more than one of either kind.
+func ScenarioRef(sc *messages.Scenario) string {
+	var rs, es []string
+	for _, t := range sc.Tags {
+		if m := ruleTag.FindStringSubmatch(t.Name); m != nil {
+			rs = append(rs, m[1])
+		} else if m := exampleTag.FindStringSubmatch(t.Name); m != nil {
+			es = append(es, m[1])
+		}
+	}
+	if len(rs) != 1 || len(es) != 1 {
+		return ""
+	}
+	return rs[0] + "/" + es[0]
+}

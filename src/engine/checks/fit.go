@@ -28,6 +28,10 @@ type CheckResult struct {
 	// Confirmed, on a NoBlockingFindingOpen result, is the 0-based position in the judged findings
 	// of the blocking finding its witness run confirmed (ADR 0042); nil on every other result.
 	Confirmed *int `json:"-"`
+	// Refs, on a failing step check's result, are the slice items it concerns (data-model "Refs",
+	// T104): the R-<n>/E-<n> of each failing scenario, or the rule of each finding at fault; nil
+	// otherwise. It is not part of check_result.
+	Refs []string `json:"-"`
 }
 
 // Fit evaluates every condition the pattern lists, in the pattern's order, against the slice.
