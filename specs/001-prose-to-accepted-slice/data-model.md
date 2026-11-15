@@ -126,7 +126,10 @@ cost in USD, minutes), `status` (`approved`). A step: `name`, `worker` (`agent:<
 These settle what the spec leaves open; the machine tests (T043) and check tests (T042) pin them.
 
 - **Active run**: a run is active until it has an outcome. A run waiting for the developer is
-  active, so a second build is refused with `RunActive` (FR-021).
+  active, so a second build is refused with `RunActive` (FR-021). At most one run is active on the
+  platform, whatever its slice: startRun, resumeRun and replayRun are refused with `RunActive`
+  while any run has not ended; editing a slice is refused only while that slice's own run is
+  active (owner, 2026-11-15; research D38).
 - **Budgets**: a step whose use takes the run or the step past a token, cost or time budget is not
   accepted, and the run is handed over with the budget it crossed as the reason (FR-016).
 - **Review rounds**: between review rounds the code step runs again with the open blocking findings
@@ -317,6 +320,14 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
 
 ## Step checks
 
+- **How a check runs Go** (owner, 2026-11-15; research D37): each call of the check program gets
+  a new, empty temporary folder, removed when the call ends; every command of the call has
+  `GOCACHE`, `GOTMPDIR`, `TMPDIR`, `HOME` and `GOPATH` inside it, and every `go test` carries
+  `-count=1`, so nothing a check writes there survives the call and no result cached by one call
+  answers another. The pinned modules' cache is shared read-only. The test checks read `go test -json` events, never summary lines. The
+  declared tests are the top-level `Test*` functions of the `_test.go` files under `tests/**`
+  and `review/**`, each with its package.
+
 - **Scope**: a step may change only paths its `writable` globs match; `dir/**` means everything
   below `dir`, any other entry one exact path.
 - **Tests unchanged**: files the tests step wrote are byte-identical after every later step; the
@@ -335,16 +346,26 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
 - **Dependencies**: imports in the step's own writable files (and `go.mod` when the step may
   write it) against the pattern's allowed and forbidden lists; forbidden wins over allowed.
 - **Tests fail against the stub**: before code, the derived tests build and fail; a test that does
-  not build does not count as failing.
+  not build does not count as failing. With `go test -json -count=1 ./tests/...`, every declared
+  test under `tests/**` must have a result event, so none vanishes, and at least one must fail
+  (owner, 2026-11-15; D37).
 - **Every example bound** (godog `--strict`): after tests; judged on binding, not results: it
   fails on a build failure, an undefined, pending or ambiguous step, or fewer scenarios run than
   `features/slice.feature` holds.
 - **All tests pass**: after code; godog runs from the project's vendored
-  dependencies inside the check container, with no network (D3, T050).
+  dependencies inside the check container, with no network (D3, T050). `go test -json -count=1
+  ./...` must exit 0 and every declared test must have a `pass` event; a declared test that
+  vanished (for example because the code's `init` ended the test binary), failed or was skipped
+  fails the check, naming it (owner, 2026-11-15; D37).
 - **Generation drift**: generated code equals a fresh generation from the approved contract.
 - **Contract hash**: the project's contract equals the approved contract's hash.
 - **Evidence-backed finding**: a review finding blocks only when it names a rule ID, a file the fix
   step's `writable` matches, a line and a new witness test in that rule's folder, and that witness
   test, run alone with coverage against the current code, fails and its coverage profile, less a `-run '^$'` baseline of the same package
   (lines run at package init never count), shows the finding's line run; printed text is never evidence; any other finding is a suggestion (FR-017,
-  D11, D35).
+  D11, D35). The baseline has no test event by design; it needs only the package's end event and
+  its profile, so it holds with `-json` (D37). The check service returns the confirmed findings
+  in NoBlockingFindingOpen's verdict (`confirmed`), and the engine records exactly those as
+  `blocking: true` and every other finding, the agent's unconfirmed claims included, as
+  `blocking: false`; only recorded blocking findings go to the fix, into the next round's key, the
+  hand-over reason and `Run.Open` (owner, 2026-11-15; research D39).

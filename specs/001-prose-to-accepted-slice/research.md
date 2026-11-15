@@ -1267,3 +1267,128 @@ page, none of which an existing project provides.
   (`keepOpenRound`, `stepKey`), `src/engine/machine/record.go` (`load`), `src/engine/api/runs.go`
   (`reloadResults`); `run-event.schema.json`; check contract
   `src/check/api/preview/2026-11-13-preview/openapi.yaml` (commitStep, CommitRequest).
+
+### D37. A test check passes only on a result event for every declared test, in a fresh folder per call
+
+- **Decision** (owner, 2026-11-15; found by T057's review, R1 and R2; the design is T092, T093
+  and T094):
+  - **Why (R1)**: AllTestsPass passed on exit code 0 and one `ok` line (`testsRan` in
+    `src/engine/checks/steps.go`). A probe whose application `init()` calls `os.Exit(0)` when
+    `os.Args[0]` ends in `.test` passed with a failing test: the test binary exits 0 before any
+    test runs, and `go test` still prints `ok`.
+  - **Declared tests**: the top-level test functions of the project's `_test.go` files under
+    `tests/**` and `review/**`, read with `go/parser` (a function `TestXxx(t *testing.T)` whose
+    name is a test name by the `go test` rule: `Test` followed by nothing or by a character that is
+    not a lower-case letter), each with its package's import path in the module. Subtests are not
+    declared tests. Other `_test.go` files (the code step's own) are run but declare nothing.
+  - **AllTestsPass**: `go test -json -count=1 ./...`; it passes only when the command exits 0, no
+    package fails to build, and every declared test has a `pass` event for its package and name.
+    A declared test with no event (it vanished), with `fail`, or with `skip` fails the check,
+    naming the test. No declared test at all fails it, as "ran no test" does today.
+  - **TestsFailAgainstStub** (owner, 2026-11-15): `go test -json -count=1 ./tests/...`; it passes
+    only when the tests build, every declared test under `tests/**` has a result event (`pass`,
+    `fail` or `skip`), so none vanishes, and at least one has `fail`.
+  - **EveryExampleBound** keeps its scenario rule; its fallback (`testsRan`) becomes the same
+    event rule: every declared test under `tests/**` has a result event (`pass` or `fail`).
+  - **Witness runs** already use `-json -count=1` and read the witness's own `fail` event
+    (D35). The baseline `-run '^$'` has no test event by design: it needs only the package's end
+    event and its coverage profile, both written with `-json`, so the baseline rule holds. A
+    witness run or baseline whose binary exits before the profile is written leaves no profile and
+    cannot be judged, so FindingsCarryEvidence fails: the probe fails closed there too.
+  - **Why (R2)**: the check service lives as long as the session and every call shared
+    `GOCACHE=/tmp/go-cache` on its `/tmp` tmpfs (`Dockerfile.check`, `compose.yaml`), without
+    `-count=1`, so a result cached from one attempt or project could answer another.
+  - **A fresh folder per call** (owner, 2026-11-15): each call of the check program (runCheck, with
+    its witness runs, and runProcedure) gets a new, empty temporary folder under `/tmp`, removed
+    when the call ends, whatever its outcome. Every command of the call has `GOCACHE`,
+    `GOTMPDIR`, `TMPDIR`, `HOME` and `GOPATH` inside it, so nothing a check writes there survives
+    the call; every `go test` carries `-count=1`. The module cache of the pinned modules,
+    `/opt/gomodcache`, is shared read-only: it is in the image, owned by root, on the read-only
+    root file system. `Dockerfile.check` drops its `GOCACHE` and `GOPATH` settings (the call sets
+    them); `compose.yaml` keeps the `/tmp` tmpfs, which holds the call folders.
+- **Rationale**: FR-017, constitution "Checks prove they can fail": a check must judge the
+  tests it names, not a summary line the code under test can print or suppress. `go test -json`
+  (test2json) gives one event per test with its action, which is what the go tool, not the test,
+  writes. A per-call cache removes any path from one call's build or test results to another's.
+- **Cost**: each call compiles the standard library packages it uses and the project from
+  scratch. The planted and us2 suites (caps 60 and 75 minutes) will take longer; T094 measures
+  one check call and both suites before and after, and the caps are checked then.
+- **Alternatives rejected**: every declared test under `tests/**` failing against the stub (a
+  test that rightly passes against the stub would fail the check; owner, 2026-11-15); counting
+  `ok` lines or `--- PASS` lines (the test prints them, or
+  `init` stops before them); `-count=1` alone (the cache still holds build results other calls
+  wrote); one cache per project (still shared across attempts and the long-lived service).
+- **Known limits**: a test that writes to an absolute path elsewhere under `/tmp`, outside its
+  call's folder, leaves the file for later calls of the service (the tmpfs is shared); the
+  variables close the paths the go tool and the tests are given, not every path. A test that
+  declares itself through `TestMain` alone is not a declared test. If compiling from scratch
+  proves too slow, the owner decides then (owner, 2026-11-15).
+- Sources: T057 review findings R1 and R2, 2026-11-15; `src/engine/checks/steps.go`
+  (`testsRan`, `AllTestsPass`, `TestsFailAgainstStub`), `src/engine/checks/witness.go`
+  (`readTestEvents`); `src/deploy/Dockerfile.check`, `src/deploy/compose.yaml`;
+  <https://pkg.go.dev/cmd/test2json> (the event actions); <https://pkg.go.dev/cmd/go#hdr-Testing_flags>
+  (`-json`, `-count`); <https://pkg.go.dev/cmd/go#hdr-Build_and_test_caching> (`GOCACHE`, cached
+  test results); <https://pkg.go.dev/testing> (test function names).
+- **Recorded as** [ADR 0041](../../docs/decisions/0041-test-checks-need-an-event-per-declared-test-in-a-fresh-folder-per-call.md).
+
+### D38. One active run on the platform, not one per slice
+
+- **Decision** (owner, 2026-11-15; found by T057's review, R3; the design is T091 and T095):
+  startRun, resumeRun and replayRun are refused with `RunActive` while any run of any slice has
+  not ended (running, interrupted or waiting for the developer), naming that run and its slice.
+  The slice-editing operations keep their per-slice refusal (a slice's parts cannot change while
+  its own run is active), and so does `ap build-workers` (it starts containers, not a run; the
+  `startRun` after it is refused).
+  - **Why**: `active()` in `src/engine/api/runs.go` looked only at the slice's own runs, so two
+    slices could have active runs at once, against FR-021 ("at most one active run at a time")
+    and the limit D32 states.
+  - **`steps.state.remember`**: the engine keeps one step worker, and so one `state`, per slice
+    (`sliceWorkers` in `src/engine/cmd/engine/setup.go`), and a project gets one run, so its
+    "runs never overlap" assumption held even per slice; with one active run on the platform it
+    holds for the whole engine. Only its comment changes, to cite FR-021.
+- **Rationale**: FR-021 and the local environment's "one active run"; the per-slice machines
+  stay, the check reads every slice's runs.
+- **Alternatives rejected**: changing FR-021 to one run per slice (the owner decided the defect is
+  the code).
+- Sources: T057 review finding R3, 2026-11-15; spec FR-021; D32, Known limits; engine contract
+  startRun (`src/engine/api/preview/2026-11-12-preview/openapi.yaml`); `src/engine/api/runs.go`
+  (`active`), `src/engine/api/slices.go` (`activeRun`), `src/engine/steps/steps.go` (`remember`).
+
+### D39. Only a finding the check confirmed is recorded as blocking
+
+- **Decision** (owner, 2026-11-15; found by T057's review, R5; the design is T092 and T096):
+  - **Why**: the machine built the open list from the agent's own `blocking: true`
+    (`src/engine/machine/drive.go`, the review loop), so a claim no witness confirmed was given to
+    the fix, entered the next round's key and appeared in the hand-over, against FR-017.
+  - **How the engine learns the confirmed set**: NoBlockingFindingOpen's verdict gains
+    `confirmed`, the 0-based positions in the request's `findings` of the findings whose witness
+    run confirmed them (check contract change, T092). It is sent on every NoBlockingFindingOpen
+    verdict, empty when it passes. The step adapter maps the positions back to the attempt's
+    findings (it drops some before the call, `projectFindings`), and the machine's `CheckResult`
+    carries them.
+  - **Recorded**: after a review attempt's checks, each finding is recorded with `blocking` true
+    exactly when NoBlockingFindingOpen confirmed it; every other finding, the agent's unconfirmed
+    claims included, is recorded with `blocking: false`, a suggestion. A round is open only when
+    NoBlockingFindingOpen is the only failed check and it confirmed at least one finding;
+    otherwise the attempt is rejected as now.
+  - **Used**: only recorded blocking findings, so only confirmed ones, are given to the fix,
+    enter the next round's key (`contextHash`), and appear in the hand-over reason, `Run.Open`
+    and the terminal client's `FindingRecorded` line.
+  - **With D36**: the kept findings of an open round are the recorded ones, so their `blocking`
+    is the verdict, and a reused round gives its fix the same confirmed list. The `findings`
+    artifact stays the agent's answer as given (its claims); the record holds the verdict.
+- **Rationale**: FR-017 says a finding blocks only with evidence a check confirms; the check
+  service is the one that runs the witnesses, so its verdict, not a second judgement in the
+  engine, says which. Positions are exact where matching findings by their fields could confuse
+  two equal claims.
+- **Alternatives rejected**: the engine reading the confirmed set from the verdict's `reason` text
+  (free text, not a contract); returning the confirmed findings as objects (two equal findings
+  cannot be told apart); the engine running the witnesses itself (the check service owns them).
+- **Known limits**: results kept before T096 hold the agent's claims as `blocking`; a replay of
+  such a run reproduces them.
+- **Recorded as** [ADR 0042](../../docs/decisions/0042-only-a-confirmed-finding-is-recorded-as-blocking.md),
+  amending what [ADR 0039](../../docs/decisions/0039-review-findings-confirmed-by-a-new-witness-test.md)
+  means by "blocking" in the record.
+- Sources: T057 review finding R5, 2026-11-15; spec FR-017; D35, D36; check contract
+  `CheckVerdict` and runCheck (NoBlockingFindingOpen); `src/engine/machine/drive.go`,
+  `src/engine/steps/steps.go` (`projectFindings`, the verdict).

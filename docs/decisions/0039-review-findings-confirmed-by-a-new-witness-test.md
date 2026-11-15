@@ -24,7 +24,7 @@ sources:
   - id: go-packages
     resource: https://pkg.go.dev/cmd/go#hdr-Package_lists_and_patterns
     title: "go command: package patterns"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-14T20:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-15T16:00:00Z }
 ---
 
 # Origin
@@ -79,5 +79,8 @@ Sources: [Feature 001 research, D35](../../specs/001-prose-to-accepted-slice/res
   ScopeKept.
 - Supersedes the confirmation part of ADR 0031; its evidence rule (a rule, a file and a line)
   stays.
+- [ADR 0042](/decisions/0042-only-a-confirmed-finding-is-recorded-as-blocking.md) (owner,
+  2026-11-15) amends what "blocking" means in the run record: only a finding NoBlockingFindingOpen
+  confirmed is recorded as blocking; the confirmation rule here is unchanged.
 
 Sources: [Feature 001 research, D35](../../specs/001-prose-to-accepted-slice/research.md); [ADR 0031](/decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md).
