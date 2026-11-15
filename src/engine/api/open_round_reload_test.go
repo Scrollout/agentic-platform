@@ -51,10 +51,14 @@ func (x *runsRig) openRoundWorker() {
 	})
 	x.c.set(func(_ context.Context, r machine.CheckRequest) (machine.CheckResult, error) {
 		if r.Name == "NoBlockingFindingOpen" {
-			for _, f := range r.Result.Findings {
+			var confirmed []int
+			for i, f := range r.Result.Findings {
 				if f.Blocking {
-					return machine.CheckResult{Passed: false, Reason: openReason}, nil
+					confirmed = append(confirmed, i)
 				}
+			}
+			if len(confirmed) > 0 {
+				return machine.CheckResult{Passed: false, Reason: openReason, Confirmed: confirmed}, nil
 			}
 		}
 		return machine.CheckResult{Passed: true, Reason: r.Name + " holds"}, nil

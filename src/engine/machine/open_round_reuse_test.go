@@ -104,7 +104,13 @@ func orCheck(r machine.CheckRequest) (machine.CheckResult, error) {
 			}
 		}
 		if n > 0 {
-			return machine.CheckResult{Passed: false, Reason: fmt.Sprintf("%d blocking finding(s) open in round %d", n, r.Round)}, nil
+			var confirmed []int
+			for i, f := range r.Result.Findings {
+				if f.Blocking {
+					confirmed = append(confirmed, i)
+				}
+			}
+			return machine.CheckResult{Passed: false, Confirmed: confirmed, Reason: fmt.Sprintf("%d blocking finding(s) open in round %d", n, r.Round)}, nil
 		}
 	}
 	return pass(r), nil

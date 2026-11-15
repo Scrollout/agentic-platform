@@ -149,6 +149,16 @@ func (s *service) RunCheck(ctx context.Context, req gen.RunCheckRequestObject) (
 		}
 		v.Passed, v.Reason = verdict(name, results)
 		v.Reason = s.scrub(v.Reason, dir)
+		if name == "NoBlockingFindingOpen" { // on every verdict it gives (ADR 0042)
+			confirmed := []int{}
+			for _, r := range results {
+				if r.Confirmed != nil {
+					confirmed = append(confirmed, *r.Confirmed)
+				}
+			}
+			sort.Ints(confirmed)
+			v.Confirmed = &confirmed
+		}
 		return gen.RunCheck200JSONResponse(v), nil
 	})
 }

@@ -523,7 +523,7 @@ func (c *checker) Check(ctx context.Context, r machine.CheckRequest) (machine.Ch
 	if r.Name == contractLintPasses {
 		return c.lint(ctx, r)
 	}
-	findings, dropped := projectFindings(r.Result.Findings)
+	findings, at, dropped := projectFindings(r.Result.Findings)
 	if len(dropped) > 0 && r.Name == findingsCarryEvidence {
 		return machine.CheckResult{Passed: false, Reason: strings.Join(dropped, "; ")}, nil
 	}
@@ -597,7 +597,33 @@ func (c *checker) Check(ctx context.Context, r machine.CheckRequest) (machine.Ch
 	if len(dropped) > 0 {
 		reason += "; dropped: " + strings.Join(dropped, "; ")
 	}
-	return machine.CheckResult{Passed: v.Passed, Reason: reason, Refs: v.Refs}, nil
+	confirmed, bad := confirmedOf(v, findings, at)
+	if bad != "" {
+		return machine.CheckResult{Passed: false, Reason: r.Name + "'s verdict is unusable: " + bad}, nil
+	}
+	return machine.CheckResult{Passed: v.Passed, Reason: reason, Refs: v.Refs, Confirmed: confirmed}, nil
+}
+
+// confirmedOf maps the verdict's confirmed positions, in the findings sent, back to the attempt's
+// findings (at holds each sent finding's position there). A position out of range or on a finding
+// not sent as blocking, or any position on a passing verdict, makes the verdict unusable: bad says
+// why. A verdict without confirmed confirms nothing.
+func confirmedOf(v *gen.CheckVerdict, sent []gen.Finding, at []int) (confirmed []int, bad string) {
+	if v.Confirmed == nil {
+		return nil, ""
+	}
+	for _, p := range *v.Confirmed {
+		switch {
+		case p < 0 || p >= len(sent):
+			return nil, fmt.Sprintf("confirmed position %d is not one of the %d findings sent", p, len(sent))
+		case !sent[p].Blocking:
+			return nil, fmt.Sprintf("confirmed position %d is a finding not sent as blocking", p)
+		case v.Passed:
+			return nil, fmt.Sprintf("confirmed position %d is on a passing verdict", p)
+		}
+		confirmed = append(confirmed, at[p])
+	}
+	return confirmed, ""
 }
 
 func nonNilEarlier(e []gen.EarlierStep) []gen.EarlierStep {
@@ -616,9 +642,9 @@ func nonNilFiles(f []machine.File) []machine.File {
 
 // projectFindings keeps the findings a check may judge: a finding that names a file names a
 // project path, and a blocking one names a file. The others are described in dropped.
-func projectFindings(in []machine.Finding) (kept []gen.Finding, dropped []string) {
+func projectFindings(in []machine.Finding) (kept []gen.Finding, at []int, dropped []string) {
 	kept = []gen.Finding{}
-	for _, f := range in {
+	for i, f := range in {
 		if (f.File != "" || f.Blocking) && !procedures.IsProjectPath(f.File) {
 			dropped = append(dropped, fmt.Sprintf("finding %s names %q, which is not a file of the project", f.Rule, f.File))
 			continue
@@ -646,8 +672,9 @@ func projectFindings(in []machine.Finding) (kept []gen.Finding, dropped []string
 			}{File: &file, Test: &test}
 		}
 		kept = append(kept, g)
+		at = append(at, i)
 	}
-	return kept, dropped
+	return kept, at, dropped
 }
 
 // projectLines keeps the changed lines in project files.

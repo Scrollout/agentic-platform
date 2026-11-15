@@ -505,6 +505,7 @@ type verdict struct {
 	Reason       string   `json:"reason"`
 	Refs         []string `json:"refs"`
 	ProjectFiles []pf     `json:"project_files"`
+	Confirmed    []int    `json:"confirmed,omitempty"`
 }
 
 func strictJSON(b []byte, v any) error {

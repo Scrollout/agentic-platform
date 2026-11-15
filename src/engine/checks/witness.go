@@ -453,7 +453,8 @@ func NoBlockingFindingOpen(r GoRunner, project string, rv Review, findings []Fin
 			n++
 		}
 		if confirmed[i] {
-			out = append(out, CheckResult{Part: "findings", Check: check, Reason: fmt.Sprintf("blocking finding %s at %s:%d is open: its witness %s (%s) fails having run that line", f.Rule, f.File, f.Line, f.Witness.Test, f.Witness.File)})
+			pos := i
+			out = append(out, CheckResult{Part: "findings", Check: check, Confirmed: &pos, Reason: fmt.Sprintf("blocking finding %s at %s:%d is open: its witness %s (%s) fails having run that line", f.Rule, f.File, f.Line, f.Witness.Test, f.Witness.File)})
 		}
 	}
 	if len(out) == 0 {

@@ -204,7 +204,8 @@ func (f *fixture) failChecks(step string) {
 }
 
 func blocking(rule, file string, line int) machine.Finding {
-	return machine.Finding{Rule: rule, File: file, Line: line, Text: "wrong status", Blocking: true, Check: "AllTestsPass"}
+	return machine.Finding{Rule: rule, File: file, Line: line, Text: "wrong status", Blocking: true, Check: "AllTestsPass",
+		Witness: &machine.Witness{File: "review/r1/x_test.go", Test: "TestR1X"}}
 }
 
 // noBlocking is the fake NoBlockingFindingOpen check.
@@ -212,7 +213,13 @@ func noBlocking(r machine.CheckRequest) (machine.CheckResult, error) {
 	if r.Name == "NoBlockingFindingOpen" {
 		for _, f := range r.Result.Findings {
 			if f.Blocking {
-				return fail(r), nil
+				res := fail(r)
+				for i, g := range r.Result.Findings { // T096: it confirms the blocking findings with a witness
+					if g.Blocking && g.Witness != nil {
+						res.Confirmed = append(res.Confirmed, i)
+					}
+				}
+				return res, nil
 			}
 		}
 	}

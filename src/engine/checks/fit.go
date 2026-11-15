@@ -25,6 +25,9 @@ type CheckResult struct {
 	// YAML document without duplicate keys: the contract was not checked at all, so whoever wrote
 	// it may be asked for a readable one. It is not part of check_result.
 	Unreadable bool `json:"-"`
+	// Confirmed, on a NoBlockingFindingOpen result, is the 0-based position in the judged findings
+	// of the blocking finding its witness run confirmed (ADR 0042); nil on every other result.
+	Confirmed *int `json:"-"`
 }
 
 // Fit evaluates every condition the pattern lists, in the pattern's order, against the slice.

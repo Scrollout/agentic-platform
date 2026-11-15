@@ -209,6 +209,10 @@ type CheckResult struct {
 	Passed bool
 	Reason string
 	Refs   []string
+	// Confirmed, on NoBlockingFindingOpen's result only, holds the 0-based positions, in the
+	// attempt's findings, of the blocking findings its witness runs confirmed (ADR 0042). Only
+	// these are recorded and used as blocking; every other finding is a suggestion.
+	Confirmed []int
 }
 
 // Checker runs one check. An error counts as a failed check.

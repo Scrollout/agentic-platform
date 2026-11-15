@@ -429,6 +429,7 @@ func (x *driver) attempt(ctx context.Context, s Step, at attemptOf) (Result, ver
 
 	var failed []string
 	var openCheck *EventCheck // the recorded NoBlockingFindingOpen result
+	var confirmed []int       // NoBlockingFindingOpen's confirmed findings (ADR 0042)
 	for _, name := range s.Checks {
 		cr, cerr := x.m.cfg.Checker.Check(ctx, CheckRequest{Run: x.r.ID, Step: s, Attempt: at.n, Name: name, Result: res,
 			Round: at.round, Inputs: slices.Clone(at.inputs), Slice: x.r.Slice, Project: x.r.Project})
@@ -450,13 +451,19 @@ func (x *driver) attempt(ctx context.Context, s Step, at attemptOf) (Result, ver
 		if name == noBlockingFindingOpen {
 			c := *e.Check
 			openCheck = &c
+			if cerr == nil {
+				confirmed = cr.Confirmed
+			}
 		}
 		if err := x.record(e); err != nil {
 			return res, rejected, "", err
 		}
 	}
 
-	open := isReview(s) && slices.Equal(failed, []string{noBlockingFindingOpen})
+	if isReview(s) { // only a finding the check confirmed is blocking (ADR 0042); the artifact stays the answer
+		res.Findings = recordedFindings(res.Findings, confirmed)
+	}
+	open := isReview(s) && slices.Equal(failed, []string{noBlockingFindingOpen}) && hasBlocking(res.Findings)
 	if len(failed) == 0 || open {
 		for _, f := range res.Findings {
 			e := base
@@ -503,6 +510,20 @@ func (x *driver) attempt(ctx context.Context, s Step, at attemptOf) (Result, ver
 	}
 	why := "failed checks: " + strings.Join(failed, ", ")
 	return res, rejected, why, x.reject(base, why)
+}
+
+// recordedFindings is the findings as the record holds them: a copy in which a finding is blocking
+// only when the agent claimed it blocking and confirmed names its position.
+func recordedFindings(in []Finding, confirmed []int) []Finding {
+	out := slices.Clone(in)
+	for i := range out {
+		out[i].Blocking = out[i].Blocking && slices.Contains(confirmed, i)
+	}
+	return out
+}
+
+func hasBlocking(fs []Finding) bool {
+	return slices.ContainsFunc(fs, func(f Finding) bool { return f.Blocking })
 }
 
 func (x *driver) reject(base Event, why string) error {
