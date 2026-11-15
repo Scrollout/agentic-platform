@@ -495,9 +495,12 @@ paths:
         for the next step or records the run's outcome. It also records an open review round: a
         review attempt recorded as StepRejected because only NoBlockingFindingOpen failed, whose
         files (its witness tests) become the project's; the engine sends `open_round: true` with
-        that round's `attempt` and `round` and calls it before the fix's restoreStep. Exactly one
-        of `attempt` and `reused_from` is sent, `outputs` only with `reused_from`, and
-        `open_round` only with `attempt` and `round`; any other combination is 400 InvalidRequest.
+        that round's `attempt` and `round` and calls it before the fix's restoreStep; an open round
+        reused from an earlier run (ResultReused with `open_round`) is sent with `open_round:
+        true`, `round`, `reused_from` and `outputs` (its witnesses), also before the fix's
+        restoreStep. Exactly one of `attempt` and `reused_from` is sent, `outputs` only with
+        `reused_from`, and `open_round` only with `round`, beside `attempt` or `reused_from`; any
+        other combination is 400 InvalidRequest.
         In order: (0) A new project (FR-025; info.description, A new project). With no record, a
         call with `reused_from` (a replay's first write) answers 409 ProjectExists, its `detail`
         naming the first path found, and changes nothing when the folder holds any file or
@@ -535,9 +538,9 @@ paths:
         line-ending, filter or encoding conversion), each as a non-executable regular file. Author
         and committer are both `agentic-platform <noreply@localhost>`, both dated `accepted_at`, in
         whole seconds, in UTC. No hook, signing, or git configuration from outside the repository is
-        used. The message is the subject `Step <step> accepted in <run>` (with `reused_from`: `Step
-        <step> reused in <run>`; with `open_round`: `Step <step> round <round> left open in
-        <run>`), an empty line, and the trailers `Run: <run>`, `Step: <step>`, then
+        used. The message is the subject `Step <step> accepted in <run>` (with `reused_from` and no
+        `open_round`: `Step <step> reused in <run>`; with `open_round`, with `attempt` or
+        `reused_from`: `Step <step> round <round> left open in <run>`), an empty line, and the trailers `Run: <run>`, `Step: <step>`, then
         `Round: <round>` when sent, then `Attempt: <attempt>` or `Reused-from: <reused_from>`, one per
         line in this order, each line ending in a line feed. So equal requests over an equal folder
         and an equal last commit give the same commit, and equal `project_files` give the same tree
@@ -1408,12 +1411,14 @@ components:
           type: string
           format: date-time
           description: The `at` of the run event that accepted or reused the step, or with
-            `open_round` of the StepRejected that left the round open; the commit's author and
-            committer date, in whole seconds (a fraction of a second is dropped, never rounded).
+            `open_round` of the StepRejected that left the round open, or of the ResultReused that
+            reused it; the commit's author and committer date, in whole seconds (a fraction of a
+            second is dropped, never rounded).
         open_round:
           type: boolean
           description: Sent, as `true`, only for an open review round (the review step, with
-            `attempt` and `round`); the commit's subject then says the round was left open.
+            `round`, and `attempt`, or `reused_from` when the round's kept result is reused); the
+            commit's subject then says the round was left open.
         outputs:
           type: array
           maxItems: 16

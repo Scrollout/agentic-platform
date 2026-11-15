@@ -63,6 +63,11 @@
       "maximum": 3,
       "description": "The review round an event belongs to: a review round's events and findings, and the events of the fix after that round."
     },
+    "open_round": {
+      "type": "boolean",
+      "const": true,
+      "description": "True on the StepRejected that leaves a review round open (only NoBlockingFindingOpen failed) and on the ResultReused that reuses such a round's kept result; never on an accepted or a reused accepted step (data-model, An open round reused)."
+    },
     "worker": {
       "$ref": "slice-defs.schema.json#/$defs/worker_ref",
       "description": "The step's worker, as the pattern declares it."
@@ -238,7 +243,7 @@
     "detail": {
       "type": "string",
       "minLength": 1,
-      "description": "Free text; for RunHandedOver, the reason."
+      "description": "Free text; for RunHandedOver, the reason; for the StepRejected that leaves a review round open and the ResultReused that reuses it (`open_round`), `review round <n> left blocking findings open`."
     }
   },
   "allOf": [
@@ -416,6 +421,58 @@
           "reuse_key",
           "artifacts"
         ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "open_round"
+        ]
+      },
+      "then": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "StepRejected",
+              "ResultReused"
+            ]
+          }
+        },
+        "required": [
+          "round",
+          "reuse_key",
+          "artifacts"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "ResultReused"
+          }
+        },
+        "required": [
+          "open_round"
+        ]
+      },
+      "then": {
+        "required": [
+          "check",
+          "detail"
+        ],
+        "properties": {
+          "check": {
+            "properties": {
+              "name": {
+                "const": "NoBlockingFindingOpen"
+              },
+              "passed": {
+                "const": false
+              }
+            }
+          }
+        }
       }
     },
     {

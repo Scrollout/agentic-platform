@@ -227,7 +227,7 @@ left out; a list is comma-separated, without spaces; hashes are printed in full 
 | `RunStarted` | `slice <slice>  pattern <pattern>` | `detail` |
 | `AttemptMade` | `worker <worker>  model <model>  agent <agent_digest>  inputs <hash>,...  artifacts <hash>,...  reuse <reuse_key>  tokens <n>  cost $<usd>` | `detail` |
 | `StepAccepted` | as `AttemptMade` without `tokens` and `cost`, then `changed <file>:<line>,...` | `detail` |
-| `ResultReused` | `artifacts <hash>,...  reuse <reuse_key>  changed <file>:<line>,...` | `detail` |
+| `ResultReused` | `artifacts <hash>,...  reuse <reuse_key>[  open round]  changed <file>:<line>,...`; `open round` only with `open_round` | the check's reason, then `detail` |
 | `CheckPassed`, `CheckFailed` | `<check name>` | the check's reason, then `detail` |
 | `StepRejected` | `tokens <n>  cost $<usd>` | `detail` |
 | `FindingRecorded` | `blocking` or `suggestion`, then `<rule>  <file>:<line>  check <check>` | the finding's text, then `detail` |
