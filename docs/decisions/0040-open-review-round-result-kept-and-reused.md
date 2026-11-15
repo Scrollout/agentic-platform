@@ -44,7 +44,9 @@ Sources: [Feature 001 research, D36](../../specs/001-prose-to-accepted-slice/res
   and model; a fix's and a later round's inputs include the hash of the open findings and changed
   lines they are given.
 - A round with only NoBlockingFindingOpen failed is recorded as `StepRejected` and committed with
-  its witnesses ([ADR 0039](/decisions/0039-review-findings-confirmed-by-a-new-witness-test.md)).
+  its witnesses ([ADR 0039](/decisions/0039-review-findings-confirmed-by-a-new-witness-test.md))
+  (and, since [ADR 0042](/decisions/0042-only-a-confirmed-finding-is-recorded-as-blocking.md),
+  confirmed at least one finding).
 - Agent output differs between runs, so only reuse makes a replay identical (FR-019, SC-005).
 
 Sources: [Feature 001 research, D8 and D35](../../specs/001-prose-to-accepted-slice/research.md); [Feature 001 spec](../../specs/001-prose-to-accepted-slice/spec.md).

@@ -1288,8 +1288,11 @@ page, none of which an existing project provides.
   - **TestsFailAgainstStub** (owner, 2026-11-15): `go test -json -count=1 ./tests/...`; it passes
     only when the tests build, every declared test under `tests/**` has a result event (`pass`,
     `fail` or `skip`), so none vanishes, and at least one has `fail`.
+  - **A result event** is a `pass`, `fail` or `skip` event for the test's package and name, in
+    every rule here that asks for one (TestsFailAgainstStub, EveryExampleBound); AllTestsPass
+    alone needs `pass` (owner's recommendation taken, 2026-11-15, `/speckit-analyze` L2).
   - **EveryExampleBound** keeps its scenario rule; its fallback (`testsRan`) becomes the same
-    event rule: every declared test under `tests/**` has a result event (`pass` or `fail`).
+    event rule: every declared test under `tests/**` has a result event.
   - **Witness runs** already use `-json -count=1` and read the witness's own `fail` event
     (D35). The baseline `-run '^$'` has no test event by design: it needs only the package's end
     event and its coverage profile, both written with `-json`, so the baseline rule holds. A
@@ -1350,6 +1353,8 @@ page, none of which an existing project provides.
   stay, the check reads every slice's runs.
 - **Alternatives rejected**: changing FR-021 to one run per slice (the owner decided the defect is
   the code).
+- **Recorded in** ADR 0036 and D32, which T095 updates to the platform-wide rule; no ADR of its
+  own (owner, 2026-11-15).
 - Sources: T057 review finding R3, 2026-11-15; spec FR-021; D32, Known limits; engine contract
   startRun (`src/engine/api/preview/2026-11-12-preview/openapi.yaml`); `src/engine/api/runs.go`
   (`active`), `src/engine/api/slices.go` (`activeRun`), `src/engine/steps/steps.go` (`remember`).

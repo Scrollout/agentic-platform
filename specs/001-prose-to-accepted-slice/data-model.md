@@ -169,7 +169,7 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
     not compensated: they are the state later steps and resume build on. Run-record events are
     not undone (D8).
   - **A review round** (owner, 2026-11-14; D35): a review attempt for which every check but
-    NoBlockingFindingOpen passes leaves an open round: it is recorded as `StepRejected` (NoBlockingFindingOpen failed),
+    NoBlockingFindingOpen passes and NoBlockingFindingOpen confirmed at least one finding (D39) leaves an open round: it is recorded as `StepRejected` (NoBlockingFindingOpen failed),
     that event carries the round's files (its witnesses), which become the project's, and,
     when the review step has `writable` entries (a review that writes nothing leaves no files),
     the engine calls `commitStep` for them before the fix's restore, committed with its
