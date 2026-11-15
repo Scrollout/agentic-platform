@@ -658,7 +658,7 @@ func (s *sliceServer) ResumeRun(_ context.Context, req gen.ResumeRunRequestObjec
 	})
 	switch {
 	case errors.Is(err, machine.ErrRunActive):
-		return s.refuse("resumeRun", &sl.Error{Code: string(gen.ErrorCodeRunActive), Detail: fmt.Sprintf("run %s is being driven", id)})
+		return s.refuse("resumeRun", &sl.Error{Code: string(gen.ErrorCodeRunActive), Detail: fmt.Sprintf("another run has not ended, so run %s cannot resume", id)})
 	case errors.Is(err, machine.ErrNotInterrupted), errors.Is(err, machine.ErrRunEnded):
 		return s.refuse("resumeRun", &sl.Error{Code: string(gen.ErrorCodeRunNotInterrupted), Detail: fmt.Sprintf("run %s is not interrupted", id)})
 	case err != nil:

@@ -417,6 +417,7 @@ type run struct {
 	refs    []string
 	seq     int
 	driving bool
+	stopped chan struct{} // closed when the current driver has stopped driving
 	cancel  context.CancelFunc
 
 	artifacts map[string]string // input or output name to hash
@@ -564,23 +565,34 @@ func (m *Machine) Start(ctx context.Context, p StartParams) (Run, error) {
 		return Run{}, err
 	}
 	m.runs[r.ID] = r
-	r.driving = true
+	r.driving, r.stopped = true, make(chan struct{})
 	m.mu.Unlock()
 	return m.drive(ctx, r)
 }
 
 // Resume continues an interrupted run from the step it stopped in; accepted steps do not run again.
+// A run seen interrupted whose driver has not yet stopped is resumed once that driver has stopped
+// (T102); the wait ends early, with ctx's error, when ctx is done.
 func (m *Machine) Resume(ctx context.Context, id string) (Run, error) {
 	m.mu.Lock()
 	r, err := m.find(id)
+	for err == nil && r.Status == StatusInterrupted && r.driving {
+		stopped := r.stopped
+		m.mu.Unlock()
+		select {
+		case <-stopped:
+		case <-ctx.Done():
+			return Run{}, ctx.Err()
+		}
+		m.mu.Lock()
+		r, err = m.find(id)
+	}
 	switch {
 	case err != nil:
 	case r.Status == StatusEnded:
 		err = ErrRunEnded
 	case r.Status != StatusInterrupted:
 		err = ErrNotInterrupted
-	case r.driving:
-		err = ErrRunActive
 	}
 	if err == nil {
 		for _, o := range m.runs {
@@ -598,7 +610,7 @@ func (m *Machine) Resume(ctx context.Context, id string) (Run, error) {
 		return r.copy(), err
 	}
 	r.Status, r.Reason, r.ExpiresAt = StatusRunning, "", time.Time{}
-	r.since, r.driving = m.cfg.Clock.Now(), true
+	r.since, r.driving, r.stopped = m.cfg.Clock.Now(), true, make(chan struct{})
 	r.committed = false // resume commits the last accepted step again first; a repeat is safe
 	m.mu.Unlock()
 	return m.drive(ctx, r)
@@ -614,6 +626,7 @@ func (m *Machine) drive(ctx context.Context, r *run) (Run, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	r.cancel, r.driving = nil, false
+	close(r.stopped)
 	if errors.Is(err, errHalt) {
 		err = nil
 	}
