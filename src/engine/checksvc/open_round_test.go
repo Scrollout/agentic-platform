@@ -54,7 +54,6 @@ func TestOpenRoundWithoutRoundOrWithReusedFromIsInvalid(t *testing.T) {
 	for name, mut := range map[string]func(b map[string]any){
 		"open_round without round": func(b map[string]any) { delete(b, "round") },
 		"open_round with reused_from": func(b map[string]any) {
-			delete(b, "attempt")
 			b["reused_from"] = "RUN-0"
 		},
 	} {

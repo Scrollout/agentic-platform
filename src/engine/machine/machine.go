@@ -231,22 +231,25 @@ type EventCheck struct {
 
 // Event is one entry of a run record; it marshals to run-event.schema.json.
 type Event struct {
-	Seq         int       `json:"seq"`
-	At          time.Time `json:"at"`
-	Run         string    `json:"run"`
-	Slice       string    `json:"slice,omitempty"`
-	Kind        string    `json:"kind"`
-	Step        string    `json:"step,omitempty"`
-	Attempt     int       `json:"attempt,omitempty"`
-	Round       int       `json:"round,omitempty"`
-	Worker      string    `json:"worker,omitempty"`
-	Model       string    `json:"model,omitempty"`
-	AgentDigest string    `json:"agent_digest,omitempty"`
-	Pattern     string    `json:"pattern,omitempty"`
-	Inputs      []string  `json:"inputs,omitempty"`
-	Artifacts   []string  `json:"artifacts,omitempty"`
-	ReuseKey    string    `json:"reuse_key,omitempty"`
-	Usage       *Usage    `json:"usage,omitempty"`
+	Seq     int       `json:"seq"`
+	At      time.Time `json:"at"`
+	Run     string    `json:"run"`
+	Slice   string    `json:"slice,omitempty"`
+	Kind    string    `json:"kind"`
+	Step    string    `json:"step,omitempty"`
+	Attempt int       `json:"attempt,omitempty"`
+	Round   int       `json:"round,omitempty"`
+	// OpenRound is true on the StepRejected that leaves a review round open and on the
+	// ResultReused that reuses such a round's kept result (research D36).
+	OpenRound   bool     `json:"open_round,omitempty"`
+	Worker      string   `json:"worker,omitempty"`
+	Model       string   `json:"model,omitempty"`
+	AgentDigest string   `json:"agent_digest,omitempty"`
+	Pattern     string   `json:"pattern,omitempty"`
+	Inputs      []string `json:"inputs,omitempty"`
+	Artifacts   []string `json:"artifacts,omitempty"`
+	ReuseKey    string   `json:"reuse_key,omitempty"`
+	Usage       *Usage   `json:"usage,omitempty"`
 	// ChangedLines, on StepAccepted or ResultReused, are the lines the accepted result reports changing (a fix);
 	// the next review round is given them, also after a restart.
 	ChangedLines []Line      `json:"changed_lines,omitempty"`
@@ -328,18 +331,19 @@ type RestoreRequest struct {
 
 // CommitRequest is commitStep for one accepted or reused step.
 type CommitRequest struct {
-	Run          string
-	Step         Step
-	Attempt      int    // the accepted attempt (StepAccepted); 0 for a reused result
-	Round        int    // the event's round, 0 when it has none
-	ReusedFrom   string // ResultReused only: the run that accepted the result
+	Run        string
+	Step       Step
+	Attempt    int    // the accepted attempt (StepAccepted); 0 for a reused result
+	Round      int    // the event's round, 0 when it has none
+	ReusedFrom string // ResultReused only: the run that accepted the result, or left the round open
 	// OpenRound is true only for a review round left with blocking findings open (data-model, "A
-	// review round"): Attempt and Round are that round's, AcceptedAt its StepRejected's `at`.
-	OpenRound bool
+	// review round"): Round is that round's, and Attempt with AcceptedAt its StepRejected's, or,
+	// for a reused open round, ReusedFrom with AcceptedAt its ResultReused's `at`.
+	OpenRound    bool
 	Project      string
 	Before       []File     // the previous accepted step's project files, empty for the first
 	ProjectFiles []File     // the event's Files
-	AcceptedAt   time.Time  // the `at` of the StepAccepted or ResultReused event (StepRejected for an open round)
+	AcceptedAt   time.Time  // the `at` of the StepAccepted or ResultReused event (StepRejected for a live open round)
 	Outputs      []Artifact // ResultReused only: each declared output that is a set of project files
 	TimeLimit    time.Duration
 }

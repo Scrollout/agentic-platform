@@ -15,6 +15,9 @@ type KeyParts struct {
 	Inputs         []string // the hashes of the step's inputs, in order
 	AgentDigest    string   // the agent definition's digest; empty for a fixed procedure
 	Model          string   // the model id the step's agent uses; empty for a fixed procedure
+	// Round is the review round a review step's key covers (research D36); 0 for every other
+	// step, which gives the key it had before the round was covered.
+	Round int
 }
 
 // ReuseKey is the SHA-256 (lowercase hex) of the key's parts, each framed by its length and the
@@ -29,6 +32,10 @@ func ReuseKey(p KeyParts) string {
 	field(strconv.Itoa(len(p.Inputs)))
 	for _, in := range p.Inputs {
 		field(in)
+	}
+	if p.Round != 0 { // after the counted inputs, so a key without a round is unchanged
+		field("round")
+		field(strconv.Itoa(p.Round))
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
@@ -46,12 +53,18 @@ func contextHash(open []Finding, changed []Line) string {
 
 // Accepted is an accepted step result, found under its reuse key (FR-019). Lines are the lines a
 // fix changed, which the next review round is given; Files the project's files after the step.
+// An open review round's result is kept the same way, marked Open, with the round's findings in
+// recorded order (suggestions included) and its NoBlockingFindingOpen result as recorded (research
+// D36; data-model, An open round reused).
 type Accepted struct {
 	Key       string
 	Artifacts []string
 	Run       string
 	Lines     []Line
 	Files     []File // the project's files after the step
+	Open      bool
+	Findings  []Finding
+	Check     *EventCheck
 }
 
 // Results is the accepted-result store, in memory. A nil *Results finds nothing and keeps nothing.
@@ -74,7 +87,7 @@ func (s *Results) Get(key string) (Accepted, bool) {
 	return a, ok
 }
 
-// Put keeps an accepted result; the first result under a key stays.
+// Put keeps an accepted or open result; the first result under a key stays, open or accepted.
 func (s *Results) Put(a Accepted) {
 	if s == nil {
 		return

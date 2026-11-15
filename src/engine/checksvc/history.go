@@ -98,10 +98,10 @@ type stamp struct {
 func (t stamp) message() string {
 	var b strings.Builder
 	switch {
+	case t.OpenRound && t.Round != nil: // live or reused (reused_from), the round was left open
+		fmt.Fprintf(&b, "Step %s round %d left open in %s\n\n", t.Step, *t.Round, t.Run)
 	case t.ReusedFrom != "":
 		fmt.Fprintf(&b, "Step %s reused in %s\n\n", t.Step, t.Run)
-	case t.OpenRound && t.Round != nil:
-		fmt.Fprintf(&b, "Step %s round %d left open in %s\n\n", t.Step, *t.Round, t.Run)
 	default:
 		fmt.Fprintf(&b, "Step %s accepted in %s\n\n", t.Step, t.Run)
 	}
@@ -755,8 +755,8 @@ func (s *service) CommitStep(ctx context.Context, req gen.CommitStepRequestObjec
 		return nil, fault(400, gen.ErrorCodeInvalidRequest, "send outputs only with reused_from")
 	}
 	openRound := body.OpenRound != nil && *body.OpenRound
-	if openRound && (reused || body.Attempt == nil || body.Round == nil) {
-		return nil, fault(400, gen.ErrorCodeInvalidRequest, "send open_round only with attempt and round, never with reused_from")
+	if openRound && body.Round == nil { // beside attempt, or reused_from for a reused open round
+		return nil, fault(400, gen.ErrorCodeInvalidRequest, "send open_round only with round")
 	}
 	var outputs []gen.ReusedOutput
 	if body.Outputs != nil {

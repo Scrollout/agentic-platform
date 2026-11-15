@@ -86,6 +86,10 @@ Shipped by Story 2 so far:
   review step has writable entries, the engine commits them with `commitStep` before the fix's
   `restoreStep`, so the fix and the next round start from them (data-model, "A review round";
   T076).
+  Such an open round keeps its result under its reuse key, which covers the round, like an
+  accepted step's; a later run of the same input reuses it without running a check, so the fix
+  and the later rounds are reused too, and resume after an open round goes straight to the fix
+  ([ADR 0040](/decisions/0040-open-review-round-result-kept-and-reused.md); T088).
 
 Built for Story 2 (T053a, split into T053c to T053e, all done):
 

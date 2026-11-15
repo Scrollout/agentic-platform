@@ -143,18 +143,47 @@ func MachinePattern(p sl.Pattern) machine.Pattern {
 	return mp
 }
 
-// reloadResults puts every result the record shows accepted into the accepted-result store, so a
-// restarted engine still reuses them. A run that cannot be read adds nothing.
+// reloadResults puts every result the record shows accepted, and every review round it shows left
+// open, into the accepted-result store, so a restarted engine still reuses them. An open round is
+// rebuilt from the StepRejected with open_round, the FindingRecorded events directly before it and
+// that attempt's NoBlockingFindingOpen CheckFailed, or from a reused open round's FindingRecorded
+// events directly before its ResultReused and that event's check (research D36). A run that
+// cannot be read adds nothing; the first result under a key stays.
 func (r *runs) reloadResults() {
 	for _, e := range r.st.Runs() {
 		events, info, err := r.read(e.Run)
 		if err != nil || info == nil {
 			continue
 		}
+		var recent []machine.Finding // the findings recorded directly before the current event
+		var files []machine.File     // the project's files after the last step that left any
+		checks := map[[3]any]*machine.EventCheck{}
 		for _, ev := range events {
-			if (ev.Kind == "StepAccepted" || ev.Kind == "ResultReused") && ev.ReuseKey != "" {
+			before := recent
+			if ev.Kind != "FindingRecorded" {
+				recent = nil
+			}
+			switch {
+			case ev.Kind == "FindingRecorded" && ev.Finding != nil:
+				recent = append(recent, *ev.Finding)
+			case ev.Kind == "CheckFailed" && ev.Check != nil && ev.Check.Name == "NoBlockingFindingOpen":
+				c := *ev.Check
+				checks[[3]any{ev.Step, ev.Round, ev.Attempt}] = &c
+			case ev.OpenRound && ev.ReuseKey != "" && (ev.Kind == "StepRejected" || ev.Kind == "ResultReused"):
+				kept := machine.Accepted{Key: ev.ReuseKey, Artifacts: slices.Clone(ev.Artifacts), Run: ev.Run, Files: slices.Clone(files),
+					Open: true, Findings: slices.Clone(before), Check: checks[[3]any{ev.Step, ev.Round, ev.Attempt}]}
+				if ev.Kind == "ResultReused" && ev.Check != nil {
+					c := *ev.Check
+					kept.Check = &c
+				}
+				if ev.Files != nil { // a review that writes nothing leaves the files it started from
+					kept.Files, files = slices.Clone(ev.Files), ev.Files
+				}
+				r.results.Put(kept)
+			case (ev.Kind == "StepAccepted" || ev.Kind == "ResultReused") && ev.ReuseKey != "":
 				r.results.Put(machine.Accepted{Key: ev.ReuseKey, Artifacts: slices.Clone(ev.Artifacts), Run: ev.Run, Lines: slices.Clone(ev.ChangedLines),
 					Files: slices.Clone(ev.Files)})
+				files = ev.Files
 			}
 		}
 	}

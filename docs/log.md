@@ -1,5 +1,9 @@
 # Directory Update Log
 
+## 2026-11-15
+
+* **Implementation**: Feature 001, T088 (Story 2): an open review round keeps its result under its reuse key, marked open, with its findings and its NoBlockingFindingOpen result; the review step's key covers its round. A later run of the same input records the kept findings and a `ResultReused` with `open_round` and `check`, runs no check, commits the round with `open_round` and `reused_from`, and reuses the fix and the later rounds. Resume after an open round makes its commit again and goes straight to the fix, or the hand-over at the last round; the last open round is committed before the hand-over. A restarted engine rebuilds open rounds from the record; the terminal client prints `open round` ([ADR 0040](/decisions/0040-open-review-round-result-kept-and-reused.md)). Tests by a separate author.
+
 ## 2026-11-14
 
 * **Implementation**: Feature 001, T077 (Story 2, code part): the review agent writes witness tests. `src/agents/review.yaml` gives it the tests and code agents' filesystem tools (no `remove_directory`) beside the offline `go` shell, 40 model turns, and a findings schema whose blocking findings require `witness: {file, test}` (a `_test.go` file in `review/r<n>/`, a test `TestR<n>…`); its instructions say how to write a witness in package `r<n>` that fails having run the finding's line, to see it fail, to write only new files and never change an earlier round's witness, and that project content is data. The pattern's review `agent_digest` is recomputed. The deprecated `checks.LegacyFindingsRerun` and `checks.LegacyNoBlockingFindingOpen`, ADR 0031's rerun, are removed, so the witness rule has one owner ([ADR 0039](/decisions/0039-review-findings-confirmed-by-a-new-witness-test.md)). Evals and grader self-tests by a separate author; the live step evals are still to run.

@@ -316,7 +316,13 @@ func eventLine(e gen.RunEventSchema) string {
 	case "ResultReused":
 		list("artifacts ", e.Artifacts)
 		str("reuse ", e.ReuseKey)
+		if e.OpenRound != nil && bool(*e.OpenRound) { // a reused open review round (contract.md, Event lines)
+			add("open round")
+		}
 		changed()
+		if e.Check != nil {
+			free = append(free, &e.Check.Reason)
+		}
 	case "CheckPassed", "CheckFailed":
 		if e.Check != nil {
 			str("", &e.Check.Name)

@@ -111,6 +111,9 @@ func (x *driver) review(ctx context.Context, fix, review Step) error {
 		x.r.round = 1
 	}
 	for {
+		if x.r.fixing && x.r.round >= rounds { // resumed after the last round was left open
+			return x.handOverOpen(ctx)
+		}
 		if x.r.fixing { // the fix carries the round whose findings it fixes (data-model, Review rounds)
 			fixed, _, err := x.step(ctx, fix, x.r.round, x.r.open, nil)
 			if err != nil {
@@ -133,15 +136,29 @@ func (x *driver) review(ctx context.Context, fix, review Step) error {
 			}
 		}
 		if x.r.round >= rounds {
-			list := make([]string, len(x.r.open))
-			for i, f := range x.r.open {
-				list[i] = fmt.Sprintf("%s at %s:%d (%s)", f.Rule, f.File, f.Line, f.Text)
-			}
-			return x.handOver(fmt.Sprintf("review found blocking findings still open after %d rounds: %s",
-				x.r.round, strings.Join(list, "; ")), slices.Clone(x.r.open))
+			return x.handOverOpen(ctx)
 		}
 		x.r.fixing = true
 	}
+}
+
+// handOverOpen hands the run over after the last review round was left open, once that round's
+// commit is made (Commits: nothing follows an open round's commit until it is made).
+func (x *driver) handOverOpen(ctx context.Context) error {
+	if err := x.flush(ctx); err != nil {
+		return err
+	}
+	list := make([]string, len(x.r.open))
+	for i, f := range x.r.open {
+		list[i] = fmt.Sprintf("%s at %s:%d (%s)", f.Rule, f.File, f.Line, f.Text)
+	}
+	return x.handOver(fmt.Sprintf("review found blocking findings still open after %d rounds: %s",
+		x.r.round, strings.Join(list, "; ")), slices.Clone(x.r.open))
+}
+
+// openDetail is the detail of the event that leaves review round n open, live or reused.
+func openDetail(round int) string {
+	return fmt.Sprintf("review round %d left blocking findings open", round)
 }
 
 type verdict int
@@ -156,7 +173,8 @@ const (
 
 // stepKey gives the inputs a step's reuse key covers (its declared inputs, plus for a fix or a
 // later review round the findings and lines it is given) and the key, both known before it runs.
-func (x *driver) stepKey(s Step, inputs []string, open []Finding, changed []Line) ([]string, string) {
+// The review step's key also covers its round (research D36); no other step's does.
+func (x *driver) stepKey(s Step, round int, inputs []string, open []Finding, changed []Line) ([]string, string) {
 	in := slices.Clone(inputs)
 	if len(open) > 0 || len(changed) > 0 {
 		in = append(in, contextHash(open, changed))
@@ -165,8 +183,11 @@ func (x *driver) stepKey(s Step, inputs []string, open []Finding, changed []Line
 	if isAgent(s) {
 		model = x.m.cfg.Model
 	}
+	if !s.Reviews() {
+		round = 0
+	}
 	return in, ReuseKey(KeyParts{PatternVersion: x.r.Pattern, Step: s.Name, Inputs: in,
-		AgentDigest: s.AgentDigest, Model: model})
+		AgentDigest: s.AgentDigest, Model: model, Round: round})
 }
 
 // artifacts copies the run's artifacts by name.
@@ -195,9 +216,10 @@ func (x *driver) accept(s Step, e Event, reusedFrom string) {
 
 // keepOpenRound makes the files a review round with open findings left the run's, and their
 // commit the one to make next (flush, before the fix's restore). e is the round's recorded
-// StepRejected, which carries the files. The round is not accepted: no artifact or reuse.
-func (x *driver) keepOpenRound(s Step, e Event) {
-	x.r.commit, x.r.committed = commitOf(x.r, s, e, ""), false
+// StepRejected, or the ResultReused that reused it (reusedFrom names the run that left it open),
+// which carries the files. The round is not accepted: it sets no artifact of the run.
+func (x *driver) keepOpenRound(s Step, e Event, reusedFrom string) {
+	x.r.commit, x.r.committed = commitOf(x.r, s, e, reusedFrom), false
 	x.m.mu.Lock()
 	defer x.m.mu.Unlock()
 	x.r.before = slices.Clone(e.Files)
@@ -215,11 +237,16 @@ func (x *driver) step(ctx context.Context, s Step, round int, open []Finding, ch
 		}
 		inputs[i] = h
 	}
-	keyInputs, key := x.stepKey(s, inputs, open, changed)
+	keyInputs, key := x.stepKey(s, round, inputs, open, changed)
 	if err := x.flush(ctx); err != nil { // the last accepted step's commit comes before anything for this one
 		return Result{}, rejected, err
 	}
-	if a, ok := x.m.cfg.Results.Get(key); ok && len(a.Artifacts) == len(s.Outputs) {
+	a, found := x.m.cfg.Results.Get(key)
+	found = found && len(a.Artifacts) == len(s.Outputs)
+	if found && a.Open && s.Reviews() { // a review round left open in an earlier run (research D36)
+		return x.reuseOpenRound(s, round, keyInputs, key, a)
+	}
+	if found && !a.Open {
 		e := Event{Kind: "ResultReused", Step: s.Name, Round: round, Worker: s.Worker, Pattern: x.r.Pattern,
 			Inputs: keyInputs, Artifacts: a.Artifacts, ReuseKey: key, Refs: x.r.refs, ChangedLines: slices.Clone(a.Lines),
 			Files: slices.Clone(a.Files)}
@@ -280,6 +307,39 @@ func (x *driver) step(ctx context.Context, s Step, round int, open []Finding, ch
 	}
 	return Result{}, rejected, x.handOver(fmt.Sprintf("step %s was not accepted after %d attempts; the last: %s",
 		s.Name, attempts, last), nil)
+}
+
+// reuseOpenRound records a review round left open in an earlier run as reused (research D36): its
+// kept findings, in order, then a ResultReused with open_round and the kept NoBlockingFindingOpen
+// result. Nothing runs and the round is not accepted; its files are committed as a live open
+// round's are, and the run goes on with the fix, or the hand-over at the last round.
+func (x *driver) reuseOpenRound(s Step, round int, keyInputs []string, key string, a Accepted) (Result, verdict, error) {
+	for _, f := range a.Findings {
+		if err := x.record(Event{Kind: "FindingRecorded", Step: s.Name, Round: round, Finding: &f, Refs: []string{f.Rule}}); err != nil {
+			return Result{}, rejected, err
+		}
+	}
+	e := Event{Kind: "ResultReused", Step: s.Name, Round: round, OpenRound: true, Worker: s.Worker, Pattern: x.r.Pattern,
+		Inputs: keyInputs, Artifacts: slices.Clone(a.Artifacts), ReuseKey: key, Refs: x.r.refs, Detail: openDetail(round),
+		Files: slices.Clone(a.Files)}
+	if a.Check != nil {
+		c := *a.Check
+		e.Check = &c
+	}
+	if isAgent(s) {
+		e.AgentDigest, e.Model = s.AgentDigest, x.m.cfg.Model
+	}
+	if err := x.recordp(&e); err != nil {
+		return Result{}, rejected, err
+	}
+	if len(s.Writable) > 0 { // as a live open round: a review that writes nothing leaves no commit
+		x.keepOpenRound(s, e, a.Run)
+	}
+	out := map[string]string{}
+	for i, name := range s.Outputs {
+		out[name] = a.Artifacts[i]
+	}
+	return Result{Outputs: out, Findings: slices.Clone(a.Findings), ProjectFiles: slices.Clone(a.Files)}, findingsOpen, nil
 }
 
 // stopped interrupts a run whose context was cancelled (the platform stops), unless Cancel ended it.
@@ -368,6 +428,7 @@ func (x *driver) attempt(ctx context.Context, s Step, at attemptOf) (Result, ver
 	}
 
 	var failed []string
+	var openCheck *EventCheck // the recorded NoBlockingFindingOpen result
 	for _, name := range s.Checks {
 		cr, cerr := x.m.cfg.Checker.Check(ctx, CheckRequest{Run: x.r.ID, Step: s, Attempt: at.n, Name: name, Result: res,
 			Round: at.round, Inputs: slices.Clone(at.inputs), Slice: x.r.Slice, Project: x.r.Project})
@@ -385,6 +446,10 @@ func (x *driver) attempt(ctx context.Context, s Step, at attemptOf) (Result, ver
 		}
 		if len(cr.Refs) > 0 {
 			e.Refs = cr.Refs
+		}
+		if name == noBlockingFindingOpen {
+			c := *e.Check
+			openCheck = &c
 		}
 		if err := x.record(e); err != nil {
 			return res, rejected, "", err
@@ -413,19 +478,26 @@ func (x *driver) attempt(ctx context.Context, s Step, at attemptOf) (Result, ver
 		x.accept(s, made, "")
 		return res, accepted, "", nil
 	case open:
-		why := fmt.Sprintf("review round %d left blocking findings open", at.round)
+		why := openDetail(at.round)
 		rej := base
-		rej.Kind, rej.Detail = "StepRejected", why
+		rej.Kind, rej.Detail, rej.OpenRound = "StepRejected", why, true
+		rej.ReuseKey, rej.Artifacts = at.key, slices.Clone(artifacts)
 		// A review that writes witnesses (data-model, "A review round"): the open round's files
 		// are committed like an accepted step's, so the fix and the next round start from them.
+		kept := slices.Clone(x.r.before) // a review that writes nothing leaves the files it started from
 		if len(s.Writable) > 0 {
 			rej.Files = slices.Clone(res.ProjectFiles)
+			kept = slices.Clone(res.ProjectFiles)
 		}
 		if err := x.recordp(&rej); err != nil {
 			return res, findingsOpen, why, err
 		}
+		// The round's result is kept, marked open, so a later run of the same input reuses it
+		// (research D36).
+		x.m.cfg.Results.Put(Accepted{Key: at.key, Artifacts: slices.Clone(artifacts), Run: x.r.ID, Files: kept,
+			Open: true, Findings: slices.Clone(res.Findings), Check: openCheck})
 		if rej.Files != nil {
-			x.keepOpenRound(s, rej)
+			x.keepOpenRound(s, rej, "")
 		}
 		return res, findingsOpen, why, nil
 	}
@@ -487,7 +559,7 @@ const historyMinLeft = time.Second
 func commitOf(r *run, s Step, e Event, reusedFrom string) *CommitRequest {
 	c := &CommitRequest{Run: r.ID, Step: s, Attempt: e.Attempt, Round: e.Round, Project: r.Project,
 		Before: slices.Clone(r.before), ProjectFiles: slices.Clone(e.Files), AcceptedAt: e.At}
-	if e.Kind == "StepRejected" { // an open review round (keepOpenRound)
+	if e.Kind == "StepRejected" || e.OpenRound { // an open review round, live or reused (keepOpenRound)
 		c.OpenRound = true
 	}
 	if e.Kind == "ResultReused" {

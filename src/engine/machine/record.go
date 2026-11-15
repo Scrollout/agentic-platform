@@ -39,6 +39,7 @@ func (m *Machine) load(events []Event) (*run, error) {
 		index[s.Name] = i
 	}
 	openOf := map[int][]Finding{}
+	var recent []Finding // the blocking findings recorded directly before the current event
 	running := true
 	for i, e := range events {
 		if e.Seq != i+1 || e.Run != r.ID {
@@ -56,6 +57,10 @@ func (m *Machine) load(events []Event) (*run, error) {
 			r.used.Tokens += u.Tokens
 			r.used.CostUSD += u.CostUSD
 		}
+		before := recent // the findings directly before e (the open round's, when e leaves it open)
+		if e.Kind != "FindingRecorded" {
+			recent = nil
+		}
 		switch e.Kind {
 		case "RunResumed":
 			r.since, running = e.At, true
@@ -72,16 +77,26 @@ func (m *Machine) load(events []Event) (*run, error) {
 			}
 		case "FindingRecorded":
 			if review && e.Finding != nil && e.Finding.Blocking {
-				openOf[e.Round] = append(openOf[e.Round], *e.Finding)
+				recent = append(recent, *e.Finding)
 			}
 		case "StepRejected":
-			// A review round left open with its witnesses (drive.go, keepOpenRound): its files
-			// are the project's, and their commit is made again first.
-			if review && e.Files != nil {
-				r.commit = commitOf(r, p.Steps[si], e, "")
-				r.before = slices.Clone(e.Files)
+			// A review round left open (drive.go, keepOpenRound): with its witnesses, its files are
+			// the project's and their commit is made again first; then the fix of the round
+			// follows with its open findings, or the hand-over at the last round (research D36).
+			if review && (e.OpenRound || e.Files != nil) {
+				r.leaveOpen(p.Steps[si], e, before, "", openOf)
 			}
-		case "StepAccepted", "ResultReused":
+		case "ResultReused":
+			if review && e.OpenRound { // a reused open round: as a live one, nothing accepted
+				reusedFrom := ""
+				if a, ok := m.cfg.Results.Get(e.ReuseKey); ok {
+					reusedFrom = a.Run
+				}
+				r.leaveOpen(p.Steps[si], e, before, reusedFrom, openOf)
+				break
+			}
+			fallthrough
+		case "StepAccepted":
 			s := p.Steps[si]
 			if len(e.Artifacts) != len(s.Outputs) {
 				return nil, fmt.Errorf("machine: run %s: event %d gives %d artifacts for %d outputs", r.ID, e.Seq, len(e.Artifacts), len(s.Outputs))
@@ -101,10 +116,7 @@ func (m *Machine) load(events []Event) (*run, error) {
 			switch {
 			case review:
 				r.pos, r.round, r.fixing, r.open, r.changed = si+1, 0, false, nil, nil
-			case fix: // a reused fix has no StepStarted, so its open findings are taken here too
-				if !r.fixing {
-					r.open = slices.Clone(openOf[r.round])
-				}
+			case fix: // a reused fix has no StepStarted; the open event took its open findings
 				r.changed, r.fixing = slices.Clone(e.ChangedLines), false
 				r.round++
 			default:
@@ -125,6 +137,18 @@ func (m *Machine) load(events []Event) (*run, error) {
 		r.Reason = "the platform stopped during the run"
 	}
 	return r, nil
+}
+
+// leaveOpen is load's part for the event e that left review round e.Round open (a StepRejected
+// or a ResultReused with open_round): its open findings are the blocking ones recorded directly
+// before e, its commit (when it carries files) is made again first, and the fix comes next.
+func (r *run) leaveOpen(s Step, e Event, recent []Finding, reusedFrom string, openOf map[int][]Finding) {
+	openOf[e.Round] = slices.Clone(recent)
+	r.round, r.fixing, r.open = e.Round, true, slices.Clone(recent)
+	if e.Files != nil && len(s.Writable) > 0 {
+		r.commit = commitOf(r, s, e, reusedFrom)
+		r.before = slices.Clone(e.Files)
+	}
 }
 
 // Difference is one field of one step that differs between two runs, as the contract's
@@ -167,18 +191,33 @@ func view(events []Event) (map[string]*stepView, []string) {
 			if len(failed) == 0 {
 				v.checks = "passed"
 			}
-		case "StepAccepted", "ResultReused":
+		case "ResultReused":
+			if e.OpenRound { // read as the original open round: its artifacts, failed check and decision
+				v.artifacts, failed = strings.Join(e.Artifacts, ","), nil
+				if e.Check != nil {
+					v.checks = "failed: " + e.Check.Reason
+				}
+				v.decision = rejectedDecision(e.Detail)
+				break
+			}
+			v.artifacts, v.checks, failed = strings.Join(e.Artifacts, ","), "passed", nil
+			v.decision = `{"accepted":true}`
+		case "StepAccepted":
 			v.artifacts, v.checks, failed = strings.Join(e.Artifacts, ","), "passed", nil
 			v.decision = `{"accepted":true}`
 		case "StepRejected":
-			b, _ := json.Marshal(struct {
-				Accepted bool   `json:"accepted"`
-				Reason   string `json:"reason"`
-			}{false, e.Detail})
-			v.decision = string(b)
+			v.decision = rejectedDecision(e.Detail)
 		}
 	}
 	return out, order
+}
+
+func rejectedDecision(reason string) string {
+	b, _ := json.Marshal(struct {
+		Accepted bool   `json:"accepted"`
+		Reason   string `json:"reason"`
+	}{false, reason})
+	return string(b)
 }
 
 // Compare lists the fields that differ between two runs' records, in step order (the first run's
