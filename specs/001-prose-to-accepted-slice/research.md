@@ -1307,7 +1307,7 @@ page, none of which an existing project provides.
     `GOCACHE=/tmp/go-cache` on its `/tmp` tmpfs (`Dockerfile.check`, `compose.yaml`), without
     `-count=1`, so a result cached from one attempt or project could answer another.
   - **A fresh folder per call** (owner, 2026-11-15): each call of the check program (runCheck, with
-    its witness runs, and runProcedure) gets a new, empty temporary folder under `/tmp`, removed
+    its witness runs, and runProcedure) gets a new temporary folder whose `GOCACHE` starts as a copy of the read-only warm base cache (the standard library) and whose rest is empty under `/tmp`, removed
     when the call ends, whatever its outcome. Every command of the call has `GOCACHE`,
     `GOTMPDIR`, `TMPDIR`, `HOME` and `GOPATH` inside it, so nothing a check writes there survives
     the call; every `go test` carries `-count=1`. The module cache of the pinned modules,
@@ -1318,7 +1318,7 @@ page, none of which an existing project provides.
 - **Rationale**: FR-017, constitution "Checks prove they can fail": a check must judge the
   tests it names, not a summary line the code under test can print or suppress. `go test -json`
   (test2json) gives one event per test with its action, so a test binary that ends before its
-  tests run leaves no event for them. A per-call cache removes any path from one call's build or test results to another's.
+  tests run leaves no event for them. A per-call cache removes any path from one call's build or test results to a later call's; calls running at the same time are a stated limit (Known limit below).
 - **Cost**: with an empty cache each call compiles the standard library and the project from
   scratch: T094 measured one AllTestsPass call on the lab's example project at 0.6 s with the old
   shared cache and about 13 s with an empty one, too slow for the planted and us2 suites (caps 60
@@ -1328,8 +1328,8 @@ page, none of which an existing project provides.
   without `-trimpath` their cache keys hold the project's own folder, so they compile per call;
   T094 measured about 3 s per call with the base), owned by root on the read-only root file system; each call
   copies it into its own folder as its `GOCACHE` and discards the copy with the folder. Nothing a
-  check writes reaches another call, and the base holds only what the image build compiled from
-  pinned sources. T094 measures one call and both suites again, and the caps are checked then.
+  check writes reaches a later call, and the base holds only what the image build compiled from
+  pinned sources. T094 measured one call; its `ap test planted` run found T100, so both suites are timed against the caps with T100's run.
 - **Known limit** (T094's review, 2026-11-15): calls that run at the same time share one user and
   one `/tmp`, so a test in one call can reach a concurrent call's folder and write into its cache;
   this falls under the deliberate-forgery limit below, and hardening (a user or a mount namespace
