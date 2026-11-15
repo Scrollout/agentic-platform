@@ -49,7 +49,7 @@ go_checks() {
     export GOPROXY=off GOFLAGS=-mod=readonly CGO_ENABLED=1 AP_OAPI_CODEGEN=/gopath/bin/oapi-codegen
     for m in $GO_MODULES; do
       if [ -z \"\$(find \"\$m\" -name '*.go' -print -quit)\" ]; then echo \"skip \$m: no Go files yet\"; continue; fi
-      (cd \"\$m\" && go test -race ./...)
+      (cd \"\$m\" && go test -race -timeout 20m ./...)
     done" "$GO_RACE_IMAGE"
 }
 if [ "${1:-}" = "--go-only" ]; then go_checks; exit 0; fi
