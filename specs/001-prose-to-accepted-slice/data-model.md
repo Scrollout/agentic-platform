@@ -140,17 +140,19 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
   round (owner, 2026-11-14).
 - **Refs**: every event names the refs it concerns: a check's own refs, otherwise the run's refs
   (the slice's goals, rules and examples) (SC-006). A `FindingRecorded` names its finding's rule.
-  A check names its own refs only when it fails (T104, owner 2026-11-15): AllTestsPass and
-  EveryExampleBound name the `R-<n>/E-<n>` of each scenario of `features/slice.feature` whose
-  godog subtest fails (godog runs each scenario as a subtest, failing it on a failed step and,
-  with Strict, on an undefined, pending or ambiguous one, and prints the scenario's
-  `slice.feature:<line>` in its output; the n-th subtest is the n-th compiled scenario when they match
-  in number and each subtest has its scenario's name; an Outline's Examples row counts as its Outline), EveryExampleBound only
-  those whose subtest carries godog's undefined, pending or ambiguous step error (it judges
-  binding, so a scenario failing against the stub is not its concern; owner, 2026-11-16), from its `@R-<n>` and `@E-<n>` tags, once each, in the
-  file's order; FindingsCarryEvidence and NoBlockingFindingOpen name the rule of each finding at
-  fault (for NoBlockingFindingOpen, each confirmed one), once each, in order. Every other check,
-  and one whose output names no tagged scenario, names none, at most 256.
+  A check names its own refs only when it fails (T104, owner 2026-11-15 and 2026-11-16).
+  AllTestsPass names each scenario of `features/slice.feature` whose godog subtest fails
+  (godog runs each scenario as a subtest, failing it on a failed step and, with Strict, on an
+  undefined, pending or ambiguous one, and prints the scenario's `slice.feature:<line>` in its
+  output; the n-th subtest is the n-th compiled scenario when they match in number and each
+  subtest has its scenario's name; an Outline's Examples row counts as its Outline).
+  EveryExampleBound names only those whose subtest carries godog's undefined, pending or
+  ambiguous step error: it judges binding, so a scenario failing against the stub is not its
+  concern (owner, 2026-11-16). Each scenario is named `R-<n>/E-<n>` from its `@R-<n>` and
+  `@E-<n>` tags, once, in the file's order. FindingsCarryEvidence and NoBlockingFindingOpen name
+  the rule of each finding at fault (for NoBlockingFindingOpen, each confirmed one), once each,
+  in order. Every other check, and one whose output names no tagged scenario, names none; a
+  verdict names at most 256.
 - **Reuse key**: deterministic and different whenever any of its ingredients differs (pattern
   version, step, input hashes, agent definition digest, model id; research D8); its exact encoding
   belongs to the implementation. A fix's and a later review round's inputs include the hash of the
