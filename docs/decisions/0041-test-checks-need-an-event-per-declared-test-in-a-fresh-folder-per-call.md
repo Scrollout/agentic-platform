@@ -69,6 +69,10 @@ Sources: [Feature 001 research, D37](../../specs/001-prose-to-accepted-slice/res
 
 - A test that vanishes, because the code ended the test binary early, fails the check that
   needs it, so the code cannot pass by stopping the tests.
+- A known limit: the events are test2json's reading of the test binary's output, so code in the
+  binary can still print lines that become events and forge a result. That adds nothing to what
+  code that detects its test binary can already do, which no test check can stop; hardening is a
+  follow-up (T097).
 - Nothing a check writes through those variables survives its call; a test that writes to an
   absolute path elsewhere under `/tmp` still can (a stated limit).
 - Each call compiles the standard library and the project from scratch, so checks and the lab

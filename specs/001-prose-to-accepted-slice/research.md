@@ -1298,8 +1298,9 @@ page, none of which an existing project provides.
   - **Witness runs** already use `-json -count=1` and read the witness's own `fail` event
     (D35). The baseline `-run '^$'` has no test event by design: it needs only the package's end
     event and its coverage profile, both written with `-json`, so the baseline rule holds. A
-    witness run or baseline whose binary exits before the profile is written leaves no profile and
-    cannot be judged, so FindingsCarryEvidence fails: the probe fails closed there too.
+    witness run whose binary exits before its test ran has no result event for that test, so
+    FindingsCarryEvidence fails closed (a binary that exits in `init` still leaves a profile
+    holding only its `mode:` line, so the profile alone does not show it).
   - **Why (R2)**: the check service lives as long as the session and every call shared
     `GOCACHE=/tmp/go-cache` on its `/tmp` tmpfs (`Dockerfile.check`, `compose.yaml`), without
     `-count=1`, so a result cached from one attempt or project could answer another.
@@ -1313,11 +1314,16 @@ page, none of which an existing project provides.
     them); `compose.yaml` keeps the `/tmp` tmpfs, which holds the call folders.
 - **Rationale**: FR-017, constitution "Checks prove they can fail": a check must judge the
   tests it names, not a summary line the code under test can print or suppress. `go test -json`
-  (test2json) gives one event per test with its action, which is what the go tool, not the test,
-  writes. A per-call cache removes any path from one call's build or test results to another's.
+  (test2json) gives one event per test with its action, so a test binary that ends before its
+  tests run leaves no event for them. A per-call cache removes any path from one call's build or test results to another's.
 - **Cost**: each call compiles the standard library packages it uses and the project from
   scratch. The planted and us2 suites (caps 60 and 75 minutes) will take longer; T094 measures
   one check call and both suites before and after, and the caps are checked then.
+- **Known limit** (T093's review, 2026-11-15): the events are what test2json makes of the test
+  binary's output, so code in the binary can still print lines that become events, or write to the
+  go command's own output, and forge a result. Deliberate forgery is not stopped; it adds nothing
+  to what code that detects its test binary can already do (answer the tests and behave otherwise
+  in production), which no test check can stop. Hardening is a follow-up (T097).
 - **Alternatives rejected**: every declared test under `tests/**` failing against the stub (a
   test that rightly passes against the stub would fail the check; owner, 2026-11-15); counting
   `ok` lines or `--- PASS` lines (the test prints them, or
