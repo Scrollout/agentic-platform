@@ -272,6 +272,7 @@ fresh review round 1.
 | CNCF Distribution (`registry`) | Apache-2.0 | 7.6 (2026-11-11) | local registry for signed images (ADR 0028) |
 | WireMock | Apache-2.0 | 5.8 (2026-11-09) | the recorded-model replay server and recorder for tests (D26) |
 | buildkit-syft-scanner | Apache-2.0 | not published | BuildKit's SBOM generator, a wrapper of syft (8.5, 2026-11-09); run locally (T063) |
+| go-arch-lint | MIT | 4.7 (2026-10-19) | the module-boundary check (D40); low score, built from source by the checksum database and a pinned module hash; watch |
 
 Custom code is limited to the engine, its checks, the slice model, the terminal client and the run
 page, none of which an existing project provides.
@@ -1405,3 +1406,172 @@ page, none of which an existing project provides.
 - Sources: T057 review finding R5, 2026-11-15; spec FR-017; D35, D36; check contract
   `CheckVerdict` and runCheck (NoBlockingFindingOpen); `src/engine/machine/drive.go`,
   `src/engine/steps/steps.go` (`projectFindings`, the verdict).
+
+### D40. Module boundaries are checked by go-arch-lint, one archfile per module
+
+- **Decision** (owner, 2026-11-15; the work is T098, and T099 for generated projects):
+  `fe3dback/go-arch-lint` v1.19.1 checks the imports of each Go module in `src/go.work` against
+  a `src/<module>/.go-arch-lint.yml` (archfile schema version 3). The archfile declares the
+  module's packages as components and, for each one, the components (`mayDependOn`) and vendor
+  packages (`canUse`) it may import. Every other import fails, and so does a package that no
+  component maps. This is how the platform applies Principle XVII's "reject a change that … adds a
+  dependency that crosses a boundary the project's design forbids" to its own code. Layering
+  inside generated projects is a later pattern-level check (T099, not blocking the MVP).
+- **Facts** (checked 2026-11-15; [go-arch-lint reference](../../docs/references/go-arch-lint.md)):
+  - Release: v1.19.1 of 2026-10-29, commit `a34dbfc8`, module hash
+    `h1:8cGotGwAxpuKpOw9H8hhA6+EN2+HGU1eHcrwMvL4dC4=`. Its `go.mod` says `go 1.25.0`, with no
+    `replace`.
+  - Project: MIT licence, Scorecard 4.7 (2026-10-19; Maintained 8, Pinned-Dependencies and
+    Signed-Releases 0). Releases every one to two months in 2026, one main maintainer merging
+    outside contributions. No open issue names Go 1.26, and the binary builds and runs under the
+    pinned Go 1.26.11.
+  - Scope: one module per run (`--project-path` needs a `go.mod`; a `go.work` is not read).
+    Imports of the other workspace modules (for example `github.com/agentic-platform/slice` from
+    the engine) are vendor imports. The standard library is always allowed.
+  - What it reads: every `.go` file's import block, `_test.go` files and files behind build tags
+    included. So it sees the `evals`-tagged imports that a plain `go list` misses.
+  - Exit codes: 0 when clean, 1 for anything else (a violation, an unmatched file, an archfile
+    notice or a setup error). `--json` gives the warnings as data.
+- **Install pin and offline build**: `images.lock` gains
+  `go-arch-lint github.com/fe3dback/go-arch-lint@v1.19.1` and `go-arch-lint-sum
+  h1:8cGotGwAxpuKpOw9H8hhA6+EN2+HGU1eHcrwMvL4dC4=`. The tool is built from source in the pinned
+  `golang` image into `/gopath/bin`, as oapi-codegen, govulncheck and go-licenses are. Those three
+  run `go install` with network each time; this one runs offline as soon as the cache holds it.
+  The experiment, on this host:
+  - `go install …@v1.19.1` with network: about 35 s; about 250 MB of module cache and 265 MB of
+    build cache.
+  - The same with `--network none` and `GOPROXY=off` fails: "loading deprecation for
+    github.com/fe3dback/go-arch-lint: module lookup disabled by GOPROXY=off".
+  - With `--network none` and `GOPROXY=file:///gopath/pkg/mod/cache/download`: succeeds in under
+    2 s.
+
+  So `scripts/check.sh` installs it offline through that file proxy. Only when the module is not
+  cached does it fetch it once with network, where the checksum database verifies it. It then
+  refuses a binary whose `go version -m` module line is not the pinned version and hash. The
+  owner accepted this (owner, 2026-11-15): the first fetch uses the network in the arch step's
+  setup, and every later run is offline through `GOPROXY=file://…`.
+- **Offline running**: `check` runs with `--network none`, `GOPROXY=off`,
+  `GOFLAGS=-mod=readonly` and `src/` mounted read-only. It needs only `go` on `PATH`, for `go list
+  std`. The archfile is always a local path, because a URL would be fetched with `http.Get`. With
+  deep scan off it takes 1 to 2 s per module.
+- **Derived dependency graph** (2026-11-15, from every `.go` file's imports outside `testdata`, as
+  the tool reads them, cross-checked with `go list -tags docker` for Imports, TestImports and
+  XTestImports; own-package `_test` imports left out):
+  - engine (`github.com/agentic-platform/engine`), project edges:
+    - `canonical`, `agentcall`, `machine`: none (leaves).
+    - `checks` → canonical.
+    - `procedures` → canonical, checks.
+    - `checksvc` → canonical, checks, procedures.
+    - `slices` → canonical, checks.
+    - `contracts` → slices.
+    - `analyst` → agentcall, slices.
+    - `steps` → agentcall, canonical, checksvc, machine, procedures.
+    - `store` → none.
+    - `api` → api/gen, machine, slices, store.
+    - `cmd/engine` → analyst, api, canonical, contracts, machine, slices, steps, store.
+    - `cmd/check` → checksvc.
+  - engine, vendor edges: `slice` module (store, slices, api, cmd/engine); `check/api/gen`
+    (checksvc, steps); yaml (checks, checksvc, slices, api, cmd/engine); jsonschema (checksvc,
+    slices, api; machine in tests); gherkin and messages (checks); `golang.org/x/mod/modfile`
+    (checks, procedures); kin-openapi and oasdiff (contracts); oapi-codegen runtime (api/gen).
+  - cli and page: root package → api/gen; `cmd/<name>` → root package; api/gen → oapi-codegen
+    runtime. check: only api/gen → oapi-codegen runtime. slice: one package → yaml, jsonschema,
+    gherkin, messages.
+  - tests: acceptance → lab; contract → lab (and yaml, jsonschema); analystsvc → evals/analyst
+    and engine/slices; analystsvc/client → engine/analyst, engine/slices; evals/analyst →
+    engine/checks, engine/slices, slice, gherkin, yaml; evals/steps → engine/canonical,
+    engine/checks, engine/procedures, yaml; lab → yaml. lab/httpc, lint, recorded,
+    recorded/recording and recorded/scripted import no project or vendor package.
+- **Rules** (the archfiles T098 writes; each component's allowed set is exactly its edges above,
+  plus itself where its external tests import it):
+  - Every package of every module is one component with one exact folder (no `**`). A new
+    package fails until its archfile declares it.
+  - `allow.depOnAnyVendor: false`: every vendor package is declared and listed per component.
+  - `excludeFiles: ["^.*/testdata/.*$"]`: the fixture modules are other projects.
+  - `allow.deepScan: false` (owner, 2026-11-15: deep scan stays off).
+  - These rules encode the intended direction, so these imports fail:
+    - the leaves (`canonical`, `agentcall`, `machine`) import nothing of the engine;
+    - `machine` never imports `api`, `steps`, `checks`, `checksvc` or `store`;
+    - `checks` imports only `canonical`, never `api`, `machine`, `steps`, `checksvc`,
+      `procedures` or `slices`;
+    - `procedures` and `checksvc` never import `api`, `machine`, `slices` or `steps`;
+    - only `api` and `cmd/engine` import `store`;
+    - only `cmd/engine` imports `api`, and no package imports a `cmd/*`;
+    - `cmd/check` imports only `checksvc`;
+    - in cli and page, `api/gen` imports only the oapi-codegen runtime, and `cmd/<name>` only the
+      root package;
+    - `slice` imports no platform module;
+    - `tests` packages import only the engine packages listed above.
+  - With these archfiles every module passed on 2026-11-15, offline, in the pinned image. In a
+    copy of the engine, a planted `machine` → `api` import failed with exit 1, naming component,
+    file, line and import. An unmapped new package failed with exit 1 and
+    `ArchWarningsNotMatched`.
+- **Edges that look like boundary violations** (owner, 2026-11-15: both are allowed now as named
+  exceptions in `src/engine/.go-arch-lint.yml`, each with a comment naming its follow-up in T097,
+  so the check passes on day one):
+  - F1 `steps` → `checksvc`: the engine's step driver imports the check service's implementation
+    package only for `checksvc.APIVersion()` and `checksvc.CallTimeLimitMax()`, the contract's
+    version and `x-limits`, in `steps/steps.go` and `steps/history.go`. A client should get those
+    from the check contract, as it already gets `check/api/gen`, not from the server it calls.
+    Follow-up (T097): move both into the check contract's generated package or a small shared
+    package.
+  - F2 `cmd/engine` holds logic, not only wiring: `setup.go`'s `sliceWorkers` routes each
+    request to a per-slice `machine.Worker`, and it also computes the agent-definition digest
+    (`canonical.FramedHash`). An import rule cannot say "cmd only wires". Follow-up (T097): move
+    `sliceWorkers` and the digest into a package, so `cmd` only wires.
+  - Not violations, recorded for clarity:
+    - `slices` → `checks` (`checks.Fit`, PatternFit) and `steps` → `procedures`
+      (`procedures.IsProjectPath`) follow "each rule has one owner".
+    - The tests module's evals and the analyst service client import engine packages, which is
+      their purpose.
+- **Archfile changes need recorded approval** (owner, 2026-11-15): an archfile is a check
+  (Principle XVII), so `scripts/hooks/commit-msg` treats `**/.go-arch-lint.yml` as a protected
+  path (its `protected` pattern, T010e, ADR 0029). A commit that adds, changes or deletes one
+  needs an `Approved-by:` trailer.
+- **Scorecard 4.7** (owner, 2026-11-15: accepted): mitigated by the version and module-hash pin,
+  the build from source against the checksum database, and manual review of every update.
+- **Rationale**: an architecture rule is a deterministic check, fixed before the change it judges
+  (Principle XVII), not a reviewer's judgement. go-arch-lint states it as data per module, fails
+  closed on any package or import it was not told about, and is mature, free and small enough to
+  adopt rather than write (Principle VI).
+- **Alternatives rejected**:
+  - **arch-go** (`github.com/arch-go/arch-go/v2`, MIT, v2.1.2 of 2026-02-03): rules by package
+    patterns (dependencies, contents, functions, naming) with compliance and coverage thresholds.
+    Its thresholds allow less than full compliance, it has no "unmapped package fails" by default
+    beyond the coverage rate, and it is released less often.
+  - **depguard through golangci-lint** (depguard v2.3.0 of 2026-10-27, GPL-3.0; golangci-lint
+    v2.15.0 of 2026-10-16): allow and deny lists of import prefixes per file glob. It has no
+    components, so every boundary becomes hand-kept prefix lists per folder. A package missing from
+    every list is not flagged. It also brings in golangci-lint, a large tool the project does not
+    otherwise run.
+  - **An own `go list` test**: this rewrites a mature tool (Principle VI). `go list` follows build
+    constraints, so it misses tagged files; it missed the `evals`-tagged `engine/slices` import in
+    `tests/evals/analyst` that go-arch-lint found.
+  - **The tool's Docker image** (`fe3dback/go-arch-lint`): unsigned, and it failed to load the
+    std packages until v1.19.1 (issue 75). Building from source in the pinned Go image reuses an
+    existing pin.
+  - **Deep scan on**: it type-loads every package through `go/packages` (engine about 9 s, against
+    about 1 s), and checks dependency injection through method arguments, which the boundary rule
+    does not need. The owner keeps it off (owner, 2026-11-15).
+- **Known limits**:
+  - It checks imports only, not `//go:embed` reach, `os/exec`, reflection or `go:linkname`.
+  - One module at a time: a sibling module counts as a vendor, checked by import path only.
+  - Exit 1 does not tell a violation from a broken setup. The tests read `--json` or the
+    message.
+  - A component's own `_test` package needs the component in its own `mayDependOn` (issue 59).
+  - A vendor glob `a/**` does not match `a`, so both are listed.
+  - Every new package means an archfile change, which is a change to a check (Principle XVII), so it
+    needs the owner's `Approved-by:`.
+- **Recorded as** [ADR 0043](../../docs/decisions/0043-module-boundaries-checked-by-go-arch-lint.md);
+  component [go-arch-lint](../../docs/components/go-arch-lint.md).
+- Sources: [go-arch-lint at v1.19.1](https://github.com/fe3dback/go-arch-lint/tree/a34dbfc83fcf68b5b76aa6b4d7e959244f87f739);
+  [archfile syntax](https://github.com/fe3dback/go-arch-lint/blob/v1.19.1/docs/syntax/README.md);
+  [releases](https://github.com/fe3dback/go-arch-lint/releases);
+  [Go module proxy, v1.19.1](https://proxy.golang.org/github.com/fe3dback/go-arch-lint/@v/v1.19.1.info);
+  [OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/fe3dback/go-arch-lint);
+  [issue 59](https://github.com/fe3dback/go-arch-lint/issues/59);
+  [PR 91](https://github.com/fe3dback/go-arch-lint/pull/91);
+  [arch-go](https://github.com/arch-go/arch-go); [depguard](https://github.com/OpenPeeDeeP/depguard);
+  [Go modules reference, GOPROXY protocol](https://go.dev/ref/mod#goproxy-protocol); the
+  experiment of 2026-11-15 in the session scratchpad (pinned `golang` image, archfiles drafted
+  there, `src/` read-only).

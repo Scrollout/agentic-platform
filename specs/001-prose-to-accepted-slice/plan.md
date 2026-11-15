@@ -20,7 +20,7 @@ replay is byte-identical. The approach is the ADR 0026 spike, made general and d
 **Language/Version**: Go 1.26 for all platform code; the built slices are Go (D1)
 
 **Primary Dependencies**: Docker Agent v1.160.0 (pinned image digest), godog, cucumber/gherkin,
-oapi-codegen, Redocly CLI (contract bundling), Spectral (also as the contract-lint service, D28),
+oapi-codegen, Redocly CLI (contract bundling), Spectral (also as the contract-lint service, D28), go-arch-lint (module boundaries, D40),
 oasdiff (as a Go library in the engine), santhosh-tekuri/jsonschema, Schemathesis, nginx (gateway),
 gVisor, WireMock (the recorded model, D26), cosign and the Distribution registry (local signing,
 D24); Docker Agent `serve api` runs the analyst (D27) and each agent step (D29);
@@ -92,6 +92,7 @@ Each decision that outlives this feature has a record in `docs/decisions/`, link
 | An open review round's result (findings, witnesses, project files, its NoBlockingFindingOpen result) is kept under its reuse key, which covers the round, marked open, and reused by a later run of the same input as `ResultReused` with `open_round`, so the fix and the later rounds are reused too; reuse runs no check; resume after an open round goes straight to the fix (owner, 2026-11-15) | D36 | [ADR 0040](../../docs/decisions/0040-open-review-round-result-kept-and-reused.md) |
 | A test check passes only on a `go test -json -count=1` result event for every declared test (a top-level `Test*` under `tests/**` or `review/**`): AllTestsPass needs a `pass` for each, TestsFailAgainstStub an event for each and at least one `fail`; each check call runs in its own new, empty temporary folder (`GOCACHE`, `GOTMPDIR`, `TMPDIR`, `HOME`, `GOPATH`), removed after the call, with the pinned modules' cache shared read-only (owner, 2026-11-15) | D37 | [ADR 0041](../../docs/decisions/0041-test-checks-need-an-event-per-declared-test-in-a-fresh-folder-per-call.md) |
 | Only a finding NoBlockingFindingOpen confirmed (its verdict's `confirmed`) is recorded as blocking; every other finding is recorded as a suggestion, and only confirmed findings reach the fix, the next round's key, the hand-over and `Run.Open` (owner, 2026-11-15) | D39 | [ADR 0042](../../docs/decisions/0042-only-a-confirmed-finding-is-recorded-as-blocking.md) (amends what ADR 0039 means by blocking in the record) |
+| Each Go module in `src/go.work` declares its packages as components with their allowed imports in a `.go-arch-lint.yml` (schema version 3, exact folders, every vendor declared, `testdata` excluded, deep scan off); `fe3dback/go-arch-lint` v1.19.1, built from source in the pinned Go image by its pinned module hash, installed and run offline, fails any undeclared import and any unmapped package in `scripts/check.sh` and the pre-commit hook; an archfile change is a protected path needing `Approved-by:`; the `steps` → `checksvc` and `cmd/engine` findings are named exceptions until their T097 follow-ups; the platform's own modules first, generated projects later (T099) (owner, 2026-11-15) | D40 | [ADR 0043](../../docs/decisions/0043-module-boundaries-checked-by-go-arch-lint.md) |
 
 ## Threat model
 
