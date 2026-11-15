@@ -185,8 +185,8 @@ Each failure is stopped by a check, and a replay of the same run gives byte-iden
 
 - **FR-015**: Every run MUST end in exactly one outcome: done, handed over to the developer with
   the reason, expired after 14 days waiting for the developer, or cancelled by the developer.
-- **FR-016**: A step that fails its checks MUST be tried at most 3 times, and a review MUST run at
-  most 3 rounds, before the run is handed over to the developer. Every run MUST stop within its
+- **FR-016**: A step that fails its checks MUST be tried at most 3 times (the fix between review
+  rounds at most 3 times in each round), and a review MUST run at most 3 rounds, before the run is handed over to the developer. Every run MUST stop within its
   declared budget of model tokens, cost and time.
 - **FR-017**: A review finding MUST block only when it carries evidence that a check confirms: a
   new witness test for its rule, written by the review in its own folder, that fails, having run
