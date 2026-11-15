@@ -39,8 +39,8 @@ Sources: [Feature 001 research, D37](../../specs/001-prose-to-accepted-slice/res
 
 # Context
 
-- `go test -json` writes one event per test with its action; the go tool writes them, not the
-  test, while the `ok` summary line only says the binary exited 0.
+- `go test -json` turns the test binary's output into one event per test with its action, so a
+  test that never ran has no event, while the `ok` summary line only says the binary exited 0.
 - The check service lives for the whole session, runs code the agents wrote, and before this
   decision kept its Go cache, home and GOPATH under one shared `/tmp`.
 - The witness runs already read `-json` events (ADR 0039).

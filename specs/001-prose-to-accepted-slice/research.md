@@ -755,6 +755,7 @@ page, none of which an existing project provides.
   D6); restoring from the stored artifacts without git (a second copy of what the last commit
   holds); restoring only after a rejected attempt (an interrupted attempt's files would need a
   second path).
+- **Known limit** (analyze, 2026-11-15): `govulncheck` and `go-licenses` scan the platform modules, not go-arch-lint's own dependencies; the tool runs offline with `src/` read-only, and the same holds for the other installed tools (oapi-codegen, govulncheck, go-licenses).
 - **Known limits**: the project worker can write any project under the projects folder; only the
   engine can call it, and the engine names only its run's project, a new folder (FR-025). The
   generate worker has the project root writable except `.git`, which is mounted read-only on top
