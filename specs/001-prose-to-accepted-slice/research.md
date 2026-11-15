@@ -1312,14 +1312,21 @@ page, none of which an existing project provides.
     the call; every `go test` carries `-count=1`. The module cache of the pinned modules,
     `/opt/gomodcache`, is shared read-only: it is in the image, owned by root, on the read-only
     root file system. `Dockerfile.check` drops its `GOCACHE` and `GOPATH` settings (the call sets
-    them); `compose.yaml` keeps the `/tmp` tmpfs, which holds the call folders.
+    them); `compose.yaml` keeps the `/tmp` tmpfs, which holds the call folders; each call's `GOCACHE`
+    starts as a copy of the image's read-only warm base cache (see Cost).
 - **Rationale**: FR-017, constitution "Checks prove they can fail": a check must judge the
   tests it names, not a summary line the code under test can print or suppress. `go test -json`
   (test2json) gives one event per test with its action, so a test binary that ends before its
   tests run leaves no event for them. A per-call cache removes any path from one call's build or test results to another's.
-- **Cost**: each call compiles the standard library packages it uses and the project from
-  scratch. The planted and us2 suites (caps 60 and 75 minutes) will take longer; T094 measures
-  one check call and both suites before and after, and the caps are checked then.
+- **Cost**: with an empty cache each call compiles the standard library and the project from
+  scratch: T094 measured one AllTestsPass call on the lab's example project at 0.6 s with the old
+  shared cache and about 13 s with an empty one, too slow for the planted and us2 suites (caps 60
+  and 75 minutes). So (owner, 2026-11-15) the image holds a **warm base cache**: `Dockerfile.check`
+  builds, from the pinned sources only, the standard library and the pinned modules the pattern
+  uses into `/opt/gocache-base`, owned by root on the read-only root file system; each call
+  copies it into its own folder as its `GOCACHE` and discards the copy with the folder. Nothing a
+  check writes reaches another call, and the base holds only what the image build compiled from
+  pinned sources. T094 measures one call and both suites again, and the caps are checked then.
 - **Known limit** (T093's review, 2026-11-15): the events are what test2json makes of the test
   binary's output, so code in the binary can still print lines that become events, or write to the
   go command's own output, and forge a result. Deliberate forgery is not stopped; it adds nothing

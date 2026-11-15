@@ -59,7 +59,8 @@ Sources: [cmd/test2json](https://pkg.go.dev/cmd/test2json); [go command: build a
   ADR 0039's rule, which holds with `-json`.
 - Each check call gets a new, empty temporary folder, removed after the call, as `GOCACHE`,
   `GOTMPDIR`, `TMPDIR`, `HOME` and `GOPATH`; every `go test` carries `-count=1`. The pinned
-  modules' cache stays shared, read-only, in the image.
+  modules' cache stays shared, read-only, in the image, and each call's `GOCACHE` starts as a copy
+  of a read-only warm base cache the image build compiles from pinned sources (owner, 2026-11-15).
 - Rejected: requiring every test to fail against the stub; counting `ok` or `--- PASS` lines;
   `-count=1` with a shared cache; one cache per project.
 
@@ -75,8 +76,8 @@ Sources: [Feature 001 research, D37](../../specs/001-prose-to-accepted-slice/res
   follow-up (T097).
 - Nothing a check writes through those variables survives its call; a test that writes to an
   absolute path elsewhere under `/tmp` still can (a stated limit).
-- Each call compiles the standard library and the project from scratch, so checks and the lab
-  suites take longer; if that proves too slow, the owner decides then.
+- With an empty cache a call took about 13 s instead of 0.6 s (T094's measurement), so the image
+  carries a warm base cache that each call copies; only the project itself is compiled per call.
 - The check contract's runCheck wording changes first (T092); the checks, the check service and
   `Dockerfile.check` follow (T093, T094).
 
