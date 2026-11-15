@@ -156,12 +156,14 @@ src/deploy/ap down
 ```
 
 The replay is identical when `compare` exits 0 and the two logs list equal trees (`%T`), commit
-by commit; commit IDs differ, since each commit names its own run and times. Until T088, a
-replay of a run with more than one review round differs (research D36); the measured run
-below found it (compare exit 7). Measured on
-2026-11-15: the images, cached, 93 s; `up` 10 s; the slice 33 s; `build-workers` 8 s; `build`
-419 s; `replay` 229 s; `compare` 1 s; `down` 3 s. With Haiku 5.5 the whole flow cost about
-$0.01 (RUN-1 used 115,595 tokens, $0.0084).
+by commit; commit IDs differ, since each commit names its own run and times. Before T088 a
+replay of a run with more than one review round differed (research D36; the first run on
+2026-11-15 gave compare exit 7). Measured on 2026-11-15 after T088, with review round 1 left
+open and round 2 accepted: `up` 10 s; the slice 34 s; `build-workers` 7 s; `build` 378 s;
+`replay` 29 s (every step and round reused, 0 tokens); `compare` 2 s, exit 0; `down` 6 s.
+Rebuilding the engine, check, cli and project images took 16 to 38 s each. With Haiku 5.5 the
+build cost about $0.01 (97,869 tokens, $0.0088). The analyst's questions differ between live
+runs, so the answers piped to `ap questions` vary.
 
 On the host, `git status` can show a vendored `build.cmd` (from
 `github.com/apapsch/go-jsonmerge/v2`) as modified. That module's own `.gitattributes` sets
