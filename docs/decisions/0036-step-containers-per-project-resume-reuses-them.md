@@ -39,13 +39,15 @@ Sources: [Project owner's decisions, 2026-11-14](https://claude.ai/code/session_
 # Context
 
 - The engine keeps one worker address per slice and step, in memory. Registering again replaces it.
-- A slice has at most one active run, and a run is active until it ends (FR-021).
+- At most one run on the platform is active, of any slice, and a run is active until it ends
+  (FR-021). `startRun`, `resumeRun` and `replayRun` are refused with `RunActive` while any run has
+  not ended (research D38).
 - A run is interrupted when the platform stopped. An engine restart loses its registrations, but
   the step containers keep running until `ap down`.
 - The engine calls a worker by its container name, a host name of one DNS label of at most 63
   characters. A project name may itself be 63 characters.
 
-Sources: [Feature 001 research, D29, D31 and D32](../../specs/001-prose-to-accepted-slice/research.md); [RFC 1035](https://www.rfc-editor.org/rfc/rfc1035#section-2.3.4).
+Sources: [Feature 001 research, D29, D31, D32 and D38](../../specs/001-prose-to-accepted-slice/research.md); [RFC 1035](https://www.rfc-editor.org/rfc/rfc1035#section-2.3.4).
 
 # Decision
 

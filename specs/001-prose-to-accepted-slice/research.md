@@ -886,7 +886,8 @@ page, none of which an existing project provides.
     a non-empty `.git` is refused by `build-workers` (exit 3) as now.
 - **Rationale**: keeping one container set per project means building a second project of a slice
   never stops the first one's containers, and the active-run refusal keeps the engine's single
-  registration on the only run that can use it, since a slice has at most one active run. Resume
+  registration on the only run that can use it, since at most one run on the platform is active
+  (FR-021, D38). Resume
   then needs only a registration, which needs no folder check, so the "folder already holds files"
   refusal of `build-workers` does not apply to it. Replay always writes a new project, so it fits
   `build-workers` as it is. No engine or contract change is needed.
@@ -899,8 +900,9 @@ page, none of which an existing project provides.
 - **Known limits**: step containers of every project built in the session use resources until
   `ap down`. Until T053j is done, an interrupted run whose containers are gone cannot be resumed
   (it can be cancelled, or it expires after 14 days). `build-workers` for another slice while a run
-  of a different slice is active starts that slice's containers, which then wait: the active-run
-  refusal is per slice, and the following `startRun` is refused with `RunActive` (FR-021).
+  of a different slice is active starts that slice's containers, which then wait: `build-workers`'
+  active-run refusal is per slice, and the following `startRun` is refused with `RunActive` while
+  any run of any slice has not ended (FR-021, D38).
 - **Recorded as** [ADR 0036](../../docs/decisions/0036-step-containers-per-project-resume-reuses-them.md).
 - Sources: owner's decisions, 2026-11-14; engine contract `registerWorker`, `listRuns`, `getRun`
   (`src/engine/api/preview/2026-11-12-preview/openapi.yaml`);

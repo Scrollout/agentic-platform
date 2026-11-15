@@ -66,10 +66,10 @@ type storedEvent struct {
 	Files []machine.File `json:"files,omitempty"`
 }
 
-// runs drives and reads the runs: one machine per slice (a run is active per slice, as startRun's
-// RunActive says), whose events go to the store through runEvents. Starts, resumes, replays and
-// hand-overs are serialised by mu, so the refusals checked before one hold until its first event
-// is recorded.
+// runs drives and reads the runs: one machine per slice, at most one active run on the platform
+// (FR-021, startRun's RunActive), whose events go to the store through runEvents. Starts,
+// resumes, replays and hand-overs are serialised by mu, so the refusals checked before one hold
+// until its first event is recorded.
 type runs struct {
 	st      RunStore
 	pattern machine.Pattern
@@ -330,21 +330,41 @@ func (r *runs) find(id string) (run machine.Run, events []machine.Event, info *r
 
 // active returns the run of the slice that has not ended, if any.
 func (r *runs) active(slice string) (string, error) {
-	m := r.machineFor(slice)
-	_ = m.ExpireDue()
+	run, _, err := r.activeWhere(func(s string) bool { return s == slice }, "")
+	return run, err
+}
+
+// activeAny returns a run of any slice, other than except, that has not ended, and its slice
+// (FR-021: at most one active run on the platform).
+func (r *runs) activeAny(except string) (run, slice string, err error) {
+	return r.activeWhere(func(string) bool { return true }, except)
+}
+
+// activeWhere returns the first recorded run, other than except, of a slice that in accepts and
+// that has not ended. Each such slice's machine first ends its runs that waited too long.
+func (r *runs) activeWhere(in func(slice string) bool, except string) (run, slice string, err error) {
+	expired := map[string]bool{}
 	for _, e := range r.st.Runs() {
-		if e.Slice != slice {
+		if !in(e.Slice) {
 			continue
 		}
-		run, ok := m.Get(e.Run)
-		if !ok {
-			return "", fmt.Errorf("run %s is in the record but cannot be read", e.Run)
+		m := r.machineFor(e.Slice)
+		if !expired[e.Slice] {
+			_ = m.ExpireDue() // a run that cannot be ended now is ended at a later read
+			expired[e.Slice] = true
 		}
-		if run.Status != machine.StatusEnded {
-			return e.Run, nil
+		if e.Run == except {
+			continue
+		}
+		v, ok := m.Get(e.Run)
+		if !ok {
+			return "", "", fmt.Errorf("run %s is in the record but cannot be read", e.Run)
+		}
+		if v.Status != machine.StatusEnded {
+			return e.Run, e.Slice, nil
 		}
 	}
-	return "", nil
+	return "", "", nil
 }
 
 // projectTaken refuses a project whose folder exists under the projects folder, or that a recorded
@@ -538,11 +558,25 @@ func (s *sliceServer) newRun(slice, project, replayOf string, inputs map[string]
 	return s.ops.launch(op, s.follow(m, id, op)), nil
 }
 
+// noOtherActiveRun refuses RunActive, naming the run and its slice, while a run of any slice other
+// than except has not ended (FR-021). The caller holds s.runs.mu, so the answer holds until the
+// start, resume or replay records its first event.
+func (s *sliceServer) noOtherActiveRun(except string) error {
+	run, slice, err := s.runs.activeAny(except)
+	switch {
+	case err != nil:
+		return err
+	case run != "":
+		return &sl.Error{Code: string(gen.ErrorCodeRunActive), Detail: fmt.Sprintf("run %s of slice %s has not ended", run, slice)}
+	}
+	return nil
+}
+
 // StartRun refuses in the contract's order, the first that applies, before any operation exists:
 // an unknown slice, a pattern condition that fails, a part not approved at its current hash
 // (Buildable); then WorkersNotReady while a step of the pattern has no registered worker for the
-// slice; then RunActive while a run of the slice has not ended; then ProjectExists when the
-// project's folder exists under the projects folder or a recorded run builds into it. A start
+// slice; then RunActive while any run, of any slice, has not ended (FR-021); then ProjectExists
+// when the project's folder exists under the projects folder or a recorded run builds into it. A start
 // that passes them all is WorkersNotReady while the engine cannot drive a run (canRun). Otherwise
 // the run is recorded and started (newRun); the folder is not touched here.
 func (s *sliceServer) StartRun(_ context.Context, req gen.StartRunRequestObject) (gen.StartRunResponseObject, error) {
@@ -556,10 +590,8 @@ func (s *sliceServer) StartRun(_ context.Context, req gen.StartRunRequestObject)
 	if s.runs != nil {
 		s.runs.mu.Lock()
 		defer s.runs.mu.Unlock()
-		if run, err := s.runs.active(id); err != nil {
-			return nil, err
-		} else if run != "" {
-			return s.refuse("startRun", &sl.Error{Code: string(gen.ErrorCodeRunActive), Detail: fmt.Sprintf("run %s of slice %s has not ended", run, id)})
+		if err := s.noOtherActiveRun(""); err != nil {
+			return s.refuse("startRun", err)
 		}
 	}
 	if err := s.projectTaken(req.Body.Project); err != nil {
@@ -588,8 +620,9 @@ func (s *sliceServer) StartRun(_ context.Context, req gen.StartRunRequestObject)
 }
 
 // ResumeRun refuses an unknown run (NotFound), then one that is not interrupted
-// (RunNotInterrupted), then WorkersNotReady, then RunActive while another run of the slice has not
-// ended. RunResumed is recorded before it answers; the run's operation is the one following it.
+// (RunNotInterrupted), then WorkersNotReady, then RunActive while any other run, of any slice,
+// has not ended (FR-021). RunResumed is recorded before it answers; the run's operation is the one
+// following it.
 func (s *sliceServer) ResumeRun(_ context.Context, req gen.ResumeRunRequestObject) (gen.ResumeRunResponseObject, error) {
 	id := req.RunIdParameter
 	if err := s.badParameter([]string{id}, ""); err != nil {
@@ -615,10 +648,8 @@ func (s *sliceServer) ResumeRun(_ context.Context, req gen.ResumeRunRequestObjec
 	if err := s.canRun(); err != nil {
 		return s.refuse("resumeRun", err)
 	}
-	if other, err := s.runs.active(run.Slice); err != nil {
-		return nil, err
-	} else if other != "" && other != id {
-		return s.refuse("resumeRun", &sl.Error{Code: string(gen.ErrorCodeRunActive), Detail: fmt.Sprintf("run %s of slice %s has not ended", other, run.Slice)})
+	if err := s.noOtherActiveRun(id); err != nil {
+		return s.refuse("resumeRun", err)
 	}
 	m := s.runs.machineFor(run.Slice)
 	err = s.runs.begin(id, func(ctx context.Context) error {
@@ -637,9 +668,9 @@ func (s *sliceServer) ResumeRun(_ context.Context, req gen.ResumeRunRequestObjec
 }
 
 // ReplayRun refuses an unknown run (NotFound), then one that has not ended (RunNotEnded), then
-// WorkersNotReady, RunActive and ProjectExists as startRun does, for the earlier run's slice. The
-// new run has the earlier run's inputs and refs and `replay_of`; it reuses every result accepted
-// under the same reuse key.
+// WorkersNotReady, RunActive (any run of any slice) and ProjectExists as startRun does, for the
+// earlier run's slice. The new run has the earlier run's inputs and refs and `replay_of`; it
+// reuses every result accepted under the same reuse key.
 func (s *sliceServer) ReplayRun(_ context.Context, req gen.ReplayRunRequestObject) (gen.ReplayRunResponseObject, error) {
 	id := req.RunIdParameter
 	if err := s.badParameter([]string{id}, ""); err != nil {
@@ -662,10 +693,8 @@ func (s *sliceServer) ReplayRun(_ context.Context, req gen.ReplayRunRequestObjec
 	if err := s.ready(run.Slice); err != nil {
 		return s.refuse("replayRun", err)
 	}
-	if other, err := s.runs.active(run.Slice); err != nil {
-		return nil, err
-	} else if other != "" {
-		return s.refuse("replayRun", &sl.Error{Code: string(gen.ErrorCodeRunActive), Detail: fmt.Sprintf("run %s of slice %s has not ended", other, run.Slice)})
+	if err := s.noOtherActiveRun(""); err != nil {
+		return s.refuse("replayRun", err)
 	}
 	if err := s.projectTaken(req.Body.Project); err != nil {
 		return s.refuse("replayRun", err)

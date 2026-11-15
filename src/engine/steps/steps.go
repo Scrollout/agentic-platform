@@ -137,9 +137,9 @@ func NewChecker(c Config) machine.Checker { return &checker{newAdapter(c)} }
 type worker struct{ *adapter }
 type checker struct{ *adapter }
 
-// remember keeps the project's files after an attempt of step. Only the latest run is kept: a
-// worker serves one slice, whose runs never overlap (one active run per slice), so an attempt of
-// a new run means the earlier ones ended.
+// remember keeps the project's files after an attempt of step. Only the latest run is kept: runs
+// never overlap (at most one active run on the platform, FR-021), so an attempt of a new run means
+// the earlier ones ended.
 func (s *state) remember(run, step string, files []machine.File) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
