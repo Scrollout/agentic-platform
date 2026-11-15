@@ -60,7 +60,7 @@ func GeneratedCodeBuilds(r GoRunner, project string) []CheckResult {
 	return []CheckResult{pass(check, "the project builds offline from vendor/")}
 }
 
-// TestsBuild: every test package of the project compiles (`go test -c` into a folder outside the
+// TestsBuild: every test package of the project compiles (`go test -c -count=1` into a folder outside the
 // project); no test is run. A project with no test package fails: there is nothing to judge.
 func TestsBuild(r GoRunner, project string) []CheckResult {
 	const check = "TestsBuild"
@@ -69,7 +69,7 @@ func TestsBuild(r GoRunner, project string) []CheckResult {
 		return []CheckResult{fail(check, "no folder for the test binaries: "+err.Error())}
 	}
 	defer os.RemoveAll(out)
-	res, bad := runGo(check, r, project, "test", "-c", "-vet=off", "-o", out+string(filepath.Separator), "./...")
+	res, bad := runGo(check, r, project, "test", "-c", "-count=1", "-vet=off", "-o", out+string(filepath.Separator), "./...")
 	if bad != nil {
 		return []CheckResult{*bad}
 	}

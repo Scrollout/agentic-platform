@@ -12,12 +12,18 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/mod/modfile"
 )
@@ -148,12 +154,19 @@ func witnessRun(check string, r GoRunner, project string, f Finding, dir string)
 			return false, false, b
 		}
 		output := HidePaths(strings.ReplaceAll(res.Output, tmp, "<profile folder>"), project)
-		ended, failedTests, buildFailed := readTestEvents(res.Output)
-		if buildFailed || (res.ExitCode != 0 && len(failedTests) == 0) {
+		ev := readEvents(res.Output)
+		failedTest := slices.Contains(slices.Collect(maps.Values(ev.results)), "fail")
+		if ev.buildFailed || (res.ExitCode != 0 && !failedTest) {
 			return false, false, failf("does not build or cannot be run (go test exited %d): %s", res.ExitCode, excerpt(output, ".go:", "failed", "FAIL"))
 		}
-		if !ended {
+		if !ev.ended {
 			return false, false, failf("gave no go test result: %s", excerpt(output))
+		}
+		// The baseline runs no test by design; the witness run must have its test's result event,
+		// or the test never ran (its package's init ended the binary) and the run cannot be judged.
+		witnessAction, hasResult := ev.results[testKey{module + "/" + dir, f.Witness.Test}]
+		if pattern != "^$" && !hasResult {
+			return false, false, failf("gave no result event for its test %s, so it never ran and the run cannot be judged", f.Witness.Test)
 		}
 		prof, err := os.ReadFile(profile)
 		if err != nil {
@@ -163,7 +176,7 @@ func witnessRun(check string, r GoRunner, project string, f Finding, dir string)
 		if err != nil {
 			return false, false, failf("left a coverage profile that cannot be read: %v", err)
 		}
-		return failedTests[f.Witness.Test], cov, nil
+		return witnessAction == "fail", cov, nil
 	}
 
 	failed, covered, b := run("witness", "^"+regexp.QuoteMeta(f.Witness.Test)+"$")
@@ -177,31 +190,148 @@ func witnessRun(check string, r GoRunner, project string, f Finding, dir string)
 	return !inBaseline, nil
 }
 
-// readTestEvents reads `go test -json` output: whether any package ended (an event with no test
-// whose action is pass, fail or skip), the top-level tests that failed, and whether the package
-// did not build.
-func readTestEvents(out string) (ended bool, failed map[string]bool, buildFailed bool) {
-	failed = map[string]bool{}
+// testKey is a top-level test by its package's import path and its name.
+type testKey struct{ pkg, name string }
+
+func (k testKey) String() string { return k.name + " (" + k.pkg + ")" }
+
+// testEvents is what a check reads from `go test -json` output (cmd/test2json): a test that never
+// ran has none. test2json builds them from the test binary's output, so code in the binary can
+// still print lines that become events (a known limit, research D37).
+type testEvents struct {
+	// results is the result action (pass, fail or skip) of each top-level test that has one.
+	results map[testKey]string
+	// ended is whether any package ended (an event with no test whose action is pass, fail or skip).
+	ended bool
+	// buildFailed is whether a package did not build or could not be set up.
+	buildFailed bool
+	// text is the output as go test without -json prints it: each event's Output in order, and
+	// each line that is not an event (what the go command writes to stderr) as it is.
+	text string
+}
+
+// readEvents reads `go test -json` output. A subtest's events (a name with "/") stand for no
+// top-level test.
+func readEvents(out string) testEvents {
+	ev := testEvents{results: map[testKey]string{}}
+	var text strings.Builder
 	sc := bufio.NewScanner(strings.NewReader(out))
 	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
 	for sc.Scan() {
 		var e testEvent
 		line := sc.Text()
 		if !strings.HasPrefix(line, "{") || json.Unmarshal([]byte(line), &e) != nil {
+			text.WriteString(line + "\n")
 			continue
 		}
+		text.WriteString(e.Output)
 		switch {
 		case e.Action == "build-fail":
-			buildFailed = true
+			ev.buildFailed = true
 		case e.Test == "" && (strings.Contains(e.Output, "[build failed]") || strings.Contains(e.Output, "[setup failed]")):
-			buildFailed = true
+			ev.buildFailed = true
 		case e.Test == "" && (e.Action == "pass" || e.Action == "fail" || e.Action == "skip"):
-			ended = true
-		case e.Test != "" && e.Action == "fail" && !strings.Contains(e.Test, "/"):
-			failed[e.Test] = true
+			ev.ended = true
+		case e.Test != "" && !strings.Contains(e.Test, "/") && (e.Action == "pass" || e.Action == "fail" || e.Action == "skip"):
+			ev.results[testKey{e.Package, e.Test}] = e.Action
 		}
 	}
-	return ended, failed, buildFailed
+	ev.text = text.String()
+	return ev
+}
+
+// declaredTests are the project's declared tests (research D37): the top-level test functions of
+// the `_test.go` files below each of the folders, read with go/parser, each with its package's
+// import path in the module (go.mod's module path and the file's folder). A test function is one
+// `go test` runs as a test: a function with no receiver named `Test` followed by nothing or by a
+// character that is not a lower-case letter, with one parameter `*testing.T` (or `*<x>.T`) and no
+// result, as the go command decides it; TestMain(*testing.M), benchmarks, examples, fuzz targets
+// and subtests are none. Sorted by import path, then name. A folder that does not exist declares
+// nothing; a file that does not parse is an error.
+func declaredTests(project string, folders ...string) ([]testKey, error) {
+	gomod, err := os.ReadFile(filepath.Join(project, "go.mod"))
+	if err != nil {
+		return nil, fmt.Errorf("go.mod cannot be read: %s", readError(err))
+	}
+	module := modfile.ModulePath(gomod)
+	if module == "" {
+		return nil, fmt.Errorf("go.mod names no module")
+	}
+	var out []testKey
+	fset := token.NewFileSet()
+	for _, folder := range folders {
+		root := filepath.Join(project, filepath.FromSlash(folder))
+		if fi, err := os.Lstat(root); err != nil || !fi.IsDir() {
+			continue
+		}
+		err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || !d.Type().IsRegular() || !strings.HasSuffix(d.Name(), "_test.go") {
+				return nil
+			}
+			rel, err := filepath.Rel(project, p)
+			if err != nil {
+				return err
+			}
+			rel = filepath.ToSlash(rel)
+			af, err := parser.ParseFile(fset, p, nil, parser.SkipObjectResolution)
+			if err != nil {
+				return fmt.Errorf("%s cannot be parsed: %w", rel, err)
+			}
+			pkg := module + "/" + path.Dir(rel)
+			for _, decl := range af.Decls {
+				if fd, ok := decl.(*ast.FuncDecl); ok && fd.Recv == nil && isTestName(fd.Name.Name) && isTestFunc(fd) {
+					out = append(out, testKey{pkg, fd.Name.Name})
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].pkg != out[j].pkg {
+			return out[i].pkg < out[j].pkg
+		}
+		return out[i].name < out[j].name
+	})
+	return slices.Compact(out), nil
+}
+
+// isTestName is the go command's rule: "Test", then nothing or a character that is not lower case.
+func isTestName(name string) bool {
+	rest, ok := strings.CutPrefix(name, "Test")
+	if !ok {
+		return false
+	}
+	if rest == "" {
+		return true
+	}
+	r, _ := utf8.DecodeRuneInString(rest)
+	return !unicode.IsLower(r)
+}
+
+// isTestFunc is the go command's signature rule for a test: one parameter of type *T or *<x>.T,
+// no result. So TestMain(m *testing.M) is not a test.
+func isTestFunc(fd *ast.FuncDecl) bool {
+	ft := fd.Type
+	if ft.Results != nil && len(ft.Results.List) > 0 || ft.Params == nil || len(ft.Params.List) != 1 || len(ft.Params.List[0].Names) > 1 {
+		return false
+	}
+	ptr, ok := ft.Params.List[0].Type.(*ast.StarExpr)
+	if !ok {
+		return false
+	}
+	switch x := ptr.X.(type) {
+	case *ast.Ident:
+		return x.Name == "T"
+	case *ast.SelectorExpr:
+		return x.Sel.Name == "T"
+	}
+	return false
 }
 
 // coversLine reports whether a `set` coverage profile has a block of the file importPath whose

@@ -421,49 +421,111 @@ func runGo(check string, r GoRunner, dir string, args ...string) (GoResult, *Che
 	return res, nil
 }
 
-// TestsFailAgainstStub runs `go test ./tests/...` and passes only when it exits non-zero with at
-// least one "--- FAIL" and no "[build failed]" or "[setup failed]".
-func TestsFailAgainstStub(r GoRunner, project string) []CheckResult {
-	const check = "TestsFailAgainstStub"
-	res, bad := runGo(check, r, project, "test", "./tests/...")
-	switch {
-	case bad != nil:
-		return []CheckResult{*bad}
-	case strings.Contains(res.Output, "[build failed]") || strings.Contains(res.Output, "[setup failed]"):
-		return []CheckResult{fail(check, "the tests do not build, and a test that does not build proves nothing: "+excerpt(res.Output, "failed", ".go:"))}
-	case res.ExitCode == 0:
-		return []CheckResult{fail(check, "the tests pass against the generated stub, so they prove nothing")}
-	case !strings.Contains(res.Output, "--- FAIL"):
-		return []CheckResult{fail(check, "go test failed without a failing test: "+excerpt(res.Output))}
+// testArgs are the arguments of every go test a test check runs: one event per test from the go
+// tool (-json), never a cached result (-count=1); research D37.
+func testArgs(pkgs string) []string { return []string{"test", "-json", "-count=1", pkgs} }
+
+// The folders whose _test.go files declare the tests (research D37): the tests step's and the
+// review step's witnesses. Other test files (the code step's own) run but declare nothing.
+var (
+	declaredInTests = []string{"tests"}
+	declaredAll     = []string{"tests", "review"}
+)
+
+// names lists the tests, each with its package's import path, for a reason.
+func names(ks []testKey) string {
+	s := make([]string, len(ks))
+	for i, k := range ks {
+		s[i] = k.String()
 	}
-	return []CheckResult{pass(check, "the tests build and fail against the stub: "+excerpt(res.Output, "--- FAIL"))}
+	return strings.Join(s, ", ")
 }
 
-// testsRan reports whether a go test run's output shows a package whose tests ran: an "ok" line
-// without "[no tests to run]". "[no test files]" and "no packages to test" are no run.
-func testsRan(output string) bool {
-	for _, l := range strings.Split(output, "\n") {
-		if (l == "ok" || strings.HasPrefix(l, "ok ") || strings.HasPrefix(l, "ok\t")) && !strings.Contains(l, "[no tests to run]") {
-			return true
+// withoutResult is the declared tests that have no result event (pass, fail or skip): they
+// vanished, never having run.
+func withoutResult(declared []testKey, ev testEvents) []testKey {
+	var out []testKey
+	for _, k := range declared {
+		if _, ok := ev.results[k]; !ok {
+			out = append(out, k)
 		}
 	}
-	return false
+	return out
 }
 
-// AllTestsPass runs `go test ./...` and passes only on exit code 0 with at least one test run.
-func AllTestsPass(r GoRunner, project string) []CheckResult {
-	const check = "AllTestsPass"
-	res, bad := runGo(check, r, project, "test", "./...")
+// TestsFailAgainstStub runs `go test -json -count=1 ./tests/...` and passes only when the tests
+// build, every declared test under tests/ has a result event (pass, fail or skip), so none
+// vanished, and at least one has fail (research D37).
+func TestsFailAgainstStub(r GoRunner, project string) []CheckResult {
+	const check = "TestsFailAgainstStub"
+	res, bad := runGo(check, r, project, testArgs("./tests/...")...)
 	if bad != nil {
 		return []CheckResult{*bad}
 	}
+	ev := readEvents(res.Output)
+	if ev.buildFailed {
+		return []CheckResult{fail(check, "the tests do not build, and a test that does not build proves nothing: "+excerpt(ev.text, "failed", ".go:"))}
+	}
+	declared, err := declaredTests(project, declaredInTests...)
+	if err != nil {
+		return []CheckResult{fail(check, "the declared tests cannot be read: "+err.Error())}
+	}
+	if len(declared) == 0 {
+		return []CheckResult{fail(check, "tests/ declares no test, so nothing can fail against the stub")}
+	}
+	if gone := withoutResult(declared, ev); len(gone) > 0 {
+		return []CheckResult{fail(check, "declared tests have no result event, so they never ran (the code under test may end the test binary): "+names(gone))}
+	}
+	var failing []testKey
+	for _, k := range declared {
+		if ev.results[k] == "fail" {
+			failing = append(failing, k)
+		}
+	}
+	if len(failing) == 0 {
+		return []CheckResult{fail(check, "the tests pass against the generated stub, so they prove nothing")}
+	}
+	return []CheckResult{pass(check, "the tests build and fail against the stub: "+names(failing))}
+}
+
+// AllTestsPass runs `go test -json -count=1 ./...` and passes only when it exits 0 and every
+// declared test (under tests/ and review/) has a pass event (research D37). One failing result
+// per declared test that failed, was skipped or has no event (it vanished, for example because
+// the code's init ended the test binary), naming it with its package; one for a non-zero exit
+// (a build failure, or a failing test of the code step's own); and one when the project declares
+// no test.
+func AllTestsPass(r GoRunner, project string) []CheckResult {
+	const check = "AllTestsPass"
+	res, bad := runGo(check, r, project, testArgs("./...")...)
+	if bad != nil {
+		return []CheckResult{*bad}
+	}
+	ev := readEvents(res.Output)
+	declared, err := declaredTests(project, declaredAll...)
+	if err != nil {
+		return []CheckResult{fail(check, "the declared tests cannot be read: "+err.Error())}
+	}
+	var out []CheckResult
+	for _, k := range declared {
+		switch a, ok := ev.results[k]; {
+		case !ok:
+			out = append(out, fail(check, "declared test "+k.String()+" has no result event, so it never ran (the code under test may end the test binary)"))
+		case a == "fail":
+			out = append(out, fail(check, "declared test "+k.String()+" failed"))
+		case a == "skip":
+			out = append(out, fail(check, "declared test "+k.String()+" was skipped, and a skipped test shows nothing"))
+		}
+	}
 	if res.ExitCode != 0 {
-		return []CheckResult{fail(check, fmt.Sprintf("go test exited %d: %s", res.ExitCode, excerpt(res.Output, "--- FAIL", "[build failed]", "[setup failed]")))}
+		out = append(out, fail(check, fmt.Sprintf("go test exited %d: %s", res.ExitCode, excerpt(ev.text, "--- FAIL", "[build failed]", "[setup failed]", ".go:"))))
 	}
-	if !testsRan(res.Output) {
-		return []CheckResult{fail(check, "go test ran no test, so nothing shows the code works: "+excerpt(res.Output, "no test files", "no packages", "no tests to run"))}
+	if len(declared) == 0 {
+		out = append(out, fail(check, "the project declares no test under tests/ or review/, so nothing shows the code works"))
 	}
-	return []CheckResult{pass(check, "every test passes")}
+	if len(out) > 0 {
+		return out
+	}
+	return []CheckResult{pass(check, fmt.Sprintf("every one of the %d declared tests passes", len(declared)))}
 }
 
 // scenarioCounts reads godog's summary lines: none says whether one reports zero scenarios ("No
@@ -483,44 +545,59 @@ func scenarioCounts(output string) (none, some bool) {
 	return none, some
 }
 
-// GodogStrict (EveryExampleBound) runs the Gherkin examples through `go test -v ./tests/...`,
-// where godog's TestSuite runs them with Strict set (-v so godog's summary is shown for a passing
-// run too). It judges binding, not results (owner, 2026-11-13): the tests step's tests must fail
+// GodogStrict (EveryExampleBound) runs the Gherkin examples through `go test -json -count=1
+// ./tests/...`, where godog's TestSuite runs them with Strict set (-json, which implies -v, so
+// godog's summary is shown for a passing run too); godog's summary and the `=== RUN` lines are
+// read from the events' output, rejoined into the text go test prints. It judges binding, not results (owner, 2026-11-13): the tests step's tests must fail
 // against the stub, so the exit code is not read. It passes only when the tests build, no step is
 // undefined, pending or ambiguous, and scenarios ran: at least one, and when the project's
 // features/slice.feature can be read, as many as godog's own summary counts (scenariosRun) and
 // at least as many as the file has, each Outline row counted (featureScenarios). godog's "No
-// scenarios" or "0 scenarios" fails, and so does a run with neither a scenario count nor a
-// package whose tests ran.
+// scenarios" or "0 scenarios" fails. A run with no scenario count falls back on the events
+// (research D37): it passes that rule only when tests/ declares a test and every declared test
+// there has a result event (pass, fail or skip); a vanished one is named.
 func GodogStrict(r GoRunner, project string) []CheckResult {
 	const check = "GodogStrict"
-	res, bad := runGo(check, r, project, "test", "-v", "./tests/...")
+	res, bad := runGo(check, r, project, testArgs("./tests/...")...)
 	if bad != nil {
 		return []CheckResult{*bad}
 	}
-	res.Output = ansiColour.ReplaceAllString(res.Output, "") // godog colours its counts
+	ev := readEvents(res.Output)
+	text := ansiColour.ReplaceAllString(ev.text, "") // godog colours its counts
 	switch {
-	case strings.Contains(res.Output, "[build failed]") || strings.Contains(res.Output, "[setup failed]"):
-		return []CheckResult{fail(check, "the tests do not build, so no example is bound: "+excerpt(res.Output, "failed", ".go:"))}
-	case strings.Contains(res.Output, "undefined"):
-		return []CheckResult{fail(check, "godog --strict found undefined steps: "+excerpt(res.Output, "undefined"))}
-	case unboundSteps.MatchString(res.Output):
-		return []CheckResult{fail(check, "godog --strict found pending or ambiguous steps: "+excerpt(res.Output, "pending", "ambiguous"))}
+	case ev.buildFailed || strings.Contains(text, "[build failed]") || strings.Contains(text, "[setup failed]"):
+		return []CheckResult{fail(check, "the tests do not build, so no example is bound: "+excerpt(text, "failed", ".go:"))}
+	case strings.Contains(text, "undefined"):
+		return []CheckResult{fail(check, "godog --strict found undefined steps: "+excerpt(text, "undefined"))}
+	case unboundSteps.MatchString(text):
+		return []CheckResult{fail(check, "godog --strict found pending or ambiguous steps: "+excerpt(text, "pending", "ambiguous"))}
 	}
-	none, some := scenarioCounts(res.Output)
-	if none || (!some && !testsRan(res.Output)) {
-		return []CheckResult{fail(check, "godog ran no scenario, so no example was checked: "+excerpt(res.Output, "scenarios", "no test files", "no packages", "no tests to run"))}
+	none, some := scenarioCounts(text)
+	if none {
+		return []CheckResult{fail(check, "godog ran no scenario, so no example was checked: "+excerpt(text, "scenarios"))}
+	}
+	if !some {
+		declared, err := declaredTests(project, declaredInTests...)
+		switch {
+		case err != nil:
+			return []CheckResult{fail(check, "godog printed no scenario count, and the declared tests cannot be read: "+err.Error())}
+		case len(declared) == 0:
+			return []CheckResult{fail(check, "godog ran no scenario and tests/ declares no test, so no example was checked: "+excerpt(text, "no test files", "no packages", "no tests to run"))}
+		}
+		if gone := withoutResult(declared, ev); len(gone) > 0 {
+			return []CheckResult{fail(check, "godog printed no scenario count, and declared tests have no result event, so they never ran: "+names(gone))}
+		}
 	}
 	want, ok, err := featureScenarios(project)
 	if err != nil {
 		return []CheckResult{fail(check, "features/slice.feature is not Gherkin, so its scenarios cannot be counted: "+err.Error())}
 	}
 	if ok {
-		if got := scenariosRun(res.Output); got < want {
+		if got := scenariosRun(text); got < want {
 			return []CheckResult{fail(check, fmt.Sprintf("godog ran %d scenarios, and features/slice.feature has %d, so not every example ran", got, want))}
 		}
 	}
-	return []CheckResult{pass(check, "every scenario runs with no undefined, pending or ambiguous step: "+excerpt(res.Output, "scenarios ("))}
+	return []CheckResult{pass(check, "every scenario runs with no undefined, pending or ambiguous step: "+excerpt(text, "scenarios ("))}
 }
 
 // ansiColour is a terminal colour sequence.

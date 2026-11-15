@@ -231,18 +231,18 @@ func TestDependenciesIndirect(t *testing.T) {
 }
 
 func TestTestsFailAgainstStub(t *testing.T) {
-	fail := checks.GoResult{ExitCode: 1, Output: "--- FAIL: TestExample\nFAIL"}
+	fail := checks.GoResult{ExitCode: 1, Output: jsonTestRun("example.com/p/tests", "TestExample", "fail")}
 	cases := []struct {
 		name string
 		res  checks.GoResult
 		pass bool
 	}{
 		{"failing tests", fail, true},
-		{"tests pass against the stub", checks.GoResult{Output: "ok"}, false},
-		{"tests do not build", checks.GoResult{ExitCode: 1, Output: "FAIL example.com/p/tests [build failed]"}, false},
+		{"tests pass against the stub", checks.GoResult{Output: jsonTestRun("example.com/p/tests", "TestExample", "pass")}, false},
+		{"tests do not build", checks.GoResult{ExitCode: 1, Output: jsonBuildFailed("example.com/p/tests")}, false},
 	}
 	for _, c := range cases {
-		rs := checks.TestsFailAgainstStub(fakeGo{res: map[string]checks.GoResult{"test": c.res}}, "unused")
+		rs := checks.TestsFailAgainstStub(fakeGo{res: map[string]checks.GoResult{"test": c.res}}, stepDir("stubfail", "clean"))
 		if allPassed(rs) != c.pass {
 			t.Errorf("%s: passed=%v, want %v: %+v", c.name, allPassed(rs), c.pass, rs)
 		}
@@ -263,10 +263,10 @@ func TestTestsFailAgainstStubReal(t *testing.T) {
 }
 
 func TestAllTestsPass(t *testing.T) {
-	if rs := checks.AllTestsPass(fakeGo{res: map[string]checks.GoResult{"test": {Output: "ok"}}}, "unused"); !allPassed(rs) {
+	if rs := checks.AllTestsPass(fakeGo{res: map[string]checks.GoResult{"test": {Output: jsonTestRun("example.com/p/tests", "TestExample", "pass")}}}, stepDir("allpass", "clean")); !allPassed(rs) {
 		t.Fatalf("passing run rejected: %+v", rs)
 	}
-	rs := checks.AllTestsPass(fakeGo{res: map[string]checks.GoResult{"test": {ExitCode: 1, Output: "--- FAIL: TestExample"}}}, "unused")
+	rs := checks.AllTestsPass(fakeGo{res: map[string]checks.GoResult{"test": {ExitCode: 1, Output: jsonTestRun("example.com/p/tests", "TestExample", "fail")}}}, stepDir("allpass", "clean"))
 	if allPassed(rs) || !strings.Contains(reasons(rs), "TestExample") {
 		t.Fatalf("failing run not rejected with the failing test named: %+v", rs)
 	}
@@ -283,16 +283,16 @@ func TestAllTestsPassReal(t *testing.T) {
 }
 
 func TestGodogStrict(t *testing.T) {
-	if rs := checks.GodogStrict(fakeGo{res: map[string]checks.GoResult{"test": {Output: "1 scenarios (1 passed)"}}}, "unused"); !allPassed(rs) {
+	if rs := checks.GodogStrict(fakeGo{res: map[string]checks.GoResult{"test": {Output: jsonTestRun("example.com/p/tests", "TestFeatures", "pass", "1 scenarios (1 passed)")}}}, "unused"); !allPassed(rs) {
 		t.Fatalf("clean run rejected: %+v", rs)
 	}
-	undef := checks.GoResult{ExitCode: 1, Output: "1 scenarios (1 undefined)\nYou can implement step definitions for undefined steps"}
+	undef := checks.GoResult{ExitCode: 1, Output: jsonTestRun("example.com/p/tests", "TestFeatures", "fail", "1 scenarios (1 undefined)", "You can implement step definitions for undefined steps")}
 	rs := checks.GodogStrict(fakeGo{res: map[string]checks.GoResult{"test": undef}}, "unused")
 	if allPassed(rs) || !strings.Contains(reasons(rs), "undefined") {
 		t.Fatalf("undefined steps not rejected: %+v", rs)
 	}
 	// Exit 0 with "undefined" in the output must still fail (strictness is not left to the exit code).
-	rs = checks.GodogStrict(fakeGo{res: map[string]checks.GoResult{"test": {Output: "1 scenarios (1 undefined)"}}}, "unused")
+	rs = checks.GodogStrict(fakeGo{res: map[string]checks.GoResult{"test": {Output: jsonTestRun("example.com/p/tests", "TestFeatures", "pass", "1 scenarios (1 undefined)")}}}, "unused")
 	if allPassed(rs) {
 		t.Fatalf("undefined steps with exit 0 passed")
 	}
@@ -373,8 +373,8 @@ func TestContractHash(t *testing.T) {
 func TestEveryStepCheckFailsOnItsPlantedFixture(t *testing.T) {
 	cleanDrift, _ := os.ReadFile(stepDir("drift", "clean", "gen", "gen.go"))
 	regen := fakeGo{gen: func(dir string) { _ = os.WriteFile(filepath.Join(dir, "gen", "gen.go"), cleanDrift, 0o644) }}
-	failRun := fakeGo{res: map[string]checks.GoResult{"test": {ExitCode: 1, Output: "--- FAIL: TestExample\n1 scenarios (1 undefined)"}}}
-	passRun := fakeGo{res: map[string]checks.GoResult{"test": {Output: "ok"}}}
+	failRun := fakeGo{res: map[string]checks.GoResult{"test": {ExitCode: 1, Output: jsonTestRun("example.com/p/tests", "TestExample", "fail", "1 scenarios (1 undefined)")}}}
+	passRun := fakeGo{res: map[string]checks.GoResult{"test": {Output: jsonTestRun("example.com/p/tests", "TestExample", "pass")}}}
 	approved := approvedHash(t, stepDir("contracthash", "clean"))
 
 	cases := []struct {
@@ -405,16 +405,16 @@ func TestEveryStepCheckFailsOnItsPlantedFixture(t *testing.T) {
 			},
 			"os/exec"},
 		{"tests fail against stub",
-			func() []checks.CheckResult { return checks.TestsFailAgainstStub(failRun, "unused") },
-			func() []checks.CheckResult { return checks.TestsFailAgainstStub(passRun, "unused") },
+			func() []checks.CheckResult { return checks.TestsFailAgainstStub(failRun, stepDir("stubfail", "clean")) },
+			func() []checks.CheckResult { return checks.TestsFailAgainstStub(passRun, stepDir("stubfail", "clean")) },
 			"pass"},
 		{"all tests pass",
-			func() []checks.CheckResult { return checks.AllTestsPass(passRun, "unused") },
-			func() []checks.CheckResult { return checks.AllTestsPass(failRun, "unused") },
+			func() []checks.CheckResult { return checks.AllTestsPass(passRun, stepDir("allpass", "clean")) },
+			func() []checks.CheckResult { return checks.AllTestsPass(failRun, stepDir("allpass", "clean")) },
 			"TestExample"},
 		{"godog strict",
-			func() []checks.CheckResult { return checks.GodogStrict(passRun, "unused") },
-			func() []checks.CheckResult { return checks.GodogStrict(failRun, "unused") },
+			func() []checks.CheckResult { return checks.GodogStrict(passRun, stepDir("allpass", "clean")) },
+			func() []checks.CheckResult { return checks.GodogStrict(failRun, stepDir("allpass", "clean")) },
 			"undefined"},
 		{"generation drift",
 			func() []checks.CheckResult { return checks.GenerationDrift(regen, stepDir("drift", "clean")) },

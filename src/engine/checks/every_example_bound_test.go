@@ -15,7 +15,7 @@ import (
 func boundDir(kind string) string { return filepath.Join("testdata", "everybound", kind) }
 
 func TestEveryExampleBoundIgnoresTheExitCodeWhenEveryExampleRan(t *testing.T) {
-	failing := checks.GoResult{ExitCode: 1, Output: "--- FAIL: TestFeatures\n2 scenarios (2 failed)\n4 steps (2 failed, 2 skipped)"}
+	failing := checks.GoResult{ExitCode: 1, Output: jsonTestRun("example.com/p/tests", "TestFeatures", "fail", "2 scenarios (2 failed)", "4 steps (2 failed, 2 skipped)")}
 	if rs := checks.GodogStrict(fakeGo{res: map[string]checks.GoResult{"test": failing}}, "unused"); !allPassed(rs) {
 		t.Fatalf("scenarios that ran and failed against the stub were rejected: %+v", rs)
 	}
