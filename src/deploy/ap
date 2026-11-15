@@ -1084,8 +1084,8 @@ cmd_test() {
   [ $# -eq 1 ] || usage
   suite=$1
   case $suite in
-    planted) pattern='^TestPlanted$' ;;
-    us2) pattern='^TestUS2' ;;
+    planted) pattern='^TestPlanted$' limit=60m ;;
+    us2) pattern='^TestUS2' limit=75m ;;
     *) die 3 "test: unknown suite $suite; the suites are planted, us2" ;;
   esac
   repo=$(CDPATH='' cd -- "$here/../.." && pwd -P)
@@ -1110,7 +1110,9 @@ cmd_test() {
     die 1 "test: the $suite suite does not build (the error is above)"
   [ -x "$bin" ] || die 1 "test: the build made no test binary at $bin"
   # The binary's exit code is kept in a file: in a pipeline sh returns only the last command's.
-  { (cd "$pkg" && "$bin" -test.run "$pattern" -test.v=test2json); echo $? >"$work/code"; } |
+  # A test binary has no time limit of its own (go test's 10 minutes is not the binary's), so each
+  # suite gets its cap (T054f; research D34).
+  { (cd "$pkg" && "$bin" -test.run "$pattern" -test.timeout "$limit" -test.v=test2json); echo $? >"$work/code"; } |
     docker run --rm -i --network none -e GOTOOLCHAIN=local "$go_image" go tool test2json >"$work/events" ||
     die 1 "test: cannot convert the test binary's output with go tool test2json"
   code=$(cat "$work/code" 2>/dev/null) || code=1

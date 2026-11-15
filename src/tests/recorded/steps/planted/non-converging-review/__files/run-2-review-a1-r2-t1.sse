@@ -1,0 +1,18 @@
+event: message_start
+data: {"message":{"content":[],"id":"msg_96c404a3e262d46dc8c3e139","model":"claude-haiku-5-5","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"input_tokens":0,"output_tokens":0}},"type":"message_start"}
+
+event: content_block_start
+data: {"content_block":{"id":"toolu_236f5f62c05a2feef808bbf7","input":{},"name":"write_file","type":"tool_use"},"index":0,"type":"content_block_start"}
+
+event: content_block_delta
+data: {"delta":{"partial_json":"{\"content\":\"package r3\\n\\nimport (\\n\\t\\\"net/http\\\"\\n\\t\\\"net/http/httptest\\\"\\n\\t\\\"strings\\\"\\n\\t\\\"testing\\\"\\n\\n\\t\\\"example.com/service/gen\\\"\\n\\t\\\"example.com/service/internal/app\\\"\\n)\\n\\n// R-3: a text of only spaces is empty (the slice's answer to Q-1), so the note is refused.\\nfunc TestR3SpacesAreRefused(t *testing.T) {\\n\\tsrv := httptest.NewServer(gen.Handler(app.New()))\\n\\tdefer srv.Close()\\n\\tresp, err := http.Post(srv.URL+\\\"/notes\\\", \\\"application/json\\\", strings.NewReader(`{\\\"text\\\":\\\"   \\\"}`))\\n\\tif err != nil {\\n\\t\\tt.Fatal(err)\\n\\t}\\n\\tresp.Body.Close()\\n\\tif resp.StatusCode != http.StatusBadRequest {\\n\\t\\tt.Errorf(\\\"a note of only spaces answered %d, want 400\\\", resp.StatusCode)\\n\\t}\\n}\\n\",\"path\":\"/projects/non-converging-review-2/review/r3/round2_test.go\"}","type":"input_json_delta"},"index":0,"type":"content_block_delta"}
+
+event: content_block_stop
+data: {"index":0,"type":"content_block_stop"}
+
+event: message_delta
+data: {"delta":{"stop_reason":"tool_use","stop_sequence":null},"type":"message_delta","usage":{"output_tokens":0}}
+
+event: message_stop
+data: {"type":"message_stop"}
+

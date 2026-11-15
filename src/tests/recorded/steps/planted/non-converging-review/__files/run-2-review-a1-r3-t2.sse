@@ -1,0 +1,18 @@
+event: message_start
+data: {"message":{"content":[],"id":"msg_78223b9779f57bf553441749","model":"claude-haiku-5-5","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"input_tokens":0,"output_tokens":0}},"type":"message_start"}
+
+event: content_block_start
+data: {"content_block":{"id":"toolu_6ce799cd78c416b335b60b24","input":{},"name":"__structured_output__","type":"tool_use"},"index":0,"type":"content_block_start"}
+
+event: content_block_delta
+data: {"delta":{"partial_json":"{\"findings\":[{\"rule\":\"R-2\",\"file\":\"internal/app/app.go\",\"line\":55,\"text\":\"CreateNote lowercases the text, so the note it returns is not the note created (R-2).\",\"blocking\":true,\"witness\":{\"file\":\"review/r2/round3_test.go\",\"test\":\"TestR2CreateReturnsTheNote\"}}]}","type":"input_json_delta"},"index":0,"type":"content_block_delta"}
+
+event: content_block_stop
+data: {"index":0,"type":"content_block_stop"}
+
+event: message_delta
+data: {"delta":{"stop_reason":"tool_use","stop_sequence":null},"type":"message_delta","usage":{"output_tokens":0}}
+
+event: message_stop
+data: {"type":"message_stop"}
+

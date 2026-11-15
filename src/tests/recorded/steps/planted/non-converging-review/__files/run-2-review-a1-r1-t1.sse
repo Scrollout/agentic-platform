@@ -1,0 +1,18 @@
+event: message_start
+data: {"message":{"content":[],"id":"msg_048d7732196d409fdb1c3374","model":"claude-haiku-5-5","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"input_tokens":0,"output_tokens":0}},"type":"message_start"}
+
+event: content_block_start
+data: {"content_block":{"id":"toolu_175367c1e56b383d8fd9f00c","input":{},"name":"write_file","type":"tool_use"},"index":0,"type":"content_block_start"}
+
+event: content_block_delta
+data: {"delta":{"partial_json":"{\"content\":\"package r1\\n\\nimport (\\n\\t\\\"encoding/json\\\"\\n\\t\\\"net/http\\\"\\n\\t\\\"net/http/httptest\\\"\\n\\t\\\"strings\\\"\\n\\t\\\"testing\\\"\\n\\n\\t\\\"example.com/service/gen\\\"\\n\\t\\\"example.com/service/internal/app\\\"\\n)\\n\\n// R-1: listing returns every note, however many were created.\\nfunc TestR1ListReturnsEveryNote(t *testing.T) {\\n\\tsrv := httptest.NewServer(gen.Handler(app.New()))\\n\\tdefer srv.Close()\\n\\tfor _, text := range []string{\\\"a\\\", \\\"b\\\", \\\"c\\\"} {\\n\\t\\tresp, err := http.Post(srv.URL+\\\"/notes\\\", \\\"application/json\\\", strings.NewReader(`{\\\"text\\\":\\\"`+text+`\\\"}`))\\n\\t\\tif err != nil {\\n\\t\\t\\tt.Fatal(err)\\n\\t\\t}\\n\\t\\tresp.Body.Close()\\n\\t}\\n\\tresp, err := http.Get(srv.URL + \\\"/notes\\\")\\n\\tif err != nil {\\n\\t\\tt.Fatal(err)\\n\\t}\\n\\tdefer resp.Body.Close()\\n\\tvar notes []struct{ Text string }\\n\\tif err := json.NewDecoder(resp.Body).Decode(&notes); err != nil {\\n\\t\\tt.Fatal(err)\\n\\t}\\n\\tif len(notes) != 3 {\\n\\t\\tt.Errorf(\\\"the list holds %d notes after three were created, want 3\\\", len(notes))\\n\\t}\\n}\\n\",\"path\":\"/projects/non-converging-review-2/review/r1/round1_test.go\"}","type":"input_json_delta"},"index":0,"type":"content_block_delta"}
+
+event: content_block_stop
+data: {"index":0,"type":"content_block_stop"}
+
+event: message_delta
+data: {"delta":{"stop_reason":"tool_use","stop_sequence":null},"type":"message_delta","usage":{"output_tokens":0}}
+
+event: message_stop
+data: {"type":"message_stop"}
+

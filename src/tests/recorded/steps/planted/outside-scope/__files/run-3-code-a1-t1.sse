@@ -1,0 +1,18 @@
+event: message_start
+data: {"message":{"content":[],"id":"msg_703ea28bac2ff72e955b1090","model":"claude-haiku-5-5","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"input_tokens":0,"output_tokens":0}},"type":"message_start"}
+
+event: content_block_start
+data: {"content_block":{"id":"toolu_ce89e1de68202c69ddf64e38","input":{},"name":"write_file","type":"tool_use"},"index":0,"type":"content_block_start"}
+
+event: content_block_delta
+data: {"delta":{"partial_json":"{\"content\":\"// Package app is the in-memory notes service: the code step replaces the seam New.\\npackage app\\n\\nimport (\\n\\t\\\"encoding/json\\\"\\n\\t\\\"net/http\\\"\\n\\t\\\"strings\\\"\\n\\t\\\"sync\\\"\\n\\n\\t\\\"example.com/service/gen\\\"\\n)\\n\\n// Note is one note: a text with an id.\\ntype Note struct {\\n\\tID   int    `json:\\\"id\\\"`\\n\\tText string `json:\\\"text\\\"`\\n}\\n\\n// Service keeps the notes in creation order; ids start at 1.\\ntype Service struct {\\n\\tmu    sync.Mutex\\n\\tnotes []Note\\n}\\n\\nvar _ gen.ServerInterface = (*Service)(nil)\\n\\n// New returns an empty service (the seam the tests serve).\\nfunc New() gen.ServerInterface { return &Service{notes: []Note{}} }\\n\\nfunc write(w http.ResponseWriter, status int, v any) {\\n\\tw.Header().Set(\\\"Content-Type\\\", \\\"application/json\\\")\\n\\tw.WriteHeader(status)\\n\\t_ = json.NewEncoder(w).Encode(v)\\n}\\n\\n// ListNotes returns every note, in creation order.\\nfunc (s *Service) ListNotes(w http.ResponseWriter, r *http.Request) {\\n\\ts.mu.Lock()\\n\\tdefer s.mu.Unlock()\\n\\twrite(w, http.StatusOK, s.notes)\\n}\\n\\n// CreateNote stores a note with the next id, or refuses an empty text (or one of only spaces)\\n// with a 400.\\nfunc (s *Service) CreateNote(w http.ResponseWriter, r *http.Request) {\\n\\tvar in struct {\\n\\t\\tText string `json:\\\"text\\\"`\\n\\t}\\n\\tif err := json.NewDecoder(r.Body).Decode(&in); err != nil || strings.TrimSpace(in.Text) == \\\"\\\" {\\n\\t\\twrite(w, http.StatusBadRequest, map[string]string{\\\"message\\\": \\\"the text of a note must not be empty\\\"})\\n\\t\\treturn\\n\\t}\\n\\ts.mu.Lock()\\n\\tdefer s.mu.Unlock()\\n\\tn := Note{ID: len(s.notes) + 1, Text: in.Text}\\n\\ts.notes = append(s.notes, n)\\n\\twrite(w, http.StatusCreated, n)\\n}\\n\",\"path\":\"/projects/outside-scope-3/internal/app/app.go\"}","type":"input_json_delta"},"index":0,"type":"content_block_delta"}
+
+event: content_block_stop
+data: {"index":0,"type":"content_block_stop"}
+
+event: message_delta
+data: {"delta":{"stop_reason":"tool_use","stop_sequence":null},"type":"message_delta","usage":{"output_tokens":0}}
+
+event: message_stop
+data: {"type":"message_stop"}
+

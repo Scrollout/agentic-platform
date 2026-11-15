@@ -91,13 +91,31 @@ Compose or a tests image ([ADR 0037](/decisions/0037-terminal-run-commands-exit-
 It builds the suite's test binary in the pinned `golang` container with `--network none`,
 `-tags docker`, `GOPROXY=off` and `-mod=readonly`, the module cache in
 `${XDG_CACHE_HOME:-~/.cache}/agentic-platform/go` (shared with `scripts/check.sh`), then runs the
-binary on the host in `src/tests/acceptance` with `-test.run` and `-test.v=test2json`. The suites
+binary on the host in `src/tests/acceptance` with `-test.run`, `-test.timeout` (60 minutes for
+`planted`, 75 for `us2`: a test binary has no time limit of its own) and `-test.v=test2json`. The suites
 start their own labs with the developer's own Docker access, an owner-approved exception to the
 test-security rule; no container holds the container engine's socket. `go tool test2json`, in the
 same pinned container, converts the binary's output, and `ap` prints one line per trial, per
 scenario and a total (`planted`), or one per test (`us2`), with a failing test's messages indented
 below it. It exits 0 when everything passes, 1 for a failing trial or test or a suite that does not
 build (the build's error on standard error), and 3 for an unknown suite.
+
+The suites' step agents answer from synthesised recordings, the step recording sets in
+`src/tests/recorded/steps/` (`happy`, `resume`, `planted/<scenario>`; research D34,
+[ADR 0038](/decisions/0038-lab-runs-the-build-path-with-synthesised-step-recordings.md)). A
+changed step agent definition, instruction, engine message or Docker Agent version makes them
+miss; make them again, free and without a key, from their reviewed answer scripts
+(`answers.json`), one suite at a time:
+
+```sh
+rm -rf src/tests/recorded/steps/<set>/mappings src/tests/recorded/steps/<set>/__files  # each set whose answers changed
+sh src/tests/recorded/synth-steps.sh '^TestPlanted$'
+sh src/tests/recorded/synth-steps.sh '^(TestUS2|TestUS2_7_.*|TestUS2_10_.*)$'
+```
+
+The us2 pattern names only the tests that use a step set: a lab with the scripted model and no
+set fails by design. Review the new mappings against their scripts, then run `ap test planted`
+and `ap test us2`, which replay them with no miss (`src/tests/recorded/README.md`).
 
 The run commands go to the terminal client through `ap` (T055, `src/cli/contract.md`). `ap build
 <slice> <project>`, `ap resume <run>` and `ap replay <run> <project>` print the run ID line, then

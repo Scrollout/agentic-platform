@@ -1,0 +1,18 @@
+event: message_start
+data: {"message":{"content":[],"id":"msg_f0c1d87de9f97b81c1b312ca","model":"claude-haiku-5-5","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"input_tokens":0,"output_tokens":0}},"type":"message_start"}
+
+event: content_block_start
+data: {"content_block":{"id":"toolu_e3350581d63b44cd3a16b4f7","input":{},"name":"write_file","type":"tool_use"},"index":0,"type":"content_block_start"}
+
+event: content_block_delta
+data: {"delta":{"partial_json":"{\"content\":\"package tests\\n\\nimport (\\n\\t\\\"net/http\\\"\\n\\n\\t\\\"example.com/service/gen\\\"\\n\\t\\\"example.com/service/internal/app\\\"\\n)\\n\\n// handler is the server under test: always the app seam, the stub before the code step.\\nfunc handler() http.Handler { return gen.Handler(app.New()) }\\n\",\"path\":\"/projects/claims-done-1/tests/handler_test.go\"}","type":"input_json_delta"},"index":0,"type":"content_block_delta"}
+
+event: content_block_stop
+data: {"index":0,"type":"content_block_stop"}
+
+event: message_delta
+data: {"delta":{"stop_reason":"tool_use","stop_sequence":null},"type":"message_delta","usage":{"output_tokens":0}}
+
+event: message_stop
+data: {"type":"message_stop"}
+

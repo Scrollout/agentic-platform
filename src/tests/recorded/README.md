@@ -91,9 +91,12 @@ The step agents' recordings are never recorded from the provider: a live session
 carry `go test` output with elapsed times, so they would never match exactly (research D34,
 [ADR 0038](../../../docs/decisions/0038-lab-runs-the-build-path-with-synthesised-step-recordings.md)).
 They are synthesised, free, from reviewed **answer scripts**. A recording set is a folder
-`steps/<set>/` (`steps/happy`, `steps/planted/<scenario>`) holding:
+`steps/<set>/` (`steps/happy` for `TestUS2`, `steps/resume` for US2.10, the happy answers with the
+code step's first turn held 30 s, and `steps/planted/<scenario>` for `TestPlanted` and US2.7) holding:
 
 - `answers.json`, the answer script (the reviewed source), and its content files (`files/...`);
+  the correct answers start from `src/tests/evals/steps/testdata/ref` and are adapted to the lab's
+  example slice (in `happy`: a local `Note` type, `TrimSpace`, and the slice's step phrases);
 - `mappings/<name>.json` and `__files/<name>.sse`, the exchanges the generator made from it, named
   `<run>-<step>-a<attempt>[-r<round>]-t<turn>` (lowercase). Do not edit them by hand.
 
@@ -113,6 +116,9 @@ They are synthesised, free, from reviewed **answer scripts**. A recording set is
   the engine's message names plus the relative `path`, the content file's exact bytes, UTF-8),
   `output` (the structured-output answer, any JSON) or `text` (the final text). `delayMs` (0 to
   60000) holds the answer; it is kept in the mapping as WireMock's `fixedDelayMilliseconds`.
+- The step sets write one file per turn: after a turn with two `write_file` calls, Docker Agent's
+  next request did not list the tool results in the same order from run to run (seen in T054l),
+  so its recording missed.
 - Unknown fields, two answers for the same step, attempt and round, an absolute or `..` path and
   a missing content file are refused when the script loads.
 
@@ -136,6 +142,22 @@ sh src/tests/recorded/synth-steps.sh '<test pattern>'    # e.g. '^TestPlanted$';
 the pattern with `AP_LAB_MODEL=scripted`. Review the new mappings with their scripts before
 committing them; the acceptance run itself always replays them through WireMock with exact
 matching and ends with no miss.
+
+## Suite times (T054l, measured 2026-11-15)
+
+On the development host, images already built (the lab's image builds took 3 s; a cold
+`aptest-check:lab` build takes about 80 s), one suite at a time:
+
+| Run | Wall time | Notes |
+|-----|-----------|-------|
+| `src/deploy/ap test planted` (replay) | 20 min 16 s | test binary build, 5 labs, 15 trials, teardown; 5 of 5 scenarios stopped in 3 of 3 trials, no miss |
+| `src/deploy/ap test us2` (replay) | 9 min 16 s | build, 5 labs; 5 of 5 tests passed, no miss (an earlier run, 7 min 20 s, failed `TestUS2` on two test checks since corrected) |
+| `synth-steps.sh '^TestPlanted$'` | 19 min 23 s | per scenario 2.7 to 4.5 min (lab start and slice approval about 15 s, first trial 0.9 to 1.3 min, later trials 0.6 to 2.2 min) |
+| `synth-steps.sh '^(TestUS2\|TestUS2_7_.*\|TestUS2_10_.*)$'` | 8 min 20 s | `TestUS2` 3.9 min, US2.7 1.5 min, US2.10 3.0 min |
+
+`ap test` prints no per-test durations, so the replay runs are timed as a whole; setup and
+teardown are inside each test's time (a lab starts and approves its slice in about 15 s and is removed in a few
+seconds).
 
 ## Checks
 
