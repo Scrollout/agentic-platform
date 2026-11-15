@@ -112,10 +112,14 @@ cost in USD, minutes), `status` (`approved`). A step: `name`, `worker` (`agent:<
   `R-<n>/E-<n>` or `contract/<operationId>` IDs it concerns), `check` (name, passed, reason),
   `finding` (rule, file, line, text, blocking, `check`: informational, no check reads it; `witness`: `file` and `test`, the new witness
   test a blocking finding carries, which confirms it,
-  [ADR 0039](../../docs/decisions/0039-review-findings-confirmed-by-a-new-witness-test.md)), `detail`. Each kind requires the
+  [ADR 0039](../../docs/decisions/0039-review-findings-confirmed-by-a-new-witness-test.md)), `detail`,
+  `open_round` (`true` on the `StepRejected` that leaves a review round open and on the
+  `ResultReused` that reuses such a round; owner, 2026-11-15, An open round reused). Each kind requires the
   fields that explain it (see `run-event.schema.json`).
-- **Accepted result**: `key` (the reuse key), `artifacts[]`, `run`. Found under its key, it is
-  reused (FR-019).
+- **Accepted result**: `key` (the reuse key), `artifacts[]`, `run`, the changed lines and the
+  project's files after the step. Found under its key, it is reused (FR-019). An open review
+  round's result is kept the same way, marked open, with the round's findings and its
+  NoBlockingFindingOpen result (owner, 2026-11-15; An open round reused).
 
 ## Run rules the machine follows
 
@@ -135,7 +139,11 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
   (the slice's goals, rules and examples) (SC-006).
 - **Reuse key**: deterministic and different whenever any of its ingredients differs (pattern
   version, step, input hashes, agent definition digest, model id; research D8); its exact encoding
-  belongs to the implementation.
+  belongs to the implementation. A fix's and a later review round's inputs include the hash of the
+  open findings and changed lines they are given. The review step's key also covers its round
+  (owner, 2026-11-15; research D36): a round's result is judged against that round's `before`,
+  whose witnesses a new finding must not reuse, so it is reused only for the same round. Keys of
+  steps outside the review rounds are unchanged.
 - **A failing worker or model**: a worker that errors, including an unavailable model, makes a
   rejected attempt, retried within the step's attempts; the run can then be resumed (edge case).
 - **The run as a process across components** (constitution, Reliable events and side effects;
@@ -167,11 +175,64 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
     commit, and the fix's restore keeps the witnesses. Every step container mounts `review/`
     read-only except the review's, the generate worker's writable root included (as `.git`), so
     the mount and ScopeKept both guard it.
+  - **An open round reused** (owner, 2026-11-15; research D36; T088): an open review round's
+    result is kept under its reuse key like an accepted step's, marked open, so a later run of the
+    same input reuses it; the fix's key then matches, and so do the later rounds' (FR-019, SC-005).
+    Until T088 the round kept nothing, so a replay ran it live and its new findings changed the
+    fix's key (found by T053a's end-to-end run, 2026-11-15).
+    - *Kept*: the `StepRejected` that leaves the round open carries `open_round: true`, the
+      round's `reuse_key` and its `artifacts` (`findings`, `witnesses`, as its `AttemptMade`). The
+      accepted-result store keeps under that key: the artifacts, the run, the round's project files
+      (with its witnesses; for a review with no `writable` entries, the files it started from), its
+      findings in their recorded order (every `FindingRecorded` of the attempt, suggestions
+      included), its NoBlockingFindingOpen result as recorded (name, `passed: false`, reason) and
+      the mark open. The key is the review step's for that round: its inputs, after round 1 the
+      hash of the open findings and changed lines it was given, and the round (Reuse key; owner,
+      2026-11-15). A
+      restarted engine rebuilds the entry from the record: the `StepRejected` with `open_round`,
+      the `FindingRecorded` events directly before it and that attempt's NoBlockingFindingOpen
+      `CheckFailed`; from a reused open round, the `FindingRecorded` events directly before its
+      `ResultReused` and that event's `check`. The first result kept under a key stays, open or
+      accepted.
+    - *Recorded*: a reused open round is one `FindingRecorded` per kept finding (`round`, no
+      `attempt`, refs the finding's rule), in the kept order, then one `ResultReused` with
+      `round`, `inputs`, `artifacts`, `reuse_key`, `open_round: true`, `check` (the kept
+      NoBlockingFindingOpen result) and `detail` `review round <n> left blocking findings open`,
+      its files beside it. No `StepStarted`, `AttemptMade`, `CheckPassed`, `CheckFailed` or
+      `StepRejected` is recorded: nothing ran. As in the original run, the round is not accepted:
+      it sets none of the run's artifacts and does not count the review step accepted. `compare`
+      reads it as the original open round: its artifacts, its checks `failed: <the check's
+      reason>`, its decision `{"accepted":false,"reason":<detail>}`.
+    - *The next step*: the round's open findings are the blocking ones among the kept findings, in
+      their order, the list the original run gave its fix, so the fix's key matches and the fix is
+      reused; its changed lines come from its own reused result, so the next round's key matches
+      in turn. At the last round (`review_rounds`) the run is handed over with those findings, as
+      after a live open round.
+    - *Commit*: when the review step has `writable` entries, the engine calls `commitStep` before
+      the fix's restore with `round`, `open_round: true`, `reused_from` (the run that left the
+      round open), `outputs` (`witnesses`, never `findings`), `before`, `project_files` (the kept
+      files) and `accepted_at` (the `ResultReused`'s `at`). Its subject is `Step <step> round
+      <round> left open in <run>`, its trailers `Run`, `Step`, `Round` and `Reused-from`; its
+      tree equals the original open round's.
+    - *Resume* (owner, 2026-11-15): after the event that left a round open (`StepRejected` or `ResultReused` with
+      `open_round`), resume makes that round's commit again first, then goes on as the live run
+      would: the fix of round n with its open findings, or, at the last round, the hand-over. The
+      round is neither run nor reused again (until T088, resume ran it again). Its open findings
+      are the blocking ones among round n's `FindingRecorded` events directly before that event,
+      so findings of an earlier, unfinished try of the round are dropped.
+    - *No check hidden* (owner, 2026-11-15): reuse runs no check, for an open round as for an accepted step (the
+      checks ran, and are recorded, in the run that produced the result; the key binds it to the
+      same inputs, agent, model and round). The witnesses were confirmed there by
+      FindingsCarryEvidence and NoBlockingFindingOpen, and are not run again on reuse. Reusing an
+      open round only adds work: the round stays open, the fix must still make each witness pass
+      under AllTestsPass, and the run ends `done` only after a round accepted live or reused from
+      a run whose checks accepted it. `commitStep` still checks every reused output against its
+      hash (InputHashMismatch) and the folder against `project_files`.
   - **Commits**: after recording `StepAccepted` or `ResultReused`, or a review round's
     `StepRejected` that carries files (A review round), the engine calls `commitStep` and calls
     nothing for the next step or attempt, and records no outcome, until it answers 200; on
     resume it calls it again for the last such event, which a repeat makes safe. One commit
-    per accepted step, a step that changed no file included, and one per open review round, on the branch `main`; its tree is
+    per accepted step, a step that changed no file included, and one per open review round, reused or not, on the branch `main`; its tree is
     exactly the accepted `project_files`, each file with its bytes as a non-executable regular
     file. For a reused result (`reused_from`), `commitStep` first writes the reused outputs'
     stored artifacts into the step's writable paths; this is how a replay's new project gets its
@@ -236,7 +297,8 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
     in whole seconds, UTC. Message: the subject `Step <step> accepted in <run>` (`Step <step>
     reused in <run>` for a reused result), an empty line, then the trailers `Run: <run>`,
     `Step: <step>`, `Round: <n>` (review rounds and their fixes only), and `Attempt: <n>` or
-    `Reused-from: <run>`, one per line in that order. A repeated `commitStep` finds the last
+    `Reused-from: <run>`, one per line in that order. An open round's subject is `Step <step>
+    round <round> left open in <run>`, reused or not (owner, 2026-11-15). A repeated `commitStep` finds the last
     commit's trailers equal and makes no second commit.
   - **Timeout**: each attempt within the step budget and the run within the run budget (D14:
     `budgets.step.minutes` 10, `budgets.run.minutes` 30); every call to a worker, the check
@@ -247,7 +309,8 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
     `commitStep` that fails or times out is retried with backoff (D7); if it still fails, the run
     is interrupted with the reason, not handed over, and resume repeats the call. A run waiting
     for the developer expires 14 days after it stopped.
-  - **What a replay makes identical** (US2.8, SC-005): every step is reused, so the replay's
+  - **What a replay makes identical** (US2.8, SC-005): every step is reused, and every review
+    round, open or accepted (owner, 2026-11-15; An open round reused), so the replay's
     artifacts are the original's, hash for hash; each step's `project_files`, and so each
     commit's tree and the final folder outside `.git`, are byte-identical to the original's.
     Commit IDs differ, since each commit names its own run and its own run's times.

@@ -114,7 +114,9 @@ fresh review round 1.
 - **Decision**: JSON Lines run records, artifacts stored under their SHA-256, in a named volume.
   Every event records the run, step, attempt, model, agent definition digest, pattern version,
   input hashes, reuse key and the goal, rule or example it concerns. A step's reuse key is the hash
-  of pattern version, step, input hashes, agent definition digest and model id.
+  of pattern version, step, input hashes, agent definition digest and model id, and for a review
+  round also its round. An open review round's result is kept and reused like an accepted one
+  (owner, 2026-11-15; D36).
 - **Rationale**: FR-018 to FR-020, SC-005, SC-006; agent output differs between runs while fixed
   inputs give identical generation (S3), so reuse is what makes a replay identical.
 - **Alternatives**: SQLite (not needed for one writer); a durable-execution engine (for hosting).
@@ -1214,3 +1216,54 @@ page, none of which an existing project provides.
   `-coverprofile`); <https://go.dev/blog/cover> (the profile's blocks, lines and counts);
   <https://pkg.go.dev/cmd/go#hdr-Package_lists_and_patterns>
   (`./...` ignores folders starting with `.` or `_` and `testdata`).
+
+### D36. An open review round's result is kept and reused like an accepted step's
+
+- **Decision** (owner, 2026-11-15; found by T053a's end-to-end run; the design is T089 and T088,
+  data-model "An open round reused"):
+  - **Why**: in RUN-1 review round 1 raised a blocking finding, the fix was accepted and round 2
+    was accepted. The replay RUN-2 reused contract-check, generate, tests and code, but ran round
+    1, the fix and round 2 live, and `compare` differed (a witness came out as
+    `review/r2/long_text_test.go` instead of `large_text_test.go`). `keepOpenRound` in
+    `src/engine/machine/drive.go` kept no result for an open round, so the replay ran it live,
+    and its new finding text changed the fix's key, which includes the hash of the open findings;
+    the fix and the later rounds then missed reuse too. So US2.8, SC-005 and FR-019 failed for
+    every run with more than one review round.
+  - **Kept**: the open round's `StepRejected` carries `open_round: true`, `reuse_key` and
+    `artifacts`; the accepted-result store keeps, under the round's key, its artifacts, run,
+    project files, findings in recorded order, NoBlockingFindingOpen result and the mark open; a
+    restarted engine rebuilds it from the record. The review step's key also covers its round
+    (owner, 2026-11-15).
+  - **Recorded on reuse**: the kept findings as `FindingRecorded` events (`round`, no `attempt`),
+    then `ResultReused` with `round`, `open_round: true`, `check` (the kept NoBlockingFindingOpen
+    result) and `detail`. Not accepted: the run's artifacts and accepted steps are unchanged, as
+    after a live open round.
+  - **The fix**: its open findings are the blocking ones among the kept findings, in order, so its
+    key, and then the next round's, match the original's.
+  - **Commit**: `commitStep` with `round`, `open_round: true`, `reused_from` and `outputs`
+    (`witnesses`); subject `Step <step> round <round> left open in <run>`, trailer `Reused-from`.
+  - **Resume** (owner, 2026-11-15): after the event that left a round open, the commit is made again, then the fix
+    (or, at the last round, the hand-over) follows; the round is not run again.
+  - **Checks** (owner, 2026-11-15): reuse runs no check, as for a reused accepted step today; the
+    witnesses are not re-confirmed: they were confirmed in the original run, whose record holds
+    those checks.
+- **Rationale**: FR-019 and SC-005: a replay is identical only if every result it depends on is
+  reused, and a fix depends on the round's findings. The key binds a kept result to the same
+  inputs, agent, model and round, so rerunning its checks would judge the same files again. An
+  open round reused only leads to more work (the fix, a later round); it never makes a run
+  accepted. The round is in the review key because a result is judged against that round's
+  `before`: a later round with the same inputs and context must not get blocking findings whose
+  witnesses are already there.
+- **Alternatives rejected**: a reused open round recorded as `StepRejected` (it says an attempt
+  was rejected, and none ran); a new event kind such as `RoundReused` (D23's list and every
+  reader, `load`, `compare`, the terminal client, would gain a kind for what `ResultReused`
+  already means: a kept result used again); rerunning FindingsCarryEvidence and
+  NoBlockingFindingOpen on reuse (no reused step's checks run again, D8; the same key gives the
+  same files); keeping the findings only in the `findings` artifact (the machine reads no stored
+  artifact; the record already holds them as `FindingRecorded` events); leaving the round out of
+  the key (above).
+- **Recorded as** [ADR 0040](../../docs/decisions/0040-open-review-round-result-kept-and-reused.md).
+- Sources: T053a's end-to-end run through `ap`, 2026-11-15 (tasks.md T053a); `src/engine/machine/drive.go`
+  (`keepOpenRound`, `stepKey`), `src/engine/machine/record.go` (`load`), `src/engine/api/runs.go`
+  (`reloadResults`); `run-event.schema.json`; check contract
+  `src/check/api/preview/2026-11-13-preview/openapi.yaml` (commitStep, CommitRequest).

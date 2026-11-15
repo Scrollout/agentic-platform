@@ -110,7 +110,8 @@ Each failure is stopped by a check, and a replay of the same run gives byte-iden
 7. **Given** a step that keeps failing its checks, **When** 3 attempts have failed, **Then** the
    run is handed over to the developer with the reason.
 8. **Given** a run that has ended, **When** the developer replays it, **Then** every step reuses
-   its accepted result and the replay's artifacts are byte-identical to the original run's.
+   its accepted result (a review round left open is reused like an accepted step; owner,
+   2026-11-15) and the replay's artifacts are byte-identical to the original run's.
 9. **Given** any two finished runs, **When** the developer inspects or compares them, in the
    terminal or on the read-only local page, **Then** they see every artifact, link, check result
    and decision in order, and the differences between the two runs.
@@ -196,7 +197,8 @@ Each failure is stopped by a check, and a replay of the same run gives byte-iden
 - **FR-018**: Every artifact, link, question, answer, check result, attempt and decision MUST be
   recorded in order with the model, agent definition and pattern version that produced it, so a
   run can be inspected, replayed and compared with another run.
-- **FR-019**: An accepted result for an input MUST be reused on later runs of the same input
+- **FR-019**: An accepted result for an input, and the result of a review round left with
+  blocking findings open (owner, 2026-11-15), MUST be reused on later runs of the same input
   instead of being produced again.
 - **FR-020**: An interrupted run MUST be resumable without repeating its accepted steps.
 

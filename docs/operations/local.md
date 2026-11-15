@@ -5,7 +5,7 @@ description: The platform on one developer's machine, started by the ap launcher
 tags: [operations, deployment, local]
 status: draft
 resource: /src/deploy/compose.yaml
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-13T23:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-15T12:00:00Z }
 ---
 
 # Purpose
@@ -133,6 +133,40 @@ the client says how to follow it (`run <run>`) or cancel it (`cancel <run>`) and
 client's code.
 A signal after the command has its result keeps that result. Text from the store is printed with
 control characters escaped.
+
+## End-to-end build and replay
+
+The owner's live end-to-end flow (feature 001, T053a): one slice described, approved, built and
+replayed through `ap`, then the two runs and their projects compared. Run each command from the
+repository root, one image build at a time. The provider key is passed only as a file path; the
+signing key's password goes from its file into the environment and is never printed.
+
+```sh
+COSIGN_PASSWORD=$(cat ~/.config/agentic-platform/cosign.pass) src/deploy/build.sh <engine|cli|project|check|agent|lint>   # one at a time
+src/deploy/ap up --credentials ~/.config/agentic-platform/anthropic_api_key --projects <projects folder>
+printf '%s' "An in-memory notes service. Listing returns all notes in creation order. Creating a note needs non-empty text and returns it with an id starting at 1." | src/deploy/ap describe
+printf '0\n1\n' | src/deploy/ap questions S-1   # the analyst's questions may differ on a live run
+src/deploy/ap approve S-1 goals; src/deploy/ap approve S-1 rules; src/deploy/ap approve S-1 contract
+src/deploy/ap build-workers S-1 notes
+src/deploy/ap build S-1 notes </dev/null
+src/deploy/ap replay RUN-1 notes-replay </dev/null
+src/deploy/ap compare RUN-1 RUN-2   # exit 0 = identical, 7 = differs
+git -C <projects>/notes log --format='%H %T %s'; git -C <projects>/notes-replay log --format='%H %T %s'
+src/deploy/ap down
+```
+
+The replay is identical when `compare` exits 0 and the two logs list equal trees (`%T`), commit
+by commit; commit IDs differ, since each commit names its own run and times. Measured on
+2026-11-15: the images, cached, 93 s; `up` 10 s; the slice 33 s; `build-workers` 8 s; `build`
+419 s; `replay` 229 s; `compare` 1 s; `down` 3 s. With Haiku 5.5 the whole flow cost about
+$0.01 (RUN-1 used 115,595 tokens, $0.0084).
+
+On the host, `git status` can show a vendored `build.cmd` (from
+`github.com/apapsch/go-jsonmerge/v2`) as modified. That module's own `.gitattributes` sets
+`*.cmd text eol=crlf`, so the host's git compares the file with converted line endings. It is not
+a defect.
+
+Sources: [Feature 001 tasks, T053a](../../specs/001-prose-to-accepted-slice/tasks.md) (the run of 2026-11-15).
 
 # Observability
 
