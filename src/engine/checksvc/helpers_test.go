@@ -47,6 +47,12 @@ var tempDirs struct {
 func TestMain(m *testing.M) {
 	code := m.Run()
 	for _, d := range tempDirs.list {
+		filepath.WalkDir(d, func(p string, e fs.DirEntry, err error) error { // the warm base is read-only
+			if err == nil && e.IsDir() {
+				os.Chmod(p, 0o700)
+			}
+			return nil
+		})
 		os.RemoveAll(d)
 	}
 	os.Exit(code)
@@ -84,7 +90,92 @@ func templateDir(t testing.TB) string {
 
 // checkConfig is the check-service deployment over the projects folder root.
 func checkConfig(t testing.TB, root string) checksvc.Config {
-	return checksvc.Config{Token: token, Project: root, Env: goEnv(), Template: templateDir(t)}
+	return checksvc.Config{Token: token, Project: root, Env: goEnv(), Template: templateDir(t), GoCacheBase: warmBase(t)}
+}
+
+// realGo is the go on PATH when the process starts, before any test puts a recording go first.
+var realGo, _ = exec.LookPath("go")
+
+var (
+	warmOnce sync.Once
+	warmDir  string
+	warmErr  error
+)
+
+// warmBase is the read-only warm base Go cache of this test process, built once as the image's
+// /opt/gocache-base is (deploy/Dockerfile.check): the standard library packages a check's go test
+// uses, compiled and vetted through go test, -cover and go test -c with the service's settings.
+func warmBase(t testing.TB) string {
+	t.Helper()
+	warmOnce.Do(func() {
+		root, err := sharedTemp("warm-base")
+		if err != nil {
+			warmErr = err
+			return
+		}
+		cache, mod := filepath.Join(root, "gocache"), filepath.Join(root, "mod")
+		env := append(os.Environ(), goEnv()...)
+		env = append(env, "GOFLAGS=-buildvcs=false", "GOCACHE="+cache, "HOME="+root, "GOPATH="+filepath.Join(root, "gopath"))
+		run := func(dir string, args ...string) (string, error) {
+			c := exec.Command(realGo, args...)
+			c.Dir, c.Env = dir, env
+			out, err := c.CombinedOutput()
+			if err != nil {
+				return "", fmt.Errorf("go %v: %v\n%.800s", args, err, out)
+			}
+			return string(out), nil
+		}
+		list, err := run(root, append([]string{"list", "-deps", "-f", "{{if .Standard}}{{.ImportPath}}{{end}}"},
+			"testing", "net/http/httptest", "encoding/json", "runtime/coverage", "testing/fstest", "net/http", "os/exec", "io/fs")...)
+		if err != nil {
+			warmErr = err
+			return
+		}
+		var src strings.Builder
+		src.WriteString("package warm\nimport (\n")
+		for _, p := range strings.Fields(list) {
+			if !strings.Contains(p, "internal") && !strings.HasPrefix(p, "vendor/") {
+				fmt.Fprintf(&src, "_ %q\n", p)
+			}
+		}
+		src.WriteString(")\n")
+		os.MkdirAll(filepath.Join(mod, "warm"), 0o755)
+		for f, c := range map[string]string{
+			"go.mod":            "module example.com/warm\n\ngo 1.26\n",
+			"warm/warm.go":      src.String(),
+			"warm/warm_test.go": "package warm\n\nimport \"testing\"\n\nfunc TestWarm(t *testing.T) {}\n",
+		} {
+			if err := os.WriteFile(filepath.Join(mod, f), []byte(c), 0o644); err != nil {
+				warmErr = err
+				return
+			}
+		}
+		for _, a := range [][]string{
+			{"test", "-json", "-count=1", "./..."},
+			{"test", "-json", "-count=1", "-covermode=set", "-coverpkg=./...", "-coverprofile=" + filepath.Join(root, "cover.out"), "./..."},
+			{"test", "-c", "-count=1", "-vet=off", "-o", filepath.Join(root, "bin") + "/", "./..."},
+		} {
+			if _, err := run(mod, a...); err != nil {
+				warmErr = err
+				return
+			}
+		}
+		filepath.WalkDir(cache, func(p string, e fs.DirEntry, err error) error {
+			if err == nil {
+				if e.IsDir() {
+					os.Chmod(p, 0o555)
+				} else {
+					os.Chmod(p, 0o444)
+				}
+			}
+			return nil
+		})
+		warmDir = cache
+	})
+	if warmErr != nil {
+		t.Fatalf("building the warm base: %v", warmErr)
+	}
+	return warmDir
 }
 
 // workerConfig is a procedure step's worker deployment.

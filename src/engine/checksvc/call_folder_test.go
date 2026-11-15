@@ -347,7 +347,9 @@ func TestEachCallGetsItsOwnEmptyFolder(t *testing.T) {
 		os.MkdirAll(d, 0o755)
 		copyTree(t, filepath.Join("testdata", "testspass"), d)
 	}
-	base := serve(t, checkConfig(t, root))
+	cfg := checkConfig(t, root)
+	cfg.GoCacheBase = "" // this test judges an empty folder; the warm base's copy is tested in call_cache_base_test.go
+	base := serve(t, cfg)
 	body := func(p string) map[string]any { return sleepCheckBody(t, filepath.Join(root, p), 60) }
 
 	check := func(what string, rs []cfRecord) string {
