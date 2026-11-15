@@ -1307,7 +1307,7 @@ page, none of which an existing project provides.
     `GOCACHE=/tmp/go-cache` on its `/tmp` tmpfs (`Dockerfile.check`, `compose.yaml`), without
     `-count=1`, so a result cached from one attempt or project could answer another.
   - **A fresh folder per call** (owner, 2026-11-15): each call of the check program (runCheck, with
-    its witness runs, and runProcedure) gets a new temporary folder whose `GOCACHE` starts as a copy of the read-only warm base cache (the standard library) and whose rest is empty under `/tmp`, removed
+    its witness runs, and runProcedure) gets a new temporary folder under `/tmp`, whose `GOCACHE` starts as a copy of the read-only warm base cache (the standard library) and whose rest is empty, removed
     when the call ends, whatever its outcome. Every command of the call has `GOCACHE`,
     `GOTMPDIR`, `TMPDIR`, `HOME` and `GOPATH` inside it, so nothing a check writes there survives
     the call; every `go test` carries `-count=1`. The module cache of the pinned modules,

@@ -324,8 +324,8 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
   a new temporary folder whose `GOCACHE` starts as a copy of the read-only warm base cache (the standard library) and whose rest is empty, removed when the call ends; every command of the call has
   `GOCACHE`, `GOTMPDIR`, `TMPDIR`, `HOME` and `GOPATH` inside it, and every `go test` carries
   `-count=1`, so nothing a check writes there survives the call and no result cached by one call
-  answers a later one; calls that run at the same time are a stated limit (research D37). The pinned modules' cache is shared read-only, and each call's `GOCACHE` starts as a copy of
-  the image's read-only warm base cache, built from pinned sources only (owner, 2026-11-15). The test checks read `go test -json` events, never summary lines. The
+  answers a later one; calls that run at the same time are a stated limit (research D37). The pinned modules' cache is shared read-only, and the warm base is built from pinned sources
+  only (owner, 2026-11-15). The test checks read `go test -json` events, never summary lines. The
   declared tests are the top-level `Test*` functions of the `_test.go` files under `tests/**`
   and `review/**`, each with its package.
 
