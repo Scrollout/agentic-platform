@@ -224,7 +224,11 @@ paths:
         review step's `findings`, a `slice/<part>`) is exempt. A check that meets something it cannot
         judge (an entry that is not a regular file or whose path is not a ProjectPath, a test binary
         that cannot be built, a go command that fails to start) answers `passed: false` with a
-        reason naming it; it never passes by default. The checks served, by name: ScopeKept, every
+        reason naming it; it never passes by default. Each call gets a new, empty temporary
+        folder, removed when it ends; every command of the call has `GOCACHE`, `GOTMPDIR`,
+        `TMPDIR`, `HOME` and `GOPATH` inside it, and every `go test` carries `-count=1`, so
+        nothing a check writes there survives the call. The pinned modules' cache is shared
+        read-only. The checks served, by name: ScopeKept, every
         path added, changed or removed between `before` and now matches the step's `writable`.
         DependenciesAllowed, the project has no symbolic link, and in the step's own files (those its
         `writable` matches) every import outside the project's module matches the step's
@@ -242,8 +246,13 @@ paths:
         undefined, pending or ambiguous step for any scenario of `features/slice.feature`, and every
         scenario runs; whether the scenarios pass is not judged (the tests step's must fail against
         the stub).
-        TestsFailAgainstStub, the tests build and fail against the generated stub. TestsUnchanged
-        and GeneratedCodeUnchanged, see EarlierStep. AllTestsPass, every test passes, offline.
+        TestsFailAgainstStub, `go test -json -count=1 ./tests/...` against the generated stub:
+        the tests build, every declared test under `tests/**` has a result event, so none
+        vanishes, and at least one fails. TestsUnchanged and GeneratedCodeUnchanged, see
+        EarlierStep. AllTestsPass, `go test -json -count=1 ./...` exits 0 and every declared
+        test (a top-level `Test*` function of a `_test.go` file under `tests/**` or `review/**`,
+        with its package) has a `pass` event; one with no event, `fail` or `skip` fails the
+        check, naming it; a project with no declared test fails it too.
         FindingsCarryEvidence, every blocking finding names a rule `R-<n>`, a file the project holds
         as a regular file that a `writable` entry of the earlier step whose outputs hold `code`
         matches (the fix step, so the finding can be fixed), a line of at least 1, and a `witness` whose `file` is a ProjectPath in
@@ -254,7 +263,8 @@ paths:
         run only decides whether a finding blocks, so a blocking finding it does not confirm is a
         suggestion and leaves FindingsCarryEvidence passing; a blocking finding with no `witness`
         is a suggestion too. NoBlockingFindingOpen, no blocking finding is confirmed by its
-        witness run; any other finding is a suggestion and leaves it passing. The witness run
+        witness run; any other finding is a suggestion and leaves it passing. Its verdict names the
+        confirmed findings in `confirmed`. The witness run
         (each of the two checks, once per finding that carries a witness): `go test -json
         -count=1 -covermode=set -coverpkg=./... -coverprofile=<a file outside the project> -run
         '^<test>$' ./review/r<n>/` in the project, offline, against the code as it stands now. A
@@ -428,6 +438,10 @@ paths:
         writable paths may hold partial files (some written, some stale ones not yet removed), and a
         repeat of the request converges them. A caller treats every
         response other than 200, and `completed: false`, as a rejected attempt.
+        Each call gets a new, empty temporary folder, removed when it ends; every command of the
+        call has `GOCACHE`, `GOTMPDIR`, `TMPDIR`, `HOME` and `GOPATH` inside it, and every
+        `go test` carries `-count=1`, so nothing a check writes there survives the call. The
+        pinned modules' cache is shared read-only.
       security:
       - engineToken: []
       x-error-codes:
@@ -1187,6 +1201,17 @@ components:
           $ref: '#/components/schemas/ProjectFiles'
           description: Every regular file of the project folder with a ProjectPath, as this check read
             it.
+        confirmed:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          description: "NoBlockingFindingOpen only, on every verdict it gives: the 0-based positions,
+            ascending, in the request's `findings` of the blocking findings whose witness run
+            confirmed them (FR-017); empty when the check passes. The engine records exactly these
+            findings as blocking, every other one as a suggestion. No other check sends it."
+          items:
+            type: integer
+            minimum: 0
     StepFilesRequest:
       description: The attempt whose files are read.
       allOf:
