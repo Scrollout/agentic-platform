@@ -9,8 +9,17 @@ GO_RACE_IMAGE=$(awk '$1=="golang-race"{print $2}' src/deploy/images.lock)
 
 GO_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/agentic-platform/go"  # shared with scripts/generate.sh
 mkdir -p "$GO_CACHE"
+# AP_TEST_REPORT_DIR (CI, research D43): when set, every test step writes JUnit reports into it; the
+# Go containers see it as /reports. Unset, no report is written and nothing else changes.
+REPORTS=
+# The folder's path must hold no space or glob character (CI's runner.temp holds none).
+if [ -n "${AP_TEST_REPORT_DIR:-}" ]; then
+  case $AP_TEST_REPORT_DIR in *[[:space:]*?[]*) echo "check: AP_TEST_REPORT_DIR holds a space or glob character" >&2; exit 2 ;; esac
+  mkdir -p "$AP_TEST_REPORT_DIR"; REPORTS="-v $AP_TEST_REPORT_DIR:/reports"
+fi
 go_run() {  # go_run <network: bridge|none> <script> [image]: a shell in a pinned Go container over src/
-  docker run --rm --network "$1" -v "$PWD/src:/src" -w /src -v "$GO_CACHE:/gopath" \
+  # shellcheck disable=SC2086
+  docker run --rm --network "$1" -v "$PWD/src:/src" -w /src -v "$GO_CACHE:/gopath" $REPORTS \
     --user "$(id -u):$(id -g)" -e GOPATH=/gopath -e GOCACHE=/gopath/cache -e GOTOOLCHAIN=local \
     "${3:-$GO_IMAGE}" sh -ec "$2"
 }
@@ -28,6 +37,11 @@ fill_module_cache() {
   grep -q "github.com/cucumber/godog $godog\$" "src/$fixture/go.mod" ||
     { echo "check: $fixture/go.mod does not require godog $godog (src/deploy/images.lock)" >&2; exit 1; }
   go_run bridge "cd $fixture && GOWORK=off GOFLAGS=-mod=readonly go mod download"
+  # gotestsum (pinned, D43) runs the Go tests and writes their JUnit reports; static, so it also
+  # runs in the Debian race image.
+  gotestsum=$(awk '$1=="gotestsum"{print $2}' src/deploy/images.lock)
+  [ -n "$gotestsum" ] || { echo "check: no gotestsum pin in src/deploy/images.lock" >&2; exit 1; }
+  go_run bridge "CGO_ENABLED=0 go install $gotestsum"
 }
 
 go_checks() {
@@ -53,11 +67,12 @@ go_checks() {
     done"
   # The tests run once, with the race detector, in the Debian image.
   echo "== go test -race ($vr, CGO_ENABLED=1)"
+  junit=; [ -z "$REPORTS" ] || junit="--junitfile /reports/go-\$m.xml"
   go_run none "
     export GOPROXY=off GOFLAGS=-mod=readonly CGO_ENABLED=1 AP_OAPI_CODEGEN=/gopath/bin/oapi-codegen
     for m in $GO_MODULES; do
       if [ -z \"\$(find \"\$m\" -name '*.go' -print -quit)\" ]; then echo \"skip \$m: no Go files yet\"; continue; fi
-      (cd \"\$m\" && go test -race -timeout 20m ./...)
+      (cd \"\$m\" && /gopath/bin/gotestsum --format standard-quiet $junit -- -race -timeout 20m ./...)
     done" "$GO_RACE_IMAGE"
 }
 if [ "${1:-}" = "--go-only" ]; then go_checks; exit 0; fi
@@ -118,7 +133,7 @@ s_py_tests() {
   # 6 test classes at a time: measured 26 minutes one at a time, 10 by module (4 at a time), 9 by
   # class (6 at a time), every test passing each time.
   # shellcheck disable=SC2086
-  python3 scripts/testrun.py --jobs 6 $py
+  python3 scripts/testrun.py --jobs 6 ${AP_TEST_REPORT_DIR:+--junit "$AP_TEST_REPORT_DIR/py-tests.xml"} $py
 }
 s_layout() { python3 scripts/layout-check.py; }
 s_knowledge() { python3 scripts/okf.py check; }
@@ -142,7 +157,25 @@ s_docker() {
     phase setup
     go_run none "cd tests && GOPROXY=off GOFLAGS=-mod=readonly CGO_ENABLED=0 go test -c -tags docker -o /gopath/$p.test ./$p/"
     phase test
-    (cd "src/tests/$p" && "$GO_CACHE/$p.test" -test.count=1)
+    if [ -z "$REPORTS" ]; then
+      (cd "src/tests/$p" && "$GO_CACHE/$p.test" -test.count=1)
+    else
+      # For the report (D43): the binary's test2json output goes into a file and is shown while it
+      # runs (GNU tail, as on the CI runners; test2json's framing byte removed); its exit code is
+      # kept; then the file is converted into src/tests/$p's JUnit report.
+      out="$GO_CACHE/$p.out"; : >"$out"
+      (cd "src/tests/$p" && exec "$GO_CACHE/$p.test" -test.count=1 -test.v=test2json) >"$out" 2>&1 &
+      pid=$!
+      tail -n +1 -f --pid="$pid" "$out" | tr -d '\026'
+      rc=0; wait "$pid" || rc=$?
+      conv=0
+      go_run none "go tool test2json -p $p </gopath/$p.out >/gopath/$p.json &&
+        /gopath/bin/gotestsum --format standard-quiet --junitfile /reports/docker-$p.xml --raw-command -- cat /gopath/$p.json >/dev/null" ||
+        conv=$?
+      rm -f "$out" "$GO_CACHE/$p.json"
+      [ "$rc" -eq 0 ] || conv=$rc
+      [ "$conv" -eq 0 ] || { rm -f "$GO_CACHE/$p.test"; exit "$conv"; }
+    fi
     phase teardown
     rm -f "$GO_CACHE/$p.test"
   done

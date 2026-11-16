@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Runs one command as a GitHub Actions job's step (research D41, T110): its output as it is, then a
 # short summary in $GITHUB_STEP_SUMMARY: one line (`✅ <name> — <n> s`, or `❌ <name> — <n> s,
-# exit <code>`), every `ap test` result line, one line of free disk, and, only when the command
-# fails, its last 40 lines in a collapsed section. Its time goes to $GITHUB_OUTPUT as `seconds`,
-# and on failure its first error line as `error`, for the run's summary (scripts/ci-summary.py).
+# exit <code>`), every `ap test` result line and, only when the command fails, its last 40 lines
+# in a collapsed section. Its time goes to $GITHUB_OUTPUT as `seconds`, and on failure its first
+# error line as `error`, for the run's summary (scripts/ci-summary.py).
 # Exits as the command does. With neither variable set it only runs the command.
 #
 #   scripts/ci-step.sh <name> <command> [args...]
@@ -32,7 +32,6 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
     if grep -Eq "$results" "$log"; then
       echo; echo '```text'; grep -E "$results" "$log"; echo '```'
     fi
-    echo; df -hP / | awk 'NR == 2 { print "Free disk: " $4 " of " $2 }'
     if [ "$rc" -ne 0 ]; then
       echo; echo '<details><summary>Last 40 lines</summary>'; echo; echo '```text'; tail -n 40 "$log"; echo '```'; echo '</details>'
     fi

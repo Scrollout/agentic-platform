@@ -61,14 +61,6 @@ class CiStepSummaryTest(unittest.TestCase):
                     self.assertNotIn("<details>", s)
                 self.clear()
 
-    def test_one_short_free_disk_line(self):
-        for tail in ("", "; exit 1"):
-            with self.subTest(tail):
-                _, s = self.step("echo x" + tail)
-                lines = [l for l in s.splitlines() if "Free disk" in l]
-                self.assertEqual(lines, ["Free disk: 88G of 145G"], s)
-                self.clear()
-
     def test_no_partial_run_warning(self):
         for tail in ("", "; exit 1"):
             with self.subTest(tail):

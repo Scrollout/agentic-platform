@@ -29,6 +29,7 @@ oapi-codegen               github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-code
 godog                      github.com/cucumber/godog/cmd/godog@v0.16.0
 govulncheck                golang.org/x/vuln/cmd/govulncheck@v1.9.0
 go-licenses                github.com/google/go-licenses/v2@v2.0.1
+gotestsum                  gotest.tools/gotestsum@v1.13.0
 # The CI runners (research D41): ci-runner, GitHub's hosted runner label (Ubuntu 26.04, a public
 # preview image; owner, 2026-11-16); ci-python, the Python version actions/setup-python installs;
 # gvisor-release and gvisor-sha512, the gVisor release scripts/ci-gvisor.sh installs and its

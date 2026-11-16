@@ -105,14 +105,6 @@ class CiStepTest(unittest.TestCase):
         self.assertNotRegex(s, r"(?i)\bpassed\b")
         self.assertRegex(s, r"\b7\b")
 
-    def test_summary_records_the_runners_free_disk(self):
-        stubs = gitenv.stub_dir(self, {"df": "echo 'Filesystem Size Used Avail Use% Mounted on'\n"
-                                             "echo '/dev/root 145G 58G 88G 40% /'\n"})
-        env = gitenv.with_path(base_env(self, {"GITHUB_STEP_SUMMARY": str(self.summary),
-                                               "GITHUB_OUTPUT": str(self.output)}), stubs)
-        self.step("demo", "true", env=env)
-        self.assertIn("Free disk: 88G of 145G", self.text().splitlines())
-
     def test_summary_holds_no_timing_table_even_when_the_command_prints_one(self):
         self.step("demo", "sh", "-c", NOISE + "; " + TABLE)
         s = self.text()
@@ -698,7 +690,7 @@ class CheckPrepareTest(unittest.TestCase):
         r = run([self.repo / "scripts" / "check.sh", "--prepare"], env=self.env, cwd=self.repo)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         c = "\n".join(self.calls())
-        self.assertNotRegex(c, r"go vet|go test|go install|go build")
+        self.assertNotRegex(c, r"go vet|go test|go build|go install(?! gotest\.tools/gotestsum@)")
         self.assertNotRegex(c, r"generate\.sh --check")
         self.assertNotIn("== time per step", r.stdout)
         self.assertNotIn("all checks passed", r.stdout)

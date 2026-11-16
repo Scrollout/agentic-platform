@@ -73,7 +73,19 @@ jobs:
           src/deploy/build.sh agent
       - id: run
         name: py-tests
+        env:
+          AP_TEST_REPORT_DIR: ${{ runner.temp }}/test-reports
         run: scripts/ci-step.sh py-tests scripts/check.sh --only py-tests
+      # The tests' results in the job's summary (research D43, ADR 0046): counts and each failed
+      # test with its message; annotate_only needs no checks: write.
+      - name: Test report
+        if: always()
+        uses: mikepenz/action-junit-report@a16be3a69023e9bd7e748ede768b3282ea7b30ce # v6.7.1
+        with:
+          report_paths: ${{ runner.temp }}/test-reports/*.xml
+          annotate_only: true
+          detailed_summary: true
+          include_passed: false
 
   layout:
     name: layout
@@ -196,7 +208,19 @@ jobs:
           persist-credentials: false
       - id: run
         name: go
+        env:
+          AP_TEST_REPORT_DIR: ${{ runner.temp }}/test-reports
         run: scripts/ci-step.sh go scripts/check.sh --only go
+      # The tests' results in the job's summary (research D43, ADR 0046): counts and each failed
+      # test with its message; annotate_only needs no checks: write.
+      - name: Test report
+        if: always()
+        uses: mikepenz/action-junit-report@a16be3a69023e9bd7e748ede768b3282ea7b30ce # v6.7.1
+        with:
+          report_paths: ${{ runner.temp }}/test-reports/*.xml
+          annotate_only: true
+          detailed_summary: true
+          include_passed: false
 
   docker:
     name: docker
@@ -216,7 +240,19 @@ jobs:
         run: scripts/ci-gvisor.sh
       - id: run
         name: docker
+        env:
+          AP_TEST_REPORT_DIR: ${{ runner.temp }}/test-reports
         run: scripts/ci-step.sh docker scripts/check.sh --only docker
+      # The tests' results in the job's summary (research D43, ADR 0046): counts and each failed
+      # test with its message; annotate_only needs no checks: write.
+      - name: Test report
+        if: always()
+        uses: mikepenz/action-junit-report@a16be3a69023e9bd7e748ede768b3282ea7b30ce # v6.7.1
+        with:
+          report_paths: ${{ runner.temp }}/test-reports/*.xml
+          annotate_only: true
+          detailed_summary: true
+          include_passed: false
 
   deps:
     name: deps
