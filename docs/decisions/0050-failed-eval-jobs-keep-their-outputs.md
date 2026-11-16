@@ -38,8 +38,9 @@ Sources: [Feature 001 research, D46](../../specs/001-prose-to-accepted-slice/res
 - A passing job uploads nothing.
 - The content is the model's answers to the suites' synthetic inputs, the public prompts and token
   use; no key and no user data, so a public artifact is acceptable.
-- GitHub serves and stores artifacts encrypted; no tenant or user content can enter, so
-  per-tenant erasure does not apply; the owner can delete one early.
+- Artifacts are fetched over HTTPS and kept in GitHub's storage, whose encryption at rest this
+  project does not control; accepted because no tenant or user content can enter, so per-tenant
+  erasure does not apply either. Anyone with write access can delete one early.
 - The folder is scanned for the secret patterns of `scripts/check.sh` before the upload, and
   nothing is uploaded when one matches.
 

@@ -1813,10 +1813,13 @@ page, none of which an existing project provides.
   suite and its cases, kept 7 days. A passing job uploads nothing.
 - **What it holds**: the model's answers to the suites' own synthetic descriptions and fixtures,
   the agents' prompts (public in the repository) and token use; no key (the key reaches only the
-  gateway, D41) and no user or tenant data. The repository is public, so any signed-in GitHub user
-  can download it while it is kept; that is acceptable for this content. Its retention is the
-  configured retention of this eval data (constitution XI). GitHub serves artifacts over TLS and
-  stores them encrypted at rest; the owner can delete one before it expires. No tenant or user
+  gateway, D41) and no user or tenant data. The repository is public, so its readers can see the
+  artifact while it is kept; that is acceptable for this content. Its retention is the
+  configured retention of this eval data (constitution XI). Artifacts are fetched over HTTPS; at rest
+  they are in GitHub's storage, whose encryption this project does not control, which is accepted
+  because the content holds no tenant or user data. `retention-days` sets the artifact's life
+  within the repository's limit (1 to 90 days for a public repository), and anyone with write
+  access can delete it before it expires (not restorable). No tenant or user
   content can enter, since the inputs are the suites' own fixtures, so per-tenant and per-user
   erasure does not apply. The report folder is outside `$RUNNER_TEMP`, where the key file is.
 - **Scanned first**: before the upload, the step runs the secret patterns of `scripts/check.sh`'s
@@ -1828,5 +1831,6 @@ page, none of which an existing project provides.
 - **Recorded as** [ADR 0050](../../docs/decisions/0050-failed-eval-jobs-keep-their-outputs.md).
 - Sources: [actions/upload-artifact](https://github.com/actions/upload-artifact);
   [GitHub: workflow artifacts](https://docs.github.com/en/actions/concepts/workflows-and-actions/workflow-artifacts);
-  [GitHub: security of artifact storage](https://docs.github.com/en/actions/reference/security/secure-use);
+  [GitHub: removing workflow artifacts](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/remove-workflow-artifacts);
+  [GitHub: retention period for artifacts](https://docs.github.com/en/organizations/managing-organization-settings/configuring-the-retention-period-for-github-actions-artifacts-and-logs-in-your-organization);
   [OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/actions/upload-artifact).
