@@ -1,0 +1,5 @@
+# Python packages the CI jobs install (research D41), pinned by version and hash, installed with
+# `pip install --require-hashes -r scripts/tools/requirements-ci.txt`: PyYAML for the check scripts.
+# The hash is the CPython 3.14 manylinux x86_64 wheel: changing ci-python in src/deploy/images.lock
+# needs this hash changed with it.
+pyyaml==6.0.3 --hash=sha256:c458b6d084f9b935061bc36216e8a69a7e293a2f1e68bf956dcd9e6cbcd143f5

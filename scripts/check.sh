@@ -16,13 +16,11 @@ go_run() {  # go_run <network: bridge|none> <script> [image]: a shell in a pinne
 }
 GO_MODULES="check engine slice cli page tests"
 
-go_checks() {
-  # Committed generated blocks first: regenerating would overwrite their drift before --check.
-  echo "== committed generated blocks: prove they match their sources"
-  scripts/generate.sh --check-committed
-  echo "== generated code: regenerate, then prove a second run finds no difference"
+# prepare: what the offline Go builds need and the repository does not hold: the generated code
+# and a filled module cache. The go step does it first; CI jobs that build offline without the go
+# step run `scripts/check.sh --prepare` (research D41).
+prepare() {
   scripts/generate.sh
-  scripts/generate.sh --check
   go_run bridge "for m in $GO_MODULES; do (cd \$m && go mod download); done"
   # The step checks' godog run (TestGodogStrictReal) is offline: put the pinned godog and its
   # dependencies into the shared module cache now, from the fixture module that requires it.
@@ -31,6 +29,15 @@ go_checks() {
   grep -q "github.com/cucumber/godog $godog\$" "src/$fixture/go.mod" ||
     { echo "check: $fixture/go.mod does not require godog $godog (src/deploy/images.lock)" >&2; exit 1; }
   go_run bridge "cd $fixture && GOWORK=off GOFLAGS=-mod=readonly go mod download"
+}
+
+go_checks() {
+  # Committed generated blocks first: regenerating would overwrite their drift before --check.
+  echo "== committed generated blocks: prove they match their sources"
+  scripts/generate.sh --check-committed
+  echo "== generated code: regenerate, fill the module cache, then prove a second run finds no difference"
+  prepare
+  scripts/generate.sh --check
   # Both images must carry the same Go release, or the race run tests another compiler.
   [ -n "$GO_RACE_IMAGE" ] || { echo "check: no golang-race pin in src/deploy/images.lock" >&2; exit 1; }
   v=$(go_run none "go env GOVERSION")
@@ -54,6 +61,7 @@ go_checks() {
     done" "$GO_RACE_IMAGE"
 }
 if [ "${1:-}" = "--go-only" ]; then go_checks; exit 0; fi
+if [ "${1:-}" = "--prepare" ]; then prepare; exit 0; fi
 
 # Steps, in the order a full run takes them: one line each, name and title; the step's code is
 # the function s_<name> below (dashes become underscores). Usage:
@@ -62,6 +70,7 @@ if [ "${1:-}" = "--go-only" ]; then go_checks; exit 0; fi
 #   scripts/check.sh --only py-tests --py test_hooks test_launcher.LauncherTest
 #                                          only those check tests (scripts/testrun.py)
 #   scripts/check.sh --list                the step names
+#   scripts/check.sh --prepare             only the generated code and the module cache (CI jobs)
 # An unknown step or check test is refused before anything runs. Each step is timed in setup,
 # test and teardown; the run ends with the times and the slowest step.
 STEP_TABLE='py-tests check tests (layout, ruleset), each with planted violations

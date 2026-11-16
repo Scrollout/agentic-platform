@@ -1,5 +1,8 @@
 # agentic-platform
 
+[![check](https://github.com/Scrollout/agentic-platform/actions/workflows/check.yml/badge.svg)](https://github.com/Scrollout/agentic-platform/actions/workflows/check.yml)
+[![evals](https://github.com/Scrollout/agentic-platform/actions/workflows/evals.yml/badge.svg)](https://github.com/Scrollout/agentic-platform/actions/workflows/evals.yml)
+
 AI-driven software work made reliable and repeatable: **the model proposes, deterministic checks
 decide.** An agent's result is accepted only when checks the project fixed beforehand prove it,
 and a proven solution is captured as a deterministic asset and reused instead of being generated
