@@ -68,7 +68,10 @@ makes them all miss. When the change is not meant to change what these replays s
 the platform's handling; the agent's live evals judge the model), the owner may renew them without
 a model call: in each of the agent's mappings the old instruction text (stripped, as JSON) is replaced by the
 new one and the answers stay byte-identical (T110 (g), 2026-11-16, for the three analyst
-recordings). From the repository root, with the old instruction in `old.md`:
+recordings). A revision's request also names the agent definition's digest (`agent_digest` in its
+current proposal), which the instruction changes: replace the old digest by the new one too (the
+engine computes it from its generated copy, `scripts/generate.sh`; a replay miss logged by
+`Lab.Wait` shows it). From the repository root, with the old instruction in `old.md`:
 
 ```sh
 python3 - old.md src/agents/analyst/instruction.md src/tests/recorded/recordings/mappings/analyst-*.json <<'PY'
