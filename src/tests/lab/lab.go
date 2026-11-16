@@ -412,7 +412,9 @@ func (l *Lab) Accept(t testing.TB, method, path string, body any) string {
 	return op.ID
 }
 
-// Wait polls an operation until it has finished (not accepted or running) and returns it.
+// Wait polls an operation until it has finished (not accepted or running) and returns it. A failed
+// operation whose error says "Request was not matched" is logged with the replay server's unmatched
+// requests in full (or the error of fetching them).
 func (l *Lab) Wait(t testing.TB, opID string) Operation {
 	t.Helper()
 	deadline := time.Now().Add(3 * time.Minute)
@@ -426,6 +428,14 @@ func (l *Lab) Wait(t testing.TB, opID string) Operation {
 			t.Fatalf("getOperation %s: %v: %s", opID, err, b)
 		}
 		if op.Status != "accepted" && op.Status != "running" {
+			if op.Status == "failed" && op.Error != nil && strings.Contains(op.Error.Detail, "Request was not matched") {
+				out, err := exec.Command("sh", filepath.Join(l.root, "src/tests/recorded/replay.sh"), "misses", l.gateway).CombinedOutput()
+				if err != nil {
+					t.Logf("operation %s: replay misses failed: %v: %s", opID, err, out)
+				} else {
+					t.Logf("operation %s: replay misses: %s", opID, out)
+				}
+			}
 			return op
 		}
 		time.Sleep(300 * time.Millisecond)
