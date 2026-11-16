@@ -1,7 +1,7 @@
 ---
 type: Playbook
 title: Protect changes locally
-description: Without a hosted forge, local git hooks run every check before a commit and require the owner's recorded approval for changes to protected paths, as constitution Principle XVI requires.
+description: Local git hooks run the quick static checks before a commit and require the owner's recorded approval for changes to protected paths, as constitution Principle XVI requires; CI on GitHub runs every check on each push.
 tags: [playbooks, governance, git]
 status: draft
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-12T18:00:00Z }
@@ -14,13 +14,16 @@ A fresh clone of the repository, or a change to the hooks.
 # Steps
 
 1. Point git at the repository's hooks: `git config core.hooksPath scripts/hooks`.
-2. Before every commit, `scripts/hooks/pre-commit` runs only the checks the staged files can
-   affect, so it stays fast. It checks the staged snapshot, not the working tree: it exports the
+2. Before every commit, `scripts/hooks/pre-commit` runs only the quick static checks the staged
+   files can affect: root layout, secret scan, knowledge bundle, markdown, contract lint,
+   committed generated blocks, and `gofmt` and `go vet` of each changed Go module. No test suite
+   runs there, so a commit takes at most about 2 minutes; it prints `pre-commit: done in <n> s`. It checks the staged snapshot, not the working tree: it exports the
    index into a temporary directory, runs every check there with the check scripts as staged,
    and removes the directory on exit. Untracked files and unstaged changes, such as another
    person's work in progress, cannot change the result, and a staged file whose working copy
    differs is checked as staged. It prints the snapshot, the staged files and each check it runs.
-   Run the full suite, `scripts/check.sh`, before a story is reported done.
+   The full suite, `scripts/check.sh`, runs in CI (GitHub Actions) on every push, and a task is
+   done when that run is green ([ADR 0044](/decisions/0044-full-checks-run-on-github-hosted-runners.md)).
 3. The hook that judges a commit is the one in that commit. `core.hooksPath` points at the
    working tree, so git starts the working-tree copy of the hook, which may be half edited. The
    hook's first block reads the staged `scripts/hooks/pre-commit` from the index and, if it
@@ -38,15 +41,14 @@ A fresh clone of the repository, or a change to the hooks.
 4. Staged names are passed NUL-separated or as git pathspecs, never split on white space, so a
    name with a space or a newline is still scanned for secrets and linted. Deleted paths count
    as staged: a commit that only deletes files still has its snapshot checked, for example the
-   layout check, the knowledge bundle check when a `docs/` file is deleted, and the check tests
-   when a `scripts/` file is deleted. The repository built from the snapshot for the check tests
-   ignores `.gitignore` and global excludes, so every tracked file is in it.
+   layout check, and the knowledge bundle check when a `docs/` file is deleted.
    The secret scan fails closed: it reads only regular files from the snapshot, scans a
    symlink's target text (what git stores) instead of following it, so a link to a file outside
    the repository is never read, and fails the hook when `xargs`, `grep` or `readlink` cannot
-   run, exits with an error or is killed. Each step of building the snapshot repository
-   (`git init`, `git add`, `git commit`) fails the hook with its own message.
-5. Go code is checked in two pinned images of the same Go release, without network:
+   run, exits with an error or is killed.
+5. The hook checks Go in the pinned `golang` image, without network: for each Go module with a
+   staged path, `gofmt -l` (testdata excluded) and `go vet`, after generating the code in the
+   snapshot. `scripts/check.sh`, in CI, checks Go in two pinned images of the same Go release:
    `go vet` and `go build` without cgo in the `golang` image, the configuration the static
    binaries ship in, then `go test -race` with cgo in the Debian-based `golang-race` image, since
    the race detector needs a C compiler. The tests run once, with the race detector.
@@ -77,9 +79,9 @@ A fresh clone of the repository, or a change to the hooks.
    under a standing approval, and a fresh agent's judgement does not replace it. A commit that
    only adds test files needs no `Tests-approved-by` trailer.
 10. A commit that stages non-test Go code together with test files, even new ones, is refused
-   without a `Tests-approved-by` trailer. New tests cannot be committed alone while they fail,
-   because the pre-commit hook runs `go test`, so a unit is committed once its separate author's
-   tests and the code that makes them pass both pass: one commit with the owner's
+   without a `Tests-approved-by` trailer. A unit is committed once its separate author's tests and
+   the code that makes them pass both pass, never its failing tests alone, and the push's CI run
+   must then be green (the hook no longer runs `go test`, ADR 0044): one commit with the owner's
    `Tests-approved-by:` trailer, after the owner approves that commit (owner's choice,
    2026-11-13). Test-first stays shown by the order of work: the tests are written by a separate
    author and seen failing before the code exists, and the fresh review checks it.
@@ -106,8 +108,9 @@ A fresh clone of the repository, or a change to the hooks.
 # Limits
 
 Hooks run on the developer's machine and can be skipped with `--no-verify`, so they record
-approval rather than enforce it the way a hosted forge's branch protection does. When the
-repository moves to a hosted forge, add branch protection and code owners there.
+approval rather than enforce it the way a hosted forge's branch protection does. The repository
+is on GitHub without pull requests (ADR 0044): a commit is accepted before CI judges it, and a red
+run does not block a push.
 
 The handover lives in the running file: a working-tree hook whose first block is missing or
 broken is not handed over, and a working copy without the block, such as `exit 0`, decides the

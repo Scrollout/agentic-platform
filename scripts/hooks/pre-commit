@@ -1,6 +1,8 @@
 #!/bin/sh
-# Fast checks before a commit: only what the staged files can affect. The full suite is
-# scripts/check.sh, run before a story is reported done.
+# Quick static checks before a commit, of what the staged files can affect: root layout, secret
+# scan, knowledge bundle, markdown, contract lint, committed generated blocks, and gofmt and go vet
+# of each changed Go module. No test suite runs here: the full scripts/check.sh runs in CI on every
+# push (research D41, ADR 0044), and a task is done when that run is green.
 #
 # The checks run on the staged snapshot, never on the working tree: the index is exported into a
 # temporary directory and every check runs there, with the check scripts as staged. Untracked
@@ -23,6 +25,7 @@
 # so names with spaces or newlines are checked. Deleted paths count as changed: a commit that
 # only deletes files still has its snapshot checked.
 set -eu
+started=$(date +%s)
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 # self: this run's own folder when it is a handed-over copy, one level below $TMPDIR (no "/" or
@@ -61,14 +64,33 @@ git diff --cached --name-only -z --no-renames >"$work/changed"
 git diff --cached --name-only -z --no-renames --diff-filter=d >"$work/content"
 git diff --cached --name-only -z --no-renames --diff-filter=d -- '*.md' ':(exclude)scripts/tests/' >"$work/md"
 touches() { ! git diff --cached --quiet --no-renames -- "$@"; }
-docs=; scripts=; contracts=; go=; inline=
+docs=; contracts=; go=; inline=
 touches 'docs/' && docs=1
-touches 'scripts/' && scripts=1
 touches ':(glob)**/api/preview/**/*openapi.yaml' 'src/engine/api/ruleset*' && contracts=1
 touches '*.go' '*go.mod' '*go.sum' ':(glob)src/*/api/**' && go=1
 # Committed inline schema blocks (scripts/generate.sh): the files that carry them, their source
 # schemas and the generator.
 touches ':(glob)src/agents/**/*.yaml' ':(glob)src/**/*.schema.json' 'scripts/generate.sh' && inline=1
+# gomods: each Go module of src/go.work (its `use` lines, as staged) with a staged path. The Go
+# checks fail closed: an unreadable src/go.work, or a staged Go file in no module, refuses the
+# commit rather than skipping gofmt and vet.
+gomods=
+if [ -n "$go" ]; then
+  workfile=$(git show :src/go.work 2>/dev/null) || {
+    echo "pre-commit: Go changes are staged but src/go.work cannot be read from the index, so the Go checks cannot run; the commit is refused" >&2; exit 1; }
+  mods=$(printf '%s\n' "$workfile" | sed -n 's#^[[:space:]]*\./\([a-z][a-z0-9-]*\)$#\1#p')
+  outside_args=
+  for m in $mods; do
+    if touches "src/$m/"; then gomods="$gomods $m"; fi
+    outside_args="$outside_args :(exclude)src/$m/"
+  done
+  # shellcheck disable=SC2086
+  git diff --cached --name-only -z --no-renames --diff-filter=d -- '*.go' $outside_args >"$work/outside"
+  if [ -s "$work/outside" ]; then
+    echo "pre-commit: these staged Go files are in no module of src/go.work, so gofmt and go vet cannot judge them; the commit is refused:" >&2
+    tr '\0' '\n' <"$work/outside" | sed 's/^/  /' >&2; exit 1
+  fi
+fi
 snap="$work/snapshot"
 git checkout-index --all --prefix="$snap/"
 tracked=$(git ls-files -z | tr -cd '\0' | wc -c | tr -d ' ')
@@ -127,22 +149,6 @@ if [ -n "$docs" ]; then
   run "knowledge bundle"
   python3 scripts/okf.py check >/dev/null || { python3 scripts/okf.py check; exit 1; }
 fi
-if [ -n "$scripts" ]; then
-  run "check tests"
-  # Some tests clone the repository: give the snapshot its own repository, holding exactly it.
-  # -f and an empty excludes file: neither .gitignore nor a global exclude may drop a tracked file.
-  # Each step has its own exit: under set -e a failure inside an && list does not stop the hook.
-  git init -q || { echo "pre-commit: git init of the snapshot repository failed" >&2; exit 1; }
-  git -c core.excludesFile=/dev/null -c core.autocrlf=false add -A -f \
-    || { echo "pre-commit: git add in the snapshot repository failed" >&2; exit 1; }
-  git -c user.name=pre-commit -c user.email=pre-commit@localhost -c commit.gpgsign=false \
-    commit -q --no-verify -m "staged snapshot" \
-    || { echo "pre-commit: the snapshot repository commit failed" >&2; exit 1; }
-  # Every check test, 6 test classes at a time (scripts/testrun.py; measured 26 to 9 minutes).
-  python3 scripts/testrun.py --jobs 6 >"$work/unittest.log" 2>&1 \
-    || { cat "$work/unittest.log"; exit 1; }
-  grep -E '^== (time|the slowest part)' "$work/unittest.log"
-fi
 if [ -s "$work/md" ]; then
   run "markdown"
   # "--": every name after it is a literal path, not a glob.
@@ -154,12 +160,25 @@ if [ -n "$contracts" ]; then
     scripts/npm-tool.sh spectral lint "$f" --ruleset src/engine/api/ruleset.yaml --fail-severity error
   done
 fi
-if [ -n "$go" ]; then
-  # check.sh --go-only checks the committed blocks first, so inline needs no run of its own here.
-  run "generated code, go vet and race tests"
-  scripts/check.sh --go-only
-elif [ -n "$inline" ]; then
+if [ -n "$go" ] || [ -n "$inline" ]; then
   run "committed generated blocks"
   scripts/generate.sh --check-committed
 fi
+if [ -n "$go" ]; then
+  # Each Go module of src/go.work with a staged path: gofmt (testdata excluded: fixtures may be
+  # unformatted on purpose) and go vet, offline, in the pinned Go container, with the generated
+  # code made first in the snapshot (it is not committed). One container per module, named only
+  # by its folder.
+  run "generated code for go vet"
+  scripts/generate.sh >/dev/null
+  image=$(awk '$1=="golang"{print $2}' src/deploy/images.lock)
+  cache="${XDG_CACHE_HOME:-$HOME/.cache}/agentic-platform/go"
+  for m in $gomods; do
+    run "gofmt and go vet of src/$m"
+    docker run --rm --network none -v "$snap/src:/src" -w "/src/$m" -v "$cache:/gopath" \
+      --user "$(id -u):$(id -g)" -e GOPATH=/gopath -e GOCACHE=/gopath/cache -e GOTOOLCHAIN=local \
+      -e GOPROXY=off -e GOFLAGS=-mod=readonly "$image" sh -ec 'out=$(find . -name "*.go" -not -path "*/testdata/*" -print | xargs -r gofmt -l); [ -z "$out" ] || { echo "gofmt: these files are not formatted:"; echo "$out"; exit 1; }; go vet ./...'
+  done
+fi
 echo "pre-commit: staged snapshot passed"
+echo "pre-commit: done in $(( $(date +%s) - started )) s"

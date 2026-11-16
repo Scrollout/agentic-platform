@@ -15,7 +15,8 @@ committed version); COMMIT_MSG_HOOK_SOURCE does the same for the commit-msg hook
 
 The second half (T009b and T009c) commits for real through core.hooksPath in the clone. Its
 clone commits the hook under test (so the staged and committed hook is that file) and trims
-scripts/tests/ to one trivial passing test, so the hook's own "check tests" step stays cheap.
+scripts/tests/ to one trivial passing test. The hook runs no test suite (T108): the Python
+check tests run in CI; the new tests of the quick checks are in test_pre_commit_quick.py.
 git and docker (markdownlint runs in a container) are prerequisites: a missing one fails.
 """
 import hashlib
@@ -335,26 +336,6 @@ class DeletionTest(CloneCase):
 class ExcludesTest(CloneCase):
     """T009b: a global core.excludesFile must not drop tracked files from the snapshot repository."""
 
-    def test_global_excludes_do_not_drop_tracked_files_from_the_snapshot_repo(self):
-        excludes = os.path.join(self.tmp, "excludes")
-        with open(excludes, "w") as f:
-            f.write("*.keepme\n")
-        gconfig = os.path.join(self.tmp, "gitconfig")
-        with open(gconfig, "w") as f:
-            f.write("[core]\n\texcludesFile = %s\n" % excludes)
-        self.env["GIT_CONFIG_GLOBAL"] = gconfig
-        self.raw_commit_ignored("src/agents/tracked.keepme", "tracked\n")
-        # A staged script test run in the snapshot: it asks the snapshot's own repository
-        # whether the tracked file is in it (the same global configuration is in force).
-        self.stage("scripts/tests/test_snapshot_repo.py", (
-            "import subprocess, unittest\n\n\nclass T(unittest.TestCase):\n"
-            "    def test_tracked_file_is_in_the_snapshot_repository(self):\n"
-            "        r = subprocess.run(['git', 'ls-files', '--error-unmatch',\n"
-            "                            'src/agents/tracked.keepme'], capture_output=True, text=True)\n"
-            "        self.assertEqual(r.returncode, 0, r.stderr)\n"))
-        r = self.run_hook()
-        self.assertEqual(r.returncode, 0, self.out(r))
-
     def raw_commit_ignored(self, path, text):
         self.write(path, text)
         self.git("add", "-f", "--", path)
@@ -506,50 +487,16 @@ class TempFoldersTest(CloneCase):
         self.assertNotEqual(self.commit().returncode, 0)
         self.assertEqual(self.leftovers(), [])
 
-    def test_removed_after_sigterm(self):
-        marker = os.path.join(self.tmp, "test-started")
-        self.stage("scripts/tests/test_sleeper.py", (
-            "import time, unittest\n\n\nclass T(unittest.TestCase):\n"
-            "    def test_sleep(self):\n"
-            "        open(%r, 'w').close()\n"
-            "        time.sleep(120)\n" % marker))
-        log = open(os.path.join(self.tmp, "hook.log"), "w")
-        self.addCleanup(log.close)
-        p = subprocess.Popen([self.hook], cwd=self.clone, env=self.env, stdout=log, stderr=log,
-                             start_new_session=True)
-        self.addCleanup(lambda: (p.poll() is None) and os.killpg(p.pid, signal.SIGKILL))
-        deadline = time.time() + 90
-        while not os.path.exists(marker) and time.time() < deadline and p.poll() is None:
-            time.sleep(0.2)
-        self.assertTrue(os.path.exists(marker), "the staged test never started")
-        self.assertEqual(len(self.leftovers()), 1, "the temp folder exists while the hook runs")
-        os.killpg(p.pid, signal.SIGTERM)  # as a terminal or a supervisor would: the whole group
-        try:
-            p.wait(timeout=30)
-        except subprocess.TimeoutExpired:
-            self.fail("the hook did not exit after SIGTERM")
-        self.assertEqual(self.leftovers(), [])
 
 
 class ScriptTestsTest(CloneCase):
     """T009c: a failing script test fails the hook."""
-
-    def test_staged_failing_script_test_fails_the_hook(self):
-        self.stage("scripts/tests/test_fails.py", (
-            "import unittest\n\n\nclass T(unittest.TestCase):\n"
-            "    def test_fails(self):\n        self.fail('PLANTED-SCRIPT-TEST-FAILURE')\n"))
-        before = self.head()
-        r = self.commit()
-        self.assertNotEqual(r.returncode, 0, self.out(r))
-        self.assertIn("PLANTED-SCRIPT-TEST-FAILURE", self.out(r))
-        self.assertEqual(self.head(), before)
 
     def test_staged_passing_script_test_passes_the_hook(self):
         # control: same path, nothing planted
         self.stage("scripts/tests/test_passes.py", TRIVIAL_TEST)
         r = self.commit()
         self.assertEqual(r.returncode, 0, self.out(r))
-        self.assertIn("check tests", self.out(r))
 
     def test_unstaged_failing_script_test_does_not_fail_the_hook(self):
         self.stage("scripts/tests/test_passes.py", TRIVIAL_TEST)
@@ -622,7 +569,7 @@ class SpecialEntriesTest(CloneCase):
         self.assertTrue(self.git("ls-tree", "HEAD", "src/agents/sub").stdout.startswith("160000"))
 
     def test_staged_gitlink_with_script_change_passes(self):
-        # the snapshot repository is built too: `git add -A` over the empty gitlink directory
+        # a gitlink in the commit does not stop the hook
         self.git("update-index", "--add", "--cacheinfo", "160000,%s,src/agents/sub" % self.head())
         self.stage("scripts/tests/test_passes.py", TRIVIAL_TEST)
         r = self.commit()
@@ -845,43 +792,6 @@ class CraftedZeroTest(CloneCase):
         self.crafted(self.msg_hook, "\n# differs\n", msg)
 
 
-class SnapshotRepositoryStepsTest(CloneCase):
-    """T009d: each step of the snapshot repository build has its own failure exit."""
-
-    def stub_git(self, failing):
-        # Fails only the named git subcommand, and only inside the snapshot folder.
-        body = (
-            'case "$PWD" in */snapshot|*/snapshot/*)\n'
-            '  for a in "$@"; do [ "$a" = %s ] && { echo "stub git: %s failed" >&2; exit 1; }; done;;\n'
-            'esac\nexec %s "$@"\n' % (failing, failing, real("git")))
-        return gitenv.with_path(self.env, gitenv.stub_dir(self, {"git": body}))
-
-    def run_with(self, failing):
-        self.stage("scripts/tests/test_second.py", TRIVIAL_TEST)
-        return self.run_hook(env=self.stub_git(failing))
-
-    def test_control_stub_that_fails_nothing_passes(self):
-        r = self.run_with("no-such-subcommand")
-        self.assertEqual(r.returncode, 0, self.out(r))
-        self.assertIn("staged snapshot passed", r.stdout)
-
-    def test_failing_git_init_fails_the_hook(self):
-        r = self.run_with("init")
-        self.assertNotEqual(r.returncode, 0, self.out(r))
-        self.assertNotIn("staged snapshot passed", self.out(r))
-        self.assertEqual(self.leftovers(), [])
-
-    def test_failing_git_add_fails_the_hook(self):
-        r = self.run_with("add")
-        self.assertNotEqual(r.returncode, 0, self.out(r))
-        self.assertNotIn("staged snapshot passed", self.out(r))
-
-    def test_failing_snapshot_commit_fails_the_hook(self):
-        r = self.run_with("commit")
-        self.assertNotEqual(r.returncode, 0, self.out(r))
-        self.assertNotIn("staged snapshot passed", self.out(r))
-
-
 class SymlinkScanTest(CloneCase):
     """T009d: a staged symlink's target text is scanned; a link out of the repository is not followed."""
 
@@ -971,71 +881,6 @@ class HandoverCallerEnvTest(CloneCase):
 class HandoverSigtermTest(CloneCase):
     """T009d: SIGTERM while the handed-over hook runs leaves no temp folders and refuses the commit."""
 
-    def test_sigterm_during_the_handed_over_hook(self):
-        marker = os.path.join(self.tmp, "test-started")
-        with open(self.hook) as f:
-            good = f.read()
-        # the staged hook differs from the running one, so the running one hands over to it
-        self.stage("scripts/hooks/pre-commit", good + "\n# staged variant\n")
-        self.write("scripts/hooks/pre-commit", good)
-        self.stage("scripts/tests/test_sleeper.py", (
-            "import time, unittest\n\n\nclass T(unittest.TestCase):\n"
-            "    def test_sleep(self):\n"
-            "        open(%r, 'w').close()\n"
-            "        time.sleep(120)\n" % marker))
-        before = self.head()
-        with open(os.path.join(self.tmp, "commit.log"), "w") as log:
-            p = subprocess.Popen(
-                ["git", "commit", "-q", "-m", "test commit", "-m", APPROVAL], cwd=self.clone,
-                env=self.env, stdout=log, stderr=log, start_new_session=True)
-            self.addCleanup(lambda: (p.poll() is None) and os.killpg(p.pid, signal.SIGKILL))
-            deadline = time.time() + 90
-            while not os.path.exists(marker) and time.time() < deadline and p.poll() is None:
-                time.sleep(0.2)
-            self.assertTrue(os.path.exists(marker), "the staged test never started")
-            self.assertGreaterEqual(len(self.leftovers()), 1)
-            os.killpg(p.pid, signal.SIGTERM)
-            try:
-                rc = p.wait(timeout=30)
-            except subprocess.TimeoutExpired:
-                self.fail("the commit did not end after SIGTERM")
-        self.assertNotEqual(rc, 0)
-        # git dies at once; the hooks it started clean up a moment later
-        deadline = time.time() + 15
-        while self.leftovers() and time.time() < deadline:
-            time.sleep(0.2)
-        self.assertEqual(self.leftovers(), [])
-        self.assertEqual(self.head(), before)
-
-    def test_sigterm_to_the_hook_group_when_run_directly(self):
-        marker = os.path.join(self.tmp, "test-started")
-        with open(self.hook) as f:
-            good = f.read()
-        self.stage("scripts/hooks/pre-commit", good + "\n# staged variant\n")
-        self.write("scripts/hooks/pre-commit", good)
-        self.stage("scripts/tests/test_sleeper.py", (
-            "import time, unittest\n\n\nclass T(unittest.TestCase):\n"
-            "    def test_sleep(self):\n"
-            "        open(%r, 'w').close()\n"
-            "        time.sleep(120)\n" % marker))
-        with open(os.path.join(self.tmp, "hook.log"), "w") as log:
-            p = subprocess.Popen([self.hook], cwd=self.clone, env=self.env, stdout=log,
-                                 stderr=log, start_new_session=True)
-            self.addCleanup(lambda: (p.poll() is None) and os.killpg(p.pid, signal.SIGKILL))
-            deadline = time.time() + 90
-            while not os.path.exists(marker) and time.time() < deadline and p.poll() is None:
-                time.sleep(0.2)
-            self.assertTrue(os.path.exists(marker), "the staged test never started")
-            os.killpg(p.pid, signal.SIGTERM)
-            try:
-                rc = p.wait(timeout=30)
-            except subprocess.TimeoutExpired:
-                self.fail("the hook did not exit after SIGTERM")
-        self.assertNotEqual(rc, 0)
-        deadline = time.time() + 15
-        while self.leftovers() and time.time() < deadline:
-            time.sleep(0.2)
-        self.assertEqual(self.leftovers(), [])
 
 
 class CommitMsgHandoverTest(CloneCase):

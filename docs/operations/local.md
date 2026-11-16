@@ -172,6 +172,14 @@ a defect.
 
 Sources: [Feature 001 tasks, T053a](../../specs/001-prose-to-accepted-slice/tasks.md) (the run of 2026-11-15).
 
+# Checks
+
+The pre-commit hook runs the quick static checks of a commit
+([playbook](/playbooks/protect-changes-locally.md)); CI on GitHub runs every step of
+`scripts/check.sh` and the acceptance suites on each push, and a task is done when that run is
+green ([ADR 0044](/decisions/0044-full-checks-run-on-github-hosted-runners.md)). `scripts/check.sh
+--only <step>` runs one step on the host while working.
+
 # Observability
 
 `docker compose logs`. The gateway logs nginx errors only, never headers or bodies.

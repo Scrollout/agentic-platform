@@ -1,5 +1,6 @@
 #!/bin/sh
-# Every repository check, run locally (no hosted CI for now). Go runs in the pinned containers.
+# Every repository check. CI (GitHub Actions, research D41) runs each step on every push; the
+# pre-commit hook runs only the quick static ones. Go runs in the pinned containers.
 set -eu
 cd "$(dirname "$0")/.."
 GO_IMAGE=$(awk '$1=="golang"{print $2}' src/deploy/images.lock)
