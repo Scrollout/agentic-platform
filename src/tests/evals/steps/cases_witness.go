@@ -44,14 +44,16 @@ import (
 
 %s// TestR2FirstNoteGetsIdOne is review round 1's witness for R-2: the first note gets id 1.
 func TestR2FirstNoteGetsIdOne(t *testing.T) {
-	h := gen.Handler(app.New())
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPost, "/notes", strings.NewReader(` + "`" + `{"text":"a"}` + "`" + `))
-	r.Header.Set("Content-Type", "application/json")
-	h.ServeHTTP(w, r)
+	srv := httptest.NewServer(gen.Handler(app.New()))
+	defer srv.Close()
+	res, err := srv.Client().Post(srv.URL+"/notes", "application/json", strings.NewReader(` + "`" + `{"text":"a"}` + "`" + `))
+	if err != nil {
+		t.Fatalf("POST /notes: %%v", err)
+	}
+	defer res.Body.Close()
 	var n gen.Note
-	if err := json.Unmarshal(w.Body.Bytes(), &n); err != nil || w.Code != http.StatusCreated || n.Id != 1 {
-		t.Fatalf("the first note: status %%d, id %%d, %%v; want 201 and id 1", w.Code, n.Id, err)
+	if err := json.NewDecoder(res.Body).Decode(&n); err != nil || res.StatusCode != http.StatusCreated || n.Id != 1 {
+		t.Fatalf("the first note: status %%d, id %%d, %%v; want 201 and id 1", res.StatusCode, n.Id, err)
 	}
 }
 `

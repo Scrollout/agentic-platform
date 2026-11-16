@@ -24,6 +24,7 @@ const witnessHead = `package r%s
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -35,10 +36,18 @@ import (
 
 func post(t *testing.T, h http.Handler, text string) *httptest.ResponseRecorder {
 	t.Helper()
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	res, err := srv.Client().Post(srv.URL+"/notes", "application/json", strings.NewReader(` + "`" + `{"text":"` + "`" + `+text+` + "`" + `"}` + "`" + `))
+	if err != nil {
+		t.Fatalf("POST /notes: %%v", err)
+	}
+	defer res.Body.Close()
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodPost, "/notes", strings.NewReader(` + "`" + `{"text":"` + "`" + `+text+` + "`" + `"}` + "`" + `))
-	r.Header.Set("Content-Type", "application/json")
-	h.ServeHTTP(w, r)
+	w.WriteHeader(res.StatusCode)
+	if _, err := io.Copy(w, res.Body); err != nil {
+		t.Fatalf("reading the response: %%v", err)
+	}
 	return w
 }
 
@@ -54,10 +63,15 @@ func TestR1ListsEveryNote(t *testing.T) {
 			t.Fatalf("creating %q: status %d", s, w.Code)
 		}
 	}
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/notes", nil))
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	res, err := srv.Client().Get(srv.URL + "/notes")
+	if err != nil {
+		t.Fatalf("GET /notes: %v", err)
+	}
+	defer res.Body.Close()
 	var got []gen.Note
-	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+	if err := json.NewDecoder(res.Body).Decode(&got); err != nil {
 		t.Fatalf("the list is not JSON: %v", err)
 	}
 	if len(got) != 3 {
@@ -78,10 +92,15 @@ func TestR1ListsEveryNote(t *testing.T) {
 // r1EmptyList lists the notes of a new service: it passes on any code that lists.
 const r1EmptyList = `
 func TestR1ListsEveryNote(t *testing.T) {
-	w := httptest.NewRecorder()
-	gen.Handler(app.New()).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/notes", nil))
+	srv := httptest.NewServer(gen.Handler(app.New()))
+	defer srv.Close()
+	res, err := srv.Client().Get(srv.URL + "/notes")
+	if err != nil {
+		t.Fatalf("GET /notes: %v", err)
+	}
+	defer res.Body.Close()
 	var got []gen.Note
-	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || len(got) != 0 {
+	if err := json.NewDecoder(res.Body).Decode(&got); err != nil || len(got) != 0 {
 		t.Fatalf("a new service lists %d notes (%v); want none", len(got), err)
 	}
 }

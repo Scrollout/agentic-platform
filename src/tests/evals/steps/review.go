@@ -153,6 +153,7 @@ func (e Env) GradeReview(before, after, answer string, plant *Plant) []Result {
 	}
 	rs = append(rs, e.scope(st, before, after), e.deps(st, after), fold(GTestsBuild, checks.TestsBuild(e.Runner, after)))
 	rs = append(rs, e.reviewUnchanged(st, before, after))
+	rs = append(rs, witnessServesThroughServer(before, after))
 	if perr != nil {
 		// Nothing below can be judged without findings; each grader fails closed.
 		graders := []string{GEvidence, GNoneOpen}

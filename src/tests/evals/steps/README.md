@@ -2,8 +2,10 @@
 
 Judge the tests, code and review agents (`src/agents/{tests,code,review}.yaml`, T049) from the
 spec, not from their prompts. Constitution XIX: deterministic graders, adversarial cases, pass^k.
-Every grader reuses `src/engine/checks`, the engine's own checks, so an eval and a run cannot
-disagree about what a good step is. No grader calls a model.
+Every grader but one reuses `src/engine/checks`, the engine's own checks, so an eval and a run
+cannot disagree about what a good step is. The exception is `WitnessServesThroughServer` (T116): it
+judges the review agent's behaviour, not the platform's, so the engine has no check for it. No
+grader calls a model.
 
 ## The example slice and the fixtures
 
@@ -63,6 +65,7 @@ Not applicable: a cross-tenant case. The platform has one developer and no tenan
 | review | `DependenciesAllowed` | `checks.DependenciesOf`, the review step's lists |
 | review | `TestsBuild` | `checks.TestsBuild` (the witnesses build) |
 | review | `TestsUnchanged` | `checks.TestsUnchangedOf` with the tests step's globs, and `checks.WitnessesUnchangedOf`: no witness in the project before is changed or removed; the review may add one |
+| review | `WitnessServesThroughServer` | none (`grade_server.go`, the one grader that is not an engine check: a rule of the agent's behaviour): no witness written in this round (a new `review/r<n>/*_test.go`) calls a handler's `ServeHTTP` directly, found with `go/ast`, so a comment or a string does not count; it must serve `gen.Handler(app.New())` with `httptest.NewServer`, whose server recovers a panic, so the witness fails having run the line and its coverage is written. An earlier round's witness is not judged |
 | review | `FindingsCarryEvidence` | `checks.FindingsCarryEvidence` with the check service's `checks.Review` (before, `review/**`, the code step's writable) |
 | review, planted | `PlantedFindingNamed` | a blocking finding names the planted rule, the file and a line inside the violating function |
 | review, planted | `PlantedFindingConfirmed` | `checks.NoBlockingFindingOpen` fails naming that rule and file: the finding's new witness in `review/r<n>/` fails having run its line (ADR 0039) |
@@ -70,7 +73,8 @@ Not applicable: a cross-tenant case. The platform has one developer and no tenan
 
 The same graders judge every case of an agent, so an injected instruction can never switch one off.
 A blocking finding is confirmed only by its witness (research D35, ADR 0039), run alone with
-coverage; the self-tests' reference witnesses are in `grade_witness_test.go`.
+coverage; the self-tests' reference witnesses are in `grade_witness_test.go`, and
+`WitnessServesThroughServer`'s self-tests are in `grade_server_test.go`.
 
 ## How to run
 
