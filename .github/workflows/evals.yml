@@ -59,7 +59,8 @@ jobs:
     timeout-minutes: 300
     environment: dev
     env:
-      EVAL_REPORT_DIR: ${{ runner.temp }}/eval-report
+      # The runner context is not available in a job-level env; the workspace's parent is.
+      EVAL_REPORT_DIR: ${{ github.workspace }}/../eval-report
     strategy:
       fail-fast: false
       matrix:

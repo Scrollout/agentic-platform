@@ -34,6 +34,6 @@ go-licenses                github.com/google/go-licenses/v2@v2.0.1
 # gvisor-release and gvisor-sha512, the gVisor release scripts/ci-gvisor.sh installs and its
 # tarball's SHA-512 as gVisor publishes it (the host installs gVisor from apt).
 ci-runner                  ubuntu-26.04
-ci-python                  3.14.4
+ci-python                  3.14.10
 gvisor-release             20261109.0
 gvisor-sha512              1a6b8f74c37b4931ef473f67ec1f601690855bedc52ac709f2fac965c69677aa0426ef44598d8eee1aed72cfdb9df87a2a5f352cb3348880fc61a7732bc10f2a

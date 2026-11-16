@@ -50,6 +50,7 @@ jobs:
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -81,6 +82,7 @@ jobs:
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -101,6 +103,7 @@ jobs:
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -121,6 +124,7 @@ jobs:
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -136,6 +140,7 @@ jobs:
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -151,6 +156,7 @@ jobs:
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -167,6 +173,7 @@ jobs:
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -182,6 +189,7 @@ jobs:
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -197,6 +205,7 @@ jobs:
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -216,6 +225,7 @@ jobs:
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -233,6 +243,7 @@ jobs:
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -248,6 +259,7 @@ jobs:
     timeout-minutes: 120
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -267,6 +279,7 @@ jobs:
     timeout-minutes: 120
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

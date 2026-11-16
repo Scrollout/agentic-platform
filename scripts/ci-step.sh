@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Runs one command as a GitHub Actions job's step (research D41): its output as it is, then a
-# summary in $GITHUB_STEP_SUMMARY (the job, its result and time, the command, check.sh's time
-# table or the last 40 lines, and the runner's free disk), and its time in seconds as the step
-# output `seconds`. Exits as the command does. With neither variable set it only runs the command.
+# Runs one command as a GitHub Actions job's step (research D41, T110): its output as it is, then a
+# short summary in $GITHUB_STEP_SUMMARY: one line (`✅ <name> — <n> s`, or `❌ <name> — <n> s,
+# exit <code>`), every `ap test` result line, one line of free disk, and, only when the command
+# fails, its last 40 lines in a collapsed section. Its time goes to $GITHUB_OUTPUT as `seconds`,
+# and on failure its first error line as `error`, for the run's summary (scripts/ci-summary.py).
+# Exits as the command does. With neither variable set it only runs the command.
 #
 #   scripts/ci-step.sh <name> <command> [args...]
 set -u
@@ -13,26 +15,28 @@ log=$(mktemp)
 "$@" 2>&1 | tee "$log"
 rc=${PIPESTATUS[0]}
 seconds=$(( $(date +%s) - start ))
-[ -z "${GITHUB_OUTPUT:-}" ] || echo "seconds=$seconds" >>"$GITHUB_OUTPUT"
+results='^(PASS|FAIL)  |^(planted|us2): [0-9]+ of [0-9]+'
+if [ -n "${GITHUB_OUTPUT:-}" ]; then
+  echo "seconds=$seconds" >>"$GITHUB_OUTPUT"
+  if [ "$rc" -ne 0 ]; then
+    # The first line that names a failure, else the last line of output.
+    err=$(grep -m1 -E '^(--- )?FAIL|(^|[^a-z])(error|Error|ERROR)[: ]|refused|cannot ' "$log" || true)
+    [ -n "$err" ] || err=$(tail -n 1 "$log")
+    echo "error=$(printf '%s' "$err" | head -n 1 | cut -c1-200)" >>"$GITHUB_OUTPUT"
+  fi
+fi
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
   {
-    if [ "$rc" -eq 0 ]; then echo "### $name: passed in $((seconds / 60)) min $((seconds % 60)) s"
-    else echo "### $name: failed (exit $rc) after $((seconds / 60)) min $((seconds % 60)) s"; fi
-    echo
-    echo "\`$*\`"
-    echo
-    # ap test's result lines (PASS or FAIL, two spaces, the scenario or test; and the total), all
-    # of them, however long the output.
-    if grep -Eq '^(PASS|FAIL)  |^(planted|us2): [0-9]+ of [0-9]+' "$log"; then
-      echo '```text'; grep -E '^(PASS|FAIL)  |^(planted|us2): [0-9]+ of [0-9]+' "$log"; echo '```'; echo
+    if [ "$rc" -eq 0 ]; then echo "✅ $name — $seconds s"
+    else echo "❌ $name — $seconds s, exit $rc"; fi
+    if grep -Eq "$results" "$log"; then
+      echo; echo '```text'; grep -E "$results" "$log"; echo '```'
     fi
-    if grep -q '^== time per step' "$log"; then
-      echo '```text'; sed -n '/^== time per step/,$p' "$log"; echo '```'
-    else
-      echo '<details><summary>Last lines</summary>'; echo; echo '```text'; tail -n 40 "$log"; echo '```'; echo '</details>'
+    echo; echo "Free disk: $(df -h / | tail -n 1 | tr -s ' ')"
+    if [ "$rc" -ne 0 ]; then
+      echo; echo '<details><summary>Last 40 lines</summary>'; echo; echo '```text'; tail -n 40 "$log"; echo '```'; echo '</details>'
     fi
     echo
-    echo 'Free disk (`df -h /`):'; echo; echo '```text'; df -h /; echo '```'
   } >>"$GITHUB_STEP_SUMMARY"
 fi
 rm -f "$log"

@@ -94,32 +94,29 @@ class CiStepTest(unittest.TestCase):
         self.step("my-step-name", "sh", "-c", "echo ok")
         s = self.text()
         self.assertIn("my-step-name", s)
-        self.assertRegex(s, r"(?i)pass")
+        self.assertRegex(s, r"✅ my-step-name — \d+ s")
         self.assertNotRegex(s, r"(?i)fail")
-        self.assertIn("sh -c", s)                      # the command
         self.assertRegex(s, r"(?i)time|seconds|\d+\s*s\b")
 
     def test_summary_of_a_failing_step_names_the_exit_code(self):
         self.step("my-step-name", "sh", "-c", "exit 7")
         s = self.text()
-        self.assertRegex(s, r"(?i)fail")
+        self.assertRegex(s, r"❌ my-step-name — \d+ s, exit 7")
         self.assertNotRegex(s, r"(?i)\bpassed\b")
         self.assertRegex(s, r"\b7\b")
 
     def test_summary_records_the_runners_free_disk(self):
         self.step("demo", "true")
         self.assertIn("DF-STUB-ROW", self.text())
-        self.assertIn("-h", self.text().split("DF-STUB", 1)[1].split("\n", 1)[0])
 
-    def test_summary_holds_the_timing_table_when_the_command_prints_one(self):
+    def test_summary_holds_no_timing_table_even_when_the_command_prints_one(self):
         self.step("demo", "sh", "-c", NOISE + "; " + TABLE)
         s = self.text()
-        self.assertIn("== time per step", s)
-        self.assertIn("12.5  (1.0 / 10.5 / 1.0)", s)
-        self.assertNotRegex(s, r"noise-70\b")
+        self.assertNotIn("== time per step", s)
+        self.assertNotIn("12.5  (1.0", s)
 
-    def test_summary_holds_the_last_40_lines_without_a_table(self):
-        self.step("demo", "sh", "-c", NOISE)
+    def test_summary_holds_the_last_40_lines_on_failure(self):
+        self.step("demo", "sh", "-c", NOISE + "; exit 1")
         s = self.text()
         self.assertRegex(s, r"noise-100\b")
         self.assertRegex(s, r"noise-61\b")
@@ -175,7 +172,6 @@ class CiStepTest(unittest.TestCase):
         self.step("demo", "sh", "-c", self.results_cmd(5, 0) + "; " + TABLE)
         s = self.text()
         self.assertIn("PASS  scenario-one", s)
-        self.assertIn("== time per step", s)
 
     def test_a_single_space_or_other_word_is_not_a_result_line(self):
         script = self.t / "noisy.sh"
@@ -211,7 +207,8 @@ class CiStepTest(unittest.TestCase):
         r = self.step("demo", "sh", "-c", "exit 1")
         self.assertEqual(r.returncode, 1)
         self.assertIn("seconds=", self.output.read_text())
-        self.assertRegex(self.text(), r"(?i)fail")
+        self.assertIn("❌", self.text())
+        self.assertIn("exit 1", self.text())
 
     def test_without_the_variables_it_only_runs_the_command(self):
         env = gitenv.with_path(base_env(self), self.stubs)
@@ -225,7 +222,7 @@ class CiStepTest(unittest.TestCase):
     def test_a_missing_command_fails_with_a_code(self):
         r = self.step("demo", "no-such-command-zz")
         self.assertNotEqual(r.returncode, 0)
-        self.assertRegex(self.text(), r"(?i)fail")
+        self.assertIn("❌", self.text())
 
 
 # ------------------------------------------------------------------ ci-summary.py
@@ -260,7 +257,7 @@ class CiSummaryTest(unittest.TestCase):
                           "beta-job": self.need("success", "345")})
         self.assertEqual(r.returncode, 0, r.stderr)
         a, b = self.row(out, "alpha-job"), self.row(out, "beta-job")
-        self.assertIn("success", a)
+        self.assertIn("✅", a)
         self.assertIn("12", a)
         self.assertIn("345", b)
         self.assertIn("|", a)       # a Markdown table
@@ -270,8 +267,8 @@ class CiSummaryTest(unittest.TestCase):
             with self.subTest(res):
                 r, out = self.go({"ok-job": self.need("success", "1"), "bad-job": self.need(res, "2")})
                 self.assertEqual(r.returncode, 1)
-                self.assertIn(res, self.row(out, "bad-job"))
-                self.assertIn("success", self.row(out, "ok-job"))
+                self.assertIn("❌", self.row(out, "bad-job"))
+                self.assertIn("✅", self.row(out, "ok-job"))
                 self.file.unlink()
 
     def test_missing_or_non_numeric_seconds_show_a_dash(self):
@@ -395,8 +392,10 @@ class CiGvisorTest(unittest.TestCase):
                                             "sudo": SUDO_STUB, "systemctl": SYSTEMCTL_STUB})
         self.lock()
 
-    def lock(self, release=RELEASE, sha=SHA):
+    def lock(self, release=RELEASE, sha=SHA, alpine="alpine:3.22@sha256:" + "a" * 64):
         lines = ["# test lock", "ci-runner ubuntu-26.04"]
+        if alpine is not None:
+            lines.append(f"alpine {alpine}")
         if release is not None:
             lines.append(f"gvisor-release {release}")
         if sha is not None:
@@ -441,6 +440,13 @@ class CiGvisorTest(unittest.TestCase):
         r = self.go()
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("gvisor-sha512", r.stdout + r.stderr)
+        self.none(r"^(curl|tar|sudo|systemctl) ", r"^docker run")
+
+    def test_missing_alpine_pin_is_refused_before_anything(self):
+        self.lock(alpine=None)
+        r = self.go()
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("alpine", r.stdout + r.stderr)
         self.none(r"^(curl|tar|sudo|systemctl) ", r"^docker run")
 
     def test_empty_pin_is_refused(self):

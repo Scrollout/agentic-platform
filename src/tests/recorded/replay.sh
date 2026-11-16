@@ -63,6 +63,11 @@ PY
     echo "replay.sh: a recording proxies or does not match the exact request URL (see above)" >&2
     exit 1
   fi
+  # A pull of a missing image prints progress on standard output; do it quietly so the only line
+  # printed is the name (the pull's own output is shown only when it fails).
+  if ! docker image inspect "$IMG" >/dev/null 2>&1; then
+    pull=$(docker pull -q "$IMG" 2>&1) || { echo "replay.sh: cannot pull $IMG: $pull" >&2; exit 1; }
+  fi
   pw=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
   docker run -d --name "$name" --label ap.replay=1 \
     --network "$net" --network-alias gateway \
