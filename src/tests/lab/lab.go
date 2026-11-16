@@ -308,6 +308,10 @@ func (l *Lab) direct(host, path string) (int, string) {
 // holds the path and any query; `api-version` is added unless path already has it or the path is
 // the provider operations list. A nil token sends no Authorization header. A non-nil body is sent
 // as JSON, unless it is a string or []byte, which is sent as it is. Extra headers are "Name: value".
+//
+// A 429 RateLimited answer is retried up to 3 times, 1 s apart, and the last answer is returned: the
+// contract limits each token (x-limits.requests-per-second-per-token), so a burst of a suite's own
+// requests must not fail on it. The wait is the limit's 1 s window, as Do returns no Retry-After.
 func (l *Lab) Do(method, path, token string, body any, extra []string) (int, string, []byte) {
 	if !strings.Contains(path, "api-version=") && !strings.HasPrefix(path, "/providers/") {
 		sep := "?"
@@ -316,7 +320,12 @@ func (l *Lab) Do(method, path, token string, body any, extra []string) (int, str
 		}
 		path += sep + "api-version=" + APIVersion
 	}
-	return l.Raw(method, path, token, body, extra)
+	st, ct, b := l.Raw(method, path, token, body, extra)
+	for retry := 0; retry < 3 && st == 429; retry++ {
+		time.Sleep(time.Second)
+		st, ct, b = l.Raw(method, path, token, body, extra)
+	}
+	return st, ct, b
 }
 
 // Raw is Do without adding the `api-version` query parameter.
