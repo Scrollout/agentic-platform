@@ -104,8 +104,8 @@ the Go module cache filled for godog and the oapi-codegen runtime, as the engine
 |----------|---------|
 | `EVAL_KEY_FILE` | Test-scoped key file (default above) |
 | `EVAL_CASES` | Comma list of case names or agent names (`tests`, `code`, `review`) to run (default all) |
-| `EVAL_REPORT_DIR` | Where `report.json`, each trial's answer and the files it wrote go (default `$TMPDIR/steps-evals-<id>`) |
-| `EVAL_RUN_FLAGS` | Flags for `docker-agent run` (default `--exec --last --safety autonomous`); `--working-dir /projects/p`, the agent file and `-` (the message on stdin) follow |
+| `EVAL_REPORT_DIR` | Where `report.json` (with each trial's token `usage` and cost), each trial's answer (`answer.txt`), its raw `--json` events (`events.ndjson`) and the files it wrote go (default `$TMPDIR/steps-evals-<id>`) |
+| `EVAL_RUN_FLAGS` | Flags for `docker-agent run` (default `--exec --safety autonomous`; `--json` is always added and `--last` dropped, since the answer and usage are read from the events); `--working-dir /projects/p`, the agent file and `-` (the message on stdin) follow |
 | `EVAL_TRIAL_TIMEOUT` | Per trial (default 10m) |
 | `EVAL_AGENT_IMAGE` | A step agent image to use instead of building `src/deploy/Dockerfile.agent` locally |
 
@@ -147,7 +147,7 @@ not `DependenciesAllowed`.
 
 ## Live runs against production
 
-The live evals run `docker-agent run --exec --last --safety autonomous` with one message on stdin.
+The live evals run `docker-agent run --exec --safety autonomous --json` with one message on stdin.
 Production runs the step agents as `serve api` sessions with `safety_policy: autonomous` (the
 analyst stays restricted). Same definition, tools, model and approval policy; what differs is the
 transport (one prompt against a session's event stream) and that `serve api` adds a session title

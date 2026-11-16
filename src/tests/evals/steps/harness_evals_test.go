@@ -28,6 +28,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/agentic-platform/tests/evals/runevents"
 )
 
 // ---- environment ----
@@ -178,14 +180,17 @@ func (l *lab) stepImage() string {
 }
 
 // agent runs one throwaway step-agent container: the message on stdin, the project at
-// /projects/p. It returns the agent's final answer (stdout) and stderr.
-func (l *lab) agent(agentName, projectDir, message string) (out, errOut []byte, err error) {
+// /projects/p. It returns the agent's final answer (the last assistant message, what --last
+// printed), the raw --json events (stdout), the usage they report (what was read, even when they
+// do not parse) and stderr.
+func (l *lab) agent(agentName, projectDir, message string) (out, events []byte, usage *runevents.Usage, errOut []byte, err error) {
 	flags := strings.Fields(os.Getenv("EVAL_RUN_FLAGS"))
 	if len(flags) == 0 {
 		// autonomous: the platform runs the step agents so, inside the container (T049); the
 		// container, not the safety mode, is the boundary.
-		flags = []string{"--exec", "--last", "--safety", "autonomous"}
+		flags = []string{"--exec", "--safety", "autonomous"}
 	}
+	flags = jsonFlags(flags)
 	timeout := 10 * time.Minute
 	if v, e := time.ParseDuration(os.Getenv("EVAL_TRIAL_TIMEOUT")); e == nil {
 		timeout = v
@@ -209,12 +214,29 @@ func (l *lab) agent(agentName, projectDir, message string) (out, errOut []byte, 
 	args = append(args, "--working-dir", "/projects/p", "/agents/"+agentName+".yaml", "-")
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	out, errOut, err = docker(ctx, []byte(message), args...)
+	events, errOut, err = docker(ctx, []byte(message), args...)
 	if ctx.Err() != nil {
 		docker(context.Background(), nil, "rm", "-f", n)
 		err = fmt.Errorf("trial timed out after %s", timeout)
 	}
-	return
+	// Only docker-agent's exit code and the graders decide a trial, as with --last: a parse
+	// problem is logged, and the answer (possibly empty) and usage are what the events hold.
+	run, perr := runevents.Parse(bytes.NewReader(events))
+	if perr != nil && err == nil {
+		l.t.Logf("the docker-agent --json events: %v", perr)
+	}
+	return []byte(run.Answer), events, &run.Usage, errOut, err
+}
+
+// jsonFlags makes the docker-agent run flags print --json events instead of the --last answer.
+func jsonFlags(flags []string) []string {
+	var out []string
+	for _, f := range flags {
+		if f != "--last" && f != "--json" {
+			out = append(out, f)
+		}
+	}
+	return append(out, "--json")
 }
 
 // ---- trials and reports ----
@@ -228,6 +250,8 @@ type Trial struct {
 	Stderr   string   `json:"stderr,omitempty"`
 	ExitErr  string   `json:"exit_error,omitempty"`
 	Changed  []string `json:"changed_files,omitempty"`
+	// Usage is the trial's token use and cost, from the --json events.
+	Usage *runevents.Usage `json:"usage,omitempty"`
 }
 
 // CaseReport is every trial of one case; the case passes (pass^k) only when all trials pass.
@@ -292,8 +316,8 @@ func (l *lab) run(env Env, cases []Case, dir string) []CaseReport {
 			start := time.Now()
 			work, err := Write(before) // each trial starts from the same files
 			must(l.t, err)
-			out, stderr, runErr := l.agent(c.Agent, work, msg)
-			tr := Trial{N: i, Duration: time.Since(start).Round(time.Second).String()}
+			out, events, usage, stderr, runErr := l.agent(c.Agent, work, msg)
+			tr := Trial{N: i, Duration: time.Since(start).Round(time.Second).String(), Usage: usage}
 			if runErr != nil {
 				tr.ExitErr = runErr.Error()
 				tr.Stderr = tail(string(stderr), 600)
@@ -314,6 +338,7 @@ func (l *lab) run(env Env, cases []Case, dir string) []CaseReport {
 			tdir := filepath.Join(dir, fmt.Sprintf("%s.trial%d", strings.ReplaceAll(c.Name, "/", "-"), i))
 			must(l.t, os.MkdirAll(tdir, 0o755))
 			must(l.t, os.WriteFile(filepath.Join(tdir, "answer.txt"), out, 0o644))
+			must(l.t, os.WriteFile(filepath.Join(tdir, "events.ndjson"), events, 0o644))
 			written := Files{}
 			for _, p := range tr.Changed {
 				if f, ok := after[p]; ok && !strings.HasPrefix(p, "vendor/") {

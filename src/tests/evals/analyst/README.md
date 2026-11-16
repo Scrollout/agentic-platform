@@ -64,8 +64,8 @@ is behind the `evals` build tag and is never compiled by `scripts/check.sh`.
 |----------|---------|
 | `EVAL_KEY_FILE` | Test-scoped key file (default above) |
 | `EVAL_CASES` | Comma list of case names to run (default all) |
-| `EVAL_REPORT_DIR` | Where `report.json` and each trial's raw output go (default `$TMPDIR/analyst-evals-<id>`) |
-| `EVAL_RUN_FLAGS` | Flags for `docker-agent run` (default `--exec --last`); the agent file and `-` (the description on stdin) follow |
+| `EVAL_REPORT_DIR` | Where `report.json` (with each trial's token `usage` and cost), each trial's answer (`<case>.trial<n>.out`) and its raw `--json` events (`<case>.trial<n>.ndjson`) go (default `$TMPDIR/analyst-evals-<id>`) |
+| `EVAL_RUN_FLAGS` | Flags for `docker-agent run` (default `--exec`; `--json` is always added and `--last` dropped, since the answer and usage are read from the events); the agent file and `-` (the description on stdin) follow |
 | `EVAL_TRIAL_TIMEOUT` | Per trial (default 5m) |
 
 ### Infrastructure
