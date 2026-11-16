@@ -57,6 +57,11 @@ Two names, two jobs:
   `build` or `replay` still runs `build-workers` exits 130 (143 for SIGTERM) before any run starts; running the
   command again is safe, since `build-workers` changes nothing the second time.
 
+  `up` returns only when every service that declares a readiness check is ready (Compose's
+  `--wait`; today `contract-lint`, through its `GET /health`), so a command right after `up` finds
+  the platform answering; a service that does not become ready within its check's limit makes `up`
+  exit 1, naming Compose's message, with the session kept until `down`.
+
   `up` refuses (exit 3) a credentials file that is missing, empty, not owned by the developer or
   readable or writable by anyone else, a projects folder that does not exist or is not writable,
   and a credentials file inside the projects folder. The file holds only the provider key. `up`
