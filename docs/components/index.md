@@ -11,9 +11,11 @@
 * [go-arch-lint](go-arch-lint.md) - Checks each platform Go module's imports against the components and allowed dependencies its .go-arch-lint.yml declares; an undeclared import or an unmapped package fails scripts/check.sh and the pre-commit hook.
 * [go-yaml](go-yaml.md) - The YAML library (go.yaml.in/yaml/v3) the slice model and the engine use to read contracts, patterns and rules.
 * [golang.org/x/mod](x-mod.md) - The Go team's module library; the engine's DependenciesAllowed step check reads a project's go.mod with its modfile package.
+* [gotestsum](gotestsum.md) - Runs go test and writes its results as JUnit XML for the CI job summaries ([research D43](../../specs/001-prose-to-accepted-slice/research.md)); Apache-2.0, OpenSSF Scorecard 3.6 on 2026-10-19.
 * [gVisor](gvisor.md) - The application-kernel sandbox (runtime runsc) that every step, check, analyst and contract-lint container runs under.
 * [kin-openapi](kin-openapi.md) - The Go OpenAPI 3 parser that oasdiff uses as a library, and which the engine imports for contract loading.
 * [markdownlint-cli2](markdownlint-cli2.md) - The Markdown linter scripts/check.sh and the commit hook run on docs, specs and source Markdown.
+* [mikepenz/action-junit-report](github-actions-junit-report.md) - Shows each CI test job's JUnit results in its job summary and as annotations, with a read-only token ([research D43](../../specs/001-prose-to-accepted-slice/research.md)); Apache-2.0, OpenSSF Scorecard 8.3 on 2026-11-16.
 * [nginx](nginx.md) - The web server image the model gateway and the run page's forwarder are made of: official image plus config templates, no custom code.
 * [oapi-codegen](oapi-codegen.md) - Generates Go server interfaces, types and clients from the platform's OpenAPI contracts, with its runtime library imported by the generated code.
 * [oasdiff](oasdiff.md) - The OpenAPI breaking-change checker, run as a pinned container by scripts/contract-diff.sh for the platform's own contracts and as a Go library in the engine for each slice's contract.

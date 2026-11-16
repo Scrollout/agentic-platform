@@ -1701,3 +1701,37 @@ page, none of which an existing project provides.
   [Enabling push protection](https://docs.github.com/en/code-security/secret-scanning/enabling-secret-scanning-features/enabling-push-protection-for-your-repository);
   [Configuring default setup for code scanning](https://docs.github.com/en/code-security/code-scanning/enabling-code-scanning/configuring-default-setup-for-code-scanning);
   [GitHub security features](https://docs.github.com/en/code-security/getting-started/github-security-features).
+
+### D43. CI test results are JUnit reports shown by action-junit-report
+
+- **Decision** (owner, 2026-11-16): every Go test in `scripts/check.sh` runs through `gotestsum`,
+  which writes a JUnit XML file beside output equal to `go test`'s; `scripts/testrun.py` writes
+  JUnit XML for the Python check tests; in CI, `mikepenz/action-junit-report` turns the files into
+  each test job's summary (counts, and each failed test with its message) and annotations, with
+  `annotate_only: true`, so the workflow token stays read-only. Free disk is no longer reported.
+- **Why**: the job summaries said only that a job passed or failed; the owner wants the tests'
+  results, in the standard way, not a design of our own (T111).
+- **Candidates** (OpenSSF Scorecard API and GitHub, checked 2026-11-16):
+
+  | Project | Licence | Scorecard | Latest release | Fit |
+  |---------|---------|-----------|----------------|-----|
+  | `mikepenz/action-junit-report` | Apache-2.0 | 8.3 (2026-11-16) | v6.7.1, 2026-11-06 | Adopted: job summary and annotations without `checks: write` |
+  | `dorny/test-reporter` | MIT | 5.0 (2026-11-09) | v3.0.0, 2026-03-21 | Reads Go's JSON too, but its report is a check run, which needs `checks: write` |
+  | `robherley/go-test-action` | MIT | 4.6 (2026-11-02) | v1.1.0, 2026-05-23 | Go only, few users |
+  | `gotest.tools/gotestsum` | Apache-2.0 | 3.6 (2026-10-19) | v1.13.0, 2025-09-11 | Adopted: the most used Go JUnit writer (2.7k stars), runs `go test` and keeps its output and exit code |
+  | `jstemmer/go-junit-report` | MIT | 5.0 (2026-11-02) | v2.1.0, 2023-10-18 | Converter only; no release for three years |
+  | `unittest-xml-reporting` | NOASSERTION | 2.9 (2026-10-19) | 4.0.0, 2026-01-07 | Rejected: no OSI licence asserted (Principle VI), and it cannot see the classes `testrun.py --jobs` runs in other processes |
+
+- **Custom code** (Principle VI justification): `testrun.py` already collects every test's outcome,
+  including those of its parallel class processes; writing them as JUnit with the standard
+  library's `xml.etree` is a few lines, and no candidate fits.
+- **Known limits**: gotestsum's Scorecard is low (no signed releases or fuzzing); it is a test-time
+  tool, never in a built image, pinned by version and installed through the checked Go module
+  proxy. The `ap test` jobs keep their own result lines (their suites run inside `ap test`).
+- **Recorded as** [ADR 0046](../../docs/decisions/0046-ci-test-results-are-junit-reports.md).
+- Sources: [action-junit-report](https://github.com/mikepenz/action-junit-report);
+  [gotestsum](https://github.com/gotestyourself/gotestsum);
+  [OpenSSF Scorecard API](https://api.securityscorecards.dev/);
+  [dorny/test-reporter](https://github.com/dorny/test-reporter);
+  [go-junit-report](https://github.com/jstemmer/go-junit-report);
+  [unittest-xml-reporting](https://github.com/xmlrunner/unittest-xml-reporting).
