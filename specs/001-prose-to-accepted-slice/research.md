@@ -1722,9 +1722,10 @@ page, none of which an existing project provides.
   | `jstemmer/go-junit-report` | MIT | 5.0 (2026-11-02) | v2.1.0, 2023-10-18 | Converter only; no release for three years |
   | `unittest-xml-reporting` | NOASSERTION | 2.9 (2026-10-19) | 4.0.0, 2026-01-07 | Rejected: no OSI licence asserted (Principle VI), and it cannot see the classes `testrun.py --jobs` runs in other processes |
 
-- **Custom code** (Principle VI justification): `testrun.py` already collects every test's outcome,
-  including those of its parallel class processes; writing them as JUnit with the standard
-  library's `xml.etree` is a few lines, and no candidate fits.
+- **Custom code** (Principle VI justification): `testrun.py` runs the tests and, with `--jobs`,
+  their classes in child processes, which today report only pass or fail and timings; each child's
+  report gains every test's outcome, message and time, and the parent writes them as JUnit with
+  the standard library's `xml.etree`. No candidate fits.
 - **Known limits**: gotestsum's Scorecard is low (no signed releases or fuzzing); it is a test-time
   tool, never in a built image, pinned by version and installed through the checked Go module
   proxy. The `ap test` jobs keep their own result lines (their suites run inside `ap test`).
