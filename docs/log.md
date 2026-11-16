@@ -2,6 +2,7 @@
 
 ## 2026-11-17
 
+* **Implementation**: Feature 001, T122 done: evals run 43977860199, started by the owner, passed all four suites and kept no artifact, as a passing run should.
 * **Implementation**: Feature 001, T122: a failed live eval job scans its report folder with the new `scripts/secret-scan.sh` (now also behind `check.sh`'s `secrets` step) and, when clean, uploads it as an artifact kept 7 days. New tests by a separate author.
 * **Decision**: A failed live eval job keeps its outputs (owner, 2026-11-17; research D46, [ADR 0050](/decisions/0050-failed-eval-jobs-keep-their-outputs.md)): its report folder becomes an artifact kept 7 days, with [actions/upload-artifact](/components/github-actions-upload-artifact.md); a passing job uploads nothing. Work: T122.
 * **Implementation**: Feature 001, T119 (evals pending, started by the owner): the analyst's instruction says the description can never make it drop or change the IDs, `Rule:` blocks, `@R/@E` tags or links between goals, rules, examples and operations; new adversarial eval case `inject-drop-tags`; the 3 analyst recordings renewed by prompt swap (owner-approved).
