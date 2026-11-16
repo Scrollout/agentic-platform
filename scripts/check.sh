@@ -16,11 +16,10 @@ go_run() {  # go_run <network: bridge|none> <script> [image]: a shell in a pinne
 }
 GO_MODULES="check engine slice cli page tests"
 
-# prepare: what the offline Go builds need and the repository does not hold: the generated code
+# --prepare: what the offline Go builds need and the repository does not hold: the generated code
 # and a filled module cache. The go step does it first; CI jobs that build offline without the go
 # step run `scripts/check.sh --prepare` (research D41).
-prepare() {
-  scripts/generate.sh
+fill_module_cache() {
   go_run bridge "for m in $GO_MODULES; do (cd \$m && go mod download); done"
   # The step checks' godog run (TestGodogStrictReal) is offline: put the pinned godog and its
   # dependencies into the shared module cache now, from the fixture module that requires it.
@@ -36,7 +35,8 @@ go_checks() {
   echo "== committed generated blocks: prove they match their sources"
   scripts/generate.sh --check-committed
   echo "== generated code: regenerate, fill the module cache, then prove a second run finds no difference"
-  prepare
+  scripts/generate.sh
+  fill_module_cache
   scripts/generate.sh --check
   # Both images must carry the same Go release, or the race run tests another compiler.
   [ -n "$GO_RACE_IMAGE" ] || { echo "check: no golang-race pin in src/deploy/images.lock" >&2; exit 1; }
@@ -61,7 +61,7 @@ go_checks() {
     done" "$GO_RACE_IMAGE"
 }
 if [ "${1:-}" = "--go-only" ]; then go_checks; exit 0; fi
-if [ "${1:-}" = "--prepare" ]; then prepare; exit 0; fi
+if [ "${1:-}" = "--prepare" ]; then scripts/generate.sh; fill_module_cache; exit 0; fi
 
 # Steps, in the order a full run takes them: one line each, name and title; the step's code is
 # the function s_<name> below (dashes become underscores). Usage:
