@@ -1,0 +1,125 @@
+# What each live eval suite reads (T115; constitution XIX): the path globs and the images.lock pins
+# it runs on. scripts/ci-evals-select.py runs only the suites a push changes, from this file;
+# scripts/tests/test_eval_suites_declaration.py proves it agrees with the code (go list -deps, the
+# paths the harnesses read, the pins they use) and with evals.yml's push paths.
+suites:
+  - suite: analyst
+    cases: ""
+    pins: [docker-agent, golang, golang-race, nginx, oapi-codegen]
+    paths:
+      - src/go.work
+      - src/go.work.sum
+      - src/check/go.mod
+      - src/cli/go.mod
+      - src/engine/go.mod
+      - src/page/go.mod
+      - src/slice/go.mod
+      - src/tests/go.mod
+      - src/check/go.sum
+      - src/cli/go.sum
+      - src/engine/go.sum
+      - src/page/go.sum
+      - src/slice/go.sum
+      - src/tests/go.sum
+      - src/tests/evals/runevents/**
+      - src/engine/canonical/**
+      - src/engine/checks/**
+      - src/slice/**
+      - src/engine/api/preview/**
+      - src/deploy/gateway/**
+      - src/deploy/Dockerfile.agent
+      - src/agents/analyst.yaml
+      - src/agents/analyst/**
+      - src/tests/evals/analyst/**
+      - src/engine/slices/**
+      - src/catalogue/api-feature-go/pattern.yaml
+  - suite: steps
+    cases: tests
+    pins: [docker-agent, golang, golang-race, nginx, oapi-codegen]
+    paths:
+      - src/go.work
+      - src/go.work.sum
+      - src/check/go.mod
+      - src/cli/go.mod
+      - src/engine/go.mod
+      - src/page/go.mod
+      - src/slice/go.mod
+      - src/tests/go.mod
+      - src/check/go.sum
+      - src/cli/go.sum
+      - src/engine/go.sum
+      - src/page/go.sum
+      - src/slice/go.sum
+      - src/tests/go.sum
+      - src/tests/evals/runevents/**
+      - src/engine/canonical/**
+      - src/engine/checks/**
+      - src/slice/**
+      - src/engine/api/preview/**
+      - src/deploy/gateway/**
+      - src/deploy/Dockerfile.agent
+      - src/tests/evals/steps/**
+      - src/engine/procedures/**
+      - src/catalogue/api-feature-go/**
+      - src/agents/tests.yaml
+      - src/agents/tests/**
+  - suite: steps
+    cases: code
+    pins: [docker-agent, golang, golang-race, nginx, oapi-codegen]
+    paths:
+      - src/go.work
+      - src/go.work.sum
+      - src/check/go.mod
+      - src/cli/go.mod
+      - src/engine/go.mod
+      - src/page/go.mod
+      - src/slice/go.mod
+      - src/tests/go.mod
+      - src/check/go.sum
+      - src/cli/go.sum
+      - src/engine/go.sum
+      - src/page/go.sum
+      - src/slice/go.sum
+      - src/tests/go.sum
+      - src/tests/evals/runevents/**
+      - src/engine/canonical/**
+      - src/engine/checks/**
+      - src/slice/**
+      - src/engine/api/preview/**
+      - src/deploy/gateway/**
+      - src/deploy/Dockerfile.agent
+      - src/tests/evals/steps/**
+      - src/engine/procedures/**
+      - src/catalogue/api-feature-go/**
+      - src/agents/code.yaml
+      - src/agents/code/**
+  - suite: steps
+    cases: review
+    pins: [docker-agent, golang, golang-race, nginx, oapi-codegen]
+    paths:
+      - src/go.work
+      - src/go.work.sum
+      - src/check/go.mod
+      - src/cli/go.mod
+      - src/engine/go.mod
+      - src/page/go.mod
+      - src/slice/go.mod
+      - src/tests/go.mod
+      - src/check/go.sum
+      - src/cli/go.sum
+      - src/engine/go.sum
+      - src/page/go.sum
+      - src/slice/go.sum
+      - src/tests/go.sum
+      - src/tests/evals/runevents/**
+      - src/engine/canonical/**
+      - src/engine/checks/**
+      - src/slice/**
+      - src/engine/api/preview/**
+      - src/deploy/gateway/**
+      - src/deploy/Dockerfile.agent
+      - src/tests/evals/steps/**
+      - src/engine/procedures/**
+      - src/catalogue/api-feature-go/**
+      - src/agents/review.yaml
+      - src/agents/review/**

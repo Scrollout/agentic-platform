@@ -121,7 +121,12 @@ def judge_permissions(root):
         if w.get("permissions") != {"contents": "read"}:
             v.append(f"{name} top-level permissions is {w.get('permissions')!r}, not contents: read")
         for jn, job in jobs(w).items():
-            if "permissions" in job and job["permissions"] != {"contents": "read"}:
+            # T115 (owner, 2026-11-16): listing workflow runs needs actions: read, on evals.yml's
+            # config job alone.
+            allowed = [{"contents": "read"}]
+            if (name, jn) == ("evals.yml", "config"):
+                allowed.append({"contents": "read", "actions": "read"})
+            if "permissions" in job and job["permissions"] not in allowed:
                 v.append(f"{name} job {jn} sets permissions {job['permissions']!r}")
     return v
 
@@ -857,6 +862,34 @@ class PermissionsTest(unittest.TestCase):
             d["check.yml"]["jobs"]["alpha"]["permissions"] = {"contents": "write"}
         v = judge_permissions(planted(self, m))
         self.assertTrue(any("alpha" in x for x in v), v)
+
+    def test_evals_config_actions_read_passes(self):
+        def m(d):
+            d["evals.yml"]["jobs"]["config"]["permissions"] = {"contents": "read", "actions": "read"}
+        self.assertEqual(judge_permissions(planted(self, m)), [])
+
+    def test_planted_actions_read_on_another_job_fails(self):
+        for wf, jn in (("evals.yml", "evals"), ("check.yml", "config"), ("check.yml", "alpha")):
+            with self.subTest(f"{wf} {jn}"):
+                def m(d, wf=wf, jn=jn):
+                    d[wf]["jobs"][jn]["permissions"] = {"contents": "read", "actions": "read"}
+                v = judge_permissions(planted(self, m))
+                self.assertTrue(any(jn in x for x in v), v)
+
+    def test_planted_other_permission_on_evals_config_fails(self):
+        for perms in ({"contents": "read", "actions": "write"},
+                      {"contents": "read", "actions": "read", "packages": "read"},
+                      {"actions": "read"}, {"contents": "write", "actions": "read"}):
+            with self.subTest(perms):
+                def m(d, perms=perms):
+                    d["evals.yml"]["jobs"]["config"]["permissions"] = perms
+                v = judge_permissions(planted(self, m))
+                self.assertTrue(any("config" in x for x in v), v)
+
+    def test_planted_actions_read_at_top_level_fails(self):
+        def m(d):
+            d["evals.yml"]["permissions"] = {"contents": "read", "actions": "read"}
+        self.assertTrue(judge_permissions(planted(self, m)))
 
 
 class PinnedUsesTest(unittest.TestCase):
