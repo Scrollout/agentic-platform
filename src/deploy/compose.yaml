@@ -184,6 +184,15 @@ services:
       - /tmp:mode=1777,size=16m
     extra_hosts: { engine: *engine-on-lint }
     networks: [lint]
+    # Ready when its GET /health answers (T113): `ap up` waits for it (docker compose up --wait), so a
+    # command right after `up` finds the lint listening (Node under gVisor starts slowly).
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+      start_interval: 2s
     deploy:
       resources:
         limits: { cpus: "0.5", memory: 256m, pids: 64 }

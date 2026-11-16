@@ -2,6 +2,7 @@
 
 ## 2026-11-16
 
+* **Decision**: End to end on the Compose stack with the recorded model (owner, 2026-11-16; [ADR 0047](/decisions/0047-end-to-end-on-the-compose-stack-with-the-recorded-model.md)): `scripts/e2e.sh`, the `check.sh` step `e2e`, runs in CI as its own job; a full local run skips it. `ap up` now waits until `contract-lint` is ready (T113). Feature 001, T024.
 * **Decision**: CI test results are JUnit reports (owner, 2026-11-16; [ADR 0046](/decisions/0046-ci-test-results-are-junit-reports.md)): Go tests through [gotestsum](/components/gotestsum.md), the Python check tests through `testrun.py`, shown in each job's summary by [action-junit-report](/components/github-actions-junit-report.md); no free-disk line. Feature 001, T111.
 * **Fix**: Feature 001, T110, from the first CI run: `replay.sh start` pulls the pinned WireMock image quietly, so it prints only the container name on a fresh machine; the CI summaries are redesigned (one line per job, a run table with failed jobs and their first error line first); the gVisor smoke runs use the pinned alpine image; Python 3.14.10, which `actions/setup-python` has for Ubuntu 26.04; the evals report folder is set where a job-level env can read it. Owner-approved test changes; new tests by a separate author.
 * **Decision**: GitHub's free scanners on the public repository (owner, 2026-11-16): secret scanning with push protection, Dependabot alerts, CodeQL default setup and private vulnerability reporting; no Dependabot pull requests (research D42, [ADR 0045](/decisions/0045-github-free-scanners.md)).

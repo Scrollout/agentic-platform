@@ -328,6 +328,31 @@ jobs:
         name: ap-test-us2
         run: scripts/ci-step.sh ap-test-us2 src/deploy/ap test us2
 
+  e2e:
+    name: e2e
+    needs: config
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs:
+      seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned gVisor
+        run: scripts/ci-gvisor.sh
+      - name: Generated code and module cache
+        run: scripts/check.sh --prepare
+      # The Compose stack on the recorded model (research D44, ADR 0047); e2e.sh builds and signs
+      # the images with a key made for this job.
+      - id: run
+        name: e2e
+        run: |
+          COSIGN_PASSWORD=$(openssl rand -hex 32)
+          export COSIGN_PASSWORD
+          scripts/ci-step.sh e2e scripts/check.sh --only e2e
+
   summary:
     name: summary
     if: always()
@@ -348,6 +373,7 @@ jobs:
       - secrets
       - ap_test_planted
       - ap_test_us2
+      - e2e
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

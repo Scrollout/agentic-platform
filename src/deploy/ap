@@ -108,7 +108,15 @@ EOF
   exit "${1:-3}"
 }
 
-compose() { docker compose -f "$here/compose.yaml" "$@"; }
+# AP_COMPOSE_OVERRIDE (tests only, src/cli/contract.md "The recorded model, for tests only"): one
+# more Compose file, after compose.yaml; `up` checks it and the session keeps it.
+compose() {
+  if [ -n "${AP_COMPOSE_OVERRIDE:-}" ]; then
+    docker compose -f "$here/compose.yaml" -f "$AP_COMPOSE_OVERRIDE" "$@"
+  else
+    docker compose -f "$here/compose.yaml" "$@"
+  fi
+}
 
 # A one-off container of the session; without a terminal on stdin (a pipe, a script) Compose must
 # not allocate one. Returns the container's exit code unchanged. SIGINT and SIGTERM sent to `ap`
@@ -120,7 +128,7 @@ compose_run() {
   if [ -t 0 ]; then cr_tty=; else cr_tty=-T; fi
   exec 3<&0
   # shellcheck disable=SC2086
-  docker compose -f "$here/compose.yaml" run --rm $cr_tty "$@" <&3 3<&- &
+  compose run --rm $cr_tty "$@" <&3 3<&- &
   cr_pid=$!
   exec 3<&-
   cr_sig=
@@ -188,6 +196,8 @@ session_value() {
 load() {
   [ -e "$sess" ] || [ -L "$sess" ] || die 3 "the platform is not started; run: ap up --credentials <file> --projects <folder>"
   session_ok || die 1 "the session file $sess $why; it is not read; run: ap down"
+  # Only `up` reads AP_COMPOSE_OVERRIDE from the environment; later commands take the session's.
+  unset AP_COMPOSE_OVERRIDE
   set -a
   # shellcheck disable=SC1090
   . "$sess"
@@ -402,6 +412,26 @@ cmd_up() {
   [ "$(id -u)" != 0 ] || die 3 "do not run ap as root: the gateway runs as your user"
   need_docker
 
+  # The recorded model (tests only): one Compose file from src/tests/e2e/ of this repository.
+  override=${AP_COMPOSE_OVERRIDE:-}
+  unset AP_COMPOSE_OVERRIDE
+  if [ -n "$override" ]; then
+    e2e_dir=$(CDPATH='' cd -- "$here/../tests/e2e" 2>/dev/null && pwd -P) || e2e_dir=$here/../tests/e2e
+    [ -f "$override" ] || die 3 "AP_COMPOSE_OVERRIDE '$override' is not a file under $e2e_dir (src/tests/e2e)"
+    override=$(abs_file "$override") || die 3 "AP_COMPOSE_OVERRIDE '$override' cannot be resolved under src/tests/e2e"
+    hops=0
+    while [ -L "$override" ]; do   # every link of a chain, so none can leave the folder
+      hops=$((hops + 1))
+      [ "$hops" -le 8 ] || die 3 "AP_COMPOSE_OVERRIDE '$override': too many symbolic links (src/tests/e2e)"
+      link=$(ls -ld -- "$override"); link=${link#* -> }
+      case $link in /*) ;; *) link=$(dirname -- "$override")/$link ;; esac
+      override=$(abs_file "$link") || die 3 "AP_COMPOSE_OVERRIDE '$override' cannot be resolved under src/tests/e2e"
+    done
+    case $override in
+      "$e2e_dir"/*) ;;
+      *) die 3 "AP_COMPOSE_OVERRIDE '$override' is not a file under $e2e_dir (src/tests/e2e)" ;;
+    esac
+  fi
   check_credentials "$cred"
   cred=$(abs_file "$cred") || die 3 "credentials file '$cred' cannot be resolved"
   [ -d "$proj" ] || die 3 "projects folder '$proj' does not exist"
@@ -427,6 +457,9 @@ cmd_up() {
     done
     # shellcheck disable=SC2086
     tokens_ok $old_tokens || die 1 "$broken"
+    old_override=$(session_value AP_COMPOSE_OVERRIDE) || die 1 "$broken"
+    [ "$override" = "$old_override" ] ||
+      die 3 "the platform is running with AP_COMPOSE_OVERRIDE '${old_override}'; run ap down first to start it with another"
     [ "$cred" = "$old_cred" ] && [ "$proj" = "$old_proj" ] ||
       die 3 "the platform is running with --credentials '$old_cred' --projects '$old_proj'; run ap down first to start it with others"
   fi
@@ -478,9 +511,15 @@ cmd_up() {
   {
     echo "# agentic-platform session, written by ap up; removed by ap down"
     for v in $vars; do eval "val=\$$v"; printf '%s=%s\n' "$v" "$(quote "$val")"; done
+    [ -z "$override" ] || printf 'AP_COMPOSE_OVERRIDE=%s\n' "$(quote "$override")"
   } >"$tmp" && chmod 600 "$tmp" && mv -f -- "$tmp" "$sess" || { rm -f -- "$tmp"; die 1 "cannot write $sess"; }
   umask "$old_umask"
   ensure_grants_dir
+  if [ -n "$override" ]; then
+    AP_COMPOSE_OVERRIDE=$override
+    export AP_COMPOSE_OVERRIDE
+    say "up: the model is the recorded model ($override)"
+  fi
 
   if [ "$AP_IMAGE_PAGE" = "$(placeholder page)" ]; then
     # No run page image yet (T056): start everything else; page and page-proxy stay at zero.
@@ -490,11 +529,13 @@ cmd_up() {
     say "starting the platform (gateway, engine, page, contract-lint, analyst, check, project-worker); run page on http://127.0.0.1:$port"
     set --
   fi
-  compose up -d "$@" || die 1 "docker compose up failed; see the messages above; the session is kept until: ap down"
+  # --wait: return only when every service with a healthcheck is healthy (contract-lint, T113).
+  compose up -d --wait "$@" || die 1 "docker compose up failed; see the messages above; the session is kept until: ap down"
 }
 
 cmd_down() {
   [ $# -eq 0 ] || usage
+  unset AP_COMPOSE_OVERRIDE   # only the session's override, read by load below
   # Compose needs every variable to read the file, though none is used to stop. A missing,
   # unreadable or broken session falls back to placeholders, so `down` always recovers.
   AP_CREDENTIALS_FILE=/nonexistent AP_PROJECTS_DIR=/nonexistent AP_PAGE_PORT=$default_page_port
@@ -509,7 +550,13 @@ cmd_down() {
     if session_ok && (. "$sess") >/dev/null 2>&1; then load; else say "the session file $sess is not read: it ${why:-cannot be read}"; fi
   fi
   say "stopping the platform and the step workers; run records and project folders are kept"
-  compose --profile '*' down --remove-orphans || die 1 "docker compose down failed; the session is kept"
+  if ! compose --profile '*' down --remove-orphans; then
+    # A recorded-model session whose override can no longer be read (its run was killed and its
+    # files are gone) still stops: the services are the same with compose.yaml alone.
+    [ -n "${AP_COMPOSE_OVERRIDE:-}" ] || die 1 "docker compose down failed; the session is kept"
+    say "stopping with compose.yaml alone: the session's recorded-model override cannot be used"
+    AP_COMPOSE_OVERRIDE='' compose --profile '*' down --remove-orphans || die 1 "docker compose down failed; the session is kept"
+  fi
   rm -f -- "$sess"
   # The step workers are gone, so are their grants and tokens.
   rm -rf -- "$workers_dir"

@@ -421,7 +421,7 @@ def pos(text, pat):
 def judge_gvisor_jobs(root, steps):
     wf = load(root)
     v = need_files(wf, "check.yml")
-    if v or "e2e" in steps:   # T024's e2e step replaces the two jobs
+    if v:
         return v
     for cmd in ("planted", "us2"):
         pat = r"\bap\s+test\s+" + cmd + r"\b"
@@ -1352,11 +1352,11 @@ class GvisorJobsTest(unittest.TestCase):
             job(d, "ap-us2")["steps"][1:] = [{"run": "src/deploy/ap test us2\nscripts/ci-gvisor.sh"}]
         self.assertTrue(judge_gvisor_jobs(planted(self, m), STEPS))
 
-    def test_the_e2e_step_replaces_the_two_jobs(self):
+    def test_the_e2e_step_does_not_replace_the_two_jobs(self):
         def m(d):
             del d["check.yml"]["jobs"]["ap-us2"]
             del d["check.yml"]["jobs"]["ap-planted"]
-        self.assertEqual(judge_gvisor_jobs(planted(self, m), STEPS + ["e2e"]), [])
+        self.assertTrue(judge_gvisor_jobs(planted(self, m), STEPS + ["e2e"]))
 
 
 class PrepareTest(unittest.TestCase):

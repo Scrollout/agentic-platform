@@ -98,7 +98,8 @@ gateway model gateway
 go go vet and tests
 docker recorded model, contract-lint service, API conformance and Story 1 acceptance (Docker, no key)
 deps dependencies and licences
-secrets secrets'
+secrets secrets
+e2e end to end: the Compose stack on the recorded model (scripts/e2e.sh; Docker, gVisor, no key)'
 STEPS=$(echo "$STEP_TABLE" | cut -d' ' -f1)
 only=; py=
 while [ $# -gt 0 ]; do
@@ -192,6 +193,7 @@ s_deps() {
       (cd \"\$m\" && /gopath/bin/govulncheck ./... && /gopath/bin/go-licenses check ./... --disallowed_types=forbidden,unknown --ignore github.com/agentic-platform)
     done"
 }
+s_e2e() { scripts/e2e.sh; }
 s_secrets() {
   if git grep -nE 'sk-ant-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{30,}' -- . ; then echo "secret found"; exit 1; fi
 }
@@ -200,6 +202,8 @@ start=$(now)
 # The table is read on descriptor 3, so a step's own commands keep the caller's input.
 while read -r step title <&3; do
   [ -z "$only" ] || echo " $only " | grep -q " $step " || continue
+  # e2e runs in CI (its own job); on the shared host only when asked (owner, 2026-11-16).
+  if [ -z "$only" ] && [ "$step" = e2e ]; then echo "== e2e: runs in CI; here only with scripts/check.sh --only e2e"; continue; fi
   echo "== $title"
   phase test
   "s_$(echo "$step" | tr - _)"
