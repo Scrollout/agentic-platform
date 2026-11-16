@@ -12,6 +12,15 @@ services:
     image: ${AP_REPLAY_IMAGE:?set AP_REPLAY_IMAGE to the wiremock pin in src/deploy/images.lock (scripts/e2e.sh does this)}
     user: "65532:65532"
     command: ["--port", "8080"]
+    # The image's own healthcheck asks the admin API without the credential, which now refuses it;
+    # ask with the credential, as replay.sh's admin does (and `ap up --wait` waits for it).
+    healthcheck:
+      test: ["CMD-SHELL", "set -- $$WIREMOCK_OPTIONS; wget -qO- \"http://$$2@127.0.0.1:8080/__admin/health\" >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+      start_interval: 2s
     environment: !override {}
     env_file: !override
       - ${AP_REPLAY_DIR:?set AP_REPLAY_DIR to the folder replay.sh prepare wrote (scripts/e2e.sh does this)}/wiremock.env

@@ -18,11 +18,10 @@ REC=${REPLAY_RECORDINGS:-$HERE/recordings}
 usage() { echo "usage: replay.sh start <network> [<name>] | misses <name> | stop <name> | prepare <set> <out>" >&2; exit 2; }
 
 # The replay server's options, their one home (start and prepare): the admin API behind basic auth
-# with a new random password, no banner, a bounded request journal.
-options() {
-  pw=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
-  printf '%s' "--admin-api-basic-auth replay:$pw --disable-banner --max-request-journal-entries 100"
-}
+# with a new random password (WIREMOCK_OPTIONS holds only this, so its credential is the rest of the
+# value), and the server's flags: no banner, a bounded request journal.
+auth() { printf '%s' "--admin-api-basic-auth replay:$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"; }
+FLAGS="--disable-banner --max-request-journal-entries 100"
 
 # check_mappings <folder>: every mapping WireMock would load (it reads subfolders too) must answer,
 # not proxy, and must match the exact URL, path and query as one string ("url"), so an extra or
@@ -81,14 +80,14 @@ start)
   if ! docker image inspect "$IMG" >/dev/null 2>&1; then
     pull=$(docker pull -q "$IMG" 2>&1) || { echo "replay.sh: cannot pull $IMG: $pull" >&2; exit 1; }
   fi
-  opts=$(options)
+  opts=$(auth)
   docker run -d --name "$name" --label ap.replay=1 \
     --network "$net" --network-alias gateway \
     --read-only --user 65532:65532 --cap-drop ALL --security-opt no-new-privileges \
     --memory 512m --pids-limit 256 --tmpfs /tmp:uid=65532,gid=65532 \
     -v "$REC:/home/wiremock:ro" \
     -e "WIREMOCK_OPTIONS=$opts" \
-    "$IMG" --port 8080 >/dev/null
+    "$IMG" --port 8080 $FLAGS >/dev/null
   i=0
   until admin "$name" /__admin/health >/dev/null 2>&1; do
     i=$((i + 1))
@@ -130,7 +129,7 @@ prepare)
   # The replay server runs as 65532: every folder 755 and every file 644, whatever the umask.
   find "$tmp/mappings" "$tmp/__files" -type d -exec chmod 755 {} + && find "$tmp/mappings" "$tmp/__files" -type f -exec chmod 644 {} +
   check_mappings "$tmp/mappings" || { echo "replay.sh: prepare refused the recordings (see above)" >&2; exit 1; }
-  (umask 077; printf 'WIREMOCK_OPTIONS=%s\n' "$(options)" >"$tmp/wiremock.env")
+  (umask 077; printf 'WIREMOCK_OPTIONS=%s %s\n' "$(auth)" "$FLAGS" >"$tmp/wiremock.env")
   chmod 755 "$tmp" && rm -rf -- "$out" && mv -- "$tmp" "$out"
   trap - EXIT
   ;;
