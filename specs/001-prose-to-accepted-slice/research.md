@@ -1803,3 +1803,23 @@ page, none of which an existing project provides.
 - Sources: [GitHub Actions: workflow_dispatch](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch);
   [GitHub Actions: job conditions](https://docs.github.com/en/actions/reference/workflows-and-actions/expressions);
   constitution XIX.
+
+### D46. A failed eval job keeps its outputs for 7 days
+
+- **Decision** (owner, 2026-11-17, after `inject-skip-links` failed 2 of 3 trials in evals run
+  43969653100 and 0 of 3 on the host, so no failing answer could be read): when a live eval job
+  fails, `evals.yml` uploads that job's report folder (`EVAL_REPORT_DIR`: `report.json` and each
+  trial's raw output and Docker Agent events) as one workflow artifact per job, named after the
+  suite and its cases, kept 7 days. A passing job uploads nothing.
+- **What it holds**: the model's answers to the suites' own synthetic descriptions and fixtures,
+  the agents' prompts (public in the repository) and token use; no key (the key reaches only the
+  gateway, D41) and no user or tenant data. The repository is public, so any signed-in GitHub user
+  can download it while it is kept; that is acceptable for this content. Its retention is the
+  configured retention of this eval data (constitution XI).
+- **Tool**: `actions/upload-artifact` (GitHub's own; MIT; OpenSSF Scorecard 5.5 on 2026-11-09:
+  Code-Review 10, Dangerous-Workflow 10, Maintained 3, no signed releases), pinned at v7.0.2 by
+  commit `cf430e030ddbb5b0abf93d22962f4752f3646cd9`. No other action uploads and keeps files.
+- **Recorded as** [ADR 0050](../../docs/decisions/0050-failed-eval-jobs-keep-their-outputs.md).
+- Sources: [actions/upload-artifact](https://github.com/actions/upload-artifact);
+  [GitHub: workflow artifacts](https://docs.github.com/en/actions/concepts/workflows-and-actions/workflow-artifacts);
+  [OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/actions/upload-artifact).
