@@ -58,10 +58,10 @@ A fresh clone of the repository, or a change to the hooks.
    contract version under `src/<service>/api/{stable,preview}/` with the previous one using the
    pinned oasdiff image, without network, and fails on any breaking change (Principle XV). A
    service with one version prints `one version, nothing to compare` and passes.
-7. A commit that changes a protected path (the constitution, `scripts/`, `src/deploy/`,
-   `src/tests/`, test files, test data, Go module files, `.gitignore`) is refused by
-   `scripts/hooks/commit-msg` unless its message carries an `Approved-by: <owner>` trailer. It
-   reads the staged names NUL-separated and matches each whole name (`grep -z`), so neither a
+7. A commit that changes a protected path (the constitution, any file under `.github/`,
+   `scripts/`, `src/deploy/`, `src/tests/`, test files, test data, Go module files, `.gitignore`)
+   is refused by `scripts/hooks/commit-msg` unless its message carries an `Approved-by: <owner>`
+   trailer. It reads the staged names NUL-separated and matches each whole name (`grep -z`), so neither a
    name git would quote, such as one with a non-ASCII letter, nor one with a newline can slip
    past a pattern. It fails closed: when `git diff`, `git interpret-trailers` or `grep` fails,
    the commit is refused with a message.

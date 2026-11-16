@@ -94,7 +94,7 @@ if matches "$tests"; then
   fi
 fi
 git diff --cached --name-only -z >"$names" || refuse "cannot list the staged files"
-protected='^(\.specify/memory/|scripts/|src/deploy/|src/tests/|.*_test\.go$|.*/testdata/|.*go\.(mod|sum)$|\.gitignore$)'
+protected='^(\.github/|\.specify/memory/|scripts/|src/deploy/|src/tests/|.*_test\.go$|.*/testdata/|.*go\.(mod|sum)$|\.gitignore$)'
 if matches "$protected"; then
   if ! trailer Approved-by; then
     echo "commit-msg: protected paths changed; add an 'Approved-by: <owner>' trailer" >&2
