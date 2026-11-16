@@ -1736,3 +1736,33 @@ page, none of which an existing project provides.
   [dorny/test-reporter](https://github.com/dorny/test-reporter);
   [go-junit-report](https://github.com/jstemmer/go-junit-report);
   [unittest-xml-reporting](https://github.com/xmlrunner/unittest-xml-reporting).
+
+### D44. End to end on the Compose stack against the recorded model
+
+- **Decision** (owner, 2026-11-16; T024): `scripts/e2e.sh` runs the real Compose stack the
+  launcher starts (`ap up`, `compose.yaml`, gVisor) against the recorded model, with no key, and
+  drives the end-to-end flow through `ap`: describe the example, answer the analyst's questions
+  (`0`, `400`), approve goals, rules and contract, `build-workers`, `build`, `replay`, `compare`.
+  It passes only when every command exits 0, the replay reused every step with no model call,
+  `compare` exits 0, the two projects' git trees are equal commit by commit, and the replay
+  server lists no miss. `scripts/check.sh` runs it as the step `e2e` (in a full run and with
+  `--only e2e`; CI runs it as its own job); the `ap-test-us2` and `ap-test-planted` jobs stay.
+- **The seam**: Compose's own override file. When `AP_COMPOSE_OVERRIDE` is set, `ap up` adds that
+  one file after `compose.yaml` and keeps it in the session, so every later command uses it; it
+  refuses any file outside `src/tests/e2e/` (exit 3) and says on standard error that the model is
+  the recorded one. The override, `src/tests/e2e/compose.recorded.yaml`, replaces the gateway by
+  the pinned WireMock replay server at the gateway's fixed addresses, with no egress and no
+  secret, and gives the engine and the project worker volumes of their own, so the developer's
+  records are never used. The image pins come from `images.lock`.
+- **Why no new recording**: the step agents' requests name the run (`RUN-1`), the step, the
+  attempt and the project folder (`/projects/notes`), which the Compose stack and the lab mount
+  alike; with a fresh store and the analyst's recorded answers, the requests equal those of
+  `TestUS2`, so the committed `steps/happy` set and the analyst recordings answer them.
+- **Refusals**: `e2e.sh` exits 3, changing nothing, while a session exists or an
+  `agentic-platform` container or network is present (the fixed subnets cannot coexist).
+- **Where it runs**: CI on every push, and on the host with `scripts/check.sh --only e2e`. The
+  pre-commit hook runs no suite since T108, so D20's "git hooks run them before every commit" no
+  longer holds.
+- **Recorded as** [ADR 0047](../../docs/decisions/0047-end-to-end-on-the-compose-stack-with-the-recorded-model.md).
+- Sources: [Compose: merge and override](https://docs.docker.com/compose/how-tos/multiple-compose-files/merge/);
+  [WireMock](https://wiremock.org/docs/); `src/cli/contract.md`; `src/tests/recorded/README.md`.

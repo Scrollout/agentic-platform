@@ -95,6 +95,12 @@ Two names, two jobs:
   `build.sh` commands may start the registry at the same time: each one returns when the one
   registry answers, and none fails because another made it first. A registry that cannot publish
   its port (the port is taken) is removed again, its data kept, and `registry` exits 1.
+- **The recorded model, for tests only.** When `AP_COMPOSE_OVERRIDE` names a file, `up` passes it
+  to Compose after `compose.yaml` and keeps it in the session, so every later command (`build-workers`,
+  the client commands, `down`) uses it. The file must be under `src/tests/e2e/` of the launcher's
+  repository; another path, or one that is not a file, is a usage error (exit 3) and nothing starts.
+  `up` then prints `up: the model is the recorded model (<file>)` on standard error. `scripts/e2e.sh`
+  uses it to run the stack against the replay server (research D44); a developer never sets it.
 - **The terminal client** runs in its own container and is a client of the engine API
   ([openapi.yaml](../engine/api/preview/2026-11-12-preview/openapi.yaml)) with the client token. It adds no behaviour
   of its own.
