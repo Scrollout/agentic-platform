@@ -1,5 +1,8 @@
 # Component
 
+* [actions/checkout](github-actions-checkout.md) - GitHub's actions/checkout action, pinned at v7.0.1 by commit hash in the CI workflows ([research D41](../../specs/001-prose-to-accepted-slice/research.md)); MIT, OpenSSF Scorecard 5.9 on 2026-11-09.
+* [actions/setup-go](github-actions-setup-go.md) - GitHub's actions/setup-go action, pinned at v7.0.0 by commit hash in the CI workflows ([research D41](../../specs/001-prose-to-accepted-slice/research.md)); MIT, OpenSSF Scorecard 6.6 on 2026-11-09.
+* [actions/setup-python](github-actions-setup-python.md) - GitHub's actions/setup-python action, pinned at v7.1.0 by commit hash in the CI workflows ([research D41](../../specs/001-prose-to-accepted-slice/research.md)); MIT, OpenSSF Scorecard 6.6 on 2026-11-09.
 * [cosign](cosign.md) - Sigstore's signing tool; signs every image the platform builds with a local key and verifies the signature before the launcher starts it.
 * [cucumber/gherkin and godog](cucumber-gherkin.md) - The Gherkin parser the slice model uses to trace examples now, and the godog runner that will execute them as tests in Story 2.
 * [Distribution registry](distribution-registry.md) - The CNCF Distribution image registry, run on 127.0.0.1 to hold the platform's built images, their SBOM and provenance attestations, and their signatures.

@@ -1602,7 +1602,9 @@ page, none of which an existing project provides.
   pre-commit hook keeps only the quick static checks of what the commit changes (root layout,
   secret scan, markdown, knowledge bundle, `gofmt` and `go vet` of the changed Go modules; no
   test suite), so a commit takes at most about 2 minutes instead of 12 to 25. No pull requests, branch protection or code owners: one
-  person commits and pushes, and a red run is fixed by the next commit. The commit-msg hook's
+  person commits and pushes, and a red run is fixed by the next commit. The full run judges a
+  task once, when it is finished and pushed: a task is done when that push's run is green
+  (owner, 2026-11-16). The commit-msg hook's
   `Approved-by:` and `Tests-approved-by:` trailers stay.
 - **Why**: the owner's host is small and shared with other projects; the full check run has
   timed out under their load (T105) and heavy runs must go one at a time there. Hosted runners give
@@ -1610,7 +1612,11 @@ page, none of which an existing project provides.
 - **Facts** (checked 2026-11-16; [GitHub Actions reference](../../docs/references/github-actions.md)):
   - Standard GitHub-hosted runners are free and unlimited in public repositories; larger runners
     are billed. A private repository gets a monthly minute quota instead.
-  - The standard Linux runner (`ubuntu-latest`, `ubuntu-24.04`) has 4 CPUs, 16 GB of memory and
+  - The standard Linux runner (`ubuntu-latest`, `ubuntu-24.04`, `ubuntu-26.04`; the workflows use `ubuntu-26.04`, Ubuntu's latest
+    stable release, named once as `ci-runner` in `images.lock`; owner, 2026-11-16, knowing that
+    GitHub's image for it is a public preview: image 20261111.196.1 with Python 3.14.4 and Docker
+    29.4.2 by its readme; Go 1.26.11 comes from `actions/setup-go`; if T107's first run cannot run
+    runsc there, `ci-runner` alone changes to `ubuntu-24.04`) has 4 CPUs, 16 GB of memory and
     a 14 GB SSD, by the runner reference; the pricing page still names a 2-core runner. The first
     run measures what a job has (T107).
   - A Free organization runs at most 20 standard-runner jobs at once; Scrollout is on the Free
@@ -1623,6 +1629,19 @@ page, none of which an existing project provides.
     guide](../../docs/guides/install-gvisor.md) installs the latest release from its apt
     repository. A hosted runner is a new machine per job, so each job that needs it installs the
     pinned release. Whether runsc runs there is proven by T107's first run.
+- **Actions adopted** (Principle VI, checked 2026-11-16): GitHub's own `actions/checkout`,
+  `actions/setup-python` and `actions/setup-go`, MIT, each pinned by its tag's commit hash; their
+  versions and Scorecard results live in their component concepts
+  ([checkout](../../docs/components/github-actions-checkout.md),
+  [setup-python](../../docs/components/github-actions-setup-python.md),
+  [setup-go](../../docs/components/github-actions-setup-go.md)). checkout's Scorecard Maintained
+  score of 0 (no commit in the 90 days before the scan) is accepted: GitHub owns and ships it, it
+  was pushed on 2026-10-17, and every job pins one commit. Against the OpenSSF Concise Guide:
+  maintained by a known owner, licence checked, pinned by hash, least permissions
+  (`contents: read`, `persist-credentials: false`); signed releases are not offered. Rejected: a
+  `git clone` in a `run:` step (the token in the command) and installing Python and Go by hand
+  (what the actions do). Their hashes and the gVisor pin are updated by the monthly manual review,
+  under the existing Principle XIII exception for automated update pull requests.
 - **Images and signing in CI**: each job builds what it needs from source with `build.sh`, signing
   with a key made for that job (the first-use key, ADR 0028), and verifies it at `ap up`; nothing
   is pushed to a registry outside the runner. Actions are pinned by commit hash, and gVisor by its
@@ -1650,6 +1669,9 @@ page, none of which an existing project provides.
   [Actions limits](https://docs.github.com/en/actions/reference/limits);
   [GitHub-hosted runners reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners);
   [Actions runner pricing](https://docs.github.com/en/billing/reference/actions-runner-pricing);
+  [runner-images README](https://github.com/actions/runner-images);
+  [Ubuntu 26.04 image readme](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2604-Readme.md);
+  [Ubuntu 26.04 public preview](https://github.com/actions/runner-images/issues/14226);
   [Using secrets in GitHub Actions](https://docs.github.com/actions/security-guides/encrypted-secrets);
   [Secret types](https://docs.github.com/en/code-security/reference/secret-security/secret-types);
   [gVisor installation](https://gvisor.dev/docs/user_guide/install/); the owner's answers of
