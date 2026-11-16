@@ -73,6 +73,12 @@ jobs:
         with:
           go-version: ${{ needs.config.outputs.go }}
           cache: false
+      # The step fixture vendors the catalogue template offline (GOPROXY=off): fill the module
+      # cache with its modules first, as scripts/check.sh's fill_module_cache does for its fixture.
+      - name: Fill the module cache for the step fixture
+        if: matrix.suite == 'steps'
+        working-directory: src/catalogue/api-feature-go/template
+        run: GOWORK=off go mod download
       - name: Install oapi-codegen (pinned in src/deploy/images.lock)
         run: go install "$(awk '$1=="oapi-codegen"{print $2}' src/deploy/images.lock)"
       - name: Write the key file
