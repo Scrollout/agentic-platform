@@ -127,8 +127,15 @@ compose() {
 compose_run() {
   if [ -t 0 ]; then cr_tty=; else cr_tty=-T; fi
   exec 3<&0
-  # shellcheck disable=SC2086
-  compose run --rm $cr_tty "$@" <&3 3<&- &
+  # docker itself in the background (not the compose function, whose subshell would get the
+  # signal instead of Compose).
+  if [ -n "${AP_COMPOSE_OVERRIDE:-}" ]; then
+    # shellcheck disable=SC2086
+    docker compose -f "$here/compose.yaml" -f "$AP_COMPOSE_OVERRIDE" run --rm $cr_tty "$@" <&3 3<&- &
+  else
+    # shellcheck disable=SC2086
+    docker compose -f "$here/compose.yaml" run --rm $cr_tty "$@" <&3 3<&- &
+  fi
   cr_pid=$!
   exec 3<&-
   cr_sig=
