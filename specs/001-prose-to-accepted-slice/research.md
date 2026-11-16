@@ -1768,3 +1768,34 @@ page, none of which an existing project provides.
 - **Recorded as** [ADR 0047](../../docs/decisions/0047-end-to-end-on-the-compose-stack-with-the-recorded-model.md).
 - Sources: [Compose: merge and override](https://docs.docker.com/compose/how-tos/multiple-compose-files/merge/);
   [WireMock](https://wiremock.org/docs/); `src/cli/contract.md`; `src/tests/recorded/README.md`.
+
+### D45. CI is the gate: evals started by hand, a keyless evals-current check, heavy suites only in CI
+
+- **Decision** (owner, 2026-11-16, after evals had started on most pushes and heavy suites had run
+  on the shared host for 15 to 50 minutes each): the workflows are designed so that nothing heavy
+  or paid runs without a reason.
+- **Evals by hand**: `evals.yml` has no `push` trigger. It runs only when the owner starts it
+  (`workflow_dispatch`, on `main` or `001-prose-to-accepted-slice`); its `config` job runs
+  `scripts/ci-evals-select.py` as for a push, against the branch's last successful evals run, so a
+  dispatched run starts only the suites whose inputs changed since then, and every suite when there
+  is no such run or when the dispatch input `all` is `true`. Before D45 a dispatch ran every suite
+  and every push that touched one of about 30 input paths (engine code and module files included)
+  started the suites it changed (T115).
+- **Nothing unproven reaches `main`**: a new keyless job `evals-current` in `check.yml` runs the
+  same selector against the last successful evals run on the pushed branch and lists the suites
+  whose evals are pending. On `001-prose-to-accepted-slice` it passes with a notice naming them; on
+  `main` it fails while any suite is pending, so a merge carries proven agents (constitution XIX:
+  before a merge or release). It needs `actions: read` on that job alone.
+- **Docs-only pushes** skip the heavy check jobs (T117, unchanged).
+- **Local work**: the commit hook and targeted tests that take seconds to a few minutes; the full
+  `scripts/check.sh`, the Docker step, `ap test` and `e2e.sh` run in CI. The host is small and
+  shared (D41).
+- **A fresh review judges the CI run**: the reviewer runs the tests that judge the change in its
+  own copy, and the full test command's run is the CI run of the pushed commit; the change is not
+  done until it is green. This amends the constitution's Fresh review rule (2.2.0,
+  [ADR 0049](../../docs/decisions/0049-fresh-review-judges-the-ci-run.md)).
+- **Recorded as** [ADR 0048](../../docs/decisions/0048-evals-started-by-hand-and-gated-before-main.md)
+  (supersedes ADR 0044 on when the evals run) and ADR 0049.
+- Sources: [GitHub Actions: workflow_dispatch](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch);
+  [GitHub Actions: job conditions](https://docs.github.com/en/actions/reference/workflows-and-actions/expressions);
+  constitution XIX.
