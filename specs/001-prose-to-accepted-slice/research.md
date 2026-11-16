@@ -1784,8 +1784,12 @@ page, none of which an existing project provides.
 - **Nothing unproven reaches `main`**: a new keyless job `evals-current` in `check.yml` runs the
   same selector against the last successful evals run on the pushed branch and lists the suites
   whose evals are pending. On `001-prose-to-accepted-slice` it passes with a notice naming them; on
-  `main` it fails while any suite is pending, so a merge carries proven agents (constitution XIX:
-  before a merge or release). It needs `actions: read` on that job alone.
+  `main` it fails while any suite is pending. With no pull requests a merge is the push itself, so
+  that failure only detects a merge made without proven evals; the gate is the owner's merge step:
+  merge only when `evals-current` on the feature branch's head names no pending suite (constitution
+  XIX: before a merge). The base run is the latest successful evals run on either branch whose head
+  is an ancestor of the commit, since evals never run on `main`. It needs `actions: read` on that
+  job alone.
 - **Docs-only pushes** skip the heavy check jobs (T117, unchanged).
 - **Local work**: the commit hook and targeted tests that take seconds to a few minutes; the full
   `scripts/check.sh`, the Docker step, `ap test` and `e2e.sh` run in CI. The host is small and

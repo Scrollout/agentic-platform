@@ -28,6 +28,9 @@ A fresh clone of the repository, or a change to the hooks.
    and `e2e.sh` run in CI, and a fresh review judges that CI run
    ([ADR 0049](/decisions/0049-fresh-review-judges-the-ci-run.md)). The live evals run only when
    the owner starts them ([ADR 0048](/decisions/0048-evals-started-by-hand-and-gated-before-main.md)).
+   The owner merges the feature branch into `main` only when the `evals-current` job on the
+   feature branch's head names no pending suite; start the evals there first
+   (`gh workflow run evals.yml --ref <branch>`).
 3. The hook that judges a commit is the one in that commit. `core.hooksPath` points at the
    working tree, so git starts the working-tree copy of the hook, which may be half edited. The
    hook's first block reads the staged `scripts/hooks/pre-commit` from the index and, if it

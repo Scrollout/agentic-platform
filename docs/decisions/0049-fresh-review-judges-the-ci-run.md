@@ -37,6 +37,10 @@ Sources: [Feature 001 research, D45](../../specs/001-prose-to-accepted-slice/res
 - The full test command's run is the CI run of the pushed commit; the change is not done until it
   is green.
 
+- This is a MINOR amendment (2.2.0): the rule stays compatible, since a review that ran the full
+  command in its own copy still meets it, and the full command still runs on the reviewed change,
+  in a fresh copy, before the change is done; only where it runs changes.
+
 # Consequences
 
 - Reviews take minutes instead of most of an hour, and the host runs no full suite.
