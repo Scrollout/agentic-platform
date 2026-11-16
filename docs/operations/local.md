@@ -193,8 +193,12 @@ Sources: [Feature 001 research, D44](../../specs/001-prose-to-accepted-slice/res
 The pre-commit hook runs the quick static checks of a commit
 ([playbook](/playbooks/protect-changes-locally.md)); CI on GitHub runs every step of
 `scripts/check.sh` and the acceptance suites on each push, and a task is done when that run is
-green ([ADR 0044](/decisions/0044-full-checks-run-on-github-hosted-runners.md)). `scripts/check.sh
---only <step>` runs one step on the host while working.
+green ([ADR 0044](/decisions/0044-full-checks-run-on-github-hosted-runners.md)). On the host, run
+only targeted tests that take seconds to a few minutes while working; the Docker step, `ap test`
+and `e2e.sh` are for CI, since the host is small and shared. The live evals run only when the
+owner starts them, `gh workflow run evals.yml --ref <branch>` (`-f all=true` for every suite),
+and each check run's `evals-current` job names the suites still pending; merge into `main` only
+when it names none, re-running it after the evals pass ([ADR 0048](/decisions/0048-evals-started-by-hand-and-gated-before-main.md)).
 
 # Observability
 

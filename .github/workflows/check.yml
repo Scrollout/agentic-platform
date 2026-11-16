@@ -353,6 +353,42 @@ jobs:
           export COSIGN_PASSWORD
           scripts/ci-step.sh e2e scripts/check.sh --only e2e
 
+  # The suites whose evals are pending (research D45, ADR 0048, T120): keyless; the selector
+  # compares this commit with the last green evals run on a dev branch that is its ancestor. A
+  # notice on the feature branch; on main it fails while a suite is pending. Runs on every push.
+  evals-current:
+    name: evals-current
+    needs: config
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ needs.config.outputs.python }}
+      - name: Install the pinned Python packages
+        run: python3 -m pip install --require-hashes -r scripts/tools/requirements-ci.txt
+      - id: run
+        name: evals-current
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: pending
+          REF: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          git fetch -q --unshallow --no-tags origin
+          RUNS=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/evals.yml/runs?status=success&per_page=100" --jq '[.workflow_runs[] | {head_sha, head_branch, conclusion}]' 2>/dev/null || true)
+          export RUNS
+          scripts/ci-step.sh evals-current python3 scripts/ci-evals-select.py
+
   summary:
     name: summary
     if: always()
@@ -374,6 +410,7 @@ jobs:
       - ap_test_planted
       - ap_test_us2
       - e2e
+      - evals-current
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

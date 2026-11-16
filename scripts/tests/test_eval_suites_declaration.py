@@ -9,8 +9,9 @@ src/tests/evals/suites.yaml is the one home of what each suite reads and runs on
         pins: [<name>, ...]   # src/deploy/images.lock pin names
 
 Each rule is a function judge_<rule>(...) returning violations; each has a test on the real
-repository and a planted violation (a copy of the declaration missing one glob or pin, a trigger
-missing one path). What a suite reads, found from the repository:
+repository and a planted violation (a copy of the declaration missing one glob or pin). Since
+T120 evals.yml has no push trigger whose paths could miss a glob: check.yml's evals-current job
+runs the selector on every push (scripts/tests/test_workflows_evals_current.py). What a suite reads, found from the repository:
 
 - every file of every workspace-module package `go list -deps -test -tags evals ./evals/<suite>`
   gives (a dependency's own tests are not built, so only its non-test files count; the
@@ -49,7 +50,6 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 DECL = REPO / "src" / "tests" / "evals" / "suites.yaml"
 LOCK = REPO / "src" / "deploy" / "images.lock"
-EVALS_YML = REPO / ".github" / "workflows" / "evals.yml"
 SETTINGS = REPO / "src" / "tests" / "lab" / "settings.go"
 AGENTS = "src/agents"
 LOCK_REL = "src/deploy/images.lock"
@@ -346,38 +346,11 @@ def judge_lock_not_globbed(decl):
             for s in decl["suites"] for g in s["paths"] if glob_rx(g).match(LOCK_REL)]
 
 
-def push_paths(wf):
-    on = wf.get("on", wf.get(True)) or {}
-    return list(((on.get("push") or {}) if isinstance(on, dict) else {}).get("paths") or [])
-
-
-def glob_covered_by(g, paths):
-    if g in paths:
-        return True
-    for p in paths:
-        if p.endswith("/**") and g.startswith(p[:-2]):
-            return True
-    return False
-
-
-def judge_trigger(decl, wf):
-    paths = push_paths(wf)
-    v = [f"evals.yml push paths do not cover {g} (suite {s['suite']}, {s['cases']!r})"
-         for s in decl["suites"] for g in s["paths"] if not glob_covered_by(g, paths)]
-    if LOCK_REL not in paths:
-        v.append(f"evals.yml push paths lack {LOCK_REL}")
-    return v
-
-
 # ---------------------------------------------------------------- tests
 
 def real_decl(tc):
     tc.assertTrue(DECL.exists(), f"{DECL.relative_to(REPO)} does not exist")
     return load_decl()
-
-
-def real_wf():
-    return yaml.safe_load(EVALS_YML.read_text())
 
 
 def without_glob(decl, s_index, path):
@@ -534,29 +507,6 @@ class LockNotGlobbedTest(unittest.TestCase):
                 d = copy.deepcopy(real_decl(self))
                 d["suites"][0]["paths"].append(g)
                 self.assertTrue(judge_lock_not_globbed(d))
-
-
-class TriggerTest(unittest.TestCase):
-    def test_real_trigger_covers_every_glob(self):
-        self.assertEqual(judge_trigger(real_decl(self), real_wf()), [])
-
-    def test_planted_trigger_missing_a_path_fails(self):
-        decl, wf = real_decl(self), real_wf()
-        paths = push_paths(wf)
-        for p in paths:
-            if not any(glob_covered_by(g, [p]) for s in decl["suites"] for g in s["paths"]) \
-                    and p != LOCK_REL:
-                continue
-            with self.subTest(p):
-                w = copy.deepcopy(wf)
-                on = w.get("on", w.get(True))
-                on["push"]["paths"] = [x for x in paths if x != p]
-                self.assertTrue(judge_trigger(decl, w), p)
-
-    def test_planted_prefix_is_not_a_cover(self):
-        self.assertFalse(glob_covered_by("src/agents/review/**", ["src/agents/rev/**"]))
-        self.assertTrue(glob_covered_by("src/agents/review/**", ["src/agents/**"]))
-        self.assertFalse(glob_covered_by("src/agentsx/**", ["src/agents/**"]))
 
 
 class GlobTest(unittest.TestCase):

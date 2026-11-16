@@ -78,10 +78,13 @@ dropped, `MODEL_GATEWAY_URL=http://gateway:8080`, a placeholder `ANTHROPIC_API_K
 labelled `ap.eval.run=<id>` and removed afterwards; `run.sh` removes by that label if the test is
 killed. The report lists every case, every trial and every failing grader with its reason.
 
-## How T059 calls it
+## How it runs in CI
 
-`scripts/check.sh` runs `sh src/tests/evals/analyst/run.sh live` (with the T041 evals) when a prompt,
-agent definition, model or Docker Agent version changed, with the test-scoped key file in place.
+`.github/workflows/evals.yml` runs this suite and the step suites only when the owner starts it
+([ADR 0048](../../../../docs/decisions/0048-evals-started-by-hand-and-gated-before-main.md)):
+`gh workflow run evals.yml --ref <branch>` runs the suites whose inputs changed since the last
+green evals run, and `-f all=true` runs every suite. Its key is the test-scoped key of the
+environment `dev`. Check runs' `evals-current` job names the suites still pending.
 Exit status is non-zero when any case fails pass^3, or when the key is missing.
 
 ## Without a model

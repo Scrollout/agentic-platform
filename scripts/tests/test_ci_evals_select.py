@@ -18,8 +18,10 @@ The selector's interface, fixed by these tests:
   chose goes to stderr.
 - A suite is chosen when a changed file matches one of its globs or one of its pins changed
   value, was added or removed between the two images.lock texts. Every suite is chosen when
-  EVENT is workflow_dispatch, when BEFORE is all zeros or empty, or when BEFORE is not a commit
-  in the fetched history.
+  BEFORE is all zeros or empty, or when BEFORE is not a commit in the fetched history. Since T120
+  a workflow_dispatch selects as a push does; the workflows give the selector RUNS (the listed
+  successful evals runs) and the dispatch input ALL instead of BEFORE, judged in
+  test_ci_evals_dispatch.py.
 
 Every case runs in a throwaway git repository with a small test-local declaration, so the
 selector's rules are judged apart from the real declaration; RealDeclarationTest then judges the
@@ -301,7 +303,8 @@ class AllSuitesTest(unittest.TestCase):
     def test_workflow_dispatch(self):
         r = Repo(self)
         sha = r.commit({"docs/index.md": "x\n"})
-        self.assertEqual(r.select(r.base, sha, event="workflow_dispatch"), ALL)
+        # Since T120 a dispatch selects as a push does.
+        self.assertEqual(r.select(r.base, sha, event="workflow_dispatch"), [])
         self.assertEqual(r.select("", sha, event="workflow_dispatch"), ALL)
 
     def test_planted_known_before_with_no_suite_input_chooses_none(self):

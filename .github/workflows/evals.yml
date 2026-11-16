@@ -1,45 +1,22 @@
-# The live evals (research D41, ADR 0044, T109, T115): each eval case 3 times through the gateway
-# with the test-scoped key, on the environment dev's branches, for the suites whose inputs a push
-# changed (src/tests/evals/suites.yaml, chosen by scripts/ci-evals-select.py), and every suite when
-# started by hand. The key is
+# The live evals (research D41, D45, ADR 0044, ADR 0048, T109, T115, T120): each eval case 3 times
+# through the gateway with the test-scoped key, only when the owner starts them, for the suites
+# whose inputs changed since the last green evals run (src/tests/evals/suites.yaml, chosen by
+# scripts/ci-evals-select.py), or every suite with the input all. The key is
 # the secret ANTHROPIC_API_KEY of the environment dev and reaches only the evals job. Never on
 # pull requests. Changing this file needs the owner's Approved-by (scripts/hooks/commit-msg);
 # scripts/tests/test_workflows.py checks its rules.
 name: evals
 
 on:
-  push:
-    branches:
-      - main
-      - 001-prose-to-accepted-slice
-    # Every input of src/tests/evals/suites.yaml (test_eval_suites_declaration.py proves it);
-    # scripts/ci-evals-select.py then picks the suites the push changed (T115).
-    paths:
-      - "src/agents/**"
-      - "src/tests/evals/**"
-      - "src/deploy/images.lock"
-      - "src/deploy/Dockerfile.agent"
-      - "src/go.work"
-      - "src/go.work.sum"
-      - "src/check/go.mod"
-      - "src/check/go.sum"
-      - "src/cli/go.mod"
-      - "src/cli/go.sum"
-      - "src/engine/go.mod"
-      - "src/engine/go.sum"
-      - "src/page/go.mod"
-      - "src/page/go.sum"
-      - "src/tests/go.mod"
-      - "src/tests/go.sum"
-      - "src/engine/canonical/**"
-      - "src/engine/checks/**"
-      - "src/slice/**"
-      - "src/engine/api/preview/**"
-      - "src/deploy/gateway/**"
-      - "src/engine/slices/**"
-      - "src/engine/procedures/**"
-      - "src/catalogue/api-feature-go/**"
+  # Only by hand (research D45, ADR 0048, T120): gh workflow run evals.yml --ref <branch>, with
+  # -f all=true for every suite; otherwise only the suites whose inputs changed since the last
+  # green evals run. No push trigger, so a push never spends the key.
   workflow_dispatch:
+    inputs:
+      all:
+        description: Run every suite, not only those whose inputs changed
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -84,23 +61,24 @@ jobs:
           python-version: ${{ steps.pins.outputs.python }}
       - name: Install the pinned Python packages
         run: python3 -m pip install --require-hashes -r scripts/tools/requirements-ci.txt
-      # The suites whose inputs changed since the branch's last successful evals run (T115): GitHub
-      # keeps one pending run per concurrency group, so the push's own `before` could miss a dropped
-      # run's changes. No such run, or the API not answering: every suite.
+      # The suites whose inputs changed since the last green evals run (T115, T120): the selector
+      # takes the successful runs and chooses the base, the newest on a dev branch whose head is an
+      # ancestor of this commit, so it needs the full history. No such run, or the API not
+      # answering: every suite.
       - id: select
-        name: Choose the eval suites the push affects
+        name: Choose the eval suites whose inputs changed
         env:
           GH_TOKEN: ${{ github.token }}
-          REF: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
           EVENT: ${{ github.event_name }}
+          ALL: ${{ inputs.all }}
         run: |
-          BEFORE=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/evals.yml/runs?branch=$REF&status=success&per_page=1" --jq '.workflow_runs[0].head_sha // ""' 2>/dev/null || true)
-          [ -z "$BEFORE" ] || git fetch -q --no-tags --depth=1 origin "$BEFORE" || true
-          export BEFORE
+          git fetch -q --unshallow --no-tags origin || echo "::warning::git fetch --unshallow failed: no base can be found, so every suite runs"
+          RUNS=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/evals.yml/runs?status=success&per_page=100" --jq '[.workflow_runs[] | {head_sha, head_branch, conclusion}]' 2>/dev/null || true)
+          export RUNS
           matrix=$(python3 scripts/ci-evals-select.py)
           echo "matrix=$matrix" >>"$GITHUB_OUTPUT"
-          if [ "$matrix" = "[]" ]; then echo "No eval suite reads what this push changed; the evals job is skipped." >>"$GITHUB_STEP_SUMMARY"; fi
+          if [ "$matrix" = "[]" ]; then echo "No eval suite's inputs changed since the last green evals run; the evals job is skipped (all=true runs every suite)." >>"$GITHUB_STEP_SUMMARY"; fi
 
   evals:
     name: evals (${{ matrix.suite }}${{ matrix.cases && format(' {0}', matrix.cases) || '' }})

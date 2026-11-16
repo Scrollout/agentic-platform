@@ -1,4 +1,8 @@
-"""Tests for the GitHub Actions workflows (T107, T109; research D41, ADR 0044).
+"""Tests for the GitHub Actions workflows (T107, T109, T120; research D41, D45, ADR 0044, ADR 0048).
+
+Since T120 evals.yml has no push trigger: it runs only when started by hand (workflow_dispatch
+with the boolean input `all`); scripts/tests/test_workflows_evals_current.py judges that and
+check.yml's evals-current job.
 
 Each rule is one function, judge_<rule>(root), that reads the workflow files under root and
 returns the violations as strings. Every rule has a test on the repository's real files and a
@@ -22,8 +26,6 @@ CHECK_SH = REPO / "scripts" / "check.sh"
 HOOK = REPO / "scripts" / "hooks" / "commit-msg"
 SLUG = "https://github.com/Scrollout/agentic-platform/actions/workflows"
 HASH = "a" * 40
-EVALS_PATHS = ["src/agents/**", "src/tests/evals/**", "src/deploy/images.lock",
-               "src/deploy/Dockerfile.agent"]
 
 
 # ---------------------------------------------------------------- loading
@@ -107,10 +109,8 @@ def judge_triggers(root):
             v.append(f"check.yml triggers are {sorted(t)}, not push and workflow_dispatch")
     if "evals.yml" in wf:
         t = triggers(wf["evals.yml"])
-        if set(t) != {"push", "workflow_dispatch"}:
-            v.append(f"evals.yml triggers are {sorted(t)}, not push and workflow_dispatch")
-        elif not (t["push"] or {}).get("paths"):
-            v.append("evals.yml push trigger has no paths")
+        if set(t) != {"workflow_dispatch"}:
+            v.append(f"evals.yml triggers are {sorted(t)}, not workflow_dispatch alone")
     return v
 
 
@@ -121,10 +121,11 @@ def judge_permissions(root):
         if w.get("permissions") != {"contents": "read"}:
             v.append(f"{name} top-level permissions is {w.get('permissions')!r}, not contents: read")
         for jn, job in jobs(w).items():
-            # T115 (owner, 2026-11-16): listing workflow runs needs actions: read, on evals.yml's
-            # config job alone.
+            # T115, T117, T120 (owner, 2026-11-16): listing workflow runs needs actions: read, on
+            # evals.yml's config job and check.yml's config and evals-current jobs alone.
             allowed = [{"contents": "read"}]
-            if (name, jn) == ("evals.yml", "config"):
+            if (name, jn) in (("evals.yml", "config"), ("check.yml", "config"),
+                              ("check.yml", "evals-current")):
                 allowed.append({"contents": "read", "actions": "read"})
             if "permissions" in job and job["permissions"] not in allowed:
                 v.append(f"{name} job {jn} sets permissions {job['permissions']!r}")
@@ -181,18 +182,6 @@ def judge_secrets_environment(root):
                     v.append(f"{name} job {jn} sets environment")
     if "evals.yml" in wf and "evals" not in jobs(wf["evals.yml"]):
         v.append("evals.yml has no job named evals")
-    return v
-
-
-def judge_evals_paths(root):
-    wf = load(root)
-    v = need_files(wf, "evals.yml")
-    if v:
-        return v
-    paths = (triggers(wf["evals.yml"]).get("push") or {}).get("paths") or []
-    for p in EVALS_PATHS:
-        if p not in paths:
-            v.append(f"evals.yml push paths lack {p}")
     return v
 
 
@@ -465,21 +454,6 @@ def evals_job(wf):
     return jobs(wf["evals.yml"]).get("evals") or {}
 
 
-def judge_evals_branches(root):
-    wf = load(root)
-    v = need_files(wf, "evals.yml")
-    if v:
-        return v
-    push = triggers(wf["evals.yml"]).get("push") or {}
-    if sorted(push.get("branches") or []) != ["001-prose-to-accepted-slice", "main"]:
-        v.append(f"evals.yml push branches are {push.get('branches')!r}, not main and "
-                 "001-prose-to-accepted-slice")
-    for k in ("branches-ignore", "tags", "tags-ignore"):
-        if k in push:
-            v.append(f"evals.yml push trigger has {k}")
-    return v
-
-
 def judge_evals_key_file(root):
     wf = load(root)
     v = need_files(wf, "evals.yml")
@@ -696,8 +670,8 @@ def good_evals():
     ev["environment"] = "dev"
     ev["env"] = {"EVAL_REPORT_DIR": "${{ runner.temp }}/eval-report"}
     return {"name": "evals",
-            "on": {"push": {"branches": ["main", "001-prose-to-accepted-slice"],
-                            "paths": list(EVALS_PATHS)}, "workflow_dispatch": None},
+            "on": {"workflow_dispatch": {"inputs": {"all": {
+                "description": "Run every suite", "type": "boolean", "default": False}}}},
             "permissions": {"contents": "read"},
             "jobs": {"config": CONFIG(), "evals": ev}}
 
@@ -748,7 +722,7 @@ def planted(tc, mutate=None):
 
 NEW_RULES = (judge_runs_on, judge_config_job, judge_no_literal_versions, judge_images_lock,
              judge_requirements, judge_install_requires_hashes, judge_checkout_credentials,
-             judge_no_event_in_run, judge_prepare, judge_evals_branches, judge_evals_key_file,
+             judge_no_event_in_run, judge_prepare, judge_evals_key_file,
              judge_evals_summary, judge_py_tests_images, judge_yaml_jobs_setup,
              judge_config_pins, judge_fetch_depth, judge_evals_report_dir)
 
@@ -760,7 +734,7 @@ class BaselineTest(unittest.TestCase):
     def test_good_tree_passes_every_rule(self):
         root = planted(self)
         for fn in (judge_triggers, judge_permissions, judge_pinned_uses,
-                   judge_secrets_environment, judge_evals_paths, judge_summary_job,
+                   judge_secrets_environment, judge_summary_job,
                    judge_hook_protects_github, judge_badges, *NEW_RULES):
             self.assertEqual(fn(root), [], fn.__name__)
         self.assertEqual(judge_steps_have_jobs(root, STEPS), [])
@@ -827,10 +801,12 @@ class TriggersTest(unittest.TestCase):
             del d["check.yml"]["on"]["push"]
         self.assertTrue(judge_triggers(planted(self, m)))
 
-    def test_planted_evals_push_without_paths_fails(self):
-        def m(d):
-            d["evals.yml"]["on"]["push"] = None
-        self.assertTrue(judge_triggers(planted(self, m)))
+    def test_planted_evals_push_trigger_fails(self):
+        for push in (None, {"branches": ["main"], "paths": ["src/agents/**"]}):
+            with self.subTest(push):
+                def m(d, push=push):
+                    d["evals.yml"]["on"]["push"] = push
+                self.assertTrue(judge_triggers(planted(self, m)))
 
     def test_planted_evals_without_dispatch_fails(self):
         def m(d):
@@ -868,8 +844,30 @@ class PermissionsTest(unittest.TestCase):
             d["evals.yml"]["jobs"]["config"]["permissions"] = {"contents": "read", "actions": "read"}
         self.assertEqual(judge_permissions(planted(self, m)), [])
 
+    def test_check_config_and_evals_current_actions_read_pass(self):
+        for jn in ("config", "evals-current"):
+            with self.subTest(jn):
+                def m(d, jn=jn):
+                    js = d["check.yml"]["jobs"]
+                    js.setdefault(jn, good_job("python3 scripts/ci-evals-select.py"))
+                    js[jn]["permissions"] = {"contents": "read", "actions": "read"}
+                self.assertEqual(judge_permissions(planted(self, m)), [])
+
+    def test_planted_other_permission_on_check_config_and_evals_current_fails(self):
+        for jn in ("config", "evals-current"):
+            for perms in ({"contents": "read", "actions": "write"},
+                          {"contents": "read", "actions": "read", "packages": "read"},
+                          {"actions": "read"}, {"contents": "write", "actions": "read"}):
+                with self.subTest(f"{jn} {perms}"):
+                    def m(d, jn=jn, perms=perms):
+                        js = d["check.yml"]["jobs"]
+                        js.setdefault(jn, good_job("python3 scripts/ci-evals-select.py"))
+                        js[jn]["permissions"] = perms
+                    v = judge_permissions(planted(self, m))
+                    self.assertTrue(any(jn in x for x in v), v)
+
     def test_planted_actions_read_on_another_job_fails(self):
-        for wf, jn in (("evals.yml", "evals"), ("check.yml", "config"), ("check.yml", "alpha")):
+        for wf, jn in (("evals.yml", "evals"), ("check.yml", "alpha")):
             with self.subTest(f"{wf} {jn}"):
                 def m(d, wf=wf, jn=jn):
                     d[wf]["jobs"][jn]["permissions"] = {"contents": "read", "actions": "read"}
@@ -973,20 +971,6 @@ class SecretsEnvironmentTest(unittest.TestCase):
         def m(d):
             d["evals.yml"]["jobs"]["evals"]["environment"] = {"name": "dev"}
         self.assertEqual(judge_secrets_environment(planted(self, m)), [])
-
-
-class EvalsPathsTest(unittest.TestCase):
-    def test_real_evals_paths(self):
-        self.assertEqual(judge_evals_paths(REPO), [])
-
-    def test_planted_each_missing_path_fails(self):
-        for p in EVALS_PATHS:
-            with self.subTest(path=p):
-                def m(d, p=p):
-                    d["evals.yml"]["on"]["push"]["paths"].remove(p)
-                v = judge_evals_paths(planted(self, m))
-                self.assertEqual(len(v), 1, v)
-                self.assertIn(p, v[0])
 
 
 class SummaryJobTest(unittest.TestCase):
@@ -1421,34 +1405,6 @@ class PrepareTest(unittest.TestCase):
 
 
 class EvalsHardeningTest(unittest.TestCase):
-    def test_real_branches(self):
-        self.assertEqual(judge_evals_branches(REPO), [])
-
-    def test_planted_extra_branch_fails(self):
-        def m(d):
-            d["evals.yml"]["on"]["push"]["branches"].append("dev")
-        self.assertTrue(judge_evals_branches(planted(self, m)))
-
-    def test_planted_wildcard_fails(self):
-        def m(d):
-            d["evals.yml"]["on"]["push"]["branches"] = ["**"]
-        self.assertTrue(judge_evals_branches(planted(self, m)))
-
-    def test_planted_missing_branch_fails(self):
-        def m(d):
-            d["evals.yml"]["on"]["push"]["branches"] = ["main"]
-        self.assertTrue(judge_evals_branches(planted(self, m)))
-
-    def test_planted_no_branch_filter_fails(self):
-        def m(d):
-            del d["evals.yml"]["on"]["push"]["branches"]
-        self.assertTrue(judge_evals_branches(planted(self, m)))
-
-    def test_planted_tags_fails(self):
-        def m(d):
-            d["evals.yml"]["on"]["push"]["tags"] = ["v*"]
-        self.assertTrue(judge_evals_branches(planted(self, m)))
-
     def test_real_key_file(self):
         self.assertEqual(judge_evals_key_file(REPO), [])
 
@@ -1703,7 +1659,7 @@ class NothingFoundTest(unittest.TestCase):
         root = Path(tempfile.mkdtemp())
         self.addCleanup(lambda: __import__("shutil").rmtree(root, ignore_errors=True))
         for fn in (judge_triggers, judge_permissions, judge_pinned_uses,
-                   judge_secrets_environment, judge_evals_paths, judge_summary_job, *NEW_RULES):
+                   judge_secrets_environment, judge_summary_job, *NEW_RULES):
             self.assertTrue(fn(root), fn.__name__)
         self.assertTrue(judge_steps_have_jobs(root, STEPS))
 

@@ -1,4 +1,4 @@
-"""The evals workflow runs only the suites scripts/ci-evals-select.py chooses (T115).
+"""The evals workflow runs only the suites scripts/ci-evals-select.py chooses (T115, T120).
 
 Rules, each a judge_<rule>(root) over root/.github/workflows/evals.yml, with a test on the real
 file and a planted violation in a temporary tree that is valid otherwise (a baseline test proves
@@ -10,14 +10,11 @@ it valid):
 - skipped: the evals job's `if:` skips it when that output is `[]`;
 - env: the selector step takes SHA and EVENT from `env:` (github.sha, github.event_name), and
   its run holds no `${{ }}` expression;
-- base: BEFORE is the head commit of the last successful evals.yml run on the branch, asked of
-  the GitHub API with `gh api` (actions/workflows/evals.yml/runs, branch=, status=success): in
-  the selector step's own run (assigned to BEFORE), or in an earlier config step whose output
-  the selector step's env BEFORE is (`${{ steps.<id>.outputs.<y> }}`); that step's GH_TOKEN is
-  `${{ github.token }}`, never a secret, and its run holds no expression. Never
-  github.event.before (T115, fresh review: GitHub drops pending runs of a concurrency group);
 - history: the config job can resolve the push's start: its checkout has fetch-depth 0, or a
   step before the selector runs `git fetch`.
+
+The base run (since T120 the selector chooses it from RUNS, the listed successful evals runs;
+the workflow gives no BEFORE) is judged by scripts/tests/test_workflows_evals_current.py.
 
 The loading helpers are scripts/tests/test_workflows.py's, imported unchanged.
 """
@@ -38,9 +35,6 @@ FROM_JSON = re.compile(r"\s*\$\{\{\s*fromjson\(\s*needs\.config\.outputs\.([\w-]
                        re.I)
 STEP_OUT = re.compile(r"\s*\$\{\{\s*steps\.([\w-]+)\.outputs\.([\w-]+)\s*\}\}\s*")
 WANT_ENV = {"SHA": "github.sha", "EVENT": "github.event_name"}
-API = [re.compile(r"\bgh\s+api\b"), re.compile(r"actions/workflows/evals\.yml/runs\b"),
-       re.compile(r"\bbranch="), re.compile(r"\bstatus=success\b")]
-TOKEN = re.compile(r"\s*\$\{\{\s*github\.token\s*\}\}\s*")
 
 
 def evals_wf(root):
@@ -143,55 +137,11 @@ def judge_history(root):
     return v
 
 
-def asks_api(run):
-    return all(p.search(run) for p in API)
-
-
-def judge_base(root):
-    w, v = evals_wf(root)
-    if v:
-        return v
-    c = jobs(w).get("config") or {}
-    i, st = select_step(c)
-    if st is None:
-        return ["no config step runs scripts/ci-evals-select.py"]
-    steps = c.get("steps") or []
-    env_before = str((st.get("env") or {}).get("BEFORE", ""))
-    if "github.event.before" in str(st) or "github.event.before" in env_before:
-        v.append("the selector's base is the push's before, not the last successful evals run")
-    so = STEP_OUT.fullmatch(env_before)
-    run = str(st.get("run", ""))
-    if so:
-        src = [s for s in steps[:i] if s.get("id") == so.group(1)]
-        if not src:
-            return v + [f"the selector's BEFORE {env_before!r} names no earlier config step"]
-        base = src[0]
-        if not re.search(r"\b" + re.escape(so.group(2)) + r"=.*GITHUB_OUTPUT",
-                         str(base.get("run", "")), re.S):
-            v.append(f"step {so.group(1)} does not write {so.group(2)}= to $GITHUB_OUTPUT")
-    elif asks_api(run) and re.search(r"\bBEFORE=", run):
-        base = st
-    else:
-        return v + ["the selector's BEFORE does not come from gh api's last successful evals.yml run"]
-    brun = str(base.get("run", ""))
-    if not asks_api(brun):
-        v.append("the base step does not ask gh api for evals.yml runs on the branch with status=success")
-    if EXPR.search(brun):
-        v.append("the base step's run holds an expression")
-    tok = (base.get("env") or {}).get("GH_TOKEN")
-    if tok is None or not TOKEN.fullmatch(str(tok)):
-        v.append(f"the base step's GH_TOKEN is {tok!r}, not ${{{{ github.token }}}}")
-    if any("secrets" in str(s) for s in steps):
-        v.append("a config step reaches a secret")
-    return v
-
-
-RULES = (judge_matrix, judge_skipped, judge_env, judge_base, judge_history)
-BASE_RUN = ("before=$(gh api \"repos/$GITHUB_REPOSITORY/actions/workflows/evals.yml/runs"
-            "?branch=$BRANCH&status=success&per_page=1\" --jq '.workflow_runs[0].head_sha // \"\"' || true)\n"
-            "echo \"before=$before\" >>\"$GITHUB_OUTPUT\"")
-
-SELECT_RUN = ("git fetch --no-tags --depth=50 origin \"$SHA\"\n"
+RULES = (judge_matrix, judge_skipped, judge_env, judge_history)
+SELECT_RUN = ("git fetch -q --no-tags --unshallow origin\n"
+              "RUNS=$(gh api \"repos/$GITHUB_REPOSITORY/actions/workflows/evals.yml/runs"
+              "?status=success&per_page=100\" --jq '[.workflow_runs[] | {head_sha, head_branch, "
+              "conclusion}]' || true)\nexport RUNS\n"
               "matrix=$(python3 scripts/ci-evals-select.py)\n"
               "echo \"matrix=$matrix\" >>\"$GITHUB_OUTPUT\"")
 
@@ -200,11 +150,9 @@ def good():
     w = good_evals()
     cfg = w["jobs"]["config"]
     cfg["outputs"]["matrix"] = "${{ steps.select.outputs.matrix }}"
-    cfg["steps"].append({"id": "base", "run": BASE_RUN,
-                         "env": {"GH_TOKEN": "${{ github.token }}", "BRANCH": "${{ github.ref_name }}"}})
     cfg["steps"].append({"id": "select", "run": SELECT_RUN,
                          "env": dict({k: "${{ %s }}" % c for k, c in WANT_ENV.items()},
-                                     BEFORE="${{ steps.base.outputs.before }}")})
+                                     GH_TOKEN="${{ github.token }}", ALL="${{ inputs.all }}")})
     ev = w["jobs"]["evals"]
     ev["if"] = "needs.config.outputs.matrix != '[]'"
     ev["strategy"] = {"fail-fast": False,
@@ -226,10 +174,6 @@ def planted(tc, mutate=None):
 
 def cfg(w):
     return w["jobs"]["config"]
-
-
-def base(w):
-    return cfg(w)["steps"][-2]
 
 
 def sel(w):
@@ -333,60 +277,6 @@ class EnvTest(unittest.TestCase):
         def m(w):
             sel(w)["env"]["SHA"] = "${{ github.event.after }}"
         self.assertTrue(judge_env(planted(self, m)))
-
-
-class BaseTest(unittest.TestCase):
-    def test_real_base_is_last_successful_run(self):
-        self.assertEqual(judge_base(REPO), [])
-
-    def test_api_in_the_selector_step_passes(self):
-        def m(w):
-            st = base(w)
-            sel(w)["run"] = st["run"].replace("before=", "BEFORE=").replace(
-                "echo \"before=$BEFORE\" >>\"$GITHUB_OUTPUT\"", "export BEFORE") + "\n" + SELECT_RUN
-            sel(w)["env"].update(st["env"])
-            del sel(w)["env"]["BEFORE"]
-            cfg(w)["steps"].remove(st)
-        self.assertEqual(judge_base(planted(self, m)), [])
-
-    def test_planted_push_before_fails(self):
-        def m(w):
-            sel(w)["env"]["BEFORE"] = "${{ github.event.before }}"
-        self.assertTrue(judge_base(planted(self, m)))
-
-    def test_planted_no_base_fails(self):
-        def m(w):
-            del sel(w)["env"]["BEFORE"]
-        self.assertTrue(judge_base(planted(self, m)))
-
-    def test_planted_api_query_wrong_fails(self):
-        for old, new in (("evals.yml", "check.yml"), ("&status=success", ""),
-                         ("branch=$BRANCH&", ""), ("gh api", "curl")):
-            with self.subTest(old):
-                def m(w, old=old, new=new):
-                    base(w)["run"] = base(w)["run"].replace(old, new)
-                self.assertTrue(judge_base(planted(self, m)))
-
-    def test_planted_token_from_secret_fails(self):
-        for tok in ("${{ secrets.GITHUB_TOKEN }}", "${{ secrets.ANTHROPIC_API_KEY }}", None):
-            with self.subTest(tok):
-                def m(w, tok=tok):
-                    if tok is None:
-                        del base(w)["env"]["GH_TOKEN"]
-                    else:
-                        base(w)["env"]["GH_TOKEN"] = tok
-                v = judge_base(planted(self, m))
-                self.assertTrue(any("GH_TOKEN" in x for x in v), v)
-
-    def test_planted_expression_in_base_run_fails(self):
-        def m(w):
-            base(w)["run"] = base(w)["run"].replace("$BRANCH", "${{ github.ref_name }}")
-        self.assertTrue(any("expression" in x for x in judge_base(planted(self, m))))
-
-    def test_planted_output_not_written_fails(self):
-        def m(w):
-            base(w)["run"] = base(w)["run"].split("\n")[0]
-        self.assertTrue(judge_base(planted(self, m)))
 
 
 class HistoryTest(unittest.TestCase):

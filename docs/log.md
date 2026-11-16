@@ -1,5 +1,9 @@
 # Directory Update Log
 
+## 2026-11-17
+
+* **Implementation**: Feature 001, T120: `evals.yml` runs only when the owner starts it (`gh workflow run evals.yml --ref <branch>`, `-f all=true` for every suite), for the suites whose inputs changed since the newest green evals run on a dev branch that is an ancestor of the commit; the new keyless `evals-current` job in `check.yml` names the pending suites, a notice on the feature branch and a failure on `main`. Owner-approved changes to the existing CI tests; new tests by a separate author. Follow-ups T121.
+
 ## 2026-11-16
 
 * **Decision**: CI is the gate (owner, 2026-11-16; research D45): the live evals run only when the owner starts them, for the suites whose inputs changed since the last green evals run, and a keyless `evals-current` check fails on `main` while a suite is pending ([ADR 0048](/decisions/0048-evals-started-by-hand-and-gated-before-main.md), superseding ADR 0044 on when evals run); heavy suites run only in CI; constitution 2.2.0: a fresh review runs the tests that judge the change and judges the CI run of the pushed commit for the full test command ([ADR 0049](/decisions/0049-fresh-review-judges-the-ci-run.md)). Work: T117, T120.
