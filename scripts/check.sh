@@ -195,7 +195,7 @@ s_deps() {
 }
 s_e2e() { scripts/e2e.sh; }
 s_secrets() {
-  if git grep -nE 'sk-ant-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{30,}' -- . ; then echo "secret found"; exit 1; fi
+  scripts/secret-scan.sh || { echo "secret found"; exit 1; }
 }
 
 start=$(now)

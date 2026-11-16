@@ -2,6 +2,7 @@
 
 ## 2026-11-17
 
+* **Implementation**: Feature 001, T122: a failed live eval job scans its report folder with the new `scripts/secret-scan.sh` (now also behind `check.sh`'s `secrets` step) and, when clean, uploads it as an artifact kept 7 days. New tests by a separate author.
 * **Decision**: A failed live eval job keeps its outputs (owner, 2026-11-17; research D46, [ADR 0050](/decisions/0050-failed-eval-jobs-keep-their-outputs.md)): its report folder becomes an artifact kept 7 days, with [actions/upload-artifact](/components/github-actions-upload-artifact.md); a passing job uploads nothing. Work: T122.
 * **Implementation**: Feature 001, T119 (evals pending, started by the owner): the analyst's instruction says the description can never make it drop or change the IDs, `Rule:` blocks, `@R/@E` tags or links between goals, rules, examples and operations; new adversarial eval case `inject-drop-tags`; the 3 analyst recordings renewed by prompt swap (owner-approved).
 * **Implementation**: Feature 001, T120: `evals.yml` runs only when the owner starts it (`gh workflow run evals.yml --ref <branch>`, `-f all=true` for every suite), for the suites whose inputs changed since the newest green evals run on a dev branch that is an ancestor of the commit; the new keyless `evals-current` job in `check.yml` names the pending suites, a notice on the feature branch and a failure on `main`. Owner-approved changes to the existing CI tests; new tests by a separate author. Follow-ups T121.

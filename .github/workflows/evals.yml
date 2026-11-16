@@ -131,3 +131,17 @@ jobs:
       - name: Remove the key file
         if: always()
         run: rm -f "$RUNNER_TEMP/anthropic_api_key"
+      # A failed job keeps its outputs for 7 days (research D46, ADR 0050, T122): the report folder
+      # is scanned for credential patterns first, and uploaded only when the scan finds none.
+      - id: scan
+        name: Scan the eval outputs for credentials
+        if: failure()
+        run: scripts/secret-scan.sh "$EVAL_REPORT_DIR"
+      - name: Keep the failed job's eval outputs
+        if: failure() && steps.scan.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: evals-${{ matrix.suite }}${{ matrix.cases && format('-{0}', matrix.cases) || '' }}-${{ github.run_attempt }}
+          path: ${{ env.EVAL_REPORT_DIR }}
+          retention-days: 7
+          if-no-files-found: warn
