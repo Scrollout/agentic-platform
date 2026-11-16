@@ -1676,3 +1676,28 @@ page, none of which an existing project provides.
   [Secret types](https://docs.github.com/en/code-security/reference/secret-security/secret-types);
   [gVisor installation](https://gvisor.dev/docs/user_guide/install/); the owner's answers of
   2026-11-16 in this session.
+
+### D42. GitHub's free scanners are on for the public repository
+
+- **Decision** (owner, 2026-11-16): the repository uses the security features GitHub gives a
+  public repository for free, beside `scripts/check.sh`'s own scans: secret scanning over the whole
+  history with push protection (a push holding a known credential is refused), Dependabot alerts
+  on the dependency graph, code scanning with CodeQL's default setup (Go, Python and the workflow
+  files), and private vulnerability reporting. **Not enabled**: Dependabot security updates and
+  version updates, which open pull requests (no pull requests, D41); alerts are reviewed in the
+  monthly dependency review instead (Principle XIII exception).
+- **Why**: Principle XIII asks for dependency, licence, secret and static analysis on every change;
+  these add GitHub's credential patterns, advisory database and CodeQL queries at no cost and with
+  no code of ours (Principle VI).
+- **Facts** (checked 2026-11-16): secret scanning runs for free on public repositories over every
+  branch's history; push protection, Dependabot alerts and the dependency graph are not on by
+  default; code scanning, including CodeQL's default setup, is available for public repositories
+  when Actions is enabled; default setup picks the languages, query suite and triggers itself.
+- **Known limits**: CodeQL's default setup runs its own workflow, outside `check.yml`, so its result
+  is not in the run summary; its findings and the alerts are read in the repository's Security tab.
+- **Recorded as** [ADR 0045](../../docs/decisions/0045-github-free-scanners.md).
+- Sources: [Quickstart for securing your repository](https://docs.github.com/en/code-security/getting-started/quickstart-for-securing-your-repository);
+  [About secret scanning](https://docs.github.com/code-security/secret-scanning/about-secret-scanning);
+  [Enabling push protection](https://docs.github.com/en/code-security/secret-scanning/enabling-secret-scanning-features/enabling-push-protection-for-your-repository);
+  [Configuring default setup for code scanning](https://docs.github.com/en/code-security/code-scanning/enabling-code-scanning/configuring-default-setup-for-code-scanning);
+  [GitHub security features](https://docs.github.com/en/code-security/getting-started/github-security-features).
