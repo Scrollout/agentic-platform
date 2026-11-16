@@ -53,7 +53,7 @@ jobs:
           cat "$GITHUB_OUTPUT"
 
   evals:
-    name: evals (${{ matrix.suite }})
+    name: evals (${{ matrix.suite }}${{ matrix.cases && format(' {0}', matrix.cases) || '' }})
     needs: config
     runs-on: ${{ needs.config.outputs.runner }}
     timeout-minutes: 300
@@ -63,8 +63,18 @@ jobs:
       EVAL_REPORT_DIR: ${{ github.workspace }}/../eval-report
     strategy:
       fail-fast: false
+      # The steps suite once per step agent (T109): its 60 trials ran one after another (about an
+      # hour); EVAL_CASES (run.sh) takes an agent's name.
       matrix:
-        suite: [analyst, steps]
+        include:
+          - suite: analyst
+            cases: ""
+          - suite: steps
+            cases: tests
+          - suite: steps
+            cases: code
+          - suite: steps
+            cases: review
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -92,7 +102,8 @@ jobs:
         env:
           EVAL_KEY_FILE: ${{ runner.temp }}/anthropic_api_key
           SUITE: ${{ matrix.suite }}
-        run: scripts/ci-step.sh "evals-$SUITE" sh "src/tests/evals/$SUITE/run.sh" live
+          EVAL_CASES: ${{ matrix.cases }}
+        run: scripts/ci-step.sh "evals-$SUITE${EVAL_CASES:+-$EVAL_CASES}" sh "src/tests/evals/$SUITE/run.sh" live
       - name: Summary of the evals
         if: always()
         run: python3 scripts/ci-evals-summary.py "$EVAL_REPORT_DIR/report.json"
