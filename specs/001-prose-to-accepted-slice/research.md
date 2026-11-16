@@ -1589,3 +1589,68 @@ page, none of which an existing project provides.
   [Go modules reference, GOPROXY protocol](https://go.dev/ref/mod#goproxy-protocol); the
   experiment of 2026-11-15 in the session scratchpad (pinned `golang` image, archfiles drafted
   there, `src/` read-only).
+
+### D41. The full checks run on GitHub-hosted runners, in a public repository
+
+- **Decision** (owner, 2026-11-16; the work is T106 to T109): the repository moves to
+  `github.com/Scrollout/agentic-platform`, public. On every push, and when started by hand,
+  GitHub Actions runs the full `scripts/check.sh` on GitHub's standard hosted Linux runners, split
+  into parallel jobs, including the contract, Docker and acceptance suites (`ap test planted`,
+  `ap test us2`) under gVisor. The live evals (T059) run in a job of their own when a prompt, an
+  agent definition, a model pin or the Docker Agent version changes, and when started by hand,
+  with the test-scoped key as a secret of the environment `dev`, which needs no approval. The local
+  pre-commit hook keeps only the quick static checks of what the commit changes (root layout,
+  secret scan, markdown, knowledge bundle, `gofmt` and `go vet` of the changed Go modules; no
+  test suite), so a commit takes at most about 2 minutes instead of 12 to 25. No pull requests, branch protection or code owners: one
+  person commits and pushes, and a red run is fixed by the next commit. The commit-msg hook's
+  `Approved-by:` and `Tests-approved-by:` trailers stay.
+- **Why**: the owner's host is small and shared with other projects; the full check run has
+  timed out under their load (T105) and heavy runs must go one at a time there. Hosted runners give
+  each job its own machine.
+- **Facts** (checked 2026-11-16; [GitHub Actions reference](../../docs/references/github-actions.md)):
+  - Standard GitHub-hosted runners are free and unlimited in public repositories; larger runners
+    are billed. A private repository gets a monthly minute quota instead.
+  - The standard Linux runner (`ubuntu-latest`, `ubuntu-24.04`) has 4 CPUs, 16 GB of memory and
+    a 14 GB SSD, by the runner reference; the pricing page still names a 2-core runner. The first
+    run measures what a job has (T107).
+  - A Free organization runs at most 20 standard-runner jobs at once; Scrollout is on the Free
+    plan. A job may run for 6 hours.
+  - Except `GITHUB_TOKEN`, secrets are not passed to a workflow started by a fork's pull request,
+    and an environment's secrets reach only jobs that name the environment. The workflows here have
+    no `pull_request` or `pull_request_target` trigger, so a fork's change never runs with the key.
+  - gVisor publishes each release's `runsc` binary with its SHA-512, and `runsc install` registers
+    it as Docker's `runsc` runtime (then the daemon restarts); on the host the [gVisor
+    guide](../../docs/guides/install-gvisor.md) installs the latest release from its apt
+    repository. A hosted runner is a new machine per job, so each job that needs it installs the
+    pinned release. Whether runsc runs there is proven by T107's first run.
+- **Images and signing in CI**: each job builds what it needs from source with `build.sh`, signing
+  with a key made for that job (the first-use key, ADR 0028), and verifies it at `ap up`; nothing
+  is pushed to a registry outside the runner. Actions are pinned by commit hash, and gVisor by its
+  release and SHA-512 in `images.lock` (Principle XIII); the hosted runner image is named by label
+  and cannot be pinned (a Principle XIII exception). Workflow files live in `.github/`, which becomes
+  a protected path of the commit-msg hook (Principle XVI: changing CI needs a recorded approval). A
+  repository ruleset blocks force-push and deletion of `main` and the feature branch; it needs no
+  pull request.
+- **Alternatives rejected**:
+  - **Self-hosted runners** (`Scrollout/platform-infra`, ARC on k3s in Hyper-V on the owner's PC):
+    they run on the same hardware the host shares, so they add no capacity.
+  - **A private repository**: its free minutes would not cover one full run per push.
+  - **Pull requests with required reviews, checks or code owners**: a one-person project; the
+    owner wants it simple and fast (owner, 2026-11-16).
+  - **Keeping the full run in the hook**: it is what times out on the shared host.
+- **Known limits**: a commit is accepted before CI has judged it; the hook can be skipped with
+  `--no-verify` and a push is not blocked by a red run, so the trailers record approval rather
+  than enforce it (the Principle XVI exception stays). The public history shows the commit author's
+  name and e-mail and every recording and fixture (owner, 2026-11-16). On the host gVisor stays
+  the apt release the guide installs; in CI it is the pinned release, and each run records
+  `runsc --version`.
+- **Recorded as** [ADR 0044](../../docs/decisions/0044-full-checks-run-on-github-hosted-runners.md);
+  reference [GitHub Actions](../../docs/references/github-actions.md).
+- Sources: [GitHub Actions billing and usage](https://docs.github.com/en/actions/concepts/billing-and-usage);
+  [Actions limits](https://docs.github.com/en/actions/reference/limits);
+  [GitHub-hosted runners reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners);
+  [Actions runner pricing](https://docs.github.com/en/billing/reference/actions-runner-pricing);
+  [Using secrets in GitHub Actions](https://docs.github.com/actions/security-guides/encrypted-secrets);
+  [Secret types](https://docs.github.com/en/code-security/reference/secret-security/secret-types);
+  [gVisor installation](https://gvisor.dev/docs/user_guide/install/); the owner's answers of
+  2026-11-16 in this session.

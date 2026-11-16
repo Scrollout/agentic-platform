@@ -2,6 +2,7 @@
 
 ## 2026-11-16
 
+* **Decision**: Feature 001, CI on GitHub (owner, 2026-11-16): the repository moves to `github.com/Scrollout/agentic-platform`, public; GitHub Actions runs the full checks and the acceptance suites on standard hosted runners on every push, with status badges and a run summary, and the live evals with the test key from the environment `dev` when an agent, prompt, model or Docker Agent changes; the pre-commit hook keeps only the quick static checks; no pull requests (research D41, [ADR 0044](/decisions/0044-full-checks-run-on-github-hosted-runners.md), [GitHub Actions reference](/references/github-actions.md)). Work: T106 to T109.
 * **Convergence**: Feature 001, T069 done (Story 2): `/speckit-converge` round 2 found nothing new after T103 and T104; every other gap is an open task. Next: T024 (`scripts/e2e.sh`) for the Story 2 checkpoint.
 
 ## 2026-11-15
