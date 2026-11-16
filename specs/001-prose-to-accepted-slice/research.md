@@ -237,7 +237,8 @@ fresh review round 1.
 - **Decision**: no hosted forge or CI for now (owner, 2026-11-12). `scripts/check.sh` and
   `scripts/e2e.sh` run every check and the whole Compose stack with gVisor locally, against the
   recorded model, never mounting the engine socket into a container; git hooks run them before
-  every commit.
+  every commit. (Superseded on this point by D41, CI on GitHub, and D44: the hook runs only the quick checks
+  since T108.)
 - **Rationale**: the first feature must run end to end through its checks (constitution,
   Outside-in); without a forge, local hooks are where they run.
 
