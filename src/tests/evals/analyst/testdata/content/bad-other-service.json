@@ -1,0 +1,30 @@
+{
+  "goals": [
+    {
+      "id": "G-1",
+      "text": "Count visits"
+    }
+  ],
+  "terms": [
+    {
+      "id": "T-1",
+      "name": "counter",
+      "definition": "A number that goes up."
+    }
+  ],
+  "rules": [
+    {
+      "id": "R-1",
+      "goal": "G-1",
+      "pattern": "event",
+      "trigger": "the user increments the counter",
+      "system": "the counter service",
+      "response": "shall return the new value",
+      "terms": [
+        "T-1"
+      ]
+    }
+  ],
+  "examples": "Feature: Counter\n  Rule: R-1\n    @R-1 @E-1\n    Scenario: Increment\n      Given the counter is 0\n      When the user increments the counter\n      Then the response status is 200\n      And the value is 1\n",
+  "contract": "openapi: 3.1.0\ninfo: {title: counter, version: '1'}\npaths:\n  /counter/increment:\n    post:\n      operationId: increment\n      x-rules: [R-1]\n      responses:\n        '200': {description: ok}\n"
+}

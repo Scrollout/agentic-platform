@@ -1,0 +1,1481 @@
+openapi: 3.1.0
+info:
+  title: Agentic Platform check service API
+  version: 2026-11-13-preview
+  description: >-
+    Judges one attempt of a build step by running one named check, returns the files an attempt
+    left in its step's writable paths, and produces one procedure step's files by running its fixed
+    procedure, and keeps the project's version history: one commit per accepted step or open review round, and
+    the project restored to its last commit before each attempt. One program serves this contract in
+    three deployments. The check service reads the
+    project folder and never writes it; it serves runCheck and readStepFiles, and answers every
+    runProcedure with 404 UnknownProcedure. A procedure step's worker, which the launcher starts for
+    that step with only the step's writable paths writable and registers with the engine, serves
+    runProcedure for its step's procedure only, at the endpoint it registered; it answers every
+    runCheck with 404 UnknownCheck and every readStepFiles with 404 UnknownStep. The project
+    worker, which holds the projects folder writable, serves commitStep and restoreStep and answers
+    runCheck, readStepFiles and runProcedure with those 404s; the check service and the procedure
+    step workers answer commitStep and restoreStep with 404 VersionHistoryNotServed. No deployment
+    keeps anything between calls except the project worker, which keeps the version history in
+    the project folder and its own record of each project's last commit (Version history), and the same request over the same project gives the same
+    response and leaves the same files, whatever the `run`, `attempt` and `round` (outside
+    commitStep, where they name the commit, they only name the call in the log). Only the engine calls it, with the `engineToken`; a request with no token or
+    any other token returns 401 Unauthorized. Every operation requires the `api-version` query
+    parameter: a missing value returns 400 MissingApiVersionParameter, any value other than
+    2026-11-13-preview returns 400 UnsupportedApiVersionValue. A request body must be sent with
+    `Content-Type: application/json` (parameters such as `charset=utf-8` may follow); any other
+    body, a body that does not match this contract, or one larger than
+    `x-limits.request-body-max-bytes` (for commitStep, `x-limits.commit-request-body-max-bytes`)
+    returns 400 InvalidRequest. No response body is larger than
+    `x-limits.response-body-max-bytes`: a response that would be is not sent, and the call returns
+    500 ResponseTooLarge instead (the limits below are derived so that this does not happen). At most `x-limits.calls-at-once` calls run at once; a call
+    beyond that returns 503 Busy with `Retry-After` and runs nothing. A call still running after its
+    `time_limit_seconds` is stopped with every process it started and returns 504
+    TimeLimitExceeded. The engine's token may make at most `x-limits.requests-per-second-per-token`
+    requests in any one-second window; more return 429 RateLimited with `Retry-After`. Requests with
+    no accepted token are counted by their source address (the connection's peer address, never a
+    header): up to `x-limits.requests-per-second-per-address-without-token` in any one-second window
+    get 401, more get 429. runCheck and readStepFiles change nothing; runProcedure and restoreStep,
+    repeated with the same request, leave the same files; commitStep, repeated, makes no second
+    commit (see commitStep). So no operation takes an Idempotency-Key and repeating a call is always
+    safe. `x-error-codes` lists the problem codes each status code may carry.
+    Names of checks, procedures, steps, runs, inputs and outputs are those of the catalogue pattern
+    the engine runs (engine contract, `pattern.schema.json`). Project paths. Every path in a request
+    or a response is a ProjectPath. Every file the services read or write is reached without
+    following a symbolic link: an entry of the project folder that is not a regular file or a
+    folder, a file larger than `x-limits.project-file-max-bytes`, or an entry whose path is not a
+    ProjectPath, is never read, listed or written; runCheck fails on
+    it naming it, and readStepFiles, runProcedure, commitStep and restoreStep answer 422
+    UnreadableProject. Version history. The folder `.git` at the project folder's root is the
+    project's version history, a git repository that commitStep creates and adds to. The folder
+    may exist empty before the first commit (the launcher creates it so that every step
+    container mounts it read-only). It is not part of the project: no path under it is ever
+    listed in `before`, `project_files`, `files`, `removed` or `restored`, read, judged or written
+    by any operation other than commitStep and restoreStep. Any other path with a part equal to
+    `.git` in any letter case (`.GIT`, `sub/.git`) is not a ProjectPath, and neither is a
+    `writable` entry with such a part, so such an entry is refused with 400 InvalidRequest and
+    such a file makes the project unreadable as above. The project worker's record. For each
+    project the project worker keeps a record outside every project, on a volume only it mounts:
+    the ID of the last commit it made, that commit's parent ID, the `run`, `step`, `round` and
+    `attempt` or `reused_from` its trailers name, and the SHA-256 of the `.git/config` it wrote.
+    It replaces the record atomically (a temporary file, written and synced, then renamed over
+    the old one): first a claimed record (the project's name and the time it was claimed, in
+    UTC; no `.git/config` hash, no commit and no run) when a first touch passes the new-project check below, before `git init` and before
+    any file is written; then a provisional record right after creating the repository (the
+    `.git/config` hash, no commit yet); then after it makes each commit object and before it
+    moves the branch to it. A new project (FR-025): with no record, a call is the run's first
+    touch of the project when it is restoreStep for attempt 1 or commitStep with `reused_from`
+    (a replay's first write). It passes only when the folder holds no file and no symbolic link
+    outside `.git`, at any depth, and `.git` is missing or empty (a folder of empty folders, such
+    as the skeleton `ap build-workers` makes, passes); otherwise it answers 409 ProjectExists,
+    whose `detail` names the first path found, and changes nothing. A first touch that passes
+    writes the claimed record first. Every other call with no record, and every call with a
+    claimed record, follows the no-record rules below, so the first commit, a restore after a
+    rejected attempt, a resume that repeats an attempt and a retry after a crash in any window
+    are never a first touch. Creating the
+    repository: only commitStep does it, in its step (5),
+    after its `before` check, when the project has no record or a claimed one. It empties the
+    contents of `.git` (never the folder itself, which step containers mount; with no record or
+    a claimed one, anything in it can only be the project worker's own unfinished first call,
+    since no step container can write `.git`), creates the folder when it is missing, runs `git
+    init --template=` (no template) with the branch `main`, and writes the provisional record. A
+    crash at any point of a first call leaves the claimed or the provisional record, so the
+    next call recovers it by these rules. The history check: before running any other git command,
+    commitStep and restoreStep inspect `.git` as files, and with a provisional or full record it passes only when
+    `.git` holds no symbolic link anywhere and no `commondir`, `gitdir`, `shallow`,
+    `info/grafts` or `objects/info/alternates`; `.git/HEAD` is exactly `ref: refs/heads/main`
+    followed by one line feed; `.git/config` has the recorded SHA-256; no `packed-refs` entry
+    names `main`; and the branch, a loose ref (`refs/heads/main`), names the recorded commit, or
+    names the recorded parent (is missing, when the recorded commit has no parent) only when the
+    recorded commit is exactly the commit this request makes (a call that stopped between
+    recording and moving the branch); with a provisional record, the branch must be missing.
+    Then, with git, the recorded commit must exist with the recorded parent and trailers. The
+    history check applies only with a provisional or a full record. With no record or a claimed
+    one, restoreStep needs no repository: it only requires `before` to be empty (otherwise 409
+    ProjectStateDiffers, as for a last commit that does not hold `before`). Anything else answers 409
+    HistoryChanged and changes nothing. Git always runs with `GIT_NO_REPLACE_OBJECTS=1`,
+    `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`, `-c core.fsmonitor=false`, `-c
+    core.hooksPath=/dev/null`, `-c gc.auto=0` and `-c commit.gpgSign=false`, and only through
+    plumbing commands that apply no filter (blobs written with `hash-object --no-filters`, the
+    index with `update-index --index-info`, files read back with `cat-file`), so the project's
+    `.gitattributes`, `.gitignore` and `info/exclude` change nothing and nothing is added to the
+    repository's own configuration or `info/`. A path reaches git only on standard input or after
+    `--`, never as an argument that could be read as an option. The version history is a second
+    layer: step containers mount `.git` read-only, so none can write it. Folders. Only regular
+    files are part of the project; a folder, empty or not, is never removed or replaced by any
+    operation, since step containers mount the project's folders. Writable paths.
+    A step's `writable` entries follow the catalogue's glob dialect: `dir/**` matches every path
+    below `dir`, and any other entry matches exactly one path. Artifacts. An input named
+    `slice/<part>` (`slice/goals`, `slice/rules`, `slice/contract`) is an approved part of the slice:
+    its `sha256` is the part hash the slice stores, the SHA-256 of the part's RFC 8785 canonical JSON
+    (engine contract, `slice-defs.schema.json`), and its content, when sent, is that canonical JSON.
+    The output name `findings` is not a set of files: it is what the review step's worker reports,
+    has no hash recomputed from the folder, and takes no writable entry. Any other input or output
+    name is a step's output, a set of project files: its `sha256` is the
+    SHA-256 of the files' framed form (for each file in byte order of its path: the path, a line
+    feed, the file's length in bytes in decimal, a line feed, then its bytes; no files give the hash
+    of no bytes), and its content, when sent, is that framed form. An output's files are the files
+    matching its step's `writable` entries when the step declares one file-set output (`findings`
+    not counted); when it declares several, the file-set output at position i (counting file-set
+    outputs only) holds the files matching writable entry i, and a step that declares several
+    file-set outputs and a different number of writable entries is refused with 400
+    InvalidRequest. In the api-feature-go pattern this gives `contract` = `api/openapi.yaml`,
+    `examples` = `features/slice.feature`, `generated-code` = `gen/**`, `go.mod`, `go.sum`,
+    `vendor/**`, `tests` = `tests/**`, `code` = `internal/**`, `cmd/**` and `witnesses` =
+    `review/**`. An agent step declares exactly one file-set output, except the review step,
+    which declares `findings` and may also declare one file-set output (`witnesses`, the witness
+    tests under its one writable entry, research D35); a review step that declares only
+    `findings` writes no file.
+  contact:
+    name: Agentic Platform maintainers
+  license:
+    name: MIT
+    identifier: MIT
+x-limits:
+  # Requests the engine's token may make in any one-second window (sliding); more get 429.
+  requests-per-second-per-token: 20
+  # Requests without an accepted token one source address may make in any one-second window
+  # (sliding); up to this many get 401, more get 429.
+  requests-per-second-per-address-without-token: 20
+  # Required of every service contract by the project ruleset (to be scoped to services that take
+  # an Idempotency-Key, tasks.md T054d). No operation here takes one, so no key is ever kept; the
+  # value promises nothing.
+  idempotency-key-retention-hours: 1
+  # Most characters of a ProjectPath; its characters are ASCII, so also its bytes.
+  path-max-chars: 256
+  # Most bytes of one project file. A larger file is an entry no operation reads: runCheck fails
+  # naming it; readStepFiles answers 422 StepFilesTooLarge when it matches the step's writable
+  # entries and 422 UnreadableProject otherwise; runProcedure answers 422 UnreadableProject.
+  # Derived: no step may leave more than `step-files-max-bytes` or `procedure-output-max-bytes`
+  # (8 MiB) in its files together, so no file a step writes is larger.
+  project-file-max-bytes: 8388608
+  # Most files `before`, `project_files`, `files` and `removed` may list. A list entry is at most
+  # about 350 bytes of JSON (a 256-byte path, a 64-character hash), so a full list is at most
+  # about 3.5 MB.
+  project-files-max: 10000
+  # Most bytes of one input's or approved part's content before base64 encoding (the engine API's
+  # largest request body, so any slice part fits); a check request carries the 3 approved parts,
+  # a procedure request at most `inputs-with-content-max` inputs with content.
+  input-max-bytes: 1048576
+  inputs-with-content-max: 4
+  # Most findings and changed lines a check request carries; a finding's text is at most 4096
+  # characters.
+  findings-max: 100
+  changed-lines-max: 2000
+  # Largest request body accepted, in bytes; a larger one gets 400 InvalidRequest. Derived from
+  # the limits above: `before` (about 3.5 MB) + at most 4 contents of 1 MiB in base64 (about 5.6 MB) + 100
+  # findings (about 1.7 MB in UTF-8) + 2000 changed lines (about 0.6 MB) + step facts, which fits
+  # 12 MiB.
+  request-body-max-bytes: 12582912
+  # Most bytes, before base64 encoding, of all files a procedure's outputs hold together. A
+  # procedure whose files would hold more returns `completed: false`, no outputs, and writes
+  # nothing.
+  procedure-output-max-bytes: 8388608
+  # Most bytes, before base64 encoding, of all files readStepFiles returns together; more gets 422
+  # StepFilesTooLarge.
+  step-files-max-bytes: 8388608
+  # Largest response body, in bytes. Derived: 8 MiB of files in base64 (about 11.2 MB) + their
+  # 10000 list entries (about 3.5 MB) + `project_files` (about 3.5 MB) + `removed` (about 2.7 MB)
+  # + a reason of 65536 characters (at most 256 KiB), which fits 24 MiB.
+  response-body-max-bytes: 25165824
+  # Largest commitStep request body, in bytes; a larger one gets 400 InvalidRequest. Derived:
+  # `before` and `project_files` (about 3.5 MB each) + a reused step's outputs in framed form, at
+  # most `step-files-max-bytes` of file bytes plus at most 265 bytes of framing per file for 10000
+  # files (11038608 bytes, 14718144 in base64), which fits 24 MiB.
+  commit-request-body-max-bytes: 25165824
+  # Calls that may run at once in one deployment; one more gets 503 Busy.
+  calls-at-once: 2
+  # Largest `time_limit_seconds` a call may ask for: the api-feature-go pattern's step budget
+  # (pattern.yaml `budgets.step.minutes`, 10 minutes; research D14).
+  call-time-limit-seconds-max: 600
+servers:
+- url: /
+  description: The check service's address, or the procedure step worker's registered endpoint, on a
+    network shared with the engine; not reachable from outside the platform's networks.
+tags:
+- name: checks
+  description: Judge one attempt of a step, and read the files it left.
+- name: procedures
+  description: Produce one step's files by a fixed procedure.
+- name: versions
+  description: Keep the project's version history, one commit per accepted step or open review
+    round.
+paths:
+  /checks/{checkName}/run:
+    post:
+      tags:
+      - checks
+      operationId: runCheck
+      x-operation-name: Agentic.Check/checks/action
+      summary: Run a check on one attempt of a step
+      description: >-
+        Served by the check service. Runs the check `checkName` on the project folder `project` as
+        it stands now, after the attempt, compared with `before`, and answers whether the attempt
+        passes it. Call it once per check the step declares, after the attempt's worker has
+        finished. Before judging, the check computes from the folder the framed hash of every entry
+        of `outputs`; when one differs from the hash the request names, the verdict is `passed:
+        false` naming that output. Every input that is an earlier step's output is bound through
+        `before`: each of its files in the folder must equal its entry in `before`, except a path
+        the step may itself write (judged as its output, such as the seam a code step replaces);
+        and when neither its producer's later steps nor this step may write any of its paths, its
+        framed hash is also computed from the folder and must equal the one the request names;
+        otherwise the verdict is `passed: false` naming that input. So a verdict always concerns
+        the files the engine stored. An output or input that is not a set of project files (the
+        review step's `findings`, a `slice/<part>`) is exempt. A check that meets something it cannot
+        judge (an entry that is not a regular file or whose path is not a ProjectPath, a test binary
+        that cannot be built, a go command that fails to start) answers `passed: false` with a
+        reason naming it; it never passes by default. Each call gets a new temporary
+        folder, removed when it ends; every command of the call has `GOCACHE`, `GOTMPDIR`,
+        `TMPDIR`, `HOME` and `GOPATH` inside it, and every `go test` carries `-count=1`, so
+        nothing a check writes there survives the call. Its `GOCACHE` starts as a copy of the
+        image's read-only warm base cache, the rest empty. The pinned modules' cache is shared
+        read-only. The checks served, by name: ScopeKept, every
+        path added, changed or removed between `before` and now matches the step's `writable`.
+        DependenciesAllowed, the project has no symbolic link, and in the step's own files (those its
+        `writable` matches) every import outside the project's module matches the step's
+        `dependencies.allowed` and no `dependencies.forbidden` entry, and when `go.mod` is one of
+        them it has no replace directive and every direct requirement matches the same way
+        (forbidden wins; the catalogue README's package patterns). Other steps' files are not
+        judged by this step's lists. ContractMatchesApproval, the SHA-256 of the RFC 8785
+        canonical JSON of `{"contract": <api/openapi.yaml as text>}` equals the `sha256` of the
+        `contract` entry of `approved`, whatever the step's inputs. ExamplesMatchApproval,
+        `features/slice.feature` is byte for byte the `examples` text of the `rules` entry of
+        `approved` (its content, after checking it has that entry's `sha256`), in UTF-8. GenerationRepeatable, a
+        fresh generation from `api/openapi.yaml` gives exactly the `generated-code` files.
+        GeneratedCodeBuilds, the project builds with the go toolchain, offline, from `vendor/`.
+        TestsBuild, every test package builds. EveryExampleBound, godog `--strict` finds no
+        undefined, pending or ambiguous step for any scenario of `features/slice.feature`, and every
+        scenario runs; whether the scenarios pass is not judged (the tests step's must fail against
+        the stub).
+        TestsFailAgainstStub, `go test -json -count=1 ./tests/...` against the generated stub:
+        the tests build, every declared test under `tests/**` has a result event, so none
+        vanishes, and at least one fails. TestsUnchanged and GeneratedCodeUnchanged, see
+        EarlierStep. AllTestsPass, `go test -json -count=1 ./...` exits 0 and every declared
+        test (a top-level `Test*` function of a `_test.go` file under `tests/**` or `review/**`,
+        with its package) has a `pass` event; one with no event, `fail` or `skip` fails the
+        check, naming it; a project with no declared test fails it too.
+        FindingsCarryEvidence, every blocking finding names a rule `R-<n>`, a file the project holds
+        as a regular file that a `writable` entry of the earlier step whose outputs hold `code`
+        matches (the fix step, so the finding can be fixed), a line of at least 1, and a `witness` whose `file` is a ProjectPath in
+        the folder `review/r<n>/` of that rule, ends in `_test.go`, is one of the judged step's own
+        files and is not in `before` (a new witness test, added by this attempt), and whose `test`
+        is the name of a Go test function that file declares and that starts with `TestR<n>` not
+        followed by a digit; and the witness run of each such finding can be judged. The witness
+        run only decides whether a finding blocks, so a blocking finding it does not confirm is a
+        suggestion and leaves FindingsCarryEvidence passing; a blocking finding with no `witness`
+        is a suggestion too. NoBlockingFindingOpen, no blocking finding is confirmed by its
+        witness run; any other finding is a suggestion and leaves it passing. Its verdict names the
+        confirmed findings in `confirmed`. The witness run
+        (each of the two checks, once per finding that carries a witness): `go test -json
+        -count=1 -covermode=set -coverpkg=./... -coverprofile=<a file outside the project> -run
+        '^<test>$' ./review/r<n>/` in the project, offline, against the code as it stands now. A
+        finding is confirmed only when its witness test ends `fail` and the coverage profile of that
+        run has a block of the finding's `file` (its import path in the project's module) whose
+        lines include the finding's `line` with a count above 0, and the baseline profile does not:
+        the witness failed, having run the finding's line. The baseline is the same command with
+        `-run '^$'` (no test runs), so it holds what package initialisation runs (`init`
+        functions, package-level initialisers, `TestMain`); a line covered there counts for no
+        witness. In `set` mode a block counts as run once it is entered, so a line in a block the
+        witness entered counts even when the block stopped before it (a stated limit). What the test prints is never read as evidence, so a witness that only
+        prints the location, or fails before it runs that line (an unconditional failure), confirms
+        nothing and is a suggestion. A blocking finding on a file the fix step may not change is a
+        suggestion too. No other test of the project is run or read for a finding: the derived tests have
+        already passed AllTestsPass in the code step (research D35, ADR 0039, superseding the rule
+        tests of ADR 0031). A `check` the finding names is not consulted. When the witness run
+        runs, a witness that does not build, or a go command that fails to start, answers `passed:
+        false`. Any other name,
+        including the pattern's ContractLintPasses (which the engine judges with its contract-lint
+        service), answers 404 UnknownCheck. 422 UnreadableProject when the project folder does not
+        exist under the projects folder, is not a folder, cannot be read, or holds more than
+        `x-limits.project-files-max` files; 504 TimeLimitExceeded when the check did not finish
+        within `time_limit_seconds`. A caller treats every response other than 200 as a failed
+        check.
+      security:
+      - engineToken: []
+      x-error-codes:
+        '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
+        '401': [Unauthorized]
+        '404': [UnknownCheck]
+        '422': [UnreadableProject, InputHashMismatch]
+        '429': [RateLimited]
+        '500': [ResponseTooLarge]
+        '503': [Busy]
+        '504': [TimeLimitExceeded]
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - name: checkName
+        in: path
+        required: true
+        description: The check's name as the step declares it in the pattern's `checks`, for example
+          ScopeKept.
+        schema:
+          $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/check_name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckRequest'
+      responses:
+        '200':
+          description: The check ran to the end; `passed` is its verdict.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckVerdict'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/UnknownName'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/ResponseTooLarge'
+        '503':
+          $ref: '#/components/responses/Busy'
+        '504':
+          $ref: '#/components/responses/TimeLimitExceeded'
+  /step-files:
+    post:
+      tags:
+      - checks
+      operationId: readStepFiles
+      x-operation-name: Agentic.Check/step-files/action
+      summary: Read the files an attempt left in its step's writable paths
+      description: >-
+        Served by the check service. Returns every regular file of the project folder `project` that
+        matches the step's `writable` entries, with its content, and the paths matching them that
+        `before` lists and the folder no longer holds. The engine calls it once per attempt of an
+        agent step, after the worker has finished and before any runCheck, and stores the files'
+        framed form under `sha256` as the artifact of the step's one file-set output (for the review
+        step, `witnesses`; its `findings` come from the worker). It returns all those
+        files, not only the ones that differ from `before`, so the artifact holds the step's files on
+        its own. A step with no writable entries gets no files. 404 UnknownStep when this deployment
+        does not serve it (a procedure step's worker); 422 UnreadableProject as for runCheck, or
+        when the folder holds an entry that is not a regular file or a folder, or a path that is not
+        a ProjectPath (`detail` names it); 422 StepFilesTooLarge when the files hold more than
+        `x-limits.step-files-max-bytes` together, or one of them alone more than
+        `x-limits.project-file-max-bytes`; 504 TimeLimitExceeded when reading did not finish
+        within `time_limit_seconds`. A caller treats every response other than 200 as a rejected
+        attempt.
+      security:
+      - engineToken: []
+      x-error-codes:
+        '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
+        '401': [Unauthorized]
+        '404': [UnknownStep]
+        '422': [UnreadableProject, StepFilesTooLarge]
+        '429': [RateLimited]
+        '500': [ResponseTooLarge]
+        '503': [Busy]
+        '504': [TimeLimitExceeded]
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StepFilesRequest'
+      responses:
+        '200':
+          description: The files the step's writable paths hold now.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StepFiles'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/UnknownName'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/ResponseTooLarge'
+        '503':
+          $ref: '#/components/responses/Busy'
+        '504':
+          $ref: '#/components/responses/TimeLimitExceeded'
+  /procedures/{procedureName}/run:
+    post:
+      tags:
+      - procedures
+      operationId: runProcedure
+      x-operation-name: Agentic.Check/procedures/action
+      summary: Run a fixed procedure for one attempt of a step
+      description: >-
+        Served by the procedure step's worker; the engine calls the endpoint that worker registered.
+        Runs the fixed procedure `procedureName` (the step's worker is `procedure:<procedureName>`)
+        on `inputs` and the project folder `project` as it stands now, writes the files it produces
+        into the project, and returns them, grouped by the step's outputs. The procedures served:
+        contract-check, whose `contract` output is the `contract` text of the `slice/contract`
+        input and whose `examples` output is the `examples` text of the `slice/rules` input, each
+        in UTF-8; and generate, whose `generated-code` output is the oapi-codegen server and types
+        generated from the `contract` input, a stub, `go.mod`, `go.sum` and the vendored
+        dependencies, resolved offline. With `completed` true the files matching the step's
+        `writable` entries are exactly the returned files: each is written, replacing any file at
+        its path, and every other file matching those entries is removed; no file outside them is
+        touched, and a repeat of the same request leaves the same files. No write or removal
+        follows a symbolic link: a path any part of which is a symbolic link answers 422
+        UnreadableProject before anything is written. A procedure that runs to the end but cannot
+        produce its outputs (for example a contract that does not generate, or files larger than
+        `x-limits.procedure-output-max-bytes`) answers `completed: false` with a reason and no
+        outputs, and writes nothing. 404 UnknownProcedure when this deployment does not serve a
+        procedure of that name (the check service serves none; a procedure worker only its step's);
+        422 UnreadableProject as for readStepFiles; 422 InputHashMismatch when an input's content
+        does not have the SHA-256 it is sent with; 500 WriteFailed when writing or removing a file
+        failed after the procedure produced its outputs, and 504 TimeLimitExceeded when the
+        procedure did not finish within `time_limit_seconds`. Writing starts only while the time
+        limit has not passed; a limit that passes while writing stops it before the next file, and
+        the 504 may come before that file's write has ended. After a 500 or a 504 the step's
+        writable paths may hold partial files (some written, some stale ones not yet removed), and a
+        repeat of the request converges them. A caller treats every
+        response other than 200, and `completed: false`, as a rejected attempt.
+        Each call gets a new temporary folder, removed when it ends; every command of the call has
+        `GOCACHE`, `GOTMPDIR`, `TMPDIR`, `HOME` and `GOPATH` inside it, and every `go test` carries
+        `-count=1`, so nothing a check writes there survives the call. Its `GOCACHE` starts as a
+        copy of the image's read-only warm base cache, the rest empty. The pinned modules' cache
+        is shared read-only.
+      security:
+      - engineToken: []
+      x-error-codes:
+        '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
+        '401': [Unauthorized]
+        '404': [UnknownProcedure]
+        '422': [UnreadableProject, InputHashMismatch]
+        '429': [RateLimited]
+        '500': [WriteFailed, ResponseTooLarge]
+        '503': [Busy]
+        '504': [TimeLimitExceeded]
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - name: procedureName
+        in: path
+        required: true
+        description: The procedure's name, the part of the step's `worker` after `procedure:`, for
+          example contract-check.
+        schema:
+          type: string
+          pattern: ^[a-z0-9-]+$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcedureRequest'
+      responses:
+        '200':
+          description: The procedure ran to the end; `completed` says whether it produced and wrote its
+            outputs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcedureResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/UnknownName'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/WriteFailed'
+        '503':
+          $ref: '#/components/responses/Busy'
+        '504':
+          $ref: '#/components/responses/TimeLimitExceeded'
+  /project-versions/commit:
+    post:
+      tags:
+      - versions
+      operationId: commitStep
+      x-operation-name: Agentic.Check/project-versions/write
+      summary: Record an accepted step, or an open review round, as the project's next commit
+      description: >-
+        Served by the project worker. Records the files the project folder `project` holds after an
+        accepted step as one new commit of the project's version history (info.description, Version
+        history) and answers with it. The engine calls it once per accepted step, after the run
+        record holds the event that accepted the step (StepAccepted, with `attempt`) or reused an
+        earlier run's result for it (ResultReused, with `reused_from`), and before it calls anything
+        for the next step or records the run's outcome. It also records an open review round: a
+        review attempt recorded as StepRejected because only NoBlockingFindingOpen failed, whose
+        files (its witness tests) become the project's; the engine sends `open_round: true` with
+        that round's `attempt` and `round` and calls it before the fix's restoreStep; an open round
+        reused from an earlier run (ResultReused with `open_round`) is sent with `open_round:
+        true`, `round`, `reused_from` and `outputs` (its witnesses), also before the fix's
+        restoreStep. Exactly one of `attempt` and `reused_from` is sent, `outputs` only with
+        `reused_from`, and `open_round` only with `round`, beside `attempt` or `reused_from`; any
+        other combination is 400 InvalidRequest.
+        In order: (0) A new project (FR-025; info.description, A new project). With no record, a
+        call with `reused_from` (a replay's first write) answers 409 ProjectExists, its `detail`
+        naming the first path found, and changes nothing when the folder holds any file or
+        symbolic link outside `.git`, at any depth, or a `.git` that holds anything (a missing or
+        empty `.git` and a folder of empty folders pass); when it passes, the claimed record is
+        written atomically before `git init` or any file. With no record or a claimed one, the
+        no-record rules follow; the history check applies only with a provisional or full
+        record. (1) Repeat. When the last commit already records this `run`, `step`, `round` and
+        `attempt` or `reused_from` (its trailers, below), the call is a repeat: when that commit is
+        exactly the commit this request makes (its tree holds `project_files`, its parent's tree
+        holds `before`, its dates are `accepted_at`), nothing is changed and the call answers with
+        it and `created: false`, so a retried call never makes a second commit; otherwise, the
+        same trailers with a different payload, it answers 409 ProjectStateDiffers and changes
+        nothing. The
+        history check (info.description, The project worker's record) comes before this, and a
+        failed check is 409 HistoryChanged. (2)
+        Starting state. The last commit must hold exactly the files `before` lists (before the
+        first commit, with no record or a claimed or provisional one, none); otherwise 409
+        ProjectStateDiffers and nothing is changed. (3) A reused result. With `reused_from`, every
+        output's content is checked against its `sha256` before anything is written (422
+        InputHashMismatch), then the files are written as runProcedure writes a completed result:
+        the files matching the step's `writable` entries are exactly the outputs' files, each
+        written in place, every other file matching those entries removed, and no file outside them
+        touched. An output that is not a set of project files (the review step's `findings`) is not
+        sent. (4) Ending state. The folder must now hold exactly the files `project_files` lists;
+        otherwise 409 ProjectStateDiffers and nothing is committed (files step 3 wrote stay, and a
+        repeat converges them). (5) Commit. The repository is created in `.git` when the project
+        has no record or a claimed one (info.description, Creating the repository; the run's first commit, after
+        contract-check), with the one branch `main`; `.git` is emptied only here, in step (5),
+        after the starting-state check of step (2) passed, and the folder is committed on `main` as one commit whose parent
+        is the last commit (none for the first). A step that changed no file still gets its commit,
+        so the history holds one commit per accepted step or open review round. What a commit holds: every file
+        `project_files` lists and nothing else, each with exactly the bytes the folder holds (no
+        `.gitattributes`, `.gitignore` or other project file changes what is committed: no
+        line-ending, filter or encoding conversion), each as a non-executable regular file. Author
+        and committer are both `agentic-platform <noreply@localhost>`, both dated `accepted_at`, in
+        whole seconds, in UTC. No hook, signing, or git configuration from outside the repository is
+        used. The message is the subject `Step <step> accepted in <run>` (with `reused_from` and no
+        `open_round`: `Step <step> reused in <run>`; with `open_round`, with `attempt` or
+        `reused_from`: `Step <step> round <round> left open in <run>`), an empty line, and the trailers `Run: <run>`, `Step: <step>`, then
+        `Round: <round>` when sent, then `Attempt: <attempt>` or `Reused-from: <reused_from>`, one per
+        line in this order, each line ending in a line feed. So equal requests over an equal folder
+        and an equal last commit give the same commit, and equal `project_files` give the same tree
+        whatever the run. 422 UnreadableProject when the project folder does not exist under the
+        projects folder, is not a folder, holds more than `x-limits.project-files-max` files outside
+        `.git`, or holds an entry outside `.git` that is not a regular file or a folder, or a path
+        that is not a ProjectPath, or when its version history cannot be read; 500 WriteFailed when
+        a file or the version history could not be written (a repeat converges the files and makes
+        at most one commit); 504 TimeLimitExceeded when the call did not finish within
+        `time_limit_seconds`, after which at most one commit was made and a repeat answers with it.
+        A caller treats every response other than 200 as a step not yet recorded in the project, and
+        repeats the call before going on.
+      security:
+      - engineToken: []
+      x-error-codes:
+        '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
+        '401': [Unauthorized]
+        '404': [VersionHistoryNotServed]
+        '409': [ProjectStateDiffers, HistoryChanged, ProjectExists]
+        '422': [UnreadableProject, InputHashMismatch]
+        '429': [RateLimited]
+        '500': [WriteFailed, ResponseTooLarge]
+        '503': [Busy]
+        '504': [TimeLimitExceeded]
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommitRequest'
+      responses:
+        '200':
+          description: The step is recorded as the project's last commit; `created` says whether this
+            call made it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectVersion'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/UnknownName'
+        '409':
+          $ref: '#/components/responses/StateDiffers'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/WriteFailed'
+        '503':
+          $ref: '#/components/responses/Busy'
+        '504':
+          $ref: '#/components/responses/TimeLimitExceeded'
+  /project-versions/restore:
+    post:
+      tags:
+      - versions
+      operationId: restoreStep
+      x-operation-name: Agentic.Check/project-versions/restore/action
+      summary: Restore the project to its last commit before an attempt
+      description: >-
+        Served by the project worker. Makes the project folder `project` hold exactly the files
+        `before` lists, taken from the last commit of its version history, so an attempt starts from
+        the files the last committed step left (the last accepted step, or an open review round
+        after it). The engine calls it before every attempt of every
+        step: it undoes whatever a rejected or interrupted attempt wrote (the run's compensation),
+        and changes nothing when the folder already holds `before`. In order: (0) A new project
+        (FR-025; info.description, A new project). With no record, a call for attempt 1 (the
+        run's first touch of the folder) answers 409 ProjectExists, its `detail` naming the first
+        path found, and changes nothing when the folder holds any file or symbolic link outside
+        `.git`, at any depth, or any content in `.git` (a missing or empty `.git` and a folder of
+        empty folders pass); when it passes, the claimed record is written atomically before any
+        file changes. A call for a later attempt with no record, and any call with a claimed
+        record, attempt 1 included, keeps the no-record rules, so a rejected first attempt is
+        still undone and a resume that repeats attempt 1 is not refused. (1) The history check (info.description, The project worker's record),
+        only with a provisional or full record; a failed check is 409 HistoryChanged. (2) The
+        last commit must hold
+        exactly the files `before` lists (no commit holds none, so before the first accepted step
+        `before` is empty); otherwise 409 ProjectStateDiffers and nothing is changed. Every file the
+        commit holds is written back in place with its committed bytes where the folder's differs
+        or is missing, and every other file outside `.git` is removed. Entries the general rules
+        would not read are removed too where the step could have made them: below the folder of
+        each `dir/**` entry, subfolders included, every symbolic link (the link itself, never what
+        it names), every regular file whose path is not a ProjectPath and every folder whose name
+        is not a ProjectPath part, with all it holds; in the folder holding an exact entry (for
+        the generate step, the project root, for `go.mod` and `go.sum`), only such an entry that
+        the step's own writable entries match by name, such as a symbolic link at `go.mod`. Such
+        an entry anywhere else answers 422 UnreadableProject, and nothing is changed. No link is
+        followed; no other folder is removed or replaced, and the version history is not changed. A repeat of the same request leaves the
+        same files. 409 ProjectStateDiffers also when, after restoring, the folder does not hold
+        `before` (something wrote to it during the call). 422 UnreadableProject as for commitStep;
+        500 WriteFailed when a file could not be written or removed, and 504 TimeLimitExceeded when
+        the call did not finish within `time_limit_seconds`; after either the folder may hold partly
+        restored files, and a repeat converges them. A caller treats every response other than 200
+        as an attempt that must not start.
+      security:
+      - engineToken: []
+      x-error-codes:
+        '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
+        '401': [Unauthorized]
+        '404': [VersionHistoryNotServed]
+        '409': [ProjectStateDiffers, HistoryChanged, ProjectExists]
+        '422': [UnreadableProject]
+        '429': [RateLimited]
+        '500': [WriteFailed, ResponseTooLarge]
+        '503': [Busy]
+        '504': [TimeLimitExceeded]
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreRequest'
+      responses:
+        '200':
+          description: The project folder holds `before`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestoredProject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/UnknownName'
+        '409':
+          $ref: '#/components/responses/StateDiffers'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/WriteFailed'
+        '503':
+          $ref: '#/components/responses/Busy'
+        '504':
+          $ref: '#/components/responses/TimeLimitExceeded'
+components:
+  securitySchemes:
+    engineToken:
+      type: http
+      scheme: bearer
+      description: The token this session issued to the engine for calling this deployment. No other
+        component holds it; any other token returns 401 Unauthorized.
+  parameters:
+    ApiVersion:
+      name: api-version
+      in: query
+      required: true
+      description: The API version. This contract is 2026-11-13-preview. A missing value returns 400
+        MissingApiVersionParameter; any other value returns 400 UnsupportedApiVersionValue.
+      schema:
+        $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/api_version
+  headers:
+    RetryAfter:
+      description: Seconds to wait before trying again.
+      schema:
+        type: integer
+        minimum: 1
+  responses:
+    BadRequest:
+      description: The request is malformed; `code` and `detail` say what to fix.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: The token is missing or is not the engine's token for this deployment.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnknownName:
+      description: This deployment serves no check (UnknownCheck) or procedure (UnknownProcedure) of
+        that name, does not serve readStepFiles (UnknownStep), or does not keep version histories
+        (VersionHistoryNotServed); `detail` says which. Nothing ran.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unprocessable:
+      description: UnreadableProject, the project folder cannot be read as a whole, or holds an entry
+        the operation may not read; InputHashMismatch, an input's content does not have its SHA-256;
+        or StepFilesTooLarge, the step's files exceed `x-limits.step-files-max-bytes`. `detail` names
+        the folder, input or path, never a path outside the projects folder. Nothing was written.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: More than `x-limits.requests-per-second-per-token` requests in one second with the
+        engine's token, or more than `x-limits.requests-per-second-per-address-without-token` without
+        an accepted token from this source address; try again after `Retry-After`.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    StateDiffers:
+      description: ProjectStateDiffers, the project's last commit or its folder does not hold the
+        files the request lists; `detail` names the first path that differs, or says that the
+        project has no commit. Or HistoryChanged, the project's version history is not the one the
+        project worker made (its record); `detail` says what differs. Or ProjectExists, the
+        project has no record and its folder already holds a file, a symbolic link or a non-empty
+        `.git` (commitStep with `reused_from`, restoreStep for attempt 1); `detail` names the
+        first path found. Nothing was committed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    WriteFailed:
+      description: WriteFailed, writing or removing a file in the step's writable paths failed after
+        the procedure produced its outputs, or a file or the version history could not be written
+        by commitStep or restoreStep; `detail` names the path, and the paths may hold partial
+        files. Or ResponseTooLarge, the result would be larger than
+        `x-limits.response-body-max-bytes` (see ResponseTooLarge).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ResponseTooLarge:
+      description: The response would be larger than `x-limits.response-body-max-bytes`, so it was
+        not sent; the call changed nothing it would not also change with a smaller response.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Busy:
+      description: '`x-limits.calls-at-once` calls are already running; nothing ran. Try again after
+        `Retry-After`.'
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TimeLimitExceeded:
+      description: The call was still running after `time_limit_seconds`; it was stopped with every
+        process it started, and it gave no verdict and no outputs.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    ErrorCode:
+      type: string
+      description: >-
+        A stable problem code. InvalidRequest: the body or a parameter does not match this contract.
+        MissingApiVersionParameter, UnsupportedApiVersionValue: the api-version is missing or not
+        served. Unauthorized: see 401. RateLimited: see 429. UnknownCheck, UnknownProcedure: this
+        deployment serves no check or procedure of that name. UnknownStep: this deployment does not
+        serve readStepFiles. VersionHistoryNotServed: this deployment does not keep version
+        histories (commitStep, restoreStep). ProjectStateDiffers: the project's last commit or its
+        folder does not hold the files the request lists. HistoryChanged: the project's version history
+        is not the one the project worker made (`.git/HEAD`, the branch `main` or `.git/config`
+        differs from its record). ProjectExists: the project has no record and its folder
+        already holds a file, a symbolic link or a non-empty `.git`, so a run may not take it over
+        (FR-025). UnreadableProject: the project folder does not exist, is not a folder,
+        cannot be read, holds more than `x-limits.project-files-max` files, or holds an entry the
+        operation may not read or write (not a regular file or folder, a file larger than
+        `x-limits.project-file-max-bytes`, a path that is not a ProjectPath, or reached through a
+        symbolic link), or its version history cannot be read. InputHashMismatch: an input's content does
+        not have the SHA-256 it is sent with. StepFilesTooLarge: the step's files exceed
+        `x-limits.step-files-max-bytes`. WriteFailed: a procedure's file could not be written or
+        removed, or a file or the version history could not be written. ResponseTooLarge: the response would be larger than
+        `x-limits.response-body-max-bytes`, so it was not sent. Busy: `x-limits.calls-at-once` calls
+        are running. TimeLimitExceeded: the call did not finish within its `time_limit_seconds`.
+      enum:
+      - InvalidRequest
+      - MissingApiVersionParameter
+      - UnsupportedApiVersionValue
+      - Unauthorized
+      - RateLimited
+      - UnknownCheck
+      - UnknownProcedure
+      - UnknownStep
+      - VersionHistoryNotServed
+      - ProjectStateDiffers
+      - HistoryChanged
+      - ProjectExists
+      - UnreadableProject
+      - InputHashMismatch
+      - StepFilesTooLarge
+      - WriteFailed
+      - ResponseTooLarge
+      - Busy
+      - TimeLimitExceeded
+    Problem:
+      type: object
+      description: An RFC 9457 problem with a stable `code`.
+      required:
+      - type
+      - title
+      - code
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        supported_versions:
+          type: array
+          description: With UnsupportedApiVersionValue, the api-versions this service serves.
+          items:
+            type: string
+    Hash:
+      $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/hash
+    ProjectPath:
+      type: string
+      description: >-
+        A file's path relative to the project folder: parts of ASCII letters, digits and `.`, `_`,
+        `~`, `+`, `@`, `=`, `,` and `-`, joined by single `/`; no leading or trailing `/`, no `.` or
+        `..` part, no part equal to `.git` in any letter case, no space or control character, at
+        most `x-limits.path-max-chars` characters. A
+        file whose path is not of this form is never read, listed or written.
+      minLength: 1
+      maxLength: 256
+      pattern: ^(?!(.*/)?\.\.?(/|$))(?!(.*/)?\.[Gg][Ii][Tt](/|$))[A-Za-z0-9._~+@=,-]+(/[A-Za-z0-9._~+@=,-]+)*$
+    ProjectFile:
+      type: object
+      description: One regular file of the project folder, by path and content hash.
+      required:
+      - path
+      - sha256
+      additionalProperties: false
+      properties:
+        path:
+          $ref: '#/components/schemas/ProjectPath'
+        sha256:
+          $ref: '#/components/schemas/Hash'
+    ProjectFiles:
+      type: array
+      description: Regular files of a project folder in byte order of `path`, each path once, at most
+        `x-limits.project-files-max`.
+      maxItems: 10000
+      items:
+        $ref: '#/components/schemas/ProjectFile'
+    Writable:
+      type: array
+      description: The step's `writable` entries, copied from the pattern; `dir/**` matches every path
+        below `dir`, any other entry exactly one path.
+      maxItems: 64
+      items:
+        type: string
+        minLength: 1
+        maxLength: 259
+        pattern: ^(?!(.*/)?\.\.?(/|$))(?!(.*/)?\.[Gg][Ii][Tt](/|$))[A-Za-z0-9._~+@=,-]+(/[A-Za-z0-9._~+@=,-]+)*(/\*\*)?$
+    OutputNames:
+      type: array
+      description: The step's declared outputs, in the pattern's order.
+      maxItems: 16
+      items:
+        type: string
+        minLength: 1
+        maxLength: 64
+    StepFacts:
+      type: object
+      description: One step of the pattern as the engine runs it, with the values its checks and
+        procedures need, copied from the pattern unchanged.
+      required:
+      - name
+      - writable
+      - dependencies
+      - outputs
+      additionalProperties: false
+      properties:
+        name:
+          $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/step_name
+        writable:
+          $ref: '#/components/schemas/Writable'
+        dependencies:
+          $ref: ../../../../engine/api/preview/2026-11-12-preview/pattern.schema.json#/properties/steps/items/properties/dependencies
+        outputs:
+          $ref: '#/components/schemas/OutputNames'
+    EarlierStep:
+      type: object
+      description: >-
+        A step the pattern runs before this one, with the paths it may write and its outputs.
+        TestsUnchanged reads the earlier step whose outputs hold `tests`, and GeneratedCodeUnchanged
+        the one whose outputs hold `generated-code`: no path matching that step's `writable` may be
+        added, changed or removed compared with `before`, unless the judged step's own `writable`
+        matches it too (the seam `internal/app/app.go`, which generate writes and code replaces).
+        TestsUnchanged also reads the step whose outputs hold `witnesses` (the review step), earlier
+        or the judged step itself: no witness test in `before` (a path its `writable` matches) may
+        be changed or removed, by any step, the review step included; the review step may only add
+        witness tests. A step before the review that writes under `review/` (only generate, whose
+        project root is writable, could) is stopped by ScopeKept, since no glob of its `writable`
+        matches; TestsUnchanged covers witnesses only once the review has written them (research
+        D35).
+      required:
+      - name
+      - writable
+      - outputs
+      additionalProperties: false
+      properties:
+        name:
+          $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/step_name
+        writable:
+          $ref: '#/components/schemas/Writable'
+        outputs:
+          $ref: '#/components/schemas/OutputNames'
+    ArtifactRef:
+      type: object
+      description: A named artifact by its SHA-256, in the form info.description's Artifacts gives for
+        its name.
+      required:
+      - name
+      - sha256
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: The input or output name the pattern declares, for example `slice/contract` or
+            `generated-code`.
+        sha256:
+          $ref: '#/components/schemas/Hash'
+    Artifact:
+      type: object
+      description: A named artifact with its content, in the form info.description's Artifacts gives
+        for its name. The service checks that `content` has the SHA-256 `sha256` before it runs
+        anything, and answers 422 InputHashMismatch otherwise.
+      required:
+      - name
+      - sha256
+      - content
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        sha256:
+          $ref: '#/components/schemas/Hash'
+        content:
+          type: string
+          format: byte
+          contentEncoding: base64
+          maxLength: 1398104
+          description: The artifact's bytes, base64 encoded (RFC 4648, with padding), at most
+            `x-limits.input-max-bytes` before encoding.
+    Finding:
+      description: A review finding as the worker reported it; its text is at most 4096 characters.
+      allOf:
+      - $ref: ../../../../engine/api/preview/2026-11-12-preview/run-event.schema.json#/properties/finding
+      - type: object
+        properties:
+          text:
+            type: string
+            maxLength: 4096
+          file:
+            $ref: '#/components/schemas/ProjectPath'
+            description: A finding whose `file` is not a ProjectPath makes the request 400
+              InvalidRequest, so the engine never sends one. A blocking one names no file the
+              project holds, so the engine counts it as a failed FindingsCarryEvidence (the
+              check's own rule) and rejects the attempt; one that is not blocking it drops.
+          witness:
+            type: object
+            description: The new witness test a blocking finding carries (FindingsCarryEvidence
+              states what it must be). A `file` that is not a ProjectPath makes the request 400
+              InvalidRequest.
+            properties:
+              file:
+                $ref: '#/components/schemas/ProjectPath'
+    ApprovedPart:
+      type: object
+      description: One approved part of the slice, from the engine's slice record. `sha256` is the
+        hash the approval stores, the SHA-256 of `content`, which is the part's RFC 8785 canonical
+        JSON (engine contract, `slice-defs.schema.json`). The service checks that `content` has that
+        hash and answers 422 InputHashMismatch otherwise.
+      required:
+      - part
+      - sha256
+      - content
+      additionalProperties: false
+      properties:
+        part:
+          type: string
+          enum:
+          - goals
+          - rules
+          - contract
+          description: The part; the examples are in `rules`.
+        sha256:
+          $ref: '#/components/schemas/Hash'
+        content:
+          type: string
+          format: byte
+          contentEncoding: base64
+          maxLength: 1398104
+          description: The part's canonical JSON, base64 encoded (RFC 4648, with padding), at most
+            `x-limits.input-max-bytes` before encoding.
+    CallCommon:
+      type: object
+      description: >-
+        What every call names: whose attempt it is, which project it reads and how long it may
+        take.
+      required:
+      - run
+      - step
+      - attempt
+      - project
+      - before
+      - time_limit_seconds
+      properties:
+        run:
+          $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/run_id
+        step:
+          $ref: '#/components/schemas/StepFacts'
+        attempt:
+          type: integer
+          minimum: 1
+          description: The attempt of the step, from 1.
+        round:
+          type: integer
+          minimum: 1
+          description: The review round, from 1; only for the review step and the fix between
+            its rounds, which carries the round whose findings it fixes.
+        project:
+          $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/project_name
+          description: The project folder's name under the projects folder.
+        before:
+          $ref: '#/components/schemas/ProjectFiles'
+          description: >-
+            Every regular file of the project as the step accepted last left it: the
+            `project_files` of that step's accepted attempt as readStepFiles (agent step) or
+            runProcedure (procedure step) returned them; empty for the first step, whose project
+            folder is new. A check that compares states compares the folder now with this list.
+        time_limit_seconds:
+          type: integer
+          minimum: 1
+          maximum: 600
+          description: How long the call may run, at most `x-limits.call-time-limit-seconds-max`;
+            the engine passes what is left of the step's time budget (for restoreStep, of the
+            run's; with less than 1 second left the engine does not call, and the run is
+            interrupted and can be resumed).
+    CheckRequest:
+      description: >-
+        One check of one attempt. `earlier_steps` are the pattern's steps before this one, in order.
+        `approved` holds every approved part of the slice the run builds, one entry per part, filled
+        by the engine from the slice record whatever the step declares as inputs: approval is
+        platform data, not a step input, and the checks that compare the project with the approval
+        read only this field. `inputs` are the step's declared inputs by hash, in the pattern's
+        order. `outputs` are the attempt's outputs by hash,
+        one per declared output, as readStepFiles or runProcedure returned them. `findings` and
+        `changed_lines` are what the attempt's worker reported (the review step's findings; a fix's
+        changed lines); a check treats them as claims to verify, never as facts: FindingsCarryEvidence
+        and NoBlockingFindingOpen confirm a finding only by running the witness test it names
+        (runCheck).
+      allOf:
+      - $ref: '#/components/schemas/CallCommon'
+      - type: object
+        required:
+        - approved
+        - earlier_steps
+        - inputs
+        - outputs
+        properties:
+          approved:
+            type: array
+            minItems: 3
+            maxItems: 3
+            items:
+              $ref: '#/components/schemas/ApprovedPart'
+          earlier_steps:
+            type: array
+            maxItems: 16
+            items:
+              $ref: '#/components/schemas/EarlierStep'
+          inputs:
+            type: array
+            maxItems: 16
+            items:
+              $ref: '#/components/schemas/ArtifactRef'
+          outputs:
+            type: array
+            maxItems: 16
+            items:
+              $ref: '#/components/schemas/ArtifactRef'
+          findings:
+            type: array
+            maxItems: 100
+            items:
+              $ref: '#/components/schemas/Finding'
+          changed_lines:
+            type: array
+            maxItems: 2000
+            items:
+              $ref: ../../../../engine/api/preview/2026-11-12-preview/run-event.schema.json#/properties/changed_lines/items
+      unevaluatedProperties: false
+    CheckVerdict:
+      type: object
+      description: >-
+        The check's verdict on the attempt. The engine accepts an attempt only when every verdict
+        passed and every verdict's `project_files` equals the `project_files` readStepFiles or
+        runProcedure returned for the attempt, so all verdicts concern the same files; that list is
+        the next step's `before`.
+      required:
+      - check
+      - passed
+      - reason
+      - refs
+      - project_files
+      additionalProperties: false
+      properties:
+        check:
+          $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/check_name
+          description: The check that ran, the path's `checkName`.
+        passed:
+          type: boolean
+          description: True only when the check found nothing at fault.
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 65536
+          description: What the check confirmed, or every fault it found, each naming the file,
+            import, rule, output or hash at fault, in the order found and joined by "; ". It names
+            paths relative to the project folder only.
+        refs:
+          type: array
+          maxItems: 256
+          description: The slice items the verdict concerns, for example the example a failing test
+            binds to; empty when it names none.
+          items:
+            $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/ref
+        project_files:
+          $ref: '#/components/schemas/ProjectFiles'
+          description: Every regular file of the project folder with a ProjectPath, as this check read
+            it.
+        confirmed:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          description: "NoBlockingFindingOpen only, on every verdict it gives: the 0-based positions,
+            ascending, in the request's `findings` of the blocking findings whose witness run
+            confirmed them (FR-017); empty when the check passes. The engine records exactly these
+            findings as blocking, every other one as a suggestion. No other check sends it."
+          items:
+            type: integer
+            minimum: 0
+    StepFilesRequest:
+      description: The attempt whose files are read.
+      allOf:
+      - $ref: '#/components/schemas/CallCommon'
+      unevaluatedProperties: false
+    FileContent:
+      type: object
+      description: One file of the project with its content.
+      required:
+      - path
+      - sha256
+      - content
+      additionalProperties: false
+      properties:
+        path:
+          $ref: '#/components/schemas/ProjectPath'
+        sha256:
+          $ref: '#/components/schemas/Hash'
+        content:
+          type: string
+          format: byte
+          contentEncoding: base64
+          description: The file's bytes, base64 encoded (RFC 4648, with padding).
+    StepFiles:
+      type: object
+      description: >-
+        The files the step's writable paths hold after the attempt. `sha256` is the SHA-256 of
+        `files` in framed form (of no bytes when `files` is empty).
+      required:
+      - sha256
+      - files
+      - removed
+      - project_files
+      additionalProperties: false
+      properties:
+        sha256:
+          $ref: '#/components/schemas/Hash'
+        files:
+          type: array
+          maxItems: 10000
+          description: Every regular file matching the step's `writable` entries, in byte order of
+            `path`.
+          items:
+            $ref: '#/components/schemas/FileContent'
+        removed:
+          type: array
+          maxItems: 10000
+          description: Paths matching the step's `writable` entries that `before` lists and the folder
+            no longer holds, in byte order.
+          items:
+            $ref: '#/components/schemas/ProjectPath'
+        project_files:
+          $ref: '#/components/schemas/ProjectFiles'
+          description: Every regular file of the project folder as it was read; the next step's
+            `before` once the attempt is accepted.
+    ProcedureRequest:
+      description: >-
+        One run of a fixed procedure for one attempt. `inputs` are the step's declared inputs with
+        their content, in the pattern's order.
+      allOf:
+      - $ref: '#/components/schemas/CallCommon'
+      - type: object
+        required:
+        - inputs
+        properties:
+          inputs:
+            type: array
+            maxItems: 4
+            items:
+              $ref: '#/components/schemas/Artifact'
+      unevaluatedProperties: false
+    ProcedureOutput:
+      type: object
+      description: >-
+        One declared output of the step and the files the procedure produced for it. `sha256` is the
+        SHA-256 of the output's framed form, which is also the artifact the engine stores. Every
+        file's path matches the output's writable entries (see info.description, Artifacts), and no
+        path is in two outputs.
+      required:
+      - name
+      - sha256
+      - files
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        sha256:
+          $ref: '#/components/schemas/Hash'
+        files:
+          type: array
+          maxItems: 10000
+          description: The output's files in byte order of `path`.
+          items:
+            $ref: '#/components/schemas/FileContent'
+    ProcedureResult:
+      type: object
+      description: The procedure's result. With `completed` true, `outputs` holds exactly one entry per
+        output the step declares, in the step's order, and the files are written; with `completed`
+        false it is empty, nothing was written, and `reason` says why.
+      required:
+      - procedure
+      - completed
+      - reason
+      - outputs
+      - project_files
+      additionalProperties: false
+      properties:
+        procedure:
+          type: string
+          pattern: ^[a-z0-9-]+$
+          description: The procedure that ran, the path's `procedureName`.
+        completed:
+          type: boolean
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 65536
+          description: What the procedure produced, or why it could not, naming paths relative to the
+            project folder only.
+        outputs:
+          type: array
+          maxItems: 16
+          items:
+            $ref: '#/components/schemas/ProcedureOutput'
+        project_files:
+          $ref: '#/components/schemas/ProjectFiles'
+          description: Every regular file of the project folder after the procedure wrote its files;
+            the next step's `before` once the attempt is accepted.
+    RestoreRequest:
+      description: The attempt about to start, and `before`, the files the project must hold for it.
+      allOf:
+      - $ref: '#/components/schemas/CallCommon'
+      unevaluatedProperties: false
+    RestoredProject:
+      type: object
+      description: The project folder after restoreStep; `project_files` equals `before`.
+      required:
+      - restored
+      - project_files
+      additionalProperties: false
+      properties:
+        restored:
+          type: array
+          maxItems: 10000
+          description: The paths written back or removed, in byte order; empty when the folder already
+            held `before`.
+          items:
+            $ref: '#/components/schemas/ProjectPath'
+        project_files:
+          $ref: '#/components/schemas/ProjectFiles'
+    ReusedOutput:
+      type: object
+      description: One declared output of a reused step that is a set of project files, by its stored
+        hash and content. The outputs of one request hold at most `x-limits.step-files-max-bytes` of
+        file bytes together; more is 400 InvalidRequest.
+      required:
+      - name
+      - sha256
+      - content
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: The output's name, one of the step's declared outputs.
+        sha256:
+          $ref: '#/components/schemas/Hash'
+          description: The artifact's hash as the run record holds it, the SHA-256 of `content`.
+        content:
+          type: string
+          format: byte
+          contentEncoding: base64
+          maxLength: 14718144
+          description: The output's framed form (info.description, Artifacts), base64 encoded (RFC
+            4648, with padding), exactly the artifact the engine stored.
+    CommitRequest:
+      type: object
+      description: >-
+        One accepted step, or one open review round, to record. `before` is the files the project
+        held when the attempt started (the `project_files` of the previous commit, empty for the
+        first step), and `project_files` the files it holds after it: the `project_files` of the
+        accepted attempt or of the open round's attempt, or for a reused result the
+        `project_files` the run that accepted it recorded.
+      required:
+      - run
+      - step
+      - project
+      - before
+      - project_files
+      - accepted_at
+      - time_limit_seconds
+      additionalProperties: false
+      properties:
+        run:
+          $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/run_id
+        step:
+          $ref: '#/components/schemas/StepFacts'
+        attempt:
+          type: integer
+          minimum: 1
+          description: The accepted attempt, or with `open_round` the open round's attempt, from
+            1; not sent for a reused result.
+        round:
+          type: integer
+          minimum: 1
+          description: The review round, from 1; only for the review step and the fixes between its
+            rounds.
+        reused_from:
+          $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/run_id
+          description: For a reused result, the run that accepted it.
+        project:
+          $ref: ../../../../engine/api/preview/2026-11-12-preview/slice-defs.schema.json#/$defs/project_name
+          description: The project folder's name under the projects folder.
+        before:
+          $ref: '#/components/schemas/ProjectFiles'
+        project_files:
+          $ref: '#/components/schemas/ProjectFiles'
+        accepted_at:
+          type: string
+          format: date-time
+          description: The `at` of the run event that accepted or reused the step, or with
+            `open_round` of the StepRejected that left the round open, or of the ResultReused that
+            reused it; the commit's author and committer date, in whole seconds (a fraction of a
+            second is dropped, never rounded).
+        open_round:
+          type: boolean
+          description: Sent, as `true`, only for an open review round (the review step, with
+            `round`, and `attempt`, or `reused_from` when the round's kept result is reused); the
+            commit's subject then says the round was left open.
+        outputs:
+          type: array
+          maxItems: 16
+          description: For a reused result only, every declared output that is a set of project
+            files, in the step's order.
+          items:
+            $ref: '#/components/schemas/ReusedOutput'
+        time_limit_seconds:
+          type: integer
+          minimum: 1
+          maximum: 600
+          description: How long the call may run, at most `x-limits.call-time-limit-seconds-max`;
+            the engine passes what is left of the run's time budget. When less than 1 second is
+            left, the engine does not call; the run is interrupted and can be resumed.
+    ProjectVersion:
+      type: object
+      description: The commit that records the step.
+      required:
+      - commit
+      - created
+      - project_files
+      additionalProperties: false
+      properties:
+        commit:
+          type: string
+          pattern: ^[0-9a-f]{40}$
+          description: The commit's ID in the version history.
+        created:
+          type: boolean
+          description: True when this call made the commit; false when an earlier call had (a repeat).
+        project_files:
+          $ref: '#/components/schemas/ProjectFiles'
+          description: Every regular file of the project folder outside `.git`, as committed.

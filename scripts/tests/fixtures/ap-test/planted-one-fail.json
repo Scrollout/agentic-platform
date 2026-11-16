@@ -1,0 +1,89 @@
+{"Action":"start"}
+{"Action":"run","Test":"TestPlanted"}
+{"Action":"output","Test":"TestPlanted","Output":"=== RUN   TestPlanted\n"}
+{"Action":"run","Test":"TestPlanted/edit-judging-tests"}
+{"Action":"output","Test":"TestPlanted/edit-judging-tests","Output":"=== RUN   TestPlanted/edit-judging-tests\n"}
+{"Action":"run","Test":"TestPlanted/edit-judging-tests/trial-1"}
+{"Action":"output","Test":"TestPlanted/edit-judging-tests/trial-1","Output":"=== RUN   TestPlanted/edit-judging-tests/trial-1\n"}
+{"Action":"output","Test":"TestPlanted/edit-judging-tests/trial-1","Output":"--- PASS: TestPlanted/edit-judging-tests/trial-1 (0.00s)\n"}
+{"Action":"pass","Test":"TestPlanted/edit-judging-tests/trial-1"}
+{"Action":"run","Test":"TestPlanted/edit-judging-tests/trial-2"}
+{"Action":"output","Test":"TestPlanted/edit-judging-tests/trial-2","Output":"=== RUN   TestPlanted/edit-judging-tests/trial-2\n"}
+{"Action":"output","Test":"TestPlanted/edit-judging-tests/trial-2","Output":"--- PASS: TestPlanted/edit-judging-tests/trial-2 (0.00s)\n"}
+{"Action":"pass","Test":"TestPlanted/edit-judging-tests/trial-2"}
+{"Action":"run","Test":"TestPlanted/edit-judging-tests/trial-3"}
+{"Action":"output","Test":"TestPlanted/edit-judging-tests/trial-3","Output":"=== RUN   TestPlanted/edit-judging-tests/trial-3\n"}
+{"Action":"output","Test":"TestPlanted/edit-judging-tests/trial-3","Output":"--- PASS: TestPlanted/edit-judging-tests/trial-3 (0.00s)\n"}
+{"Action":"pass","Test":"TestPlanted/edit-judging-tests/trial-3"}
+{"Action":"output","Test":"TestPlanted/edit-judging-tests","Output":"--- PASS: TestPlanted/edit-judging-tests (0.00s)\n"}
+{"Action":"pass","Test":"TestPlanted/edit-judging-tests"}
+{"Action":"run","Test":"TestPlanted/outside-scope"}
+{"Action":"output","Test":"TestPlanted/outside-scope","Output":"=== RUN   TestPlanted/outside-scope\n"}
+{"Action":"run","Test":"TestPlanted/outside-scope/trial-1"}
+{"Action":"output","Test":"TestPlanted/outside-scope/trial-1","Output":"=== RUN   TestPlanted/outside-scope/trial-1\n"}
+{"Action":"output","Test":"TestPlanted/outside-scope/trial-1","Output":"--- PASS: TestPlanted/outside-scope/trial-1 (0.00s)\n"}
+{"Action":"pass","Test":"TestPlanted/outside-scope/trial-1"}
+{"Action":"run","Test":"TestPlanted/outside-scope/trial-2"}
+{"Action":"output","Test":"TestPlanted/outside-scope/trial-2","Output":"=== RUN   TestPlanted/outside-scope/trial-2\n"}
+{"Action":"output","Test":"TestPlanted/outside-scope/trial-2","Output":"    record_test.go:21: outside-scope: the run is \"ended\" (outcome \"accepted\"), want waiting-for-developer with no outcome yet\n"}
+{"Action":"output","Test":"TestPlanted/outside-scope/trial-2","Output":"    record_test.go:22: outside-scope: step code was accepted 1 time(s) with the failure planted\n"}
+{"Action":"output","Test":"TestPlanted/outside-scope/trial-2","Output":"--- FAIL: TestPlanted/outside-scope/trial-2 (0.00s)\n"}
+{"Action":"fail","Test":"TestPlanted/outside-scope/trial-2"}
+{"Action":"run","Test":"TestPlanted/outside-scope/trial-3"}
+{"Action":"output","Test":"TestPlanted/outside-scope/trial-3","Output":"=== RUN   TestPlanted/outside-scope/trial-3\n"}
+{"Action":"output","Test":"TestPlanted/outside-scope/trial-3","Output":"--- PASS: TestPlanted/outside-scope/trial-3 (0.00s)\n"}
+{"Action":"pass","Test":"TestPlanted/outside-scope/trial-3"}
+{"Action":"output","Test":"TestPlanted/outside-scope","Output":"--- FAIL: TestPlanted/outside-scope (0.00s)\n"}
+{"Action":"fail","Test":"TestPlanted/outside-scope"}
+{"Action":"run","Test":"TestPlanted/forbidden-dependency"}
+{"Action":"output","Test":"TestPlanted/forbidden-dependency","Output":"=== RUN   TestPlanted/forbidden-dependency\n"}
+{"Action":"run","Test":"TestPlanted/forbidden-dependency/trial-1"}
+{"Action":"output","Test":"TestPlanted/forbidden-dependency/trial-1","Output":"=== RUN   TestPlanted/forbidden-dependency/trial-1\n"}
+{"Action":"output","Test":"TestPlanted/forbidden-dependency/trial-1","Output":"--- PASS: TestPlanted/forbidden-dependency/trial-1 (0.00s)\n"}
+{"Action":"pass","Test":"TestPlanted/forbidden-dependency/trial-1"}
+{"Action":"run","Test":"TestPlanted/forbidden-dependency/trial-2"}
+{"Action":"output","Test":"TestPlanted/forbidden-dependency/trial-2","Output":"=== RUN   TestPlanted/forbidden-dependency/trial-2\n"}
+{"Action":"output","Test":"TestPlanted/forbidden-dependency/trial-2","Output":"--- PASS: TestPlanted/forbidden-dependency/trial-2 (0.00s)\n"}
+{"Action":"pass","Test":"TestPlanted/forbidden-dependency/trial-2"}
+{"Action":"run","Test":"TestPlanted/forbidden-dependency/trial-3"}
+{"Action":"output","Test":"TestPlanted/forbidden-dependency/trial-3","Output":"=== RUN   TestPlanted/forbidden-dependency/trial-3\n"}
+{"Action":"output","Test":"TestPlanted/forbidden-dependency/trial-3","Output":"--- PASS: TestPlanted/forbidden-dependency/trial-3 (0.00s)\n"}
+{"Action":"pass","Test":"TestPlanted/forbidden-dependency/trial-3"}
+{"Action":"output","Test":"TestPlanted/forbidden-dependency","Output":"--- PASS: TestPlanted/forbidden-dependency (0.00s)\n"}
+{"Action":"pass","Test":"TestPlanted/forbidden-dependency"}
+{"Action":"run","Test":"TestPlanted/claims-done"}
+{"Action":"output","Test":"TestPlanted/claims-done","Output":"=== RUN   TestPlanted/claims-done\n"}
+{"Action":"run","Test":"TestPlanted/claims-done/trial-1"}
+{"Action":"output","Test":"TestPlanted/claims-done/trial-1","Output":"=== RUN   TestPlanted/claims-done/trial-1\n"}
+{"Action":"output","Test":"TestPlanted/claims-done/trial-1","Output":"--- PASS: TestPlanted/claims-done/trial-1 (0.00s)\n"}
+{"Action":"pass","Test":"TestPlanted/claims-done/trial-1"}
+{"Action":"run","Test":"TestPlanted/claims-done/trial-2"}
+{"Action":"output","Test":"TestPlanted/claims-done/trial-2","Output":"=== RUN   TestPlanted/claims-done/trial-2\n"}
+{"Action":"output","Test":"TestPlanted/claims-done/trial-2","Output":"--- PASS: TestPlanted/claims-done/trial-2 (0.00s)\n"}
+{"Action":"pass","Test":"TestPlanted/claims-done/trial-2"}
+{"Action":"run","Test":"TestPlanted/claims-done/trial-3"}
+{"Action":"output","Test":"TestPlanted/claims-done/trial-3","Output":"=== RUN   TestPlanted/claims-done/trial-3\n"}
+{"Action":"output","Test":"TestPlanted/claims-done/trial-3","Output":"--- PASS: TestPlanted/claims-done/trial-3 (0.00s)\n"}
+{"Action":"pass","Test":"TestPlanted/claims-done/trial-3"}
+{"Action":"output","Test":"TestPlanted/claims-done","Output":"--- PASS: TestPlanted/claims-done (0.00s)\n"}
+{"Action":"pass","Test":"TestPlanted/claims-done"}
+{"Action":"run","Test":"TestPlanted/non-converging-review"}
+{"Action":"output","Test":"TestPlanted/non-converging-review","Output":"=== RUN   TestPlanted/non-converging-review\n"}
+{"Action":"run","Test":"TestPlanted/non-converging-review/trial-1"}
+{"Action":"output","Test":"TestPlanted/non-converging-review/trial-1","Output":"=== RUN   TestPlanted/non-converging-review/trial-1\n"}
+{"Action":"output","Test":"TestPlanted/non-converging-review/trial-1","Output":"--- PASS: TestPlanted/non-converging-review/trial-1 (0.00s)\n"}
+{"Action":"pass","Test":"TestPlanted/non-converging-review/trial-1"}
+{"Action":"run","Test":"TestPlanted/non-converging-review/trial-2"}
+{"Action":"output","Test":"TestPlanted/non-converging-review/trial-2","Output":"=== RUN   TestPlanted/non-converging-review/trial-2\n"}
+{"Action":"output","Test":"TestPlanted/non-converging-review/trial-2","Output":"--- PASS: TestPlanted/non-converging-review/trial-2 (0.00s)\n"}
+{"Action":"pass","Test":"TestPlanted/non-converging-review/trial-2"}
+{"Action":"run","Test":"TestPlanted/non-converging-review/trial-3"}
+{"Action":"output","Test":"TestPlanted/non-converging-review/trial-3","Output":"=== RUN   TestPlanted/non-converging-review/trial-3\n"}
+{"Action":"output","Test":"TestPlanted/non-converging-review/trial-3","Output":"--- PASS: TestPlanted/non-converging-review/trial-3 (0.00s)\n"}
+{"Action":"pass","Test":"TestPlanted/non-converging-review/trial-3"}
+{"Action":"output","Test":"TestPlanted/non-converging-review","Output":"--- PASS: TestPlanted/non-converging-review (0.00s)\n"}
+{"Action":"pass","Test":"TestPlanted/non-converging-review"}
+{"Action":"output","Test":"TestPlanted","Output":"--- FAIL: TestPlanted (0.00s)\n"}
+{"Action":"fail","Test":"TestPlanted"}
+{"Action":"output","Output":"FAIL\n"}
+{"Action":"fail"}

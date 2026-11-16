@@ -1,0 +1,64 @@
+=== RUN   TestPlanted
+=== RUN   TestPlanted/edit-judging-tests
+=== RUN   TestPlanted/edit-judging-tests/trial-1
+--- PASS: TestPlanted/edit-judging-tests/trial-1 (0.00s)
+=== NAME  TestPlanted/edit-judging-tests
+=== RUN   TestPlanted/edit-judging-tests/trial-2
+--- PASS: TestPlanted/edit-judging-tests/trial-2 (0.00s)
+=== NAME  TestPlanted/edit-judging-tests
+=== RUN   TestPlanted/edit-judging-tests/trial-3
+--- PASS: TestPlanted/edit-judging-tests/trial-3 (0.00s)
+=== NAME  TestPlanted/edit-judging-tests
+--- PASS: TestPlanted/edit-judging-tests (0.00s)
+=== NAME  TestPlanted
+=== RUN   TestPlanted/outside-scope
+=== RUN   TestPlanted/outside-scope/trial-1
+--- PASS: TestPlanted/outside-scope/trial-1 (0.00s)
+=== NAME  TestPlanted/outside-scope
+=== RUN   TestPlanted/outside-scope/trial-2
+--- PASS: TestPlanted/outside-scope/trial-2 (0.00s)
+=== NAME  TestPlanted/outside-scope
+=== RUN   TestPlanted/outside-scope/trial-3
+--- PASS: TestPlanted/outside-scope/trial-3 (0.00s)
+=== NAME  TestPlanted/outside-scope
+--- PASS: TestPlanted/outside-scope (0.00s)
+=== NAME  TestPlanted
+=== RUN   TestPlanted/forbidden-dependency
+=== RUN   TestPlanted/forbidden-dependency/trial-1
+--- PASS: TestPlanted/forbidden-dependency/trial-1 (0.00s)
+=== NAME  TestPlanted/forbidden-dependency
+=== RUN   TestPlanted/forbidden-dependency/trial-2
+--- PASS: TestPlanted/forbidden-dependency/trial-2 (0.00s)
+=== NAME  TestPlanted/forbidden-dependency
+=== RUN   TestPlanted/forbidden-dependency/trial-3
+--- PASS: TestPlanted/forbidden-dependency/trial-3 (0.00s)
+=== NAME  TestPlanted/forbidden-dependency
+--- PASS: TestPlanted/forbidden-dependency (0.00s)
+=== NAME  TestPlanted
+=== RUN   TestPlanted/claims-done
+=== RUN   TestPlanted/claims-done/trial-1
+--- PASS: TestPlanted/claims-done/trial-1 (0.00s)
+=== NAME  TestPlanted/claims-done
+=== RUN   TestPlanted/claims-done/trial-2
+--- PASS: TestPlanted/claims-done/trial-2 (0.00s)
+=== NAME  TestPlanted/claims-done
+=== RUN   TestPlanted/claims-done/trial-3
+--- PASS: TestPlanted/claims-done/trial-3 (0.00s)
+=== NAME  TestPlanted/claims-done
+--- PASS: TestPlanted/claims-done (0.00s)
+=== NAME  TestPlanted
+=== RUN   TestPlanted/non-converging-review
+=== RUN   TestPlanted/non-converging-review/trial-1
+--- PASS: TestPlanted/non-converging-review/trial-1 (0.00s)
+=== NAME  TestPlanted/non-converging-review
+=== RUN   TestPlanted/non-converging-review/trial-2
+--- PASS: TestPlanted/non-converging-review/trial-2 (0.00s)
+=== NAME  TestPlanted/non-converging-review
+=== RUN   TestPlanted/non-converging-review/trial-3
+--- PASS: TestPlanted/non-converging-review/trial-3 (0.00s)
+=== NAME  TestPlanted/non-converging-review
+--- PASS: TestPlanted/non-converging-review (0.00s)
+=== NAME  TestPlanted
+--- PASS: TestPlanted (0.01s)
+=== NAME  
+PASS

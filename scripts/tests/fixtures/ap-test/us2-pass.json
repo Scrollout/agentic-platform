@@ -1,0 +1,19 @@
+{"Action":"start"}
+{"Action":"run","Test":"TestUS2"}
+{"Action":"output","Test":"TestUS2","Output":"=== RUN   TestUS2\n"}
+{"Action":"run","Test":"TestUS2/US2.1"}
+{"Action":"output","Test":"TestUS2/US2.1","Output":"=== RUN   TestUS2/US2.1\n"}
+{"Action":"output","Test":"TestUS2/US2.1","Output":"--- PASS: TestUS2/US2.1 (0.00s)\n"}
+{"Action":"pass","Test":"TestUS2/US2.1"}
+{"Action":"output","Test":"TestUS2","Output":"--- PASS: TestUS2 (0.00s)\n"}
+{"Action":"pass","Test":"TestUS2"}
+{"Action":"run","Test":"TestUS2_2_EditingTheJudgingTestsIsStopped"}
+{"Action":"output","Test":"TestUS2_2_EditingTheJudgingTestsIsStopped","Output":"=== RUN   TestUS2_2_EditingTheJudgingTestsIsStopped\n"}
+{"Action":"output","Test":"TestUS2_2_EditingTheJudgingTestsIsStopped","Output":"--- PASS: TestUS2_2_EditingTheJudgingTestsIsStopped (0.00s)\n"}
+{"Action":"pass","Test":"TestUS2_2_EditingTheJudgingTestsIsStopped"}
+{"Action":"run","Test":"TestUS2_10_AnInterruptedRunResumesWithoutRepeatingAcceptedSteps"}
+{"Action":"output","Test":"TestUS2_10_AnInterruptedRunResumesWithoutRepeatingAcceptedSteps","Output":"=== RUN   TestUS2_10_AnInterruptedRunResumesWithoutRepeatingAcceptedSteps\n"}
+{"Action":"output","Test":"TestUS2_10_AnInterruptedRunResumesWithoutRepeatingAcceptedSteps","Output":"--- PASS: TestUS2_10_AnInterruptedRunResumesWithoutRepeatingAcceptedSteps (0.00s)\n"}
+{"Action":"pass","Test":"TestUS2_10_AnInterruptedRunResumesWithoutRepeatingAcceptedSteps"}
+{"Action":"output","Output":"PASS\n"}
+{"Action":"pass"}

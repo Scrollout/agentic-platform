@@ -1,0 +1,19 @@
+openapi: 3.1.0
+info: {title: Fixture, version: v}
+paths:
+  /items:
+    get:
+      operationId: listItems
+      parameters:
+        - {name: api-version, in: query, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: The items.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, name]
+                properties:
+                  id: {type: string}
+                  name: {type: string}

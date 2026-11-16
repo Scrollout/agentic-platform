@@ -1,0 +1,21 @@
+{
+  "goals": [
+    {
+      "id": "G-1",
+      "text": "Browse products"
+    }
+  ],
+  "terms": [],
+  "rules": [
+    {
+      "id": "R-1",
+      "goal": "G-1",
+      "pattern": "ubiquitous",
+      "system": "the shop",
+      "response": "shall list products",
+      "terms": []
+    }
+  ],
+  "examples": "Feature: Browse\n  Rule: R-1\n    @R-1 @E-1\n    Scenario: List\n      Given products\n",
+  "contract": " \n\t\n  "
+}

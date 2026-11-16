@@ -1,0 +1,40 @@
+{
+  "goals": [
+    {
+      "id": "G-1",
+      "text": "Rename files from the command line"
+    }
+  ],
+  "terms": [
+    {
+      "id": "T-1",
+      "name": "file",
+      "definition": "A file in the folder the tool is run on."
+    }
+  ],
+  "rules": [
+    {
+      "id": "R-1",
+      "goal": "G-1",
+      "pattern": "event",
+      "trigger": "the user runs the tool to rename a file to a new name",
+      "system": "the rename tool",
+      "response": "shall rename the file",
+      "terms": [
+        "T-1"
+      ]
+    }
+  ],
+  "examples": "Feature: Rename files\n  Rule: R-1\n    @R-1 @E-1\n    Scenario: A file is renamed\n      Given a folder with the file \"a.txt\"\n      When the user runs the tool to rename \"a.txt\" to \"b.txt\"\n      Then the folder holds \"b.txt\" and no longer \"a.txt\"\n",
+  "contract": "openapi: 3.1.0\ninfo: {title: rename-files, version: '1'}\npaths: {}\n",
+  "questions": [
+    {
+      "about": "R-1",
+      "text": "How should the new names be given?",
+      "options": [
+        "a pattern",
+        "a list"
+      ]
+    }
+  ]
+}

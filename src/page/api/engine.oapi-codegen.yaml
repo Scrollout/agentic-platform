@@ -1,0 +1,12 @@
+# The engine API client and its types, from the engine contract. scripts/generate.sh writes them to
+# gen/engine.gen.go; never edit that file by hand.
+package: gen
+generate:
+  client: true
+  models: true
+output-options:
+  overlay:
+    path: ../../engine/api/engine.overlay.yaml
+    strict: true
+compatibility:
+  always-prefix-enum-values: true

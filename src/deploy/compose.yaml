@@ -1,0 +1,436 @@
+# The platform's containers on one machine (research D5, D6, D9, D12, D13). Started and stopped by
+# the launcher `ap` (src/deploy/ap), which sets every variable below; never edit values in here per
+# deployment. A missing variable stops Compose with the message after `:?`.
+#
+#   AP_CREDENTIALS_FILE  absolute path of the file holding only the model provider key
+#   AP_PROJECTS_DIR      absolute path of the folder new projects are built in
+#   AP_PAGE_PORT         host port of the run page, published on 127.0.0.1 only
+#   AP_CLIENT_TOKEN      this session's token for the terminal client and the test harness
+#   AP_PAGE_TOKEN        this session's token for the run page
+#   AP_WORKER_TOKEN      this session's token for step and check workers
+#   AP_LINT_TOKEN        this session's token the engine calls the contract-lint service with
+#   AP_ANALYST_TOKEN     this session's token the engine calls the analyst service with
+#   AP_CHECK_TOKEN       this session's token the engine calls the check service with (D29)
+#   AP_PROJECT_TOKEN     this session's token the engine calls the project worker with (D30)
+#   AP_GRANTS_DIR        absolute path of the folder of step worker grants `ap build-workers` writes
+#                        (research D31); only the engine mounts it, read-only. Unset, it names a
+#                        folder that does not exist, so the engine does not start
+#   AP_HOST_USER         the developer's numeric uid:gid; the gateway runs as it to read the key
+#                        file (mode 600), and step workers and the project worker run as it to
+#                        write the projects folder
+#   AP_GATEWAY_IMAGE     the nginx pin from images.lock (its one home); the launcher reads it
+#   AP_IMAGE_ENGINE, AP_IMAGE_PAGE, AP_IMAGE_CLI, AP_IMAGE_AGENT, AP_IMAGE_CHECK, AP_IMAGE_PROJECT,
+#   AP_IMAGE_TESTS, AP_IMAGE_LINT
+#                        each image's signed digest reference, recorded by build.sh and verified by
+#                        the launcher before start (ADR 0028)
+#
+# Our images are built locally by build.sh, started by digest from the local image store and
+# never pulled (pull_policy: never).
+#
+# The analyst runs the upstream docker-agent pin by digest, written out below because Compose
+# cannot read images.lock and the variables above are all the launcher's; test_services_lint_analyst
+# fails when the two differ.
+#
+# Profiles: no profile is what `ap up` starts (gateway, engine, page, contract-lint, analyst, check,
+# project-worker). `client` and `tests` are run
+# on demand with `docker compose run --rm`; `workers` (step-agent, procedure-worker) are templates
+# `ap build-workers` starts once per step of a slice with `docker compose run -d`, adding that step's
+# project mounts and its own call token.
+#
+# Networks: every one is internal and isolated (no route out, and no address of the host's, so no
+# host service is reachable from it) except `egress`, which only the gateway joins, and
+# `page-host`, which only the page forwarder joins. Docker publishes no port from an internal
+# network, so the forwarder, a static nginx, takes the page's port on 127.0.0.1 and passes requests
+# to the page on the internal network `page`. `page-host` has IP masquerading off (no NAT), but the
+# host's addresses stay reachable from it: that exposure is the forwarder's alone (T022a). The
+# two networks that can reach the host have fixed subnets inside 10.231.0.0/16, so the optional
+# host firewall rule in docs/operations/local.md can name them (T022d).
+#
+# Names under gVisor: a gVisor container cannot use Docker's embedded DNS server (127.0.0.11),
+# because gVisor's own network stack never sees the NAT rule that carries 127.0.0.11 to Docker's
+# resolver (runsc --reproduce-nat would copy it, but that is a runtime flag of the host's Docker
+# configuration, not of this file). So the networks the workers share with the engine and the
+# gateway have fixed subnets, those two services fixed addresses on them, and each worker finds
+# them through its /etc/hosts (extra_hosts); so do contract-lint and the analyst, also under gVisor. Every subnet and address is declared once, in
+# x-addresses; other containers get theirs from the upper half of each subnet (ip_range), so no
+# container can take a fixed address. Containers under runc still use Docker's DNS (T022c).
+
+name: agentic-platform
+
+# The fixed subnets and addresses, each declared once and used by reference below. All lie in
+# 10.231.0.0/16, outside Docker's default address pools; the image registry's publishing network
+# (made by ap) is 10.231.5.0/24.
+x-addresses:
+  agents-subnet: &agents-subnet 10.231.1.0/24
+  agents-range: &agents-range 10.231.1.128/25
+  engine-on-agents: &engine-on-agents 10.231.1.2
+  gateway-on-agents: &gateway-on-agents 10.231.1.3
+  checks-subnet: &checks-subnet 10.231.2.0/24
+  checks-range: &checks-range 10.231.2.128/25
+  engine-on-checks: &engine-on-checks 10.231.2.2
+  lint-subnet: &lint-subnet 10.231.6.0/24
+  lint-range: &lint-range 10.231.6.128/25
+  engine-on-lint: &engine-on-lint 10.231.6.2
+  analyst-subnet: &analyst-subnet 10.231.7.0/24
+  analyst-range: &analyst-range 10.231.7.128/25
+  engine-on-analyst: &engine-on-analyst 10.231.7.2
+  gateway-on-analyst: &gateway-on-analyst 10.231.7.3
+  egress-subnet: &egress-subnet 10.231.3.0/24
+  page-host-subnet: &page-host-subnet 10.231.4.0/24
+
+# Settings every service shares: Kubernetes Restricted profile equivalents (constitution VIII).
+x-hardened: &hardened
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  restart: "no"
+
+# Step and check workers: gVisor (research D13), an executable /tmp for the Go toolchain, and the
+# session's worker token. Nothing else is writable.
+x-sandboxed: &sandboxed
+  <<: *hardened
+  runtime: runsc
+  profiles: [workers]
+  tmpfs:
+    - /tmp:exec,mode=1777,size=1g
+  deploy:
+    resources:
+      limits: { cpus: "2", memory: 2g, pids: 512 }
+
+services:
+  # Model gateway (src/deploy/gateway/README.md): the only container with egress and the only one
+  # that can read the provider key.
+  gateway:
+    <<: *hardened
+    image: ${AP_GATEWAY_IMAGE:?set AP_GATEWAY_IMAGE to the nginx pin in src/deploy/images.lock (ap up does this)}
+    user: ${AP_HOST_USER:?set AP_HOST_USER to the uid:gid that owns the credentials file (ap up does this)}
+    environment:
+      GATEWAY_SERVER_NAME: gateway
+      NGINX_ENVSUBST_FILTER: ^(ANTHROPIC_API_KEY|GATEWAY_SERVER_NAME)$$
+    secrets:
+      - anthropic_api_key
+    volumes:
+      - { type: bind, source: ./gateway/default.conf.template, target: /etc/nginx/templates/default.conf.template, read_only: true }
+      - { type: bind, source: ./gateway/provider.inc.template, target: /etc/nginx/templates/provider.inc.template, read_only: true }
+      - { type: bind, source: ./gateway/credential.envsh, target: /docker-entrypoint.d/05-credential.envsh, read_only: true }
+    tmpfs:
+      - /etc/nginx/conf.d:mode=1777,size=1m
+      - /var/cache/nginx:mode=1777,size=16m
+      - /var/run:mode=1777,size=1m
+      - /tmp:mode=1777,size=16m
+    networks:
+      agents: { ipv4_address: *gateway-on-agents }
+      analyst: { ipv4_address: *gateway-on-analyst }
+      egress: {}
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 128m, pids: 128 }
+
+  # Workflow engine (src/engine). It holds the three caller tokens to tell callers apart (research
+  # D12), and the tokens it calls contract-lint, the analyst, the check service and the project
+  # worker with (research D27, D28, D29, D30).
+  engine:
+    <<: *hardened
+    image: ${AP_IMAGE_ENGINE:?set AP_IMAGE_ENGINE to the signed ap-engine image (ap up does this; build it with src/deploy/build.sh engine)}
+    pull_policy: never
+    user: "65532:65532"
+    environment:
+      ENGINE_LISTEN_ADDRESS: ":8080"
+      ENGINE_CLIENT_TOKEN: ${AP_CLIENT_TOKEN:?set AP_CLIENT_TOKEN (ap up does this)}
+      ENGINE_PAGE_TOKEN: ${AP_PAGE_TOKEN:?set AP_PAGE_TOKEN (ap up does this)}
+      ENGINE_WORKER_TOKEN: ${AP_WORKER_TOKEN:?set AP_WORKER_TOKEN (ap up does this)}
+      AP_LINT_URL: http://contract-lint:8080
+      AP_LINT_TOKEN: ${AP_LINT_TOKEN:?set AP_LINT_TOKEN (ap up does this)}
+      AP_ANALYST_URL: http://analyst:8080
+      AP_ANALYST_TOKEN: ${AP_ANALYST_TOKEN:?set AP_ANALYST_TOKEN (ap up does this)}
+      AP_CHECK_URL: http://check:8080
+      AP_CHECK_TOKEN: ${AP_CHECK_TOKEN:?set AP_CHECK_TOKEN (ap up does this)}
+      AP_PROJECT_URL: http://project-worker:8080
+      AP_PROJECT_TOKEN: ${AP_PROJECT_TOKEN:?set AP_PROJECT_TOKEN (ap up does this)}
+      ENGINE_STORE_DIR: /var/lib/engine
+      ENGINE_GRANTS_DIR: /var/lib/engine-grants
+    tmpfs:
+      - /tmp:mode=1777,size=16m
+    # The engine's store (runs, slices, acceptances; T038g) on a named volume only it mounts, so
+    # the root stays read-only and `ap down` keeps the records. Docker gives a new volume the
+    # image directory's owner, 65532 (Dockerfile.engine). The step worker grants `ap build-workers`
+    # writes (research D31): a host folder owned by the engine's user 65532, mode 700, that no
+    # other service mounts; the engine reads a grant file at each worker-token authentication.
+    volumes:
+      - { type: volume, source: engine-store, target: /var/lib/engine }
+      - { type: bind, source: "${AP_GRANTS_DIR:-/nonexistent/ap-grants-dir-is-set-by-ap-up}", target: /var/lib/engine-grants, read_only: true }
+    networks:
+      clients: {}
+      agents: { ipv4_address: *engine-on-agents }
+      checks: { ipv4_address: *engine-on-checks }
+      lint: { ipv4_address: *engine-on-lint }
+      analyst: { ipv4_address: *engine-on-analyst }
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 512m, pids: 256 }
+
+  # contract-lint (src/deploy/lint/server.mjs, research D28): Spectral behind a small HTTP front,
+  # under gVisor, on `lint` with the engine only. It reads its token as LINT_TOKEN. It calls no one;
+  # the engine's entry in extra_hosts is the gVisor rule every sandboxed service follows (T022c).
+  contract-lint:
+    <<: *hardened
+    image: ${AP_IMAGE_LINT:?set AP_IMAGE_LINT to the signed ap-lint image (ap up does this; build it with src/deploy/build.sh lint)}
+    pull_policy: never
+    runtime: runsc
+    user: "65532:65532"
+    environment:
+      LINT_TOKEN: ${AP_LINT_TOKEN:?set AP_LINT_TOKEN (ap up does this)}
+    tmpfs:
+      - /tmp:mode=1777,size=16m
+    extra_hosts: { engine: *engine-on-lint }
+    networks: [lint]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256m, pids: 64 }
+
+  # The analyst (src/agents/README.md, research D27): Docker Agent's `serve api` with the agent
+  # definitions read-only, under gVisor, on `analyst` with the engine and the gateway only. The
+  # token reaches it through its environment and a shell, so it is not on the command line
+  # (`docker inspect` would show it). The model key never reaches it: the gateway adds it, and the
+  # placeholder only lets the Anthropic client start.
+  analyst:
+    <<: *hardened
+    image: docker/docker-agent:1.160.0@sha256:186f001f1096d3071a49113044465be8cec453cf06b26366f4c56b6789f5103c
+    runtime: runsc
+    user: "65532:65532"
+    entrypoint: ["sh", "-c", "exec /docker-agent serve api /agents/analyst.yaml --listen 0.0.0.0:8080 --auth-token \"$$AP_ANALYST_TOKEN\" --session-db /tmp/session.db"]
+    command: []
+    environment:
+      AP_ANALYST_TOKEN: ${AP_ANALYST_TOKEN:?set AP_ANALYST_TOKEN (ap up does this)}
+      MODEL_GATEWAY_URL: http://gateway:8080
+      ANTHROPIC_API_KEY: placeholder-not-a-key
+      TELEMETRY_ENABLED: "false"
+      HOME: /tmp/home
+    volumes:
+      - { type: bind, source: ../agents, target: /agents, read_only: true }
+    tmpfs:
+      - /tmp:uid=65532,gid=65532,mode=0700,size=64m
+    extra_hosts: { engine: *engine-on-analyst, gateway: *gateway-on-analyst }
+    networks: [analyst]
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 1g, pids: 512 }
+
+  # Read-only run page (research D18), reached only through page-proxy on 127.0.0.1. PAGE_HOST is
+  # the one Host header it accepts (DNS rebinding guard, plan threat model); the forwarder passes
+  # the client's Host unchanged.
+  page:
+    <<: *hardened
+    image: ${AP_IMAGE_PAGE:?set AP_IMAGE_PAGE to the signed ap-page image (ap up does this; build it with src/deploy/build.sh page)}
+    pull_policy: never
+    user: "65532:65532"
+    environment:
+      PAGE_LISTEN_ADDRESS: ":8080"
+      PAGE_HOST: 127.0.0.1:${AP_PAGE_PORT:?set AP_PAGE_PORT (ap up does this)}
+      ENGINE_URL: http://engine:8080
+      ENGINE_TOKEN: ${AP_PAGE_TOKEN:?set AP_PAGE_TOKEN (ap up does this)}
+    networks: [clients, page]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 128m, pids: 64 }
+
+  # The run page's forwarder (src/deploy/page-proxy/nginx.conf): the only container on
+  # `page-host`, publishing the page's port on 127.0.0.1 only. One fixed file, no variables; nginx
+  # runs directly, without the image's entrypoint scripts.
+  page-proxy:
+    <<: *hardened
+    image: ${AP_GATEWAY_IMAGE:?set AP_GATEWAY_IMAGE to the nginx pin in src/deploy/images.lock (ap up does this)}
+    user: "65532:65532"
+    entrypoint: ["nginx", "-c", "/etc/ap/nginx.conf", "-g", "daemon off;"]
+    command: []
+    volumes:
+      - { type: bind, source: ./page-proxy/nginx.conf, target: /etc/ap/nginx.conf, read_only: true }
+    tmpfs:
+      - /tmp:mode=1777,size=16m
+    ports:
+      - { target: 8080, published: "${AP_PAGE_PORT:?set AP_PAGE_PORT (ap up does this)}", host_ip: 127.0.0.1, protocol: tcp }
+    networks: [page, page-host]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 64m, pids: 64 }
+
+  # Terminal client (src/cli/contract.md), run per command by the launcher.
+  cli:
+    <<: *hardened
+    image: ${AP_IMAGE_CLI:?set AP_IMAGE_CLI to the signed ap-cli image (ap up does this; build it with src/deploy/build.sh cli)}
+    pull_policy: never
+    profiles: [client]
+    user: "65532:65532"
+    environment:
+      ENGINE_URL: http://engine:8080
+      ENGINE_TOKEN: ${AP_CLIENT_TOKEN:?set AP_CLIENT_TOKEN (ap up does this)}
+    tmpfs:
+      - /tmp:mode=1777,size=16m
+    networks: [clients]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 128m, pids: 64 }
+
+  # Test harness (src/tests), run by `ap test <suite>` as a client of the engine.
+  tests:
+    <<: *hardened
+    image: ${AP_IMAGE_TESTS:?set AP_IMAGE_TESTS to the signed ap-tests image (ap up does this; build it with src/deploy/build.sh tests)}
+    pull_policy: never
+    profiles: [tests]
+    user: "65532:65532"
+    environment:
+      ENGINE_URL: http://engine:8080
+      ENGINE_TOKEN: ${AP_CLIENT_TOKEN:?set AP_CLIENT_TOKEN (ap up does this)}
+    tmpfs:
+      - /tmp:exec,mode=1777,size=512m
+    networks: [clients]
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 1g, pids: 512 }
+
+  # Agent step worker (Docker Agent `serve api`, research D29). The template `ap build-workers`
+  # starts once per agent step of a slice (`agent:<name>` in the pattern): STEP_AGENT names the
+  # definition under /agents and STEP_TOKEN is the token the engine calls it with (the launcher's,
+  # one per container). The token reaches the container through its environment, so it is not in
+  # the container's configured command (`docker inspect`); a known limit: Docker Agent takes it as
+  # the `--auth-token` flag, so inside the sandbox it is on docker-agent's own command line, which
+  # the agent's shell tool can read. The launcher mounts only the step's project, read-only at
+  # /projects/<project>, with the step's writable folders writable and `.git` read-only (research
+  # D5, D30). The template holds no token (owner, 2026-11-13): ENGINE_TOKEN stays empty, since the
+  # launcher registers the container on its behalf, and an empty STEP_AGENT or STEP_TOKEN stops
+  # it, so a manual `docker compose up` gets no session token. The model key never reaches it: the
+  # gateway adds it, and the placeholder only lets the Anthropic client start (as for the analyst).
+  step-agent:
+    <<: *sandboxed
+    image: ${AP_IMAGE_AGENT:?set AP_IMAGE_AGENT to the signed ap-agent image (ap up does this; build it with src/deploy/build.sh agent)}
+    pull_policy: never
+    user: ${AP_HOST_USER:?set AP_HOST_USER to the developer's uid:gid (ap up does this)}
+    entrypoint: ["sh", "-c", "if [ -z \"$${STEP_AGENT:-}\" ] || [ -z \"$${STEP_TOKEN:-}\" ]; then echo 'step-agent: STEP_AGENT and STEP_TOKEN must be set (ap build-workers sets them)' >&2; exit 1; fi; exec /usr/local/bin/docker-agent serve api \"/agents/$$STEP_AGENT.yaml\" --listen 0.0.0.0:8080 --auth-token \"$$STEP_TOKEN\" --session-db /tmp/session.db"]
+    command: []
+    environment:
+      ENGINE_URL: http://engine:8080
+      ENGINE_TOKEN: ""
+      MODEL_GATEWAY_URL: http://gateway:8080
+      ANTHROPIC_API_KEY: placeholder-not-a-key
+      TELEMETRY_ENABLED: "false"
+    volumes:
+      - { type: bind, source: ../agents, target: /agents, read_only: true }
+    extra_hosts: { engine: *engine-on-agents, gateway: *gateway-on-agents }
+    networks: [agents]
+
+  # Procedure step worker (src/engine/cmd/check as a `procedure-worker` deployment, research D29).
+  # The template `ap build-workers` starts once per procedure step of a slice
+  # (`procedure:<name>`): it sets CHECK_PROCEDURE and CHECK_STEP and CHECK_TOKEN, the container's
+  # own call token (empty in the template, so the worker does not start without the launcher), and mounts the project as for step-agent (generate alone gets the
+  # project root writable, for go.mod and go.sum, with `.git` read-only on top; research D30). It
+  # runs as the developer so they own the files it writes, and like the check service it has no
+  # route to the gateway.
+  procedure-worker:
+    <<: *sandboxed
+    image: ${AP_IMAGE_CHECK:?set AP_IMAGE_CHECK to the signed ap-check image (ap up does this; build it with src/deploy/build.sh check)}
+    pull_policy: never
+    user: ${AP_HOST_USER:?set AP_HOST_USER to the developer's uid:gid (ap up does this)}
+    command: ["/check"]
+    environment:
+      CHECK_LISTEN_ADDRESS: ":8080"
+      CHECK_TOKEN: ""
+      CHECK_PROJECTS_DIR: /projects
+      CHECK_OAPI_CODEGEN: /usr/local/bin/oapi-codegen
+      CHECK_TEMPLATE_DIR: /opt/template
+      CHECK_DEPLOYMENT: procedure-worker
+    extra_hosts: { engine: *engine-on-checks }
+    networks: [checks]
+
+  # The check service (src/engine/cmd/check, research D29): runs checks on generated code and reads
+  # a step's files, over the projects folder it only reads, with no route to the gateway (plan
+  # threat model: no network beyond the engine). It answers only the engine, which calls it with
+  # AP_CHECK_TOKEN; it calls no one, so it holds no worker token. The tools it needs (pinned
+  # oapi-codegen, the catalogue template and its module cache) are in the image (Dockerfile.check).
+  # Started by `ap up` like contract-lint, so it overrides the workers' profile.
+  check:
+    <<: *sandboxed
+    profiles: []
+    image: ${AP_IMAGE_CHECK:?set AP_IMAGE_CHECK to the signed ap-check image (ap up does this; build it with src/deploy/build.sh check)}
+    pull_policy: never
+    user: "65532:65532"
+    command: ["/check"]
+    environment:
+      CHECK_LISTEN_ADDRESS: ":8080"
+      CHECK_TOKEN: ${AP_CHECK_TOKEN:?set AP_CHECK_TOKEN (ap up does this)}
+      CHECK_PROJECTS_DIR: /projects
+      CHECK_OAPI_CODEGEN: /usr/local/bin/oapi-codegen
+      CHECK_TEMPLATE_DIR: /opt/template
+      CHECK_DEPLOYMENT: check-service
+    volumes:
+      - { type: bind, source: "${AP_PROJECTS_DIR:?set AP_PROJECTS_DIR to the projects folder (ap up does this)}", target: /projects, read_only: true }
+    extra_hosts: { engine: *engine-on-checks }
+    networks: [checks]
+
+  # The project worker (src/engine/cmd/check, research D30, ADRs 0032 and 0033): the check program's third
+  # deployment, in its own small image (Dockerfile.project: the binary and git, no Go toolchain),
+  # which keeps each new project's version history (one git commit per accepted step)
+  # and restores the project to its last commit before each attempt. It is the one service with the
+  # projects folder writable, and runs as the developer so they own the files and the repository.
+  # Its record of each project's last commit (the history guard) is on project-worker-state, a
+  # volume only it mounts. It answers only the engine, which calls it with AP_PROJECT_TOKEN, and
+  # calls no one; like the check service it has no route to the gateway. Started by `ap up`.
+  project-worker:
+    <<: *sandboxed
+    profiles: []
+    image: ${AP_IMAGE_PROJECT:?set AP_IMAGE_PROJECT to the signed ap-project image (ap up does this; build it with src/deploy/build.sh project)}
+    pull_policy: never
+    user: ${AP_HOST_USER:?set AP_HOST_USER to the developer's uid:gid (ap up does this)}
+    command: ["/check"]
+    environment:
+      CHECK_LISTEN_ADDRESS: ":8080"
+      CHECK_TOKEN: ${AP_PROJECT_TOKEN:?set AP_PROJECT_TOKEN (ap up does this)}
+      CHECK_PROJECTS_DIR: /projects
+      CHECK_HISTORY_DIR: /var/lib/project-worker
+      CHECK_DEPLOYMENT: project-worker
+    # A new volume takes the image folder's owner and mode; Dockerfile.project makes that folder
+    # writable by any user (mode 1777), since the developer's uid is known only at start.
+    volumes:
+      - { type: bind, source: "${AP_PROJECTS_DIR:?set AP_PROJECTS_DIR to the projects folder (ap up does this)}", target: /projects }
+      - { type: volume, source: project-worker-state, target: /var/lib/project-worker }
+    extra_hosts: { engine: *engine-on-checks }
+    networks: [checks]
+
+# `isolated` (Docker 28 and later) gives an internal network's bridge no address on the host, so a
+# container on it reaches only the other containers on it; a plain internal network still reaches
+# every host service listening on the bridge address.
+x-isolated: &isolated
+  internal: true
+  driver_opts:
+    com.docker.network.bridge.gateway_mode_ipv4: isolated
+
+networks:
+  clients: *isolated
+  agents:
+    <<: *isolated
+    ipam: { config: [{ subnet: *agents-subnet, ip_range: *agents-range }] }
+  checks:
+    <<: *isolated
+    ipam: { config: [{ subnet: *checks-subnet, ip_range: *checks-range }] }
+  page: *isolated
+  lint:
+    <<: *isolated
+    ipam: { config: [{ subnet: *lint-subnet, ip_range: *lint-range }] }
+  analyst:
+    <<: *isolated
+    ipam: { config: [{ subnet: *analyst-subnet, ip_range: *analyst-range }] }
+  egress:
+    ipam: { config: [{ subnet: *egress-subnet }] }
+  page-host:
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "false"
+    ipam: { config: [{ subnet: *page-host-subnet }] }
+
+# The engine's store and the project worker's records; plain local volumes, kept by `ap down` (it
+# never passes -v).
+volumes:
+  engine-store: {}
+  project-worker-state: {}
+
+secrets:
+  anthropic_api_key:
+    file: ${AP_CREDENTIALS_FILE:?set AP_CREDENTIALS_FILE to the file holding only the provider key (ap up does this)}

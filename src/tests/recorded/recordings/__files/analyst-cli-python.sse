@@ -1,0 +1,18 @@
+event: message_start
+data: {"message":{"content":[],"id":"msg_recorded","model":"claude-haiku-5-5","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"input_tokens":0,"output_tokens":0}},"type":"message_start"}
+
+event: content_block_start
+data: {"content_block":{"id":"toolu_recorded","input":{},"name":"__structured_output__","type":"tool_use"},"index":0,"type":"content_block_start"}
+
+event: content_block_delta
+data: {"delta":{"partial_json":"{\"goals\":[{\"id\":\"G-1\",\"text\":\"Count the words of a text file from the command line\"}],\"terms\":[{\"id\":\"T-1\",\"name\":\"word\",\"definition\":\"A run of characters without whitespace.\"}],\"rules\":[{\"id\":\"R-1\",\"goal\":\"G-1\",\"pattern\":\"event\",\"trigger\":\"the user runs the tool with a file path\",\"system\":\"the wordcount tool\",\"response\":\"shall print the number of words in the file\",\"terms\":[\"T-1\"]}],\"examples\":\"Feature: Word count\\n\\n  Rule: R-1\\n\\n    @R-1 @E-1\\n    Scenario: Count the words of a file\\n      Given a file with the text \\\"one two three\\\"\\n      When the user runs wordcount with the file's path\\n      Then the tool prints 3\\n\",\"contract\":\"openapi: 3.1.0\\ninfo:\\n  title: Wordcount\\n  version: '1'\\n  description: A command-line tool; it has no HTTP operations.\\npaths: {}\\n\"}","type":"input_json_delta"},"index":0,"type":"content_block_delta"}
+
+event: content_block_stop
+data: {"index":0,"type":"content_block_stop"}
+
+event: message_delta
+data: {"delta":{"stop_reason":"tool_use","stop_sequence":null},"type":"message_delta","usage":{"output_tokens":0}}
+
+event: message_stop
+data: {"type":"message_stop"}
+

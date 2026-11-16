@@ -1,0 +1,542 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "run-event.schema.json",
+  "title": "RunEvent",
+  "description": "One entry of a run record. Each kind requires the fields that explain it.",
+  "type": "object",
+  "required": [
+    "seq",
+    "at",
+    "run",
+    "kind"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Position in the run record, from 1, without gaps."
+    },
+    "at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "run": {
+      "$ref": "slice-defs.schema.json#/$defs/run_id"
+    },
+    "slice": {
+      "$ref": "slice-defs.schema.json#/$defs/slice_id",
+      "description": "The slice the run builds; on RunStarted only."
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "RunStarted",
+        "RunResumed",
+        "RunInterrupted",
+        "StepStarted",
+        "AttemptMade",
+        "CheckPassed",
+        "CheckFailed",
+        "StepAccepted",
+        "StepRejected",
+        "ResultReused",
+        "FindingRecorded",
+        "RunHandedOver",
+        "HandOverAccepted",
+        "RunExpired",
+        "RunCancelled",
+        "RunCompleted"
+      ]
+    },
+    "step": {
+      "$ref": "slice-defs.schema.json#/$defs/step_name"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "round": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3,
+      "description": "The review round an event belongs to: a review round's events and findings, and the events of the fix after that round."
+    },
+    "open_round": {
+      "type": "boolean",
+      "const": true,
+      "description": "True on the StepRejected that leaves a review round open (only NoBlockingFindingOpen failed, with at least one confirmed finding) and on the ResultReused that reuses such a round's kept result; never on an accepted or a reused accepted step (data-model, An open round reused)."
+    },
+    "worker": {
+      "$ref": "slice-defs.schema.json#/$defs/worker_ref",
+      "description": "The step's worker, as the pattern declares it."
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1
+    },
+    "agent_digest": {
+      "$ref": "slice-defs.schema.json#/$defs/hash"
+    },
+    "pattern": {
+      "$ref": "slice-defs.schema.json#/$defs/pattern_ref",
+      "description": "Pattern ID and version, as `<id>@<version>`."
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "$ref": "slice-defs.schema.json#/$defs/hash"
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "slice-defs.schema.json#/$defs/hash"
+      }
+    },
+    "reuse_key": {
+      "$ref": "slice-defs.schema.json#/$defs/hash"
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tokens",
+        "cost_usd"
+      ],
+      "description": "What one attempt used: on AttemptMade, and on StepRejected for an attempt that made no AttemptMade (its worker failed or its result was refused), so the run's use can be summed from its record.",
+      "properties": {
+        "tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Model tokens."
+        },
+        "cost_usd": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Model cost in US dollars."
+        }
+      }
+    },
+    "changed_lines": {
+      "type": "array",
+      "description": "On StepAccepted or ResultReused: the lines the accepted result reports changing (a fix of review findings), which the next review round is given; kept here so a resumed run still gives them.",
+      "items": {
+        "type": "object",
+        "required": [
+          "file",
+          "line"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Path relative to the project folder."
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "refs": {
+      "type": "array",
+      "description": "The goals, rules, terms, examples or contract operations the event concerns.",
+      "items": {
+        "$ref": "slice-defs.schema.json#/$defs/ref"
+      }
+    },
+    "check": {
+      "type": "object",
+      "required": [
+        "name",
+        "passed",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "slice-defs.schema.json#/$defs/check_name"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": [
+        "rule",
+        "text",
+        "blocking"
+      ],
+      "additionalProperties": false,
+      "description": "A review finding. It blocks only with a file, a line and a new witness test that fails there (FR-017); otherwise it is a suggestion.",
+      "properties": {
+        "rule": {
+          "$ref": "slice-defs.schema.json#/$defs/rule_id"
+        },
+        "file": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path relative to the project folder."
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "blocking": {
+          "type": "boolean",
+          "description": "As the engine records it: true only for a finding NoBlockingFindingOpen confirmed (its verdict's `confirmed`); every other finding, an unconfirmed claim included, is recorded false, a suggestion."
+        },
+        "check": {
+          "$ref": "slice-defs.schema.json#/$defs/check_name",
+          "description": "Informational: the check the reviewer names for the finding. No check consults it; a blocking finding is confirmed only by running the witness test it carries (check contract, runCheck, FindingsCarryEvidence)."
+        },
+        "witness": {
+          "type": "object",
+          "required": [
+            "file",
+            "test"
+          ],
+          "additionalProperties": false,
+          "description": "The new failing witness test the review wrote for the finding's rule (FR-017): a Go test file in the rule's folder review/r<n>/ and the test function in it, named TestR<n>... A blocking finding without one is recorded but confirms nothing, so it is a suggestion.",
+          "properties": {
+            "file": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^review/r[0-9]+/[A-Za-z0-9_.-]+_test\\.go$",
+              "description": "Path relative to the project folder."
+            },
+            "test": {
+              "type": "string",
+              "pattern": "^TestR[0-9]+([^0-9][A-Za-z0-9_]*)?$",
+              "description": "The Go test function's name; it starts with TestR<n> for the finding's rule R-<n>."
+            }
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "blocking": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "file",
+          "line"
+        ]
+      }
+    },
+    "detail": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Free text; for RunHandedOver, the reason; for the StepRejected that leaves a review round open and the ResultReused that reuses it (`open_round`), `review round <n> left blocking findings open`."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "RunStarted"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "pattern"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "StepStarted",
+              "AttemptMade",
+              "CheckPassed",
+              "CheckFailed",
+              "StepAccepted",
+              "StepRejected",
+              "ResultReused",
+              "FindingRecorded"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "step"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "AttemptMade",
+              "StepAccepted"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "attempt",
+          "worker",
+          "pattern",
+          "inputs",
+          "artifacts",
+          "reuse_key"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "AttemptMade",
+              "StepAccepted"
+            ]
+          },
+          "worker": {
+            "$ref": "slice-defs.schema.json#/$defs/worker_ref_agent_prefix"
+          }
+        },
+        "required": [
+          "worker"
+        ]
+      },
+      "then": {
+        "required": [
+          "model",
+          "agent_digest"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "CheckPassed",
+              "CheckFailed"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "check",
+          "refs"
+        ],
+        "properties": {
+          "refs": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "CheckPassed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "check": {
+            "properties": {
+              "passed": {
+                "const": true
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "CheckFailed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "check": {
+            "properties": {
+              "passed": {
+                "const": false
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "FindingRecorded"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "finding",
+          "round"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "ResultReused"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "reuse_key",
+          "artifacts"
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "open_round"
+        ]
+      },
+      "then": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "StepRejected",
+              "ResultReused"
+            ]
+          }
+        },
+        "required": [
+          "round",
+          "reuse_key",
+          "artifacts"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "ResultReused"
+          }
+        },
+        "required": [
+          "open_round"
+        ]
+      },
+      "then": {
+        "required": [
+          "check",
+          "detail"
+        ],
+        "properties": {
+          "check": {
+            "properties": {
+              "name": {
+                "const": "NoBlockingFindingOpen"
+              },
+              "passed": {
+                "const": false
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "RunHandedOver"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "detail"
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "slice"
+        ]
+      },
+      "then": {
+        "properties": {
+          "kind": {
+            "const": "RunStarted"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "usage"
+        ]
+      },
+      "then": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "AttemptMade",
+              "StepRejected"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "changed_lines"
+        ]
+      },
+      "then": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "StepAccepted",
+              "ResultReused"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

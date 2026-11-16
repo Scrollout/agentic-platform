@@ -1,0 +1,17 @@
+# Shared proxy settings for allowed paths. The upstream is fixed here, never taken from the request.
+set $provider "api.anthropic.com";
+proxy_pass https://$provider;
+proxy_http_version 1.1;
+proxy_ssl_server_name on;
+proxy_ssl_name $provider;
+proxy_ssl_verify on;
+proxy_ssl_verify_depth 3;
+proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+proxy_set_header Host $provider;
+proxy_set_header Connection "";
+# The credential is set here; any credential or cookie the caller sends is replaced or dropped.
+proxy_set_header x-api-key "${ANTHROPIC_API_KEY}";
+proxy_set_header Authorization "";
+proxy_set_header Cookie "";
+proxy_buffering off;
+proxy_read_timeout 300s;

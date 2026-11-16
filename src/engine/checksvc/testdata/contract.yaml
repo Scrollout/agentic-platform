@@ -1,0 +1,30 @@
+openapi: 3.1.0
+info:
+  title: Greeter
+  version: 1.0.0
+paths:
+  /greetings/{name}:
+    get:
+      operationId: getGreeting
+      x-rules: [R-1]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The greeting.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Greeting"
+components:
+  schemas:
+    Greeting:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string

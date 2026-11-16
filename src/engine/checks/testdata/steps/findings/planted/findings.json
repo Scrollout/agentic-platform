@@ -1,0 +1,5 @@
+[
+  {"rule": "R-2", "file": "internal/x.go", "line": 14, "text": "cited, but no rule test confirms it", "blocking": true, "confirming_check": "RuleTest/R-2"},
+  {"rule": "R-3", "file": "internal/y.go", "line": 0, "text": "no line", "blocking": true, "confirming_check": "RuleTest/R-3"},
+  {"rule": "", "file": "internal/z.go", "line": 3, "text": "no rule id", "blocking": true, "confirming_check": "RuleTest/R-4"}
+]

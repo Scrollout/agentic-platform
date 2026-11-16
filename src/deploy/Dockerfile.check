@@ -1,0 +1,75 @@
+# Check service image (research D29): the check service program, the Go toolchain it runs checks
+# with, the pinned oapi-codegen, the catalogue's module template and the module cache of the
+# template's go.mod, so the checks run with no network. Build context: src/. Pins come from build
+# args that deploy/build.sh reads from images.lock (OAPI_CODEGEN is the oapi-codegen line, one home).
+ARG GOLANG_IMAGE
+FROM ${GOLANG_IMAGE} AS build
+ARG OAPI_CODEGEN
+WORKDIR /src
+COPY . .
+# src/tests is excluded from the context (src/.dockerignore), so the workspace must not use it.
+RUN go work edit -dropuse=./tests
+ENV CGO_ENABLED=0 GOFLAGS=-trimpath\ -buildvcs=false GOTOOLCHAIN=local GOTELEMETRY=off
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    cd engine && go build -ldflags="-s -w -buildid=" -o /out/check ./cmd/check
+# The pinned oapi-codegen (the Go checksum database verifies the module), built in its own module
+# cache so the image's cache holds only what the template needs.
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    GOBIN=/out GOFLAGS=-trimpath GOWORK=off go install "${OAPI_CODEGEN}"
+# The template's module cache: every module of its go.mod and go.sum (go.sum verifies each one), so
+# `go mod vendor -mod=mod` and the checks find them with GOPROXY=off. Made read-only by Go itself.
+RUN cd catalogue/api-feature-go/template && GOWORK=off GOMODCACHE=/out/modcache GOFLAGS=-mod=mod go mod download \
+    && GOWORK=off GOMODCACHE=/out/modcache GOFLAGS=-mod=mod go mod vendor -o /tmp/vendor-probe \
+    && rm -rf /tmp/vendor-probe
+# The warm base cache (research D37 "Cost", owner 2026-11-15): the standard library of this pinned
+# toolchain, compiled and vetted as a check's go test needs it, from pinned sources only. Its
+# packages are the standard library dependencies of the pattern's pinned modules (the template's
+# vendortools: godog and the oapi runtime) and of the packages a derived test uses, built through
+# go test (compile, vet, -cover and -c) with the check service's own settings, so a call's lookups
+# hit it. The vendored modules themselves are not in it: their cache keys hold the project's
+# folder (no -trimpath), which differs per project. Each call copies it as its GOCACHE. The
+# packages are listed in a copy of the template with -mod=readonly: /opt/template must stay the
+# repository's bytes (a go list with -mod=mod rewrote its go.mod, and every generate step then
+# failed DependenciesAllowed).
+RUN set -e; mkdir -p /out/warm/warm /tmp/warm-bin; \
+    export GOFLAGS=-buildvcs=false GOWORK=off GOPROXY=off GOMODCACHE=/out/modcache GOCACHE=/out/gocache-base \
+      HOME=/tmp/warm-home GOPATH=/tmp/warm-gopath; \
+    cp -r catalogue/api-feature-go/template /tmp/warm-template; \
+    pkgs=$( (cd /tmp/warm-template && GOFLAGS="-buildvcs=false -mod=readonly" go list -tags tools -deps \
+        -f '{{if .Standard}}{{.ImportPath}}{{end}}' ./vendortools; \
+      go list -deps -f '{{if .Standard}}{{.ImportPath}}{{end}}' testing net/http/httptest encoding/json \
+        runtime/coverage testing/fstest) | grep -v -e internal -e '^vendor/' | sort -u); \
+    { echo 'package warm'; echo 'import ('; for p in $pkgs; do echo "_ \"$p\""; done; echo ')'; } >/out/warm/warm/warm.go; \
+    printf 'package warm\n\nimport "testing"\n\nfunc TestWarm(t *testing.T) {}\n' >/out/warm/warm/warm_test.go; \
+    printf 'module example.com/warm\n\ngo 1.26\n' >/out/warm/go.mod; \
+    cd /out/warm; \
+    go test -json -count=1 ./... >/dev/null; \
+    go test -json -count=1 -covermode=set -coverpkg=./... -coverprofile=/tmp/warm.out ./... >/dev/null; \
+    go test -c -count=1 -vet=off -o /tmp/warm-bin/ ./... >/dev/null; \
+    rm -rf /out/warm /tmp/warm-bin /tmp/warm.out /tmp/warm-home /tmp/warm-gopath /tmp/warm-template
+
+FROM ${GOLANG_IMAGE} AS base
+RUN adduser -D -u 65532 -h /tmp/home check
+
+# The golang image's files without its ENV, which sets GOPATH=/go: the image must set no GOPATH
+# (each call sets its own, below). PATH is the golang image's, without its /go/bin.
+FROM scratch
+COPY --from=base / /
+ENV PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+COPY --from=build /out/check /check
+COPY --from=build /out/oapi-codegen /usr/local/bin/oapi-codegen
+COPY --from=build /src/catalogue/api-feature-go/template /opt/template
+COPY --from=build /out/modcache /opt/gomodcache
+COPY --from=build /out/gocache-base /opt/gocache-base
+# The module cache and the warm base cache are in the image, owned by root and read-only (COPY
+# makes them root's; the check user can write neither). The image sets no GOCACHE and no GOPATH:
+# each call of the check program makes its own new folder under /tmp, copies the base cache
+# (CHECK_GOCACHE_BASE) into it as its GOCACHE, sets GOCACHE, GOTMPDIR, TMPDIR, HOME and GOPATH
+# inside it for every command, and removes it when the call ends (research D37, ADR 0041). HOME=/tmp/home is the service process's
+# own only. So the root file system can be read-only. The check service also sets GOPROXY=off,
+# GOWORK=off and GOTOOLCHAIN=local on every command it runs.
+ENV GOTELEMETRY=off GOTOOLCHAIN=local GOFLAGS=-buildvcs=false \
+    HOME=/tmp/home GOMODCACHE=/opt/gomodcache CGO_ENABLED=0 CHECK_GOCACHE_BASE=/opt/gocache-base
+USER 65532:65532
+WORKDIR /work
+CMD ["/check"]

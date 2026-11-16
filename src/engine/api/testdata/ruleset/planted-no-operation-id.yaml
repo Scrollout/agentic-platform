@@ -1,0 +1,88 @@
+openapi: 3.1.0
+info:
+  title: Test API
+  version: 1.0.0
+  description: Fixture API for ruleset tests.
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+x-limits:
+  requests-per-second-per-token: 20
+  requests-per-second-per-address-without-token: 20
+  idempotency-key-retention-hours: 24
+  request-body-max-bytes: 1048576
+servers:
+  - url: https://example.com
+tags:
+  - name: things
+    description: Things.
+paths:
+  /things:
+    get:
+      summary: List things
+      description: Lists things.
+      tags: [things]
+      parameters:
+        - $ref: '#/components/parameters/ApiVersion'
+        - name: page_token
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: string
+        default:
+          description: Error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /providers/things:
+    get:
+      operationId: getProviderThings
+      summary: Provider things
+      description: Gets provider things.
+      tags: [things]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+        default:
+          description: Error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+components:
+  parameters:
+    ApiVersion:
+      name: api-version
+      in: query
+      required: true
+      schema:
+        type: string
+  schemas:
+    Problem:
+      type: object
+      required: [code, title]
+      properties:
+        code:
+          type: string
+        title:
+          type: string

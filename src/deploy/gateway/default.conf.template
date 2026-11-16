@@ -1,0 +1,40 @@
+# Model gateway (nginx). Rendered at container start by the nginx image's envsubst step
+# (/etc/nginx/templates/*.template -> /etc/nginx/conf.d/). Variables, only these two:
+#   ${ANTHROPIC_API_KEY}    the provider credential; exists only in the gateway's environment
+#   ${GATEWAY_SERVER_NAME}  the one Host name callers use for the gateway (for example "gateway")
+# Nothing is logged except errors: no access log, so no headers or bodies reach any log.
+
+access_log off;
+error_log /dev/stderr warn;
+
+# Docker's embedded DNS; the provider host is re-resolved, not frozen at start.
+resolver 127.0.0.11 valid=30s ipv6=off;
+
+# Any Host other than the gateway's own name is refused.
+server {
+    listen 8080 default_server;
+    server_name _;
+    return 421 "gateway: host not allowed\n";
+}
+
+server {
+    listen 8080;
+    server_name ${GATEWAY_SERVER_NAME};
+
+    client_max_body_size 8m;
+
+    # Only the Messages API of the provider.
+    location = /v1/messages {
+        limit_except POST { deny all; }
+        include /etc/nginx/conf.d/provider.inc;
+    }
+    location = /v1/messages/count_tokens {
+        limit_except POST { deny all; }
+        include /etc/nginx/conf.d/provider.inc;
+    }
+
+    # Everything else: refused.
+    location / {
+        return 403 "gateway: path not allowed\n";
+    }
+}

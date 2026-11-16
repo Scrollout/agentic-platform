@@ -1,0 +1,4 @@
+package notes
+
+// Text says "hi" \ with a tab	here, é, <b> & done.
+func Hello() string { return "hi" }

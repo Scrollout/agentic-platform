@@ -1,0 +1,467 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "slice-defs.schema.json",
+  "title": "SliceDefinitions",
+  "description": "The parts of a slice and the value rules they share, defined once and used by the slice, the slice proposal, the pattern, the run record and the engine API.",
+  "$defs": {
+    "slice_id": {
+      "type": "string",
+      "pattern": "^S-[0-9]+$",
+      "description": "A slice ID, `S-<n>`."
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^RUN-[0-9]+$",
+      "description": "A run ID, `RUN-<n>`."
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "A SHA-256 hash in lowercase hex."
+    },
+    "slice_or_run_id": {
+      "type": "string",
+      "pattern": "^(S|RUN)-[0-9]+$",
+      "description": "The ID of a slice or of a run, `S-<n>` or `RUN-<n>`."
+    },
+    "operation_id": {
+      "type": "string",
+      "pattern": "^OP-[0-9]+$",
+      "description": "An operation ID, `OP-<n>`."
+    },
+    "goal_id": {
+      "type": "string",
+      "pattern": "^G-[0-9]+$",
+      "description": "A goal ID, `G-<n>`."
+    },
+    "term_id": {
+      "type": "string",
+      "pattern": "^T-[0-9]+$",
+      "description": "A term ID, `T-<n>`."
+    },
+    "rule_id": {
+      "type": "string",
+      "pattern": "^R-[0-9]+$",
+      "description": "A rule ID, `R-<n>`."
+    },
+    "question_id": {
+      "type": "string",
+      "pattern": "^Q-[0-9]+$",
+      "description": "A question ID, `Q-<n>`."
+    },
+    "pattern_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "A pattern's name: lowercase letters, digits and hyphens. A separate rule from `step_name`, though the same today, because a pattern and a step are named for different things and either rule may change alone."
+    },
+    "pattern_ref": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+@[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "One version of a pattern, `<pattern_id>@<major>.<minor>.<patch>`."
+    },
+    "step_name": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "A step's name within a pattern: lowercase letters, digits and hyphens. A separate rule from `pattern_id`, though the same today, because a step and a pattern are named for different things and either rule may change alone."
+    },
+    "worker_ref": {
+      "type": "string",
+      "pattern": "^(agent|procedure):[a-z0-9-]+$",
+      "description": "The worker a step runs on: `agent:<name>` for an agent, `procedure:<name>` for a fixed procedure."
+    },
+    "worker_ref_agent_prefix": {
+      "pattern": "^agent:",
+      "description": "True when a `worker_ref` names an agent: a test on its `agent:` prefix for use in `if`, not a value type."
+    },
+    "check_name": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9]*$",
+      "description": "A check's name in PascalCase, for example ExampleTagged."
+    },
+    "project_name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+      "description": "A project's name, which is also its folder name: lowercase letters, digits and hyphens, starting with a letter or digit, at most 63 characters."
+    },
+    "worker_endpoint": {
+      "type": "string",
+      "pattern": "^http://[a-z0-9-]+:[0-9]{1,5}/?$",
+      "description": "A worker's address on the internal network, `http://<service>:<port>`."
+    },
+    "api_version": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}(-preview)?$",
+      "description": "An API version, a date `YYYY-MM-DD`, with `-preview` for a preview version."
+    },
+    "ref": {
+      "type": "string",
+      "pattern": "^(G-[0-9]+|R-[0-9]+|T-[0-9]+|R-[0-9]+/E-[0-9]+|contract/[A-Za-z][A-Za-z0-9]*)$",
+      "description": "One item of a slice: a goal `G-<n>`, rule `R-<n>`, term `T-<n>`, example `R-<n>/E-<n>` or contract operation `contract/<operationId>`."
+    },
+    "part_ref": {
+      "type": "string",
+      "pattern": "^(goals|rules|contract|G-[0-9]+|R-[0-9]+|T-[0-9]+|R-[0-9]+/E-[0-9]+|contract/[A-Za-z][A-Za-z0-9]*)$",
+      "description": "A whole part (`goals`, `rules` or `contract`) or one item of it, as in `ref`."
+    },
+    "part": {
+      "type": "string",
+      "enum": [
+        "goals",
+        "rules",
+        "contract"
+      ],
+      "description": "A part the developer approves. `rules` covers the rules, examples and terms."
+    },
+    "goal": {
+      "type": "object",
+      "required": [
+        "id",
+        "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/goal_id"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "term": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "definition"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/term_id"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "definition": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "description": "A business rule in structured EARS. The slice shows its sentence in `rule_text`.",
+      "required": [
+        "id",
+        "goal",
+        "pattern",
+        "system",
+        "response",
+        "terms"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/rule_id"
+        },
+        "goal": {
+          "$ref": "#/$defs/goal_id"
+        },
+        "pattern": {
+          "type": "string",
+          "enum": [
+            "ubiquitous",
+            "event",
+            "state",
+            "unwanted",
+            "option"
+          ]
+        },
+        "precondition": {
+          "type": "string",
+          "minLength": 1
+        },
+        "trigger": {
+          "type": "string",
+          "minLength": 1
+        },
+        "feature": {
+          "type": "string",
+          "minLength": 1
+        },
+        "system": {
+          "type": "string",
+          "minLength": 1
+        },
+        "response": {
+          "type": "string",
+          "minLength": 1
+        },
+        "terms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/term_id"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "pattern": {
+                "const": "state"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "precondition"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pattern": {
+                "enum": [
+                  "event",
+                  "unwanted"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "trigger"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pattern": {
+                "const": "option"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "feature"
+            ]
+          }
+        }
+      ]
+    },
+    "examples": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^\\s*[^\"\\s][\\s\\S]*\\n",
+      "description": "Gherkin text with one `Rule:` block per rule. Every scenario is tagged `@R-<n>` with the rule of its block and `@E-<n>` with its own example ID, which is unique in the slice and never reused. The ExampleTagged check fails a scenario that lacks either tag, whose `@R-<n>` differs from its block's rule, or whose `@E-<n>` repeats another scenario's. The pattern refuses text whose first non-blank character is `\"` or that has no real line break after its first non-blank character, which is a JSON-encoded or once-more-escaped string rather than the Gherkin itself."
+    },
+    "contract": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^\\s*[^\"\\s][\\s\\S]*\\n",
+      "description": "An OpenAPI 3.1 document as YAML text. Every operation has an `operationId` and `x-rules: [R-<n>, ...]`. The pattern refuses text whose first non-blank character is `\"` or that has no real line break after its first non-blank character, which is a JSON-encoded or once-more-escaped string rather than the YAML itself."
+    },
+    "question_about": {
+      "$ref": "#/$defs/ref",
+      "description": "The one item the question concerns."
+    },
+    "question_text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "question_options": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Up to 5 answers to choose from. Without options, the developer gives a free answer."
+    },
+    "answer": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "option"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "option": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4,
+              "description": "The position of the chosen option, from 0."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "A free answer of at most 200 characters."
+            }
+          }
+        }
+      ]
+    },
+    "question_draft": {
+      "type": "object",
+      "description": "A question the analyst asks. The platform gives it its `Q-<n>` ID.",
+      "required": [
+        "about",
+        "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "about": {
+          "$ref": "#/$defs/question_about"
+        },
+        "text": {
+          "$ref": "#/$defs/question_text"
+        },
+        "options": {
+          "$ref": "#/$defs/question_options"
+        }
+      }
+    },
+    "question": {
+      "type": "object",
+      "required": [
+        "id",
+        "about",
+        "text"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/question_id"
+        },
+        "about": {
+          "$ref": "#/$defs/question_about"
+        },
+        "text": {
+          "$ref": "#/$defs/question_text"
+        },
+        "options": {
+          "$ref": "#/$defs/question_options"
+        },
+        "answer": {
+          "$ref": "#/$defs/answer"
+        },
+        "answered_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "dependentRequired": {
+        "answer": [
+          "answered_at"
+        ]
+      }
+    },
+    "check_result": {
+      "type": "object",
+      "required": [
+        "part",
+        "check",
+        "passed",
+        "reason",
+        "pattern"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "part": {
+          "$ref": "#/$defs/part_ref"
+        },
+        "check": {
+          "$ref": "#/$defs/check_name",
+          "description": "The check's name, for example ExampleTagged or PatternFit."
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why the check failed, or what it confirmed."
+        },
+        "pattern": {
+          "type": "boolean",
+          "description": "True when the check is a condition of the catalogue pattern (pattern.yaml conditions, or PatternFit when no pattern can be read), false for the engine's own checks. A client names the failing checks with true when it says the pattern does not fit."
+        }
+      }
+    },
+    "goals_part": {
+      "type": "object",
+      "description": "The goals part. Its hash is the SHA-256 of this object's RFC 8785 canonical JSON.",
+      "required": [
+        "goals"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "goals": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/goal"
+          }
+        }
+      }
+    },
+    "rules_part": {
+      "type": "object",
+      "description": "The rules part: rules, examples and terms. Its hash is the SHA-256 of this object's RFC 8785 canonical JSON.",
+      "required": [
+        "rules",
+        "examples",
+        "terms"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/rule"
+          }
+        },
+        "examples": {
+          "$ref": "#/$defs/examples"
+        },
+        "terms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/term"
+          }
+        }
+      }
+    },
+    "contract_part": {
+      "type": "object",
+      "description": "The contract part. Its hash is the SHA-256 of this object's RFC 8785 canonical JSON, so it covers the YAML text exactly.",
+      "required": [
+        "contract"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "contract": {
+          "$ref": "#/$defs/contract"
+        }
+      }
+    }
+  }
+}

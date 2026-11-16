@@ -1,0 +1,1215 @@
+#!/bin/sh
+# ap: starts, stops and drives the platform on this machine (src/cli/contract.md, research D6).
+#
+# Runs on the host and calls nothing but `docker` (Compose) and POSIX utilities, except `test`, which
+# also runs a test binary it built in the pinned Go container (ADR 0037). Its own commands
+# are up, down, build-workers, page, test and registry; build, resume and replay first make the slice's
+# workers ready; every other command goes unchanged to the terminal client container, and its exit
+# code is returned. Exit codes are the terminal contract's: 3 is a usage error or a command that is
+# not available yet; 1 is a failed start or stop.
+#
+# Values reach Compose only through the environment (never a command line, so `ps` does not show
+# them). `up` on a started session keeps its tokens, so running it twice changes nothing; only
+# `up` after `down` makes new ones, and a second `up` with other credentials or projects is refused.
+# The session (tokens, paths, port) is kept for later commands in
+# ${XDG_STATE_HOME:-$HOME/.local/state}/agentic-platform/session.env (folder mode 700, file mode
+# 600, owned by the developer; any other file is refused, never read), removed by `down`.
+#
+# Images (ADR 0028): build.sh records each signed image as a digest reference in
+# ${XDG_STATE_HOME:-$HOME/.local/state}/agentic-platform/images.env. `up` verifies every image it
+# passes to Compose with the public key in ${XDG_CONFIG_HOME:-$HOME/.config}/agentic-platform/
+# signing/cosign.pub, from a cosign container on the registry's internal network (`ap-signing`),
+# against the local registry; any failure stops `up` before anything starts. A recorded image no
+# longer in the local image store (replaced by a rebuild) is pulled back by digest from the local
+# registry first. The session keeps the verified references, so later commands start exactly those
+# images. `registry` starts the local registry if it isn't running (build.sh and `up` call it).
+#
+# Step workers (research D5, D29, D30, D31): `build-workers <slice> <project>` makes the slice's step
+# workers ready for a build into the new project folder <project>: one container per step of the
+# pattern, from the Compose templates step-agent and procedure-worker, each with its own tokens, a
+# grant the engine reads from the grants folder, and a registration with the engine. Running it
+# again changes nothing. The worker tokens of the session are kept in
+# ${XDG_STATE_HOME:-$HOME/.local/state}/agentic-platform/workers/<slice> (mode 600) and the grants in
+# .../agentic-platform/grants (the engine's user's, mode 700); `down` removes both. Each project has
+# its own step containers, named by slice, step and the project's hash and labelled with all three
+# (research D32, ADR 0036); `resume` registers an interrupted run's own containers again and
+# `replay` builds a new project, both after reading the run with getRun.
+set -u
+
+here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+state_dir=${XDG_STATE_HOME:-$HOME/.local/state}/agentic-platform
+sess=$state_dir/session.env
+images_env=$state_dir/images.env
+pub=${XDG_CONFIG_HOME:-$HOME/.config}/agentic-platform/signing/cosign.pub
+# Images `up` needs (it starts the engine; every client command runs cli) and images it passes
+# only when built (their profiles are started later, by build-workers). tests is no longer used:
+# `test` runs on the host (ADR 0037); removing it waits for the owner's approval. lint, check and
+# project (the project worker) are started by `up` too, but stay optional until their first signed build (T038g): without it, `compose up` stops
+# with "No such image ap-lint:not-built". page stays optional until the run page exists (T056):
+# without it, `up` starts neither page nor page-proxy (--scale ...=0) and says so.
+needed_images="engine cli"
+optional_images="page agent check project tests lint"
+# shellcheck disable=SC2086
+image_vars=$(printf 'AP_IMAGE_%s ' $needed_images $optional_images | tr '[:lower:]' '[:upper:]')
+token_vars="AP_CLIENT_TOKEN AP_PAGE_TOKEN AP_WORKER_TOKEN AP_LINT_TOKEN AP_ANALYST_TOKEN AP_CHECK_TOKEN AP_PROJECT_TOKEN"
+vars="AP_CREDENTIALS_FILE AP_PROJECTS_DIR AP_PAGE_PORT $token_vars AP_HOST_USER AP_GATEWAY_IMAGE AP_GRANTS_DIR $image_vars"
+# The step worker grants (research D31): one file per grant, named the SHA-256 of the worker's token
+# and holding {"slice","step","call_token"}, in a folder only the engine mounts (read-only). The
+# folder and its files belong to the engine's user, the `user` of the engine in compose.yaml, so no
+# other container and no other host user can read them; `ap` writes them from a one-off container
+# running as that user.
+grants_dir=$state_dir/grants
+engine_user=65532:65532
+# Each slice's worker tokens: one line per step, `<step> <worker token> <call token>`, and a line
+# `id <hex>` that changes with them.
+workers_dir=$state_dir/workers
+# Compose's project name, read from its one home, `name:` in compose.yaml; it prefixes the
+# networks and the step containers' names.
+compose_project=$(awk '/^name: / { print $2; exit }' "$here/compose.yaml")
+# The label on each step container: what it was started with, so an unchanged one is left alone.
+worker_label=org.agentic-platform.worker
+default_page_port=7878
+default_registry_port=5005
+# The registry's names, derived here only. AP_REGISTRY_NAME runs a second, independent registry
+# (for example for tests); unset, the names are ap-registry, ap-registry-data and ap-signing.
+reg=${AP_REGISTRY_NAME:-ap-registry}
+case $reg in [a-z0-9]*[!a-z0-9_.-]* | [!a-z0-9]* | '') printf 'ap: AP_REGISTRY_NAME %s is not a container name ([a-z0-9][a-z0-9_.-]*)\n' "'$reg'" >&2; exit 3 ;; esac
+reg_volume=$reg-data
+reg_hostnet=$reg-host
+# The default registry's publishing network has a fixed subnet in the platform's 10.231.0.0/16 (the
+# other subnets are in compose.yaml), so the optional host firewall rule in docs/operations/local.md
+# covers it; a second registry's is chosen by Docker.
+if [ "$reg" = ap-registry ]; then
+  reg_net=ap-signing reg_hostnet_subnet=10.231.5.0/24
+else
+  reg_net=$reg-net reg_hostnet_subnet=''
+fi
+
+say() { printf 'ap: %s\n' "$*" >&2; }
+die() { code=$1; shift; say "$*"; exit "$code"; }
+
+usage() {
+  cat >&2 <<'EOF'
+usage: ap up --credentials <file> --projects <folder>
+       ap down
+       ap page
+       ap build-workers <slice> <project>
+       ap build-workers --resume <run>
+       ap test <suite>
+       ap registry
+       ap <terminal client command> [arguments]   (see src/cli/contract.md)
+
+The credentials file holds only the model provider key and is readable only by you.
+AP_PAGE_PORT, if set, chooses the run page's port (default 7878).
+AP_REGISTRY_PORT, if set, chooses the local image registry's port (default 5005).
+AP_REGISTRY_NAME, if set, runs a second, independent registry under that name (e.g. for tests).
+Build the images first with src/deploy/build.sh <name>.
+EOF
+  exit "${1:-3}"
+}
+
+compose() { docker compose -f "$here/compose.yaml" "$@"; }
+
+# A one-off container of the session; without a terminal on stdin (a pipe, a script) Compose must
+# not allocate one. Returns the container's exit code unchanged. SIGINT and SIGTERM sent to `ap`
+# alone reach the client too (src/cli/contract.md): `docker compose run` runs in the background, the
+# traps pass each signal on to it, and `ap` waits again until it ends, so the client's own exit code
+# (130 or 143 when it detaches) is returned. A background job's standard input is /dev/null in sh,
+# so the client gets `ap`'s through descriptor 3.
+compose_run() {
+  if [ -t 0 ]; then cr_tty=; else cr_tty=-T; fi
+  exec 3<&0
+  # shellcheck disable=SC2086
+  docker compose -f "$here/compose.yaml" run --rm $cr_tty "$@" <&3 3<&- &
+  cr_pid=$!
+  exec 3<&-
+  cr_sig=
+  trap 'cr_sig=INT; kill -INT "$cr_pid" 2>/dev/null' INT
+  trap 'cr_sig=TERM; kill -TERM "$cr_pid" 2>/dev/null' TERM
+  while :; do
+    cr_sig=
+    wait "$cr_pid"
+    cr_code=$?
+    # A wait cut short by a trap returns 128 + the signal; wait again for the client's own code.
+    [ -n "$cr_sig" ] || break
+    kill -0 "$cr_pid" 2>/dev/null || { wait "$cr_pid" 2>/dev/null; c=$?; [ "$c" -eq 127 ] || cr_code=$c; break; }
+  done
+  trap - INT TERM
+  return "$cr_code"
+}
+
+pin() { awk -v n="$1" '$1 == n { print $2 }' "$here/images.lock"; }
+
+upper() { printf '%s' "$1" | tr '[:lower:]' '[:upper:]'; }
+
+# A reference that resolves in Compose but names no image, for a profile whose image is not built;
+# Compose never pulls our images, so starting it fails with "No such image".
+placeholder() { printf 'ap-%s:not-built' "$1"; }
+
+# 64 hex characters from the kernel's random source.
+rand() { od -An -N32 -tx1 /dev/urandom | tr -d ' \n'; }
+
+# True when the arguments are one token per name in token_vars, each at least 32 lowercase hex
+# characters, and pairwise distinct.
+tokens_ok() {
+  # shellcheck disable=SC2086
+  [ $# -eq "$(set -- $token_vars; echo $#)" ] || return 1
+  for t in "$@"; do
+    [ "${#t}" -ge 32 ] || return 1
+    case $t in *[!0-9a-f]*) return 1 ;; esac
+  done
+  [ "$(printf '%s\n' "$@" | sort -u | wc -l)" -eq $# ]
+}
+
+# Single-quote a value for the session file, which is read back with `.`.
+quote() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+
+# The session file is read with `.`, so it must be one only the developer could have written: a
+# regular file (not a link), owned by them, mode 600. Sets why when it is not.
+session_ok() {
+  why=''
+  if [ -L "$sess" ] || [ ! -f "$sess" ]; then why="is not a regular file"; return 1; fi
+  set -f
+  # shellcheck disable=SC2046
+  set -- $(ls -ldn -- "$sess")
+  set +f
+  case $1 in -rw------- | -rw-------.) ;; *) why="is not mode 600 (it is $1)"; return 1 ;; esac
+  [ "$3" = "$(id -u)" ] || { why="is not owned by you"; return 1; }
+  [ -r "$sess" ] || { why="is not readable"; return 1; }
+}
+
+# One value of the session file, read in a subshell so nothing else of it is kept.
+session_value() {
+  # shellcheck disable=SC1090,SC2086
+  (unset $vars; . "$sess" >/dev/null 2>&1 || exit 1; eval "printf '%s' \"\${$1:-}\"")
+}
+
+# Load the session, or stop if the platform was not started.
+load() {
+  [ -e "$sess" ] || [ -L "$sess" ] || die 3 "the platform is not started; run: ap up --credentials <file> --projects <folder>"
+  session_ok || die 1 "the session file $sess $why; it is not read; run: ap down"
+  set -a
+  # shellcheck disable=SC1090
+  . "$sess"
+  set +a
+}
+
+# Absolute, symlink-free path of an existing file.
+abs_file() { d=$(CDPATH='' cd -- "$(dirname -- "$1")" && pwd -P) && printf '%s/%s' "$d" "$(basename -- "$1")"; }
+
+check_credentials() {
+  f=$1
+  [ -f "$f" ] || die 3 "credentials file '$f' does not exist or is not a file"
+  [ -r "$f" ] || die 3 "credentials file '$f' is not readable"
+  [ -s "$f" ] || die 3 "credentials file '$f' is empty"
+  set -f
+  # shellcheck disable=SC2046
+  set -- $(ls -lnL -- "$f")
+  set +f
+  case $1 in
+    -???------ | -???------.) ;;
+    *) die 3 "credentials file '$f' must be readable and writable only by you (chmod 600 '$f')" ;;
+  esac
+  [ "$3" = "$(id -u)" ] || die 3 "credentials file '$f' must be owned by you"
+}
+
+# A network the registry joins, with the one driver option that matters: an internal network is
+# `isolated` (its bridge has no host address, so nothing on it reaches the host), the publishing
+# network has IP masquerading off (no NAT, so no working route out); and its subnet when one is
+# given (empty: any). A network with another option or subnet is replaced, together with the
+# registry container attached to it (its data volume is kept).
+ensure_reg_net() {
+  nname=$1 nopt=$2 nval=$3 nsubnet=$4
+  shift 4
+  if docker network inspect "$nname" >/dev/null 2>&1; then
+    [ "$(docker network inspect -f "{{index .Options \"$nopt\"}}" "$nname")" = "$nval" ] &&
+      { [ -z "$nsubnet" ] || [ "$(docker network inspect -f '{{range .IPAM.Config}}{{.Subnet}} {{end}}' "$nname")" = "$nsubnet " ]; } &&
+      return 0
+    say "replacing the network $nname (it lacks $nopt=$nval${nsubnet:+ or the subnet $nsubnet}); the registry's data is kept"
+    if docker container inspect "$reg" >/dev/null 2>&1; then
+      docker rm -f "$reg" >/dev/null || die 1 "cannot remove the container $reg"
+    fi
+    docker network rm "$nname" >/dev/null || die 1 "cannot remove the network $nname (is a build running?)"
+  fi
+  docker network create "$@" ${nsubnet:+--subnet "$nsubnet"} -o "$nopt=$nval" "$nname" >/dev/null ||
+    die 1 "cannot create the network $nname"
+}
+
+# The networks' `isolated` gateway mode exists from Docker 28; an older engine may ignore the option
+# and leave the host reachable from every internal network, so it is refused.
+need_docker() {
+  dv=$(docker version --format '{{.Server.Version}}' 2>/dev/null) || dv=''
+  [ -n "$dv" ] || die 1 "cannot read the Docker server's version; is Docker running?"
+  case ${dv%%.*} in
+    '' | *[!0-9]*) die 3 "unrecognised Docker server version '$dv'; the platform needs Docker 28 or later" ;;
+  esac
+  [ "${dv%%.*}" -ge 28 ] ||
+    die 3 "Docker $dv is too old: the platform needs Docker 28 or later, whose isolated internal networks keep containers from reaching the host"
+}
+
+# The local image registry (ADR 0028): container $reg from the registry pin, published on
+# 127.0.0.1:$AP_REGISTRY_PORT only from its own network $reg_hostnet (masquerading off, nothing else
+# on it), data in the volume $reg_volume, and also on the isolated internal network $reg_net, where
+# cosign reaches it as $reg:5000. Converges: a registry created from the same pin, port, run flags
+# and networks is left alone (only started if stopped, attached if detached); any other is
+# replaced, keeping its data volume. Returns once the registry answers.
+#
+# Several `ap` and build.sh processes may converge it at the same time (T022d): a step that fails
+# because another process changed the registry in between (a name already taken, a removal
+# already in progress, a container removed under it) fails the whole pass, which runs again from
+# the start in a subshell and then finds what the other process made. Every step is safe to
+# repeat, so no lock is needed; a step that keeps failing stops after five passes.
+ensure_registry() {
+  need_docker
+  rport=${AP_REGISTRY_PORT:-$default_registry_port}
+  case $rport in '' | *[!0-9]*) die 3 "AP_REGISTRY_PORT '$rport' is not a port number" ;; esac
+  [ "$rport" -ge 1 ] && [ "$rport" -le 65535 ] || die 3 "AP_REGISTRY_PORT '$rport' is not a port number"
+  rimage=$(pin registry)
+  [ -n "$rimage" ] || die 1 "no registry pin in $here/images.lock"
+  # The registry's run flags (no value has a space). Their checksum is part of the label, so a
+  # change to them, the pin or the port replaces an existing container.
+  rflags="--restart no --read-only --tmpfs /tmp:mode=1777,size=64m --cap-drop ALL
+    --security-opt no-new-privileges --user 65532:65532 --memory 256m --cpus 1 --pids-limit 128
+    -e REGISTRY_LOG_LEVEL=info -v $reg_volume:/var/lib/registry --network $reg_hostnet
+    -p 127.0.0.1:$rport:5000"
+  want="$rimage 127.0.0.1:$rport flags:$(printf '%s %s' "$rflags" "$reg_net" | tr -s ' \n' '  ' | cksum | cut -d' ' -f1)"
+
+  pass=1
+  until started=$(converge_registry); do
+    rc=$?
+    [ "$rc" -eq 1 ] && [ "$pass" -lt 5 ] || exit "$rc"
+    say "setting up the image registry $reg failed (another ap or build.sh may be setting it up too); trying again"
+    pass=$((pass + 1))
+    sleep 1
+  done
+  i=0
+  until docker exec "$reg" wget -q -O /dev/null http://127.0.0.1:5000/v2/ >/dev/null 2>&1; do
+    i=$((i + 1))
+    [ "$i" -lt 20 ] || die 1 "the image registry did not become ready; see: docker logs $reg"
+    sleep 1
+  done
+  [ -z "$started" ] || say "the image registry $reg is running on 127.0.0.1:$rport"
+}
+
+# One pass of ensure_registry, run in a subshell (its `die` ends only the pass). Prints `started`
+# when it started the container.
+converge_registry() (
+  ensure_reg_net "$reg_net" com.docker.network.bridge.gateway_mode_ipv4 isolated '' --internal
+  ensure_reg_net "$reg_hostnet" com.docker.network.bridge.enable_ip_masquerade false "$reg_hostnet_subnet"
+
+  have=$(docker container inspect -f '{{index .Config.Labels "org.agentic-platform.registry"}}' "$reg" 2>/dev/null) ||
+    have=absent
+  if [ "$have" != absent ] && [ "$have" != "$want" ]; then
+    say "replacing the image registry $reg ($have) with $want; its data is kept"
+    docker rm -f "$reg" >/dev/null || die 1 "cannot remove the old container $reg"
+    have=absent
+  fi
+  if [ "$have" = absent ]; then
+    if ! docker volume inspect "$reg_volume" >/dev/null 2>&1; then
+      docker volume create "$reg_volume" >/dev/null || die 1 "cannot create the volume $reg_volume"
+      # A new volume belongs to root; hand it to the registry's user. This one-off container runs
+      # as root with CHOWN as its only capability and no network.
+      docker run --rm --network none --read-only --cap-drop ALL --cap-add CHOWN \
+        --security-opt no-new-privileges --user 0:0 -v "$reg_volume:/var/lib/registry" \
+        --entrypoint chown "$rimage" 65532:65532 /var/lib/registry >/dev/null ||
+        die 1 "cannot prepare the volume $reg_volume"
+    fi
+    # shellcheck disable=SC2086
+    docker create --name "$reg" --label "org.agentic-platform.registry=$want" $rflags "$rimage" >/dev/null ||
+      die 1 "cannot create the container $reg"
+  fi
+  [ "$(docker container inspect -f "{{if index .NetworkSettings.Networks \"$reg_net\"}}yes{{end}}" "$reg" 2>/dev/null)" = yes ] ||
+    docker network connect "$reg_net" "$reg" >&2 || die 1 "cannot attach $reg to $reg_net"
+  if [ "$(docker container inspect -f '{{.State.Running}}' "$reg" 2>/dev/null)" = true ]; then
+    drop_unpublished || die 1 "the image registry $reg was running without its port 127.0.0.1:$rport"
+    exit 0
+  fi
+  docker start "$reg" >/dev/null || { drop_unpublished; die 1 "cannot start the container $reg"; }
+  drop_unpublished || die 1 "the image registry $reg started without its port 127.0.0.1:$rport"
+  echo started
+)
+
+# When its port is taken, a registry can be left running without it, by a failed start or even by
+# a later start that succeeds (seen on Docker 29.9). A registry container that has not published
+# 127.0.0.1:$rport within five seconds (another process may be starting it) is removed, keeping
+# its data volume, so the next pass creates it again; returns 1 then.
+drop_unpublished() {
+  j=0
+  until [ "$(docker port "$reg" 5000/tcp 2>/dev/null)" = "127.0.0.1:$rport" ]; do
+    j=$((j + 1))
+    if [ "$j" -ge 5 ]; then
+      say "the image registry $reg did not publish 127.0.0.1:$rport (is the port taken?); removing the container, its data is kept"
+      docker rm -f "$reg" >/dev/null 2>&1
+      return 1
+    fi
+    sleep 1
+  done
+}
+
+# Read images.env into AP_IMAGE_<NAME> for the images Compose uses. Every line must be a digest
+# reference in the form build.sh writes; a missing needed image stops with the build to run.
+read_images() {
+  [ -f "$images_env" ] && [ -r "$images_env" ] ||
+    die 1 "no images recorded in $images_env; build them first: src/deploy/build.sh engine (and cli)"
+  bad=$(grep -Evx 'AP_IMAGE_[A-Z]+=127\.0\.0\.1:[0-9]{1,5}/ap-[a-z]+@sha256:[0-9a-f]{64}' "$images_env" | head -n 1)
+  [ -z "$bad" ] || die 1 "$images_env has a line build.sh does not write: '$bad'; rebuild with src/deploy/build.sh <name>"
+  for n in $needed_images $optional_images; do
+    v=AP_IMAGE_$(upper "$n")
+    val=$(sed -n "s/^$v=//p" "$images_env" | tail -n 1)
+    case $val in
+      '') ;;
+      */ap-"$n"@sha256:*) ;;
+      *) die 1 "$images_env: $v names another image ($val); rebuild with src/deploy/build.sh $n" ;;
+    esac
+    if [ -z "$val" ]; then
+      case " $needed_images " in *" $n "*) die 1 "no $n image recorded in $images_env; run: src/deploy/build.sh $n" ;; esac
+      val=$(placeholder "$n")
+    fi
+    eval "$v=\$val"
+  done
+}
+
+# Verify one image's signature with the public key, from a cosign container on the internal
+# network only, against the registry's internal name. The private key is never mounted. An image
+# no longer in the local image store (a rebuild replaced it) is first pulled back, by its digest,
+# from the local registry on 127.0.0.1, so Compose can start it without pulling.
+verify_image() {
+  vname=$1 vref=$2
+  if ! docker image inspect "$vref" >/dev/null 2>&1; then
+    say "the $vname image $vref is not in the local image store; pulling it back from the local registry"
+    docker pull -q "$vref" >/dev/null ||
+      die 1 "the $vname image $vref is in neither the local image store nor the local registry; rebuild it with src/deploy/build.sh $vname"
+  fi
+  out=$(docker run --rm --network "$reg_net" --read-only --cap-drop ALL --security-opt no-new-privileges \
+    --user "$(id -u):$(id -g)" -v "$pub:/k/cosign.pub:ro" "$cosign_image" verify --key /k/cosign.pub \
+    --insecure-ignore-tlog --allow-http-registry "$reg:5000/ap-$vname@${vref#*@}" 2>&1) || {
+    printf '%s\n' "$out" >&2
+    die 1 "the $vname image $vref failed signature verification; nothing was started (rebuild it with src/deploy/build.sh $vname)"
+  }
+  say "verified the signature of $vref"
+}
+
+cmd_up() {
+  cred='' proj=''
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --credentials) [ $# -ge 2 ] || usage; cred=$2; shift 2 ;;
+      --projects) [ $# -ge 2 ] || usage; proj=$2; shift 2 ;;
+      *) usage ;;
+    esac
+  done
+  [ -n "$cred" ] && [ -n "$proj" ] || usage
+  [ "$(id -u)" != 0 ] || die 3 "do not run ap as root: the gateway runs as your user"
+  need_docker
+
+  check_credentials "$cred"
+  cred=$(abs_file "$cred") || die 3 "credentials file '$cred' cannot be resolved"
+  [ -d "$proj" ] || die 3 "projects folder '$proj' does not exist"
+  [ -w "$proj" ] || die 3 "projects folder '$proj' is not writable"
+  proj=$(CDPATH='' cd -- "$proj" && pwd -P) || die 3 "projects folder '$proj' cannot be resolved"
+  case $cred in "$proj"/*) die 3 "the credentials file must not be inside the projects folder" ;; esac
+
+  # A started session is kept as it is (constitution XVII: a second `up` changes nothing): its
+  # tokens and, unless AP_PAGE_PORT is set, its port. Only after `down` does `up` make new tokens.
+  # A second `up` with other credentials or projects is refused: they would recreate the gateway
+  # and the workers under a running session.
+  old_tokens='' old_port=''
+  if [ -e "$sess" ] || [ -L "$sess" ]; then
+    session_ok || die 1 "the session file $sess $why; it is not read; run: ap down"
+    broken="the session file $sess is unreadable or incomplete; run: ap down"
+    old_port=$(session_value AP_PAGE_PORT) &&
+      old_cred=$(session_value AP_CREDENTIALS_FILE) && old_proj=$(session_value AP_PROJECTS_DIR) ||
+      die 1 "$broken"
+    [ -n "$old_port" ] && [ -n "$old_cred" ] && [ -n "$old_proj" ] || die 1 "$broken"
+    for v in $token_vars; do
+      t=$(session_value "$v") || die 1 "$broken"
+      old_tokens="$old_tokens $t"
+    done
+    # shellcheck disable=SC2086
+    tokens_ok $old_tokens || die 1 "$broken"
+    [ "$cred" = "$old_cred" ] && [ "$proj" = "$old_proj" ] ||
+      die 3 "the platform is running with --credentials '$old_cred' --projects '$old_proj'; run ap down first to start it with others"
+  fi
+
+  port=${AP_PAGE_PORT:-${old_port:-$default_page_port}}
+  case $port in '' | *[!0-9]*) die 3 "AP_PAGE_PORT '$port' is not a port number" ;; esac
+  [ "$port" -ge 1 ] && [ "$port" -le 65535 ] || die 3 "AP_PAGE_PORT '$port' is not a port number"
+
+  gateway_image=$(pin nginx)
+  [ -n "$gateway_image" ] || die 1 "no nginx pin in $here/images.lock"
+  cosign_image=$(pin cosign)
+  [ -n "$cosign_image" ] || die 1 "no cosign pin in $here/images.lock"
+
+  # Every image Compose is given is verified before anything starts (constitution VIII, ADR 0028).
+  read_images
+  [ -f "$pub" ] && [ -r "$pub" ] || die 1 "no public key at $pub; build the images first with src/deploy/build.sh <name>"
+  ensure_registry
+  for n in $needed_images $optional_images; do
+    eval "val=\$AP_IMAGE_$(upper "$n")"
+    [ "$val" = "$(placeholder "$n")" ] || verify_image "$n" "$val"
+  done
+
+  if [ -n "$old_tokens" ]; then
+    tokens=$old_tokens
+    say "the platform's session is already started; keeping its tokens"
+  else
+    # A new session: fresh tokens, one per kind of caller (research D12) and one per service the
+    # engine calls (contract-lint, the analyst, the check service, the project worker; research
+    # D27, D28, D29, D30).
+    tokens=''
+    for v in $token_vars; do tokens="$tokens $(rand)"; done
+    # shellcheck disable=SC2086
+    tokens_ok $tokens || die 1 "could not generate distinct session tokens"
+  fi
+  # shellcheck disable=SC2086
+  set -- $tokens
+  AP_CLIENT_TOKEN=$1 AP_PAGE_TOKEN=$2 AP_WORKER_TOKEN=$3 AP_LINT_TOKEN=$4 AP_ANALYST_TOKEN=$5 AP_CHECK_TOKEN=$6
+  AP_PROJECT_TOKEN=$7
+
+  AP_CREDENTIALS_FILE=$cred AP_PROJECTS_DIR=$proj AP_PAGE_PORT=$port
+  AP_HOST_USER=$(id -u):$(id -g) AP_GATEWAY_IMAGE=$gateway_image AP_GRANTS_DIR=$grants_dir
+  # shellcheck disable=SC2086
+  export $vars
+
+  old_umask=$(umask)
+  umask 077
+  mkdir -p -- "$state_dir" && chmod 700 -- "$state_dir" || die 1 "cannot create $state_dir or make it private (mode 700)"
+  tmp=$sess.$$
+  {
+    echo "# agentic-platform session, written by ap up; removed by ap down"
+    for v in $vars; do eval "val=\$$v"; printf '%s=%s\n' "$v" "$(quote "$val")"; done
+  } >"$tmp" && chmod 600 "$tmp" && mv -f -- "$tmp" "$sess" || { rm -f -- "$tmp"; die 1 "cannot write $sess"; }
+  umask "$old_umask"
+  ensure_grants_dir
+
+  if [ "$AP_IMAGE_PAGE" = "$(placeholder page)" ]; then
+    # No run page image yet (T056): start everything else; page and page-proxy stay at zero.
+    say "the run page is not built yet (T056); starting the platform without it (gateway, engine, contract-lint, analyst, check, project-worker)"
+    set -- --scale page=0 --scale page-proxy=0
+  else
+    say "starting the platform (gateway, engine, page, contract-lint, analyst, check, project-worker); run page on http://127.0.0.1:$port"
+    set --
+  fi
+  compose up -d "$@" || die 1 "docker compose up failed; see the messages above; the session is kept until: ap down"
+}
+
+cmd_down() {
+  [ $# -eq 0 ] || usage
+  # Compose needs every variable to read the file, though none is used to stop. A missing,
+  # unreadable or broken session falls back to placeholders, so `down` always recovers.
+  AP_CREDENTIALS_FILE=/nonexistent AP_PROJECTS_DIR=/nonexistent AP_PAGE_PORT=$default_page_port
+  AP_CLIENT_TOKEN=none AP_PAGE_TOKEN=none AP_WORKER_TOKEN=none AP_LINT_TOKEN=none AP_ANALYST_TOKEN=none AP_CHECK_TOKEN=none AP_PROJECT_TOKEN=none
+  AP_HOST_USER=65534:65534
+  AP_GATEWAY_IMAGE=none AP_GRANTS_DIR=/nonexistent
+  for n in $needed_images $optional_images; do eval "AP_IMAGE_$(upper "$n")=\$(placeholder \"\$n\")"; done
+  # shellcheck disable=SC2086
+  export $vars
+  # shellcheck disable=SC1090
+  if [ -e "$sess" ] || [ -L "$sess" ]; then
+    if session_ok && (. "$sess") >/dev/null 2>&1; then load; else say "the session file $sess is not read: it ${why:-cannot be read}"; fi
+  fi
+  say "stopping the platform and the step workers; run records and project folders are kept"
+  compose --profile '*' down --remove-orphans || die 1 "docker compose down failed; the session is kept"
+  rm -f -- "$sess"
+  # The step workers are gone, so are their grants and tokens.
+  rm -rf -- "$workers_dir"
+  if [ -d "$grants_dir" ] && [ ! -L "$grants_dir" ]; then
+    as_engine_in_grants find /grants -mindepth 1 -delete </dev/null ||
+      die 1 "cannot remove the step worker grants in $grants_dir"
+  fi
+}
+
+cmd_page() {
+  [ $# -eq 0 ] || usage
+  load
+  echo "http://127.0.0.1:$AP_PAGE_PORT"
+}
+
+# The grants folder (research D31), made by `up` before the engine starts: mode 700 and owned by the
+# engine's user, handed over by a one-off container that runs as root with CHOWN as its only
+# capability and no network (as for the registry's volume). One already owned by the engine's user
+# is left alone.
+ensure_grants_dir() {
+  [ ! -L "$grants_dir" ] || die 1 "$grants_dir is a symbolic link; remove it and run ap up again"
+  if [ ! -d "$grants_dir" ]; then
+    (umask 077 && mkdir -p -- "$grants_dir") || die 1 "cannot create the grants folder $grants_dir"
+  fi
+  set -f
+  # shellcheck disable=SC2046
+  set -- $(ls -ldn -- "$grants_dir")
+  set +f
+  [ "$3:$4" != "$engine_user" ] || return 0
+  [ "$3" = "$(id -u)" ] || die 1 "the grants folder $grants_dir belongs to neither you nor the engine; remove it and run ap up again"
+  chmod 700 -- "$grants_dir" || die 1 "cannot make $grants_dir private (mode 700)"
+  alpine_image=$(pin alpine)
+  [ -n "$alpine_image" ] || die 1 "no alpine pin in $here/images.lock"
+  docker run --rm --network none --read-only --cap-drop ALL --cap-add CHOWN --security-opt no-new-privileges \
+    --user 0:0 -v "$grants_dir:/grants" --entrypoint chown "$alpine_image" "$engine_user" /grants >/dev/null ||
+    die 1 "cannot hand the grants folder $grants_dir to the engine's user $engine_user"
+}
+
+# Run a command in a one-off container as the engine's user, with the grants folder at /grants and
+# no network; its standard input is this command's.
+as_engine_in_grants() {
+  alpine_image=$(pin alpine)
+  [ -n "$alpine_image" ] || die 1 "no alpine pin in $here/images.lock"
+  docker run --rm -i --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+    --user "$engine_user" -v "$grants_dir:/grants" "$alpine_image" "$@"
+}
+
+# The grant files of one slice, from lines `<worker token> <grant JSON>` on standard input: each
+# written (mode 600, replaced atomically) unless it already holds that grant, and every other grant
+# of the slice removed. The tokens travel on standard input only; the file names are their SHA-256.
+# shellcheck disable=SC2016
+grants_script='set -eu
+umask 077
+keep=" "
+while read -r tok json; do
+  name=$(printf "%s" "$tok" | sha256sum | cut -c1-64)
+  keep="$keep$name "
+  if [ -f "/grants/$name" ] && [ "$(cat "/grants/$name")" = "$json" ]; then continue; fi
+  printf "%s\n" "$json" >"/grants/.$name.tmp"
+  mv -f "/grants/.$name.tmp" "/grants/$name"
+done
+for f in /grants/*; do
+  [ -f "$f" ] || continue
+  case $keep in *" ${f##*/} "*) continue ;; esac
+  if grep -q "^{\"slice\":\"$1\"," "$f"; then rm -f "$f"; fi
+done'
+
+# The pattern's steps (src/catalogue/api-feature-go/pattern.yaml, the catalogue's one pattern and the
+# one the engine embeds), one line per step: `<name> <worker> <writable entry>...`. A step or entry
+# that is not in the pattern's own rules stops build-workers.
+read_pattern() {
+  pfile=$here/../catalogue/api-feature-go/pattern.yaml
+  [ -f "$pfile" ] || die 1 "no pattern at $pfile"
+  out=$(awk '
+    /^steps:/ { s = 1; next }
+    s && /^[^ #]/ { s = 0 }
+    !s { next }
+    /^  - name: / { if (line != "") print line; line = $3; w = 0; next }
+    /^    worker: / { line = line " " $2; w = 0; next }
+    /^    writable: *$/ { w = 1; next }
+    /^    [a-z_]+:/ { w = 0; next }
+    w && /^      - / { line = line " " $2; next }
+    END { if (line != "") print line }
+  ' "$pfile") || die 1 "cannot read the pattern $pfile"
+  [ -n "$out" ] || die 1 "the pattern $pfile declares no steps"
+  printf '%s\n' "$out" | while read -r pname pworker pentries; do
+    case $pname in '' | *[!a-z0-9-]*) die 1 "the pattern's step name '$pname' is not [a-z0-9-]+" ;; esac
+    case $pworker in agent:[a-z0-9]* | procedure:[a-z0-9]*) ;; *) die 1 "the pattern's step $pname has the worker '$pworker'" ;; esac
+    case ${pworker#*:} in *[!a-z0-9-]*) die 1 "the pattern's step $pname has the worker '$pworker'" ;; esac
+    for e in $pentries; do
+      # dir/** or one exact path, in ProjectPath characters, never naming .git
+      p=${e%/\*\*}
+      case $p in
+        '' | /* | */ | *//* | *[!A-Za-z0-9._~+@=,/-]* | .git | .git/* | */.git | */.git/*)
+          die 1 "the pattern's step $pname has the writable entry '$e' (only dir/** or one exact path)" ;;
+      esac
+    done
+  done || exit $?
+  printf '%s\n' "$out"
+}
+
+# The folders a step's container mounts writable, from its writable entries: the folder of each
+# `dir/**`, the folder an exact path is in, or `.` (the project root) for an exact path in the root.
+step_folders() {
+  for e in "$@"; do
+    case $e in
+      *'/**') printf '%s\n' "${e%/\*\*}" ;;
+      */*) printf '%s\n' "${e%/*}" ;;
+      *) printf '.\n' ;;
+    esac
+  done | sort -u
+}
+
+# One HTTP call to the engine on the network the step agents share with it, from a one-off
+# container (busybox nc, no capability) under runc, so Docker's DNS finds `engine`. The request,
+# token included, goes on standard input only. Prints the response's status code.
+register_worker() {
+  rtoken=$1 rendpoint=$2
+  body="{\"endpoint\":\"$rendpoint\"}"
+  resp=$(printf 'POST /workers?api-version=%s HTTP/1.1\r\nHost: engine\r\nAuthorization: Bearer %s\r\nContent-Type: application/json\r\nContent-Length: %s\r\nConnection: close\r\n\r\n%s' \
+    "$api_version" "$rtoken" "${#body}" "$body" |
+    docker run --rm -i --network "${compose_project}_agents" --read-only --cap-drop ALL \
+      --security-opt no-new-privileges --user 65532:65532 "$alpine_image" nc -w 30 engine 8080) || resp=''
+  printf '%s\n' "$resp" | head -n 1 | tr -d '\r' | awk '$1 ~ /^HTTP\// { print $2 }'
+}
+
+# What engine reads need: the alpine pin (the one-off container), the API version and Compose's
+# project name (its networks). Sets alpine_image, api_version and compose_project, or stops.
+engine_prereqs() {
+  alpine_image=$(pin alpine)
+  [ -n "$alpine_image" ] || die 1 "no alpine pin in $here/images.lock"
+  # shellcheck disable=SC2012
+  api_version=$(ls -- "$here/../engine/api/preview" 2>/dev/null)
+  case $api_version in '' | *[!0-9a-z-]*) die 1 "cannot tell the engine's API version from $here/../engine/api/preview" ;; esac
+  case $compose_project in '' | *[!a-z0-9_-]*) die 1 "cannot read Compose's project name from $here/compose.yaml" ;; esac
+}
+
+# One GET to the engine with the session's client token, sent as register_worker sends its call
+# (research D32). HTTP/1.0, so the answer is never chunked and ends when the engine closes. Sets
+# get_status (empty for no answer) and get_body.
+engine_get() {
+  resp=$(printf 'GET %s HTTP/1.0\r\nHost: engine\r\nAuthorization: Bearer %s\r\nAccept: application/json\r\n\r\n' \
+    "$1" "$AP_CLIENT_TOKEN" |
+    docker run --rm -i --network "${compose_project}_agents" --read-only --cap-drop ALL \
+      --security-opt no-new-privileges --user 65532:65532 "$alpine_image" nc -w 30 engine 8080) || resp=''
+  get_status=$(printf '%s\n' "$resp" | head -n 1 | tr -d '\r' | awk '$1 ~ /^HTTP\// && $2 ~ /^[0-9][0-9][0-9]$/ { print $2 }')
+  # A chunked answer is not one this request asks for; it is not read.
+  if printf '%s\n' "$resp" | awk '/^\r?$/ { exit } tolower($0) ~ /^transfer-encoding:/ { f = 1 } END { exit !f }'; then
+    get_body=''
+  else
+    get_body=$(printf '%s\n' "$resp" | awk 'h { print; next } /^\r?$/ { h = 1 }')
+  fi
+}
+
+# A JSON document on standard input, flattened to one line per value: `<path>\t<kind>\t<raw>`, the
+# path its keys and indices joined by `.` (empty for the document), the kind o, a, s, n, b or z
+# (null), and for a string its content as written (escapes kept). Exits 1, printing nothing, for
+# anything that is not one well-formed JSON document, has a key twice, or nests deeper than 16.
+json_flat() {
+  awk '
+    function fail() { bad = 1; exit 1 }
+    function ws() { while (pos <= n && index(" \t\n\r", substr(s, pos, 1)) > 0) pos++ }
+    function emit(p, k, v) { if (p in seen) fail(); seen[p] = 1; out[++no] = p "\t" k "\t" v }
+    function str(   c, v, h) {
+      pos++; v = ""
+      while (1) {
+        if (pos > n) fail()
+        c = substr(s, pos, 1)
+        if (c == "\"") { pos++; return v }
+        if (c == "\t" || c == "\n" || c == "\r") fail()
+        if (c == "\\") {
+          h = substr(s, pos + 1, 1)
+          if (h == "u") { if (substr(s, pos + 2, 4) !~ /^[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]$/) fail(); v = v substr(s, pos, 6); pos += 6; continue }
+          if (index("\"\\/bfnrt", h) == 0 || h == "") fail()
+          v = v c h; pos += 2; continue
+        }
+        v = v c; pos++
+      }
+    }
+    function key(p, k) { return p == "" ? k : p "." k }
+    function value(p, d,   c, k, i, t) {
+      if (d > 16) fail()
+      ws(); if (pos > n) fail()
+      c = substr(s, pos, 1)
+      if (c == "{") {
+        emit(p, "o", ""); pos++; ws()
+        if (substr(s, pos, 1) == "}") { pos++; return }
+        while (1) {
+          ws(); if (substr(s, pos, 1) != "\"") fail()
+          k = str(); ws()
+          if (substr(s, pos, 1) != ":") fail()
+          pos++; value(key(p, k), d + 1); ws()
+          c = substr(s, pos, 1); pos++
+          if (c == "}") return
+          if (c != ",") fail()
+        }
+      }
+      if (c == "[") {
+        emit(p, "a", ""); pos++; ws(); i = 0
+        if (substr(s, pos, 1) == "]") { pos++; return }
+        while (1) {
+          value(key(p, i), d + 1); i++; ws()
+          c = substr(s, pos, 1); pos++
+          if (c == "]") return
+          if (c != ",") fail()
+        }
+      }
+      if (c == "\"") { emit(p, "s", str()); return }
+      if (substr(s, pos, 4) == "true") { pos += 4; emit(p, "b", "true"); return }
+      if (substr(s, pos, 5) == "false") { pos += 5; emit(p, "b", "false"); return }
+      if (substr(s, pos, 4) == "null") { pos += 4; emit(p, "z", ""); return }
+      t = substr(s, pos)
+      if (match(t, /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][-+]?[0-9]+)?/) == 0) fail()
+      emit(p, "n", substr(t, 1, RLENGTH)); pos += RLENGTH
+    }
+    { s = s (NR > 1 ? "\n" : "") $0 }
+    END {
+      if (bad) exit 1
+      n = length(s); pos = 1
+      value("", 0); ws()
+      if (pos <= n) fail()
+      for (i = 1; i <= no; i++) print out[i]
+    }
+  '
+}
+
+# A string value of a flattened document (json_flat), or nothing when it is missing or no string.
+flat_str() { printf '%s\n' "$1" | awk -F '\t' -v p="$2" '$1 == p && $2 == "s" { print $3; exit }'; }
+flat_kind() { printf '%s\n' "$1" | awk -F '\t' -v p="$2" '$1 == p { print $2; exit }'; }
+
+is_slice_id() { case $1 in S-[0-9]*) case ${1#S-} in *[!0-9]*) return 1 ;; esac ;; *) return 1 ;; esac; }
+is_run_id() { case $1 in RUN-[0-9]*) case ${1#RUN-} in *[!0-9]*) return 1 ;; esac ;; *) return 1 ;; esac; }
+is_project() {
+  case $1 in [a-z0-9]*) ;; *) return 1 ;; esac
+  case $1 in *[!a-z0-9-]*) return 1 ;; esac
+  [ "${#1}" -le 63 ]
+}
+
+# The first 12 hex digits of the SHA-256 of a project name: part of its step containers' names.
+project_hash() {
+  if command -v sha256sum >/dev/null 2>&1; then h=$(printf '%s' "$1" | sha256sum)
+  elif command -v shasum >/dev/null 2>&1; then h=$(printf '%s' "$1" | shasum -a 256)
+  else h=$(printf '%s' "$1" | docker run --rm -i --network none --read-only --cap-drop ALL \
+    --security-opt no-new-privileges --user 65532:65532 "$alpine_image" sha256sum)
+  fi
+  h=$(printf '%s' "$h" | cut -c1-12)
+  case $h in ????????????) case $h in *[!0-9a-f]*) die 1 "cannot compute the SHA-256 of '$1'" ;; esac ;;
+    *) die 1 "cannot compute the SHA-256 of '$1'" ;; esac
+  printf '%s' "$h"
+}
+
+# A step container's name (research D32, ADR 0036): one DNS label of at most 63 characters.
+step_cname() { printf '%s-worker-%s-%s-%s' "$compose_project" "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" "$2" "$3"; }
+
+# Refuse (exit 4, RunActive) while a run of the slice has not ended, by every page of listRuns with
+# the session's client token (research D32). An answer that is missing, not 200 or cannot be read,
+# or a run in it without a run ID, slice ID or status, stops with exit 1 (fail closed).
+refuse_active_run() {
+  arslice=$1 arexcept=${2:-} ptoken='' pages=0
+  while :; do
+    pages=$((pages + 1))
+    [ "$pages" -le 10000 ] || die 1 "build-workers: listRuns did not end after $pages pages"
+    engine_get "/runs?api-version=$api_version${ptoken:+&page_token=$ptoken}"
+    case $get_status in
+      200) ;;
+      '') die 1 "build-workers: no answer from the engine listing the runs; is the platform up (ap up)?" ;;
+      *) die 1 "build-workers: the engine answered $get_status listing the runs" ;;
+    esac
+    flat=$(printf '%s\n' "$get_body" | json_flat) || die 1 "build-workers: the engine's list of runs cannot be read"
+    [ "$(flat_kind "$flat" '')" = o ] && [ "$(flat_kind "$flat" items)" = a ] ||
+      die 1 "build-workers: the engine's list of runs cannot be read (no items)"
+    i=0
+    while [ -n "$(flat_kind "$flat" "items.$i")" ]; do
+      rid=$(flat_str "$flat" "items.$i.id") rsl=$(flat_str "$flat" "items.$i.slice") rst=$(flat_str "$flat" "items.$i.status")
+      is_run_id "$rid" && is_slice_id "$rsl" && [ -n "$rst" ] && case $rst in *[!a-z-]*) false ;; *) true ;; esac ||
+        die 1 "build-workers: the engine's list of runs cannot be read (a run without its ID, slice or status)"
+      [ "$rsl" != "$arslice" ] || [ "$rst" = ended ] || [ "$rid" = "$arexcept" ] ||
+        die 4 "build-workers: the run $rid of $arslice has not ended (RunActive); resume, take over or cancel it first"
+      i=$((i + 1))
+    done
+    case $(flat_kind "$flat" next_page_token) in
+      '') break ;;
+      s) ptoken=$(flat_str "$flat" next_page_token)
+        case $ptoken in '' | *[!A-Za-z0-9_-]*) die 1 "build-workers: the engine's list of runs has a page token that cannot be read" ;; esac ;;
+      *) die 1 "build-workers: the engine's list of runs cannot be read (its page token)" ;;
+    esac
+  done
+}
+
+# Read a run with getRun and the session's client token (research D32). Sets run_slice,
+# run_project and run_status (each empty when missing or no string). An unknown run exits 4
+# (NotFound); an answer that is missing, not 200 or cannot be read exits 1.
+read_run() {
+  rcmd=$1 rrun=$2
+  engine_get "/runs/$rrun?api-version=$api_version"
+  case $get_status in
+    200) ;;
+    404) die 4 "$rcmd: the engine has no run $rrun (NotFound)" ;;
+    '') die 1 "$rcmd: no answer from the engine reading the run $rrun; is the platform up (ap up)?" ;;
+    *) die 1 "$rcmd: the engine answered $get_status reading the run $rrun" ;;
+  esac
+  flat=$(printf '%s\n' "$get_body" | json_flat) && [ "$(flat_kind "$flat" '')" = o ] ||
+    die 1 "$rcmd: the engine's answer for the run $rrun cannot be read"
+  run_slice=$(flat_str "$flat" slice) run_project=$(flat_str "$flat" project) run_status=$(flat_str "$flat" status)
+  is_slice_id "$run_slice" || die 1 "$rcmd: the engine's answer for the run $rrun has no slice ID"
+}
+
+# The slice's worker tokens file, if any: sets tokfile, tokens_id (empty when missing) and complete
+# (no unless it holds a well-formed line for every step in $steps). One that is not a regular file
+# of the developer's with mode 600 stops with exit 1.
+read_tokens() {
+  slice=$1
+  tokfile=$workers_dir/$slice
+  if [ -e "$tokfile" ] || [ -L "$tokfile" ]; then
+    set -f
+    # shellcheck disable=SC2046
+    set -- $(ls -ldn -- "$tokfile")
+    set +f
+    [ ! -L "$tokfile" ] && [ -f "$tokfile" ] && [ "$3" = "$(id -u)" ] &&
+      case $1 in -rw------- | -rw-------.) true ;; *) false ;; esac ||
+      die 1 "the worker tokens file $tokfile is not a regular file of yours with mode 600; run: ap down"
+  fi
+  tokens_id=$(awk '$1 == "id" && NF == 2 { print $2 }' "$tokfile" 2>/dev/null)
+  complete=yes
+  for st in $(printf '%s\n' "$steps" | awk '{ print $1 }'); do
+    line=$(awk -v s="$st" '$1 == s && NF == 3 && $2 ~ /^[0-9a-f]+$/ && $3 ~ /^[0-9a-f]+$/ && length($2) == 64 && length($3) == 64' "$tokfile" 2>/dev/null)
+    [ -n "$line" ] || complete=no
+  done
+}
+
+# A field of a step's line in the tokens file: 2 its worker token, 3 its call token.
+token_of() { awk -v s="$1" -v f="$2" '$1 == s { print $f }' "$tokfile"; }
+
+# Make the slice's step workers ready for a build into the new project folder (research D5, D29,
+# D30): the project folder with an empty `.git` and the folders of each step's writable entries;
+# one container per step of the pattern, from the step-agent or procedure-worker template under
+# gVisor, with only that step's project mounted (read-only, its writable folders writable, `.git`
+# read-only; `review/`, the review step's witness tests, writable only for the review step and
+# read-only for every other, generate's writable root included); a worker token and a call token per container, its
+# grant in the grants folder and its registration with the engine. A container started with the
+# same settings and still running is left alone, so running it again changes nothing.
+build_workers() {
+  slice=$1 project=$2 resume_run=${3:-}
+  is_slice_id "$slice" || die 3 "build-workers: '$slice' is not a slice ID (S-<n>)"
+  is_project "$project" || die 3 "build-workers: '$project' is not a project name (lowercase letters, digits and hyphens, at most 63)"
+  for n in agent check; do
+    eval "val=\$AP_IMAGE_$(upper "$n")"
+    [ "$val" != "$(placeholder "$n")" ] ||
+      die 3 "build-workers needs the $n image: build it with src/deploy/build.sh $n, then run ap up again"
+  done
+  case $AP_PROJECTS_DIR in *:* | *,*) die 1 "the projects folder $AP_PROJECTS_DIR has a ':' or ',' in its path, which a bind mount cannot name" ;; esac
+  engine_prereqs
+  steps=$(read_pattern) || exit $?
+
+  # The project must be new, by the engine's ProjectExists rule (owner, 2026-11-13): an existing
+  # folder may hold only empty folders and an empty `.git` (the skeleton build-workers makes); one
+  # holding a file or a symbolic link at any depth, or anything in `.git`, is refused before
+  # anything is granted, registered, made or started, and before the engine is asked anything.
+  pdir=$AP_PROJECTS_DIR/$project
+  if [ -n "$resume_run" ]; then
+    # --resume (T053j): the interrupted run's own folder, which that run made; it must hold its
+    # `.git` and every step's folder, each a folder and no symbolic link, and nothing is made in it.
+    need=". .git $(printf '%s\n' "$steps" | while read -r _ _ entries; do
+      # shellcheck disable=SC2086
+      step_folders $entries
+    done | sort -u | tr '\n' ' ')"
+    for f in $need; do
+      sub=$pdir prefix=''
+      for part in $(printf '%s' "$f" | tr '/' ' '); do
+        [ "$part" = . ] && continue
+        prefix=${prefix:+$prefix/}$part
+        sub=$pdir/$prefix
+        [ -d "$sub" ] && [ ! -L "$sub" ] ||
+          die 3 "build-workers: $sub of the run $resume_run is missing or not a folder; nothing was changed"
+      done
+      [ -d "$pdir" ] && [ ! -L "$pdir" ] ||
+        die 3 "build-workers: the project folder $pdir of the run $resume_run is missing or not a folder; nothing was changed"
+    done
+  elif [ -e "$pdir" ] || [ -L "$pdir" ]; then
+    [ -d "$pdir" ] && [ ! -L "$pdir" ] || die 3 "build-workers: the project folder $pdir exists and is not a folder"
+    if [ -n "$(find "$pdir" ! -type d 2>&1 | head -n 1)" ] ||
+      { [ -e "$pdir/.git" ] && [ -n "$(find "$pdir/.git" -mindepth 1 2>&1 | head -n 1)" ]; }; then
+      die 3 "build-workers: the project folder $pdir already holds files or a version history (ProjectExists); build into a new project"
+    fi
+  fi
+
+  # The engine keeps one registration per slice and step, so none is moved away from a run of the
+  # slice that has not ended (research D32).
+  refuse_active_run "$slice" "$resume_run"
+
+  # Each project has its own containers (ADR 0036): a container of a wanted name whose project
+  # label names another project (a hash collision) is refused, and never removed or replaced.
+  phash=$(project_hash "$project")
+  for st in $(printf '%s\n' "$steps" | awk '{ print $1 }'); do
+    cname=$(step_cname "$slice" "$st" "$phash")
+    if docker container inspect "$cname" >/dev/null 2>&1; then
+      other=$(docker container inspect -f '{{index .Config.Labels "org.agentic-platform.project"}}' "$cname" 2>/dev/null) ||
+        die 1 "cannot inspect the container $cname"
+      [ "$other" = "$project" ] ||
+        die 1 "build-workers: the container $cname belongs to the project '$other', not $project; nothing was changed"
+    fi
+  done
+
+  # The slice's tokens: kept while the session lasts, made when missing or incomplete.
+  read_tokens "$slice"
+  if [ "$complete" = no ] || [ -z "$tokens_id" ]; then
+    old_umask=$(umask)
+    umask 077
+    mkdir -p -- "$workers_dir" && chmod 700 -- "$workers_dir" || die 1 "cannot create $workers_dir or make it private (mode 700)"
+    tmp=$tokfile.$$
+    {
+      echo "id $(rand | cut -c1-16)"
+      for st in $(printf '%s\n' "$steps" | awk '{ print $1 }'); do echo "$st $(rand) $(rand)"; done
+    } >"$tmp" && chmod 600 "$tmp" && mv -f -- "$tmp" "$tokfile" || { rm -f -- "$tmp"; die 1 "cannot write $tokfile"; }
+    umask "$old_umask"
+    tokens_id=$(awk '$1 == "id" { print $2 }' "$tokfile")
+    say "made new worker tokens for $slice"
+  fi
+  # The grants, then the registrations: a slice the engine does not have stops here, before any
+  # folder or container is made.
+  [ -d "$grants_dir" ] || die 1 "no grants folder $grants_dir; run: ap up"
+  printf '%s\n' "$steps" | while read -r st _; do
+    printf '%s {"slice":"%s","step":"%s","call_token":"%s"}\n' "$(token_of "$st" 2)" "$slice" "$st" "$(token_of "$st" 3)"
+  done | as_engine_in_grants sh -c "$grants_script" sh "$slice" ||
+    die 1 "cannot write the step worker grants of $slice in $grants_dir"
+  for st in $(printf '%s\n' "$steps" | awk '{ print $1 }'); do
+    cname=$(step_cname "$slice" "$st" "$phash")
+    code=$(register_worker "$(token_of "$st" 2)" "http://$cname:8080")
+    case $code in
+      200) ;;
+      404) die 4 "build-workers: the engine has no slice $slice with a step $st (NotFound)" ;;
+      '') die 1 "build-workers: no answer from the engine registering $cname; is the platform up (ap up)?" ;;
+      *) die 1 "build-workers: the engine answered $code registering $cname" ;;
+    esac
+  done
+
+  # The project folder, its empty `.git` (the project worker makes the repository in it, D30) and
+  # the folders the steps mount writable; empty folders are no project files.
+  if [ -z "$resume_run" ]; then
+    mkdir -p -- "$pdir/.git" "$pdir/review" || die 1 "cannot create the project folder $pdir"
+    printf '%s\n' "$steps" | while read -r st _ entries; do
+      # shellcheck disable=SC2086
+      for f in $(step_folders $entries); do
+        [ "$f" = . ] || mkdir -p -- "$pdir/$f" || die 1 "cannot create $pdir/$f"
+      done
+    done || exit $?
+  fi
+
+  inside=/projects/$project
+  printf '%s\n' "$steps" | while read -r st worker entries; do
+    cname=$(step_cname "$slice" "$st" "$phash")
+    # shellcheck disable=SC2086
+    folders=$(step_folders $entries)
+    case " $(printf '%s ' $folders)" in
+      # the root writable (generate): review/ stays read-only on top, as .git (owner, 2026-11-14)
+      *' . '*) mounts="-v $pdir:$inside -v $pdir/review:$inside/review:ro" ;;
+      *)
+        mounts="-v $pdir:$inside:ro"
+        for f in $folders; do mounts="$mounts -v $pdir/$f:$inside/$f"; done
+        ;;
+    esac
+    mounts="$mounts -v $pdir/.git:$inside/.git:ro"
+    case $worker in
+      agent:*) service=step-agent image=$AP_IMAGE_AGENT env="-e STEP_AGENT=${worker#agent:} -e STEP_TOKEN -e ENGINE_TOKEN=" ;;
+      *) service=procedure-worker image=$AP_IMAGE_CHECK env="-e CHECK_PROCEDURE=${worker#procedure:} -e CHECK_STEP=$st -e CHECK_TOKEN" ;;
+    esac
+    want="$service $image $project $st $(printf '%s %s' "$mounts" "$env" | cksum | cut -d' ' -f1) $tokens_id"
+    have=$(docker container inspect -f "{{index .Config.Labels \"$worker_label\"}}/{{.State.Running}}" "$cname" 2>/dev/null) || have=absent
+    if [ "$have" = "$want/true" ]; then
+      say "the $st worker $cname is running as declared; unchanged"
+      continue
+    fi
+    if [ "$have" != absent ]; then
+      say "replacing the $st worker $cname (it was started with other settings or stopped)"
+      docker rm -f "$cname" >/dev/null || die 1 "cannot remove the container $cname"
+    fi
+    call=$(token_of "$st" 3)
+    # shellcheck disable=SC2086
+    (STEP_TOKEN=$call CHECK_TOKEN=$call && export STEP_TOKEN CHECK_TOKEN &&
+      compose run -d -T --no-deps --name "$cname" -l "$worker_label=$want" -l "org.agentic-platform.slice=$slice" \
+        -l "org.agentic-platform.step=$st" -l "org.agentic-platform.project=$project" $mounts $env "$service" >/dev/null) ||
+      die 1 "cannot start the $st worker $cname"
+    say "started the $st worker $cname ($service) for $project"
+  done || exit $?
+  say "the step workers of $slice are ready for the project $project"
+}
+
+# `resume <run>` (research D32, ADR 0036): never runs build-workers. For an interrupted run, every
+# step's container of the run's slice and project must be running with this session's tokens; each
+# is registered with the engine again and the command is passed on. A run in another state is passed
+# on unchanged for the engine to refuse.
+cmd_resume() {
+  run=$1
+  is_run_id "$run" || die 3 "resume: '$run' is not a run ID (RUN-<n>)"
+  engine_prereqs
+  read_run resume "$run"
+  if [ -z "$run_status" ] || case $run_status in *[!a-z-]*) true ;; *) false ;; esac; then
+    die 1 "resume: the engine's answer for the run $run has no status"
+  fi
+  is_project "$run_project" || die 1 "resume: the engine's answer for the run $run has no project name"
+  if [ "$run_status" = interrupted ]; then
+    steps=$(read_pattern) || exit $?
+    gone="resume: the step workers of $run_slice for the project $run_project are not running; run ap build-workers --resume $run, then ap resume $run"
+    read_tokens "$run_slice"
+    [ "$complete" = yes ] && [ -n "$tokens_id" ] || die 3 "$gone"
+    phash=$(project_hash "$run_project")
+    for st in $(printf '%s\n' "$steps" | awk '{ print $1 }'); do
+      cname=$(step_cname "$run_slice" "$st" "$phash")
+      have=$(docker container inspect -f "{{.State.Running}} {{index .Config.Labels \"org.agentic-platform.slice\"}} {{index .Config.Labels \"org.agentic-platform.step\"}} {{index .Config.Labels \"org.agentic-platform.project\"}} {{index .Config.Labels \"$worker_label\"}}" "$cname" 2>/dev/null) ||
+        die 3 "$gone"
+      # Running, labelled with the slice, step and project, and started with this session's tokens
+      # (the worker label: service, image, project, step, settings checksum, tokens id).
+      set -f
+      # shellcheck disable=SC2086
+      set -- $have
+      set +f
+      [ $# -eq 10 ] && [ "$1" = true ] && [ "$2" = "$run_slice" ] && [ "$3" = "$st" ] && [ "$4" = "$run_project" ] &&
+        [ "$7" = "$run_project" ] && [ "$8" = "$st" ] && [ "${10}" = "$tokens_id" ] || die 3 "$gone"
+    done
+    for st in $(printf '%s\n' "$steps" | awk '{ print $1 }'); do
+      cname=$(step_cname "$run_slice" "$st" "$phash")
+      code=$(register_worker "$(token_of "$st" 2)" "http://$cname:8080")
+      case $code in
+        200) ;;
+        404) die 4 "resume: the engine has no slice $run_slice with a step $st (NotFound)" ;;
+        '') die 1 "resume: no answer from the engine registering $cname; is the platform up (ap up)?" ;;
+        *) die 1 "resume: the engine answered $code registering $cname" ;;
+      esac
+    done
+    say "registered the step workers of $run_slice for the project $run_project again"
+  fi
+  compose_run cli resume "$run"
+}
+
+# `build-workers --resume <run>` (T053j, research D32, FR-020): rebuilds the step workers of an
+# interrupted run after `ap down` or a host reboot. The slice and project come only from the run
+# (getRun); its existing folder is accepted, nothing is made in it, and the rest is build-workers'.
+cmd_rebuild() {
+  run=$1
+  is_run_id "$run" || die 3 "build-workers: '$run' is not a run ID (RUN-<n>)"
+  engine_prereqs
+  read_run build-workers "$run"
+  if [ -z "$run_status" ] || case $run_status in *[!a-z-]*) true ;; *) false ;; esac; then
+    die 1 "build-workers: the engine's answer for the run $run has no status"
+  fi
+  is_project "$run_project" || die 1 "build-workers: the engine's answer for the run $run has no project name"
+  [ "$run_status" = interrupted ] ||
+    die 4 "build-workers: the run $run is $run_status, not interrupted (RunNotInterrupted); nothing was changed"
+  build_workers "$run_slice" "$run_project" "$run"
+}
+
+# `replay <run> <project>` (research D32): always into a new, empty project; the workers are those
+# of the run's slice, made by build-workers as for `build`.
+cmd_replay() {
+  run=$1 project=$2
+  is_run_id "$run" || die 3 "replay: '$run' is not a run ID (RUN-<n>)"
+  is_project "$project" || die 3 "replay: '$project' is not a project name (lowercase letters, digits and hyphens, at most 63)"
+  engine_prereqs
+  read_run replay "$run"
+  build_workers "$run_slice" "$project"
+}
+
+# The test harness (src/cli/contract.md "The test harness", research D33, ADR 0037). `test <suite>`
+# builds the acceptance suite's test binary in the pinned golang container, offline, with the module
+# cache in ${XDG_CACHE_HOME:-~/.cache}/agentic-platform/go (as scripts/check.sh builds its docker
+# suites), runs it on the host in src/tests/acceptance of this repository with `-test.v=test2json`,
+# converts its stream with `go tool test2json` in the same pinned container, and prints the
+# contract's lines from the events. No session, no Compose, no tests image: the suites start their
+# own labs with the developer's own Docker access on the host (plan, Exceptions to Engineering
+# Principles), and no container holds the container engine's socket.
+cmd_test() {
+  [ $# -eq 1 ] || usage
+  suite=$1
+  case $suite in
+    planted) pattern='^TestPlanted$' limit=60m ;;
+    us2) pattern='^TestUS2' limit=75m ;;
+    *) die 3 "test: unknown suite $suite; the suites are planted, us2" ;;
+  esac
+  repo=$(CDPATH='' cd -- "$here/../.." && pwd -P)
+  pkg=$repo/src/tests/acceptance
+  [ -d "$pkg" ] || die 1 "test: no acceptance suite in $pkg"
+  go_image=$(pin golang)
+  [ -n "$go_image" ] || die 1 "test: no golang pin in $here/images.lock"
+  need_docker
+  go_cache=${XDG_CACHE_HOME:-$HOME/.cache}/agentic-platform/go
+  mkdir -p "$go_cache" || die 1 "test: cannot make the module cache $go_cache"
+  name=ap-test-$suite-$$.test
+  bin=$go_cache/$name
+  work=$(mktemp -d) || die 1 "test: cannot make a temporary folder"
+  trap 'rm -rf "$work"; rm -f "$bin"' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  say "test: building the $suite suite in $go_image"
+  docker run --rm --network none -v "$repo/src:/src" -w /src/tests -v "$go_cache:/gopath" \
+    --user "$(id -u):$(id -g)" -e GOPATH=/gopath -e GOCACHE=/gopath/cache -e GOTOOLCHAIN=local \
+    -e GOPROXY=off -e GOFLAGS=-mod=readonly -e CGO_ENABLED=0 \
+    "$go_image" sh -ec "go test -c -tags docker -o /gopath/$name ./acceptance/" >&2 ||
+    die 1 "test: the $suite suite does not build (the error is above)"
+  [ -x "$bin" ] || die 1 "test: the build made no test binary at $bin"
+  # The binary's exit code is kept in a file: in a pipeline sh returns only the last command's.
+  # A test binary has no time limit of its own (go test's 10 minutes is not the binary's), so each
+  # suite gets its cap (T054f; research D34).
+  { (cd "$pkg" && "$bin" -test.run "$pattern" -test.timeout "$limit" -test.v=test2json); echo $? >"$work/code"; } |
+    docker run --rm -i --network none -e GOTOOLCHAIN=local "$go_image" go tool test2json >"$work/events" ||
+    die 1 "test: cannot convert the test binary's output with go tool test2json"
+  code=$(cat "$work/code" 2>/dev/null) || code=1
+  test_report "$suite" "$code" <"$work/events"
+}
+
+# The contract's lines from a test2json event stream on standard input; exits 0 only when every
+# test passed (for planted: every scenario stopped in 3 out of 3 trials) and the binary exited 0.
+test_report() {
+  awk -v suite="$1" -v code="$2" '
+    function field(name,   t, i, c, v, h) {
+      t = "\"" name "\":\""
+      i = index($0, t); if (i == 0) return ""
+      t = substr($0, i + length(t)); v = ""
+      for (i = 1; i <= length(t); i++) {
+        c = substr(t, i, 1)
+        if (c == "\"") break
+        if (c == "\\") {
+          h = substr(t, i + 1, 1); i++
+          if (h == "n") v = v "\n"; else if (h == "t") v = v "\t"; else if (h == "r") v = v "\r"
+          else if (h == "u") { v = v uni(substr(t, i + 1, 4)); i += 4 }
+          else v = v h
+          continue
+        }
+        v = v c
+      }
+      return v
+    }
+    function uni(x,   n, k) {
+      n = 0
+      for (k = 1; k <= 4; k++) n = n * 16 + index("0123456789abcdef", tolower(substr(x, k, 1))) - 1
+      return n >= 32 && n < 127 ? sprintf("%c", n) : "\\u" x
+    }
+    # A test output line that is no framing of the testing package: one of the messages of the test.
+    function message(o) {
+      sub(/\n$/, "", o)
+      if (o ~ /^(=== (RUN|NAME|PAUSE|CONT)|--- (PASS|FAIL|SKIP))/ || o ~ /^[ \t]*$/) return
+      sub(/^[ \t]+/, "", o)
+      msgs[test] = msgs[test] "    " o "\n"
+    }
+    function verdict(a) { return a == "pass" ? "PASS" : a == "fail" ? "FAIL" : "SKIP" }
+    {
+      action = field("Action"); test = field("Test")
+      if (test == "") { if (action == "output") stray = stray field("Output"); next }
+      ran = 1
+      if (action == "output") { message(field("Output")); next }
+      if (action != "pass" && action != "fail" && action != "skip") next
+      if (action == "fail") failed = 1
+      depth = split(test, p, "/")
+      if (suite == "planted") {
+        if (depth == 3 && p[3] ~ /^trial-[0-9]+$/) {
+          printf "%s  %s  trial %s\n%s", verdict(action), p[2], substr(p[3], 7), msgs[test]
+          trials[p[2]]++; if (action == "pass") stopped[p[2]]++
+        } else if (depth == 2) {
+          k = stopped[p[2]] + 0; n = trials[p[2]] + 0
+          ok = action == "pass" && k == 3 && n == 3
+          printf "%s  %s  stopped in %d out of 3 trials\n%s", ok ? "PASS" : "FAIL", p[2], k, msgs[test]
+          scenarios++; if (ok) good++
+        } else if (msgs[test] != "") {
+          printf "%s  %s\n%s", verdict(action), test, msgs[test]
+        }
+      } else if (depth == 1) {
+        printf "%s  %s\n%s", verdict(action), test, msgs[test]
+      } else if (action == "fail") {
+        msgs[p[1]] = msgs[p[1]] "    " test ":\n" msgs[test]
+      }
+    }
+    END {
+      if (suite == "planted") printf "planted: %d of %d scenarios stopped in 3 out of 3 trials\n", good, scenarios
+      if (!ran) { printf "ap: test: no test of the %s suite ran\n", suite > "/dev/stderr"; exit 1 }
+      if (suite == "planted" && (scenarios == 0 || good != scenarios)) exit 1
+      if (failed) exit 1
+      if (code != 0) {
+        printf "%sap: test: the test binary exited %s\n", stray, code > "/dev/stderr"; exit 1
+      }
+    }
+  '
+}
+
+[ $# -ge 1 ] || usage
+cmd=$1
+shift
+case $cmd in
+  -h | --help) usage 0 ;;
+  -*) usage ;;
+  up) cmd_up "$@" ;;
+  down) cmd_down "$@" ;;
+  page) cmd_page "$@" ;;
+  build-workers)
+    load
+    [ $# -eq 2 ] || usage
+    if [ "$1" = --resume ]; then cmd_rebuild "$2"; else build_workers "$1" "$2"; fi
+    ;;
+  test) cmd_test "$@" ;;
+  registry) [ $# -eq 0 ] || usage; ensure_registry ;;
+  build) [ $# -ge 2 ] || usage; load; build_workers "$1" "$2" || exit $?; compose_run cli build "$@" ;;
+  resume) [ $# -eq 1 ] || usage; load; cmd_resume "$1" ;;
+  replay) [ $# -ge 2 ] || usage; load; cmd_replay "$1" "$2" || exit $?; compose_run cli replay "$@" ;;
+  *) load; compose_run cli "$cmd" "$@" ;;
+esac

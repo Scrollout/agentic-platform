@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "slice.schema.json",
+  "title": "Slice",
+  "description": "One use case as the developer approves it: goals, terms, rules, examples and a contract, with its questions, check results, approvals and history.",
+  "type": "object",
+  "required": [
+    "id",
+    "title",
+    "description",
+    "state",
+    "goals",
+    "terms",
+    "rules",
+    "rule_text",
+    "examples",
+    "contract",
+    "questions",
+    "parts",
+    "approvals",
+    "checks",
+    "history"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "$ref": "slice-defs.schema.json#/$defs/slice_id"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A short name, taken from the first goal."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The developer's prose."
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "proposed",
+        "questions-open",
+        "checked",
+        "approved"
+      ],
+      "description": "Where the slice is before a build. Whether it is building, done, handed over or expired is the state of its latest run."
+    },
+    "latest_run": {
+      "$ref": "slice-defs.schema.json#/$defs/run_id"
+    },
+    "artifact_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "The number of distinct artifacts stored for the slice's runs; the same bytes stored twice count once. The engine always sends it."
+    },
+    "goals": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "slice-defs.schema.json#/$defs/goal"
+      }
+    },
+    "terms": {
+      "type": "array",
+      "items": {
+        "$ref": "slice-defs.schema.json#/$defs/term"
+      }
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "slice-defs.schema.json#/$defs/rule"
+      }
+    },
+    "rule_text": {
+      "type": "object",
+      "description": "Each rule's EARS sentence, keyed by rule ID. Written by the platform from the rule's fields; never edited.",
+      "propertyNames": {
+        "$ref": "slice-defs.schema.json#/$defs/rule_id"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "examples": {
+      "$ref": "slice-defs.schema.json#/$defs/examples"
+    },
+    "contract": {
+      "$ref": "slice-defs.schema.json#/$defs/contract"
+    },
+    "questions": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "$ref": "slice-defs.schema.json#/$defs/question"
+      }
+    },
+    "parts": {
+      "type": "object",
+      "description": "The current hash of each part. `goals` hashes `{goals}`, `rules` hashes `{rules, examples, terms}` and `contract` hashes `{contract}`, each as the SHA-256 of its RFC 8785 canonical JSON. These are hashes of the canonical JSON of each replace operation's body, not the bodies themselves.",
+      "required": [
+        "goals",
+        "rules",
+        "contract"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "goals": {
+          "$ref": "slice-defs.schema.json#/$defs/hash"
+        },
+        "rules": {
+          "$ref": "slice-defs.schema.json#/$defs/hash"
+        },
+        "contract": {
+          "$ref": "slice-defs.schema.json#/$defs/hash"
+        }
+      }
+    },
+    "approvals": {
+      "type": "array",
+      "maxItems": 3,
+      "description": "The approvals that hold. An approval holds only while `parts[part]` equals its `content_hash`.",
+      "items": {
+        "type": "object",
+        "required": [
+          "part",
+          "content_hash",
+          "at"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "part": {
+            "$ref": "slice-defs.schema.json#/$defs/part"
+          },
+          "content_hash": {
+            "$ref": "slice-defs.schema.json#/$defs/hash"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "description": "The latest result of every check on the slice.",
+      "items": {
+        "$ref": "slice-defs.schema.json#/$defs/check_result"
+      }
+    },
+    "history": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Every change to the slice in order, starting with the proposal. A proposed or revised entry names the model and agent definition that wrote it, and how many attempts it took.",
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "at",
+          "refs"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "proposed: the analyst's first proposal; revised: its revision after answers; answered: questions answered; changed: a part replaced, which withdraws that part's approval; approved: a part approved; withdrawn: approvals of the parts in refs withdrawn because a change elsewhere made those parts fail a check.",
+            "enum": [
+              "proposed",
+              "revised",
+              "answered",
+              "changed",
+              "approved",
+              "withdrawn"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "model": {
+            "type": "string",
+            "minLength": 1
+          },
+          "agent_digest": {
+            "$ref": "slice-defs.schema.json#/$defs/hash"
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "On a proposed or revised entry: how many times the analyst was asked before its output was usable, at most the pattern's limits.attempts. Entries recorded before it existed have none."
+          },
+          "refs": {
+            "type": "array",
+            "description": "The parts, items or questions the entry concerns.",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "slice-defs.schema.json#/$defs/part_ref"
+                },
+                {
+                  "$ref": "slice-defs.schema.json#/$defs/question_id"
+                }
+              ]
+            }
+          }
+        },
+        "if": {
+          "properties": {
+            "kind": {
+              "enum": [
+                "proposed",
+                "revised"
+              ]
+            }
+          }
+        },
+        "then": {
+          "required": [
+            "model",
+            "agent_digest"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+event: message_start
+data: {"message":{"content":[],"id":"msg_cdd364b7baaed4e1c9056a9a","model":"claude-haiku-5-5","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"input_tokens":0,"output_tokens":0}},"type":"message_start"}
+
+event: content_block_start
+data: {"content_block":{"id":"toolu_ab311bcb065ad741e7403ad4","input":{},"name":"write_file","type":"tool_use"},"index":0,"type":"content_block_start"}
+
+event: content_block_delta
+data: {"delta":{"partial_json":"{\"content\":\"package r2\\n\\nimport (\\n\\t\\\"encoding/json\\\"\\n\\t\\\"net/http\\\"\\n\\t\\\"net/http/httptest\\\"\\n\\t\\\"strings\\\"\\n\\t\\\"testing\\\"\\n\\n\\t\\\"example.com/service/gen\\\"\\n\\t\\\"example.com/service/internal/app\\\"\\n)\\n\\n// R-2: creating a note returns that note, with its text as given.\\nfunc TestR2CreateReturnsTheNote(t *testing.T) {\\n\\tsrv := httptest.NewServer(gen.Handler(app.New()))\\n\\tdefer srv.Close()\\n\\tresp, err := http.Post(srv.URL+\\\"/notes\\\", \\\"application/json\\\", strings.NewReader(`{\\\"text\\\":\\\"Buy Milk\\\"}`))\\n\\tif err != nil {\\n\\t\\tt.Fatal(err)\\n\\t}\\n\\tdefer resp.Body.Close()\\n\\tvar n struct {\\n\\t\\tID   int\\n\\t\\tText string\\n\\t}\\n\\tif err := json.NewDecoder(resp.Body).Decode(&n); err != nil {\\n\\t\\tt.Fatal(err)\\n\\t}\\n\\tif n.ID != 1 || n.Text != \\\"Buy Milk\\\" {\\n\\t\\tt.Errorf(\\\"the created note is %+v, want id 1 and the text \\\\\\\"Buy Milk\\\\\\\"\\\", n)\\n\\t}\\n}\\n\",\"path\":\"/projects/non-converging-review-1/review/r2/round3_test.go\"}","type":"input_json_delta"},"index":0,"type":"content_block_delta"}
+
+event: content_block_stop
+data: {"index":0,"type":"content_block_stop"}
+
+event: message_delta
+data: {"delta":{"stop_reason":"tool_use","stop_sequence":null},"type":"message_delta","usage":{"output_tokens":0}}
+
+event: message_stop
+data: {"type":"message_stop"}
+

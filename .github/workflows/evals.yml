@@ -1,0 +1,94 @@
+# The live evals (research D41, ADR 0044, T109): every agent's eval cases 3 times each through the
+# gateway with the test-scoped key, when an agent definition, its model pin, an eval case or the
+# Docker Agent pin changes on the environment dev's branches, and when started by hand. The key is
+# the secret ANTHROPIC_API_KEY of the environment dev and reaches only the evals job. Never on
+# pull requests. Changing this file needs the owner's Approved-by (scripts/hooks/commit-msg);
+# scripts/tests/test_workflows.py checks its rules.
+name: evals
+
+on:
+  push:
+    branches:
+      - main
+      - 001-prose-to-accepted-slice
+    paths:
+      - "src/agents/**"
+      - "src/tests/evals/**"
+      - "src/deploy/images.lock"
+      - "src/deploy/Dockerfile.agent"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  config:
+    name: config
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      runner: ${{ steps.pins.outputs.runner }}
+      python: ${{ steps.pins.outputs.python }}
+      go: ${{ steps.pins.outputs.go }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: pins
+        name: Read the CI pins from src/deploy/images.lock
+        run: |
+          pin() { awk -v n="$1" '$1 == n { print $2 }' src/deploy/images.lock; }
+          runner=$(pin ci-runner)
+          python=$(pin ci-python)
+          go=$(pin golang-race | sed 's/^[a-z]*:\([0-9.]*\)-.*/\1/')
+          for v in runner python go; do
+            eval "val=\$$v"
+            [ -n "$val" ] || { echo "config: no $v pin in src/deploy/images.lock" >&2; exit 1; }
+            echo "$v=$val" >>"$GITHUB_OUTPUT"
+          done
+          cat "$GITHUB_OUTPUT"
+
+  evals:
+    name: evals (${{ matrix.suite }})
+    needs: config
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 300
+    environment: dev
+    env:
+      EVAL_REPORT_DIR: ${{ runner.temp }}/eval-report
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [analyst, steps]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ needs.config.outputs.go }}
+          cache: false
+      - name: Install oapi-codegen (pinned in src/deploy/images.lock)
+        run: go install "$(awk '$1=="oapi-codegen"{print $2}' src/deploy/images.lock)"
+      - name: Write the key file
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          umask 077
+          printf '%s' "$ANTHROPIC_API_KEY" >"$RUNNER_TEMP/anthropic_api_key"
+      - id: run
+        name: Live evals
+        env:
+          EVAL_KEY_FILE: ${{ runner.temp }}/anthropic_api_key
+          SUITE: ${{ matrix.suite }}
+        run: scripts/ci-step.sh "evals-$SUITE" sh "src/tests/evals/$SUITE/run.sh" live
+      - name: Summary of the evals
+        if: always()
+        run: python3 scripts/ci-evals-summary.py "$EVAL_REPORT_DIR/report.json"
+      - name: Remove the key file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/anthropic_api_key"

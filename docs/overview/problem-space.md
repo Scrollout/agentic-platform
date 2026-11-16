@@ -8,7 +8,7 @@ sources:
   - id: owner
     resource: https://claude.ai/code/session_01P2TmGw3MdjVyoyhGeQK7np
     title: Project owner's answers, 2026-11-11
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-12T00:45:00Z }
 ---
 
 # How to use these tables
@@ -37,7 +37,7 @@ Sources: [Project owner's answers, 2026-11-11](https://claude.ai/code/session_01
 |----|------|----------|-----------|------|-------|
 | N-001 | State who the platform serves, what problem it solves for them, and what it will not do | yes | | | done |
 | N-002 | Serve individual developers, teams and organizations | yes | | | todo |
-| N-003 | Support software projects | yes | | | todo |
+| N-003 | Support software projects | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | specified |
 | N-004 | Support agent work outside software projects | later | | | todo |
 | N-005 | Run on the user's own infrastructure, and as a hosted service | yes | | | todo |
 
@@ -88,17 +88,17 @@ Constitution Principle XX makes them binding for the product.
 
 | ID | Need | In scope | Prior art | Spec | State |
 |----|------|----------|-----------|------|-------|
-| N-050 | Applying the same method to the same input gives the same accepted result | yes | | | todo |
-| N-051 | A result is accepted only when it passes checks that do not depend on a model's judgement | yes | | | todo |
-| N-052 | A proven solution is captured once and reused, without the model generating it again | yes | | | todo |
-| N-053 | Every result can be traced to the method, inputs, model and rules that produced it, and reproduced from them | yes | | | todo |
+| N-050 | Applying the same method to the same input gives the same accepted result | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | specified |
+| N-051 | A result is accepted only when it passes checks that do not depend on a model's judgement | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | specified |
+| N-052 | A proven solution is captured once and reused, without the model generating it again | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | specified |
+| N-053 | Every result can be traced to the method, inputs, model and rules that produced it, and reproduced from them | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | specified |
 | N-054 | How much results vary from run to run is measured and shown | undecided | | | todo |
-| N-055 | The project's principles, docs, specs, decisions, validations, tests and reviews hold at every stage of the lifecycle | yes | | | todo |
-| N-056 | The author of a change cannot alter, skip or weaken the checks that judge it; only a recorded, independent decision can change a check | yes | | | todo |
-| N-057 | A change stays within the files and areas its task allows; anything outside is rejected | yes | | | todo |
-| N-058 | Code depends only on what the design allows; a dependency across a forbidden boundary is rejected | yes | | | todo |
+| N-055 | The project's principles, docs, specs, decisions, validations, tests and reviews hold at every stage of the lifecycle | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | specified |
+| N-056 | The author of a change cannot alter, skip or weaken the checks that judge it; only a recorded, independent decision can change a check | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | specified |
+| N-057 | A change stays within the files and areas its task allows; anything outside is rejected | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | specified |
+| N-058 | Code depends only on what the design allows; a dependency across a forbidden boundary is rejected | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | specified |
 | N-059 | Values that belong in data or configuration cannot be hard-coded | yes | | | todo |
-| N-060 | Work cannot be reported done until its checks pass | yes | | | todo |
-| N-061 | Work is reviewed by an agent or person that did not do it | yes | | | todo |
+| N-060 | Work cannot be reported done until its checks pass | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | specified |
+| N-061 | Work is reviewed by an agent or person that did not do it | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | specified |
 | N-062 | Every change traces back to a need, spec or decision | undecided | | | todo |
-| N-063 | Review and fixing converge: a change reaches an accepted or escalated end in a bounded number of rounds, and a review cannot keep adding new demands | yes | | | todo |
+| N-063 | Review and fixing converge: a change reaches an accepted or escalated end in a bounded number of rounds, and a review cannot keep adding new demands | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | specified |

@@ -1,0 +1,21 @@
+{"Action":"start"}
+{"Action":"run","Test":"TestUS2"}
+{"Action":"output","Test":"TestUS2","Output":"=== RUN   TestUS2\n"}
+{"Action":"run","Test":"TestUS2/US2.1"}
+{"Action":"output","Test":"TestUS2/US2.1","Output":"=== RUN   TestUS2/US2.1\n"}
+{"Action":"output","Test":"TestUS2/US2.1","Output":"    record_test.go:33: US2.1: the run page shows no accepted step\n"}
+{"Action":"output","Test":"TestUS2/US2.1","Output":"--- FAIL: TestUS2/US2.1 (0.00s)\n"}
+{"Action":"fail","Test":"TestUS2/US2.1"}
+{"Action":"output","Test":"TestUS2","Output":"--- FAIL: TestUS2 (0.00s)\n"}
+{"Action":"fail","Test":"TestUS2"}
+{"Action":"run","Test":"TestUS2_2_EditingTheJudgingTestsIsStopped"}
+{"Action":"output","Test":"TestUS2_2_EditingTheJudgingTestsIsStopped","Output":"=== RUN   TestUS2_2_EditingTheJudgingTestsIsStopped\n"}
+{"Action":"output","Test":"TestUS2_2_EditingTheJudgingTestsIsStopped","Output":"    record_test.go:40: edit-judging-tests: step code was accepted 1 time(s) with the failure planted\n"}
+{"Action":"output","Test":"TestUS2_2_EditingTheJudgingTestsIsStopped","Output":"--- FAIL: TestUS2_2_EditingTheJudgingTestsIsStopped (0.00s)\n"}
+{"Action":"fail","Test":"TestUS2_2_EditingTheJudgingTestsIsStopped"}
+{"Action":"run","Test":"TestUS2_10_AnInterruptedRunResumesWithoutRepeatingAcceptedSteps"}
+{"Action":"output","Test":"TestUS2_10_AnInterruptedRunResumesWithoutRepeatingAcceptedSteps","Output":"=== RUN   TestUS2_10_AnInterruptedRunResumesWithoutRepeatingAcceptedSteps\n"}
+{"Action":"output","Test":"TestUS2_10_AnInterruptedRunResumesWithoutRepeatingAcceptedSteps","Output":"--- PASS: TestUS2_10_AnInterruptedRunResumesWithoutRepeatingAcceptedSteps (0.00s)\n"}
+{"Action":"pass","Test":"TestUS2_10_AnInterruptedRunResumesWithoutRepeatingAcceptedSteps"}
+{"Action":"output","Output":"FAIL\n"}
+{"Action":"fail"}

@@ -1,0 +1,15 @@
+# Agent step image: Docker Agent plus the Go toolchain, run as a non-root user. Build context: src/.
+ARG DOCKER_AGENT_IMAGE
+ARG GOLANG_IMAGE
+FROM ${DOCKER_AGENT_IMAGE} AS docker-agent
+
+FROM ${GOLANG_IMAGE}
+COPY --from=docker-agent /docker-agent /usr/local/bin/docker-agent
+RUN adduser -D -u 65532 -h /tmp/home agent
+# Docker product telemetry is on by default (constitution XI); Go telemetry is off too. Caches and
+# HOME live under /tmp so the root file system can be read-only.
+ENV TELEMETRY_ENABLED=false GOTELEMETRY=off GOTOOLCHAIN=local GOFLAGS=-buildvcs=false \
+    HOME=/tmp/home GOPATH=/tmp/go GOCACHE=/tmp/go-cache CGO_ENABLED=0
+USER 65532:65532
+WORKDIR /work
+ENTRYPOINT ["/usr/local/bin/docker-agent"]

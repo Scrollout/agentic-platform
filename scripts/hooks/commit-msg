@@ -1,0 +1,104 @@
+#!/bin/sh
+# Constitution XVI without a hosted forge: a commit that touches a protected path must record the
+# project owner's approval in an "Approved-by:" trailer.
+#
+# Usage: commit-msg <message-file>. Exit 0 accepts the message, anything else refuses it.
+#
+# The hook that judges a commit is the one in that commit, as in scripts/hooks/pre-commit: the
+# first block reads the staged scripts/hooks/commit-msg from the index and, if it differs from
+# the running file, execs it in a fresh temporary folder ($TMPDIR/commit-msg-hook.*) with the same
+# arguments. A run is the staged hook exactly when its own file equals the staged one; the staged
+# copy removes its folder once it has compared itself. A commit that deletes the hook is judged by
+# the running one. Keep the block short: an unstaged edit to the block itself still takes effect.
+set -eu
+# self: this run's own folder when it is a handed-over copy, one level below $TMPDIR (no "/" or
+# "..", so a crafted $0 cannot point rm -rf elsewhere). Assignments, not tests: under set -e a
+# failing git in "$(...)" stops the hook only when the substitution is assigned.
+self=; mid=${0#"${TMPDIR:-/tmp}"/commit-msg-hook.}; mid=${mid%/commit-msg}
+case $0 in "${TMPDIR:-/tmp}"/commit-msg-hook.*/commit-msg)
+  case $mid in */*|.|..|'') ;; *) self=${0%/commit-msg} ;; esac ;;
+esac
+staged_hook=$(git ls-files -- ':(top)scripts/hooks/commit-msg') \
+  || { echo "commit-msg: cannot read the index" >&2; exit 1; }
+if [ -n "$staged_hook" ]; then
+  hookdir=$(mktemp -d "${TMPDIR:-/tmp}/commit-msg-hook.XXXXXX")
+  trap 'rm -rf "$hookdir" ${self:+"$self"}' EXIT
+  trap 'exit 1' HUP INT TERM
+  git show :scripts/hooks/commit-msg >"$hookdir/commit-msg" \
+    || { echo "commit-msg: cannot read the staged scripts/hooks/commit-msg" >&2; exit 1; }
+  if ! cmp -s "$0" "$hookdir/commit-msg"; then
+    echo "commit-msg: running the staged scripts/hooks/commit-msg, which differs from $0"
+    [ -z "$self" ] || rm -rf "$self"
+    # The EXIT trap stays: it runs only if exec fails, and then removes hookdir.
+    trap 'rm -rf "$hookdir"' EXIT
+    exec sh "$hookdir/commit-msg" "$@"
+  fi
+  rm -rf "$hookdir" ${self:+"$self"}; trap - EXIT HUP INT TERM
+fi
+msg_file="$1"
+# The staged names, NUL-separated and matched as whole names (grep -z), so neither a name git
+# would quote ("scripts/\303\251.sh") nor one with a newline can slip past a pattern. Every git
+# and grep status is checked: a step that did not run refuses the commit.
+names=$(mktemp "${TMPDIR:-/tmp}/commit-msg.XXXXXX")
+trap 'rm -f "$names" "$names.m"' EXIT
+trap 'exit 1' HUP INT TERM
+refuse() { echo "commit-msg: $1; the commit is refused" >&2; exit 1; }
+git diff --cached --name-only -z >"$names" || refuse "cannot list the staged files"
+# matches <pattern> [<exclude>]: true when a staged name matches the pattern (and not the exclude).
+matches() {
+  rc=0; grep -zE -e "$1" -- "$names" >"$names.m" || rc=$?
+  [ "$rc" -le 1 ] || refuse "grep failed (exit $rc)"
+  [ "$rc" -eq 0 ] || return 1
+  [ $# -ge 2 ] || return 0
+  rc=0; grep -zEv -e "$2" -- "$names.m" >/dev/null || rc=$?
+  [ "$rc" -le 1 ] || refuse "grep failed (exit $rc)"
+  [ "$rc" -eq 0 ]
+}
+# trailer <name>: true when the message's final trailer block has "<name>: ".
+trailer() {
+  git interpret-trailers --parse -- "$msg_file" >"$names.m" \
+    || refuse "cannot read the trailers of $msg_file"
+  rc=0; grep -q "^$1: " -- "$names.m" || rc=$?
+  [ "$rc" -le 1 ] || refuse "grep failed (exit $rc)"
+  [ "$rc" -eq 0 ]
+}
+
+# Code changed together with its tests: a commit that changes Go code and the tests that judge it
+# needs a 'Tests-approved-by:' trailer. Only the project owner approves a test change (ADR 0029);
+# the rule below also requires the owner's name and date when an existing test changes.
+if matches '^src/.*\.go$' '_test\.go$|/testdata/' && matches '^src/.*(_test\.go$|/testdata/)'; then
+  if ! trailer Tests-approved-by; then
+    echo "commit-msg: code and the tests that judge it changed together; add 'Tests-approved-by: <owner name> (<YYYY-MM-DD>)' once the owner has approved the test change" >&2
+    exit 1
+  fi
+fi
+# ADR 0029: an existing test file changes only with the owner's approval of that change. Every
+# staged path that is not an addition, with renames split into a deletion of the old path and an
+# addition of the new one, so a renamed test counts by its old path. Adding test files needs
+# nothing. The approval is 'Tests-approved-by: <owner name> (<YYYY-MM-DD>)' in the final trailer
+# block; no standing approval covers it.
+git diff --cached --no-renames --diff-filter=a --name-only -z >"$names" \
+  || refuse "cannot list the staged changes to existing files"
+tests='(^|/)[^/]*_test\.go$|(^|/)testdata/|^scripts/tests/|^src/tests/|(^|/)test_[^/]*\.(sh|py)$'
+if matches "$tests"; then
+  git interpret-trailers --parse -- "$msg_file" >"$names.m" \
+    || refuse "cannot read the trailers of $msg_file"
+  rc=0
+  grep -qE '^Tests-approved-by: [^ (]([^(]*[^ (])? \([0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])\)$' \
+    -- "$names.m" || rc=$?
+  [ "$rc" -le 1 ] || refuse "grep failed (exit $rc)"
+  if [ "$rc" -ne 0 ]; then
+    echo "commit-msg: existing tests changed (modified, renamed or deleted); only the project owner approves that change: add 'Tests-approved-by: <owner name> (<YYYY-MM-DD>)' after the owner approves it" >&2
+    grep -zE -e "$tests" -- "$names" | tr '\0' '\n' >&2
+    exit 1
+  fi
+fi
+git diff --cached --name-only -z >"$names" || refuse "cannot list the staged files"
+protected='^(\.github/|\.specify/memory/|scripts/|src/deploy/|src/tests/|.*_test\.go$|.*/testdata/|.*go\.(mod|sum)$|\.gitignore$)'
+if matches "$protected"; then
+  if ! trailer Approved-by; then
+    echo "commit-msg: protected paths changed; add an 'Approved-by: <owner>' trailer" >&2
+    grep -zE -e "$protected" -- "$names" | tr '\0' '\n' >&2
+    exit 1
+  fi
+fi

@@ -1,0 +1,11 @@
+{
+  "name": "agentic-platform-repository-tools",
+  "private": true,
+  "description": "Node tools the repository checks run (contract bundling and linting, Markdown linting), pinned with their whole dependency tree by package-lock.json.",
+  "license": "MIT",
+  "devDependencies": {
+    "@redocly/cli": "2.72.1",
+    "@stoplight/spectral-cli": "6.15.0",
+    "markdownlint-cli2": "0.18.1"
+  }
+}

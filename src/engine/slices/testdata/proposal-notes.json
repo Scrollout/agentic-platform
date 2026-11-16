@@ -1,0 +1,45 @@
+{
+  "goals": [
+    {
+      "id": "G-1",
+      "text": "Keep a <note> & café"
+    },
+    {
+      "id": "G-2",
+      "text": "List\tnotes"
+    }
+  ],
+  "terms": [
+    {
+      "id": "T-1",
+      "name": "Note",
+      "definition": "a short text kept by the service"
+    }
+  ],
+  "rules": [
+    {
+      "id": "R-1",
+      "goal": "G-1",
+      "pattern": "event",
+      "trigger": "the developer submits a <note>",
+      "system": "the notes service",
+      "response": "shall store the note",
+      "terms": [
+        "T-1"
+      ]
+    },
+    {
+      "id": "R-2",
+      "goal": "G-2",
+      "pattern": "ubiquitous",
+      "system": "the notes service",
+      "response": "shall list notes",
+      "terms": []
+    }
+  ],
+  "examples": "Feature: Notes\n  Rule: R-1\n    @R-1 @E-1\n    Scenario: Keep\n      Given a note\n  Rule: R-2\n    @R-2 @E-2\n    Scenario: List\n      Given notes\n",
+  "contract": "openapi: 3.1.0\ninfo:\n  title: Notes\n  version: '1'\npaths:\n  /notes:\n    get:\n      operationId: listNotes\n      x-rules: [R-2]\n      responses:\n        '200':\n          description: The notes.\n    post:\n      operationId: keepNote\n      x-rules: [R-1]\n      responses:\n        '201':\n          description: The note was kept.\n",
+  "questions": [],
+  "model": "claude-haiku-test",
+  "agent_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+}

@@ -1,0 +1,5 @@
+{"answers": [
+  {"step": "tests", "turns": [{"write": [{"path": "tests/features_test.go", "content": "files/features_test.go.txt"}]}, {"write": [{"path": "tests/handler_test.go", "content": "files/handler_test.go.txt"}]}, {"text": "The step definitions bind every example and fail against the stub."}]},
+  {"step": "code", "turns": [{"delayMs": 30000, "write": [{"path": "internal/app/app.go", "content": "files/app.go.txt"}]}, {"write": [{"path": "cmd/notes/main.go", "content": "files/main.go.txt"}]}, {"text": "Done: the implementation is written and every test passes."}]},
+  {"step": "review", "round": 1, "turns": [{"output": {"findings": []}}]}
+]}

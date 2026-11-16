@@ -1,0 +1,55 @@
+openapi: 3.1.0
+info: {title: Fixture, version: 2026-11-12-preview}
+paths:
+  /items:
+    get:
+      operationId: listItems
+      parameters:
+        - {name: api-version, in: query, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: The items.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  value:
+                    type: array
+                    items:
+                      $ref: './item.schema.json'
+    post:
+      operationId: createItem
+      parameters:
+        - {name: api-version, in: query, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: {type: string}
+                note: {type: string}
+                kind: {type: string, enum: [a, b, c]}
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: './item.schema.json'
+  /items/{id}:
+    get:
+      operationId: getItem
+      parameters:
+        - {name: api-version, in: query, required: true, schema: {type: string}}
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: The item.
+          content:
+            application/json:
+              schema:
+                $ref: './item.schema.json'

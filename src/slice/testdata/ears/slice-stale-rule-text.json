@@ -1,0 +1,11 @@
+{
+  "rules": [
+    {"id": "R-1", "goal": "G-1", "pattern": "ubiquitous", "system": "the notes service", "response": "shall store each note", "terms": [], "text": "Input text that must be ignored."},
+    {"id": "R-2", "goal": "G-1", "pattern": "event", "trigger": "a user creates a note", "system": "the notes service", "response": "shall return the new note", "terms": []}
+  ],
+  "rule_text": {
+    "R-1": "The notes service shall do something else.",
+    "R-2": "Stale text for a rule that changed.",
+    "R-9": "Text for a rule that does not exist."
+  }
+}

@@ -1,0 +1,18 @@
+event: message_start
+data: {"message":{"content":[],"id":"msg_797cd940c7d7b15b6845c452","model":"claude-haiku-5-5","role":"assistant","stop_reason":null,"stop_sequence":null,"type":"message","usage":{"input_tokens":0,"output_tokens":0}},"type":"message_start"}
+
+event: content_block_start
+data: {"content_block":{"id":"toolu_ca6ab6475c7c04d07802a168","input":{},"name":"write_file","type":"tool_use"},"index":0,"type":"content_block_start"}
+
+event: content_block_delta
+data: {"delta":{"partial_json":"{\"content\":\"# notes\\n\\nAn in-memory notes service: `go run ./cmd/notes` serves it on :8080.\\n\",\"path\":\"/projects/outside-scope-1/README.md\"}","type":"input_json_delta"},"index":0,"type":"content_block_delta"}
+
+event: content_block_stop
+data: {"index":0,"type":"content_block_stop"}
+
+event: message_delta
+data: {"delta":{"stop_reason":"tool_use","stop_sequence":null},"type":"message_delta","usage":{"output_tokens":0}}
+
+event: message_stop
+data: {"type":"message_stop"}
+

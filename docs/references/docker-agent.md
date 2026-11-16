@@ -83,7 +83,10 @@ sources:
   - id: da-headless
     resource: https://docker.github.io/docker-agent/guides/headless/
     title: Docker Agent - Headless mode
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
+  - id: da-events
+    resource: https://github.com/docker/docker-agent/blob/v1.160.0/pkg/runtime/event.go
+    title: Docker Agent v1.160.0 - runtime event types (pkg/runtime/event.go)
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-13T18:00:00Z }
 ---
 
 # Summary
@@ -184,6 +187,9 @@ Sources: [Docker Agent - Distribution](https://docker.github.io/docker-agent/con
   - Session endpoints cover create, list, get, delete, fork, steer, follow-up (with `Idempotency-Key`), tool-call approval (`/resume`), elicitation and per-session safety policy.
   - Each turn streams typed SSE events, for example `agent_choice`, `tool_call`, `tool_call_confirmation`, `token_usage` and `budget_exceeded`.
   - Auth is one shared bearer token, which is mandatory on non-loopback addresses. There is no TLS, and the request body cap is 1 MiB by default.
+  - One turn is `POST /api/sessions` (with a title, or a second model call names the session), then `POST /api/sessions/{id}/agent/{agent}`, whose stream ends with `stream_stopped`; `agent_info` names the model the agent runs and the last `agent_choice` holds its answer (seen with v1.160.0 in feature 001, research D27).
+  - A `token_usage` event's `usage` (`input_tokens`, `output_tokens`, and `cost` in USD) is its session's running total, not one message's; the per-message figures are only in `last_message`. So a client takes a session's last `token_usage` event and never sums them.
+  - A sub-session reports under its own `session_id`, and its usage is not folded into its parent's, so a turn's total is the last event of each `session_id` added up. No summary event exists, and `stream_stopped` carries no usage (v1.160.0, `pkg/runtime/event.go`; feature 001, research D29).
 - **Sessions are stored in SQLite (`session.db`), with migrations.**
   - One run per session at a time.
   - Live run state, budgets and idempotency keys are held in memory.
@@ -195,7 +201,7 @@ Sources: [Docker Agent - Distribution](https://docker.github.io/docker-agent/con
   - `--repeat` reports pass@k and pass^k.
   - `--baseline` with `--regression-tolerance` exits non-zero on a regression, so it can be a CI gate.
 
-Sources: [Docker Agent - API server](https://docker.github.io/docker-agent/features/api-server/); [Docker Agent - Headless mode](https://docker.github.io/docker-agent/guides/headless/); [Docker Agent - Chat server](https://docker.github.io/docker-agent/features/chat-server/); [Docker Agent - A2A](https://docker.github.io/docker-agent/features/a2a/); [Docker Agent - ACP](https://docker.github.io/docker-agent/features/acp/); [Docker Agent - MCP mode](https://docker.github.io/docker-agent/features/mcp-mode/); [Docker Agent - Sessions](https://docker.github.io/docker-agent/features/sessions/); [Docker Agent - Go SDK](https://docker.github.io/docker-agent/guides/go-sdk/); [docker/docker-agent at commit 3c9f6d45 (release v1.160.0)](https://github.com/docker/docker-agent/tree/3c9f6d45b8682e02713e85330fc98b5157e4896d); [Docker Agent - Evaluation](https://docker.github.io/docker-agent/features/evaluation/).
+Sources: [Docker Agent - API server](https://docker.github.io/docker-agent/features/api-server/); [Docker Agent - Headless mode](https://docker.github.io/docker-agent/guides/headless/); [Docker Agent - Chat server](https://docker.github.io/docker-agent/features/chat-server/); [Docker Agent - A2A](https://docker.github.io/docker-agent/features/a2a/); [Docker Agent - ACP](https://docker.github.io/docker-agent/features/acp/); [Docker Agent - MCP mode](https://docker.github.io/docker-agent/features/mcp-mode/); [Docker Agent - Sessions](https://docker.github.io/docker-agent/features/sessions/); [Docker Agent - Go SDK](https://docker.github.io/docker-agent/guides/go-sdk/); [docker/docker-agent at commit 3c9f6d45 (release v1.160.0)](https://github.com/docker/docker-agent/tree/3c9f6d45b8682e02713e85330fc98b5157e4896d); [Docker Agent - Evaluation](https://docker.github.io/docker-agent/features/evaluation/); [Docker Agent v1.160.0 - runtime event types](https://github.com/docker/docker-agent/blob/v1.160.0/pkg/runtime/event.go).
 
 # Security model
 

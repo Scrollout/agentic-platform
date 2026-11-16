@@ -1,0 +1,13 @@
+# The engine's generated server interfaces and types (strict server on net/http), from the engine
+# contract. scripts/generate.sh writes them to gen/engine.gen.go; never edit that file by hand.
+package: gen
+generate:
+  std-http-server: true
+  strict-server: true
+  models: true
+output-options:
+  overlay:
+    path: engine.overlay.yaml
+    strict: true
+compatibility:
+  always-prefix-enum-values: true

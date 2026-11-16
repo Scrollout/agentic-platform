@@ -1,0 +1,19 @@
+# Build context: src/. Pins come from build args that deploy/build.sh reads from images.lock.
+ARG GOLANG_IMAGE
+FROM ${GOLANG_IMAGE} AS build
+WORKDIR /src
+COPY . .
+# src/tests is excluded from the context (src/.dockerignore), so the workspace must not use it.
+RUN go work edit -dropuse=./tests
+ENV CGO_ENABLED=0 GOFLAGS=-trimpath\ -buildvcs=false GOTOOLCHAIN=local GOTELEMETRY=off
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    cd engine && go build -ldflags="-s -w -buildid=" -o /out/engine ./cmd/engine
+# The store's mount point (ENGINE_STORE_DIR). scratch has no RUN, so the directory is made here and
+# copied with the engine user as owner; Docker gives a new named volume that owner.
+RUN mkdir -p /out/store
+
+FROM scratch
+COPY --from=build /out/engine /engine
+COPY --from=build --chown=65532:65532 /out/store /var/lib/engine
+USER 65532:65532
+ENTRYPOINT ["/engine"]

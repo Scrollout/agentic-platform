@@ -1,0 +1,106 @@
+#!/bin/sh
+# Minimal correct launcher used only to prove the assertions in test_launcher.py pass
+# (and, when mutated, fail). Not the product launcher.
+set -eu
+here=$(cd "$(dirname "$0")" && pwd)
+state=${XDG_STATE_HOME:-$HOME/.local/state}/agentic-platform
+sess=$state/session.env
+usage() { echo "usage: ap up|down|build-workers|page|test|<client command>" >&2; exit 3; }
+needed="engine cli"
+names="$needed page agent check project tests lint"
+reg=${AP_REGISTRY_NAME:-ap-registry}
+if [ -n "${AP_REGISTRY_NAME:-}" ]; then net=$AP_REGISTRY_NAME-net; else net=ap-signing; fi
+cfg=${XDG_CONFIG_HOME:-$HOME/.config}/agentic-platform/signing
+imgs=$state/images.env
+compose() { docker compose -f "$here/compose.yaml" --profile '*' "$@"; }
+# images not built are placeholders that name no image
+load() {
+  [ -f "$sess" ] || [ -L "$sess" ] || { echo "ap: not up" >&2; exit 3; }
+  check_session
+  set -a; . "$sess"
+  for n in $names; do N=$(echo "$n" | tr a-z A-Z); eval "unset AP_IMAGE_$N"; done
+  [ ! -f "$imgs" ] || . "$imgs"
+  for n in $names; do N=$(echo "$n" | tr a-z A-Z); eval "[ -n \"\${AP_IMAGE_$N:-}\" ] || AP_IMAGE_$N=ap-$n:not-built"; done
+  set +a
+}
+rp() { d=$(cd "$(dirname "$1")" && pwd -P) && printf '%s/%s' "$d" "$(basename "$1")"; }
+# T023b: a session file is read as shell code, so it must be a file of ours, mode 600
+check_session() {
+  [ -f "$sess" ] || [ -L "$sess" ] || return 0
+  [ ! -L "$sess" ] || { echo "ap: the session file $sess is a link; run: ap down" >&2; exit 1; }
+  set -- $(ls -lnL "$sess")
+  case $1 in -rw-------*) ;; *) echo "ap: the session file $sess must be mode 600; run: ap down" >&2; exit 1 ;; esac
+  [ "$3" = "$(id -u)" ] || { echo "ap: the session file $sess is not yours; run: ap down" >&2; exit 1; }
+}
+tflag=-T
+[ -t 0 ] && tflag=
+rand() { od -An -N24 -tx1 /dev/urandom | tr -d ' \n'; }
+build_workers() { echo "build-workers: not available yet" >&2; return 1; }
+[ $# -ge 1 ] || usage
+cmd=$1; shift
+case $cmd in
+-*) usage ;;
+up)
+  cred= proj=
+  while [ $# -gt 0 ]; do
+    case $1 in
+    --credentials) [ $# -ge 2 ] || usage; cred=$2; shift 2 ;;
+    --projects) [ $# -ge 2 ] || usage; proj=$2; shift 2 ;;
+    *) usage ;;
+    esac
+  done
+  [ -n "$cred" ] && [ -n "$proj" ] || usage
+  [ -f "$cred" ] && [ -s "$cred" ] || { echo "ap: credentials file missing or empty" >&2; exit 3; }
+  m=$(stat -c %a "$cred")
+  [ "$m" = 600 ] || [ "$m" = 400 ] || { echo "ap: credentials file must be mode 600" >&2; exit 3; }
+  uid=$(id -u); gid=$(id -g)
+  [ "$uid" != 0 ] || { echo "ap: refusing to run as root" >&2; exit 3; }
+  [ -d "$proj" ] || { echo "ap: projects folder missing" >&2; exit 3; }
+  mkdir -p "$state"; chmod 700 "$state"
+  cred=$(rp "$cred"); proj=$(cd "$proj" && pwd -P)
+  # converge: a second up reuses the session's tokens and port, but only for the same paths
+  check_session
+  [ -f "$sess" ] && . "$sess" || true
+  if [ -n "${AP_CREDENTIALS_FILE:-}" ] && { [ "$AP_CREDENTIALS_FILE" != "$cred" ] || [ "$AP_PROJECTS_DIR" != "$proj" ]; }; then
+    echo "ap: the running session uses other --credentials or --projects; run: ap down" >&2; exit 3
+  fi
+  tc=${AP_CLIENT_TOKEN:-$(rand)}; tp=${AP_PAGE_TOKEN:-$(rand)}; tw=${AP_WORKER_TOKEN:-$(rand)}
+  tl=${AP_LINT_TOKEN:-$(rand)}; ta=${AP_ANALYST_TOKEN:-$(rand)}
+  port=${AP_PAGE_PORT:-$(( 20000 + $(od -An -N2 -tu2 /dev/urandom) % 20000 ))}
+  lock=${REFERENCE_IMAGES_LOCK:-$here/images.lock}
+  img=$(awk '$1=="nginx"{print $2}' "$lock")
+  ( umask 077
+    { echo "AP_CREDENTIALS_FILE='$cred'"; echo "AP_PROJECTS_DIR='$proj'"
+      echo "AP_PAGE_PORT=$port"; echo "AP_GATEWAY_IMAGE='$img'"; echo "AP_HOST_USER=$uid:$gid"
+      echo "AP_CLIENT_TOKEN=$tc"; echo "AP_PAGE_TOKEN=$tp"; echo "AP_WORKER_TOKEN=$tw"
+      echo "AP_LINT_TOKEN=$tl"; echo "AP_ANALYST_TOKEN=$ta"; } > "$sess" )
+  chmod 600 "$sess"
+  # images: those recorded are verified before anything starts; engine and cli must be
+  # recorded; page, agent, check, project, tests and lint not built are passed as placeholders and not verified
+  cosign=$(awk '$1=="cosign"{print $2}' "$lock")
+  [ -f "$imgs" ] || { echo "ap: no images recorded; run: src/deploy/build.sh engine" >&2; exit 1; }
+  if grep -Evx 'AP_IMAGE_[A-Z]+=127\.0\.0\.1:[0-9]{1,5}/ap-[a-z]+@sha256:[0-9a-f]{64}' "$imgs" >/dev/null; then
+    echo "ap: $imgs has a line build.sh does not write" >&2; exit 1
+  fi
+  [ -f "$cfg/cosign.pub" ] || { echo "ap: no public key at $cfg/cosign.pub; run: src/deploy/build.sh engine" >&2; exit 1; }
+  for n in $names; do
+    N=$(echo "$n" | tr a-z A-Z)
+    v=$(sed -n "s/^AP_IMAGE_$N=//p" "$imgs" 2>/dev/null | tail -n 1)
+    if [ -z "$v" ]; then
+      case " $needed " in *" $n "*) echo "ap: no image for $n; run: src/deploy/build.sh $n" >&2; exit 1 ;; esac
+      continue
+    fi
+    case $v in */ap-"$n"@sha256:*) ;; *) echo "ap: $imgs: AP_IMAGE_$N names another image" >&2; exit 1 ;; esac
+    ref=$reg:5000/${v#*/}
+    docker run --rm --network "$net" -v "$cfg/cosign.pub:/cosign.pub:ro" "$cosign" verify --key /cosign.pub --insecure-ignore-tlog --allow-http-registry "$ref" >/dev/null ||
+      { echo "ap: signature check failed for ap-$n ($v); nothing started" >&2; exit 1; }
+  done
+  load
+  compose up -d ;;
+down) load; compose down; rm -f "$sess" ;;
+build-workers) [ $# -eq 1 ] || usage; load; build_workers "$1" ;;
+page) load; echo "http://127.0.0.1:$AP_PAGE_PORT" ;;
+test) usage ;;
+build) load; build_workers "${1:-}" || exit 1; compose run $tflag --rm cli build "$@" ;;
+*) load; compose run $tflag --rm cli "$cmd" "$@" ;;
+esac

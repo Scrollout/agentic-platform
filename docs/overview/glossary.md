@@ -14,7 +14,13 @@ sources:
   - id: ahp
     resource: /references/agent-host-protocol.md
     title: Agent Host Protocol reference
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
+  - id: spec-001
+    resource: ../../specs/001-prose-to-accepted-slice/spec.md
+    title: Feature 001 specification, Key Entities
+  - id: data-model-001
+    resource: ../../specs/001-prose-to-accepted-slice/data-model.md
+    title: Feature 001 data model
+generated: { by: claude-code/claude-sonnet-5-5, at: 2026-11-13T12:00:00Z }
 ---
 
 # Knowledge bundle terms
@@ -51,3 +57,19 @@ These terms come from Docker Agent and the Agent Host Protocol. Add each new ter
 | Channel | A URI-addressed AHP resource (root, session, chat, terminal, ...) with its own state tree, which clients subscribe to. |
 
 Sources: [Docker Agent reference](/references/docker-agent.md); [Agent Host Protocol reference](/references/agent-host-protocol.md).
+
+# Feature 001 terms
+
+These terms come from the Feature 001 specification and data model.
+
+| Term | Meaning |
+|------|---------|
+| Slice | One use case taken from description to working software; holds goals, rules, examples, terms and a contract. |
+| Pattern | A reviewed way to build one kind of slice: its conditions for fitting, its steps, each step's scope, allowed dependencies and checks, its limits and budgets, and its sources. Declared in a `pattern.yaml`. |
+| Catalogue | The set of approved patterns (`src/catalogue/`). |
+| Run | One attempt to build a slice from a pattern. It ends in exactly one outcome: done, handed over, expired or cancelled. |
+| Step | One part of a run, filled by an agent or a fixed procedure, with a scope and checks. |
+| Check | A deterministic test that decides whether a step or an artifact is accepted. A model never decides. |
+| Hand-over | The end of a run the platform could not finish within its attempts, review rounds or budgets, after which the developer takes the work over. It has three forms: the spec says a run is "handed over", the data model's outcome is `handed-over`, and the terminal client's command is `take-over`. |
+
+Sources: [Feature 001 specification](../../specs/001-prose-to-accepted-slice/spec.md); [Feature 001 data model](../../specs/001-prose-to-accepted-slice/data-model.md).

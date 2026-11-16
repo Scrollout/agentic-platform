@@ -1,0 +1,222 @@
+# Planted violation of one rule: engine_socket
+# Generated shape: JSON, which is valid YAML. Reads the AP_* variables (images by role: AP_IMAGE_*).
+{
+  "name": "ap-fixture",
+  "services": {
+    "gateway": {
+      "read_only": true,
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "user": "101:101",
+      "networks": [
+        "internal",
+        "egress"
+      ],
+      "tmpfs": [
+        "/tmp"
+      ],
+      "image": "${AP_GATEWAY_IMAGE}",
+      "secrets": [
+        "anthropic_api_key"
+      ],
+      "cpus": 0.5,
+      "mem_limit": "128m",
+      "pids_limit": 64
+    },
+    "engine": {
+      "read_only": true,
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "user": "65532:65532",
+      "networks": [
+        "internal"
+      ],
+      "tmpfs": [
+        "/tmp"
+      ],
+      "image": "${AP_IMAGE_ENGINE}",
+      "environment": {
+        "ENGINE_CLIENT_TOKEN": "${AP_CLIENT_TOKEN}",
+        "ENGINE_PAGE_TOKEN": "${AP_PAGE_TOKEN}",
+        "ENGINE_WORKER_TOKEN": "${AP_WORKER_TOKEN}"
+      },
+      "volumes": [
+        {
+          "type": "bind",
+          "source": "${AP_PROJECTS_DIR}",
+          "target": "/projects"
+        }
+      ],
+      "cpus": 0.5,
+      "mem_limit": "128m",
+      "pids_limit": 64,
+      "pull_policy": "never",
+      "restart": "no"
+    },
+    "page": {
+      "read_only": true,
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "user": "65532:65532",
+      "networks": [
+        "internal"
+      ],
+      "tmpfs": [
+        "/tmp"
+      ],
+      "image": "${AP_IMAGE_PAGE}",
+      "environment": {
+        "TOKEN": "${AP_PAGE_TOKEN}"
+      },
+      "ports": [
+        {
+          "mode": "ingress",
+          "host_ip": "127.0.0.1",
+          "target": 8080,
+          "published": "${AP_PAGE_PORT}",
+          "protocol": "tcp"
+        }
+      ],
+      "cpus": 0.5,
+      "mem_limit": "128m",
+      "pids_limit": 64,
+      "pull_policy": "never"
+    },
+    "cli": {
+      "read_only": true,
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "user": "65532:65532",
+      "networks": [
+        "internal"
+      ],
+      "tmpfs": [
+        "/tmp"
+      ],
+      "image": "${AP_IMAGE_CLI}",
+      "environment": {
+        "TOKEN": "${AP_CLIENT_TOKEN}"
+      },
+      "cpus": 0.5,
+      "mem_limit": "128m",
+      "pids_limit": 64,
+      "pull_policy": "never",
+      "volumes": [
+        {
+          "type": "bind",
+          "source": "/srv/docker.sock",
+          "target": "/x.sock"
+        }
+      ]
+    },
+    "tests": {
+      "read_only": true,
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "user": "65532:65532",
+      "networks": [
+        "internal"
+      ],
+      "tmpfs": [
+        "/tmp"
+      ],
+      "image": "${AP_IMAGE_TESTS}",
+      "environment": {
+        "TOKEN": "${AP_CLIENT_TOKEN}"
+      },
+      "cpus": 0.5,
+      "mem_limit": "128m",
+      "pids_limit": 64,
+      "pull_policy": "never"
+    },
+    "agent-one": {
+      "read_only": true,
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "user": "${AP_HOST_USER}",
+      "networks": [
+        "internal"
+      ],
+      "tmpfs": [
+        "/tmp"
+      ],
+      "runtime": "runsc",
+      "cpus": 1.0,
+      "mem_limit": "512m",
+      "pids_limit": 256,
+      "image": "${AP_IMAGE_AGENT}",
+      "environment": {
+        "TOKEN": "${AP_WORKER_TOKEN}"
+      },
+      "pull_policy": "never"
+    },
+    "check-one": {
+      "read_only": true,
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "user": "65532:65532",
+      "networks": [
+        "internal"
+      ],
+      "tmpfs": [
+        "/tmp"
+      ],
+      "runtime": "runsc",
+      "cpus": 1.0,
+      "mem_limit": "512m",
+      "pids_limit": 256,
+      "image": "${AP_IMAGE_CHECK}",
+      "environment": {
+        "TOKEN": "${AP_CHECK_TOKEN}"
+      },
+      "pull_policy": "never"
+    }
+  },
+  "networks": {
+    "internal": {
+      "internal": true,
+      "driver_opts": {
+        "com.docker.network.bridge.gateway_mode_ipv4": "isolated"
+      }
+    },
+    "egress": {},
+    "page-host": {
+      "driver_opts": {
+        "com.docker.network.bridge.enable_ip_masquerade": "false"
+      }
+    }
+  },
+  "secrets": {
+    "anthropic_api_key": {
+      "file": "${AP_CREDENTIALS_FILE}"
+    }
+  }
+}

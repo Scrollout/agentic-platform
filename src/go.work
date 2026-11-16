@@ -1,0 +1,10 @@
+go 1.26.0
+
+use (
+	./check
+	./cli
+	./engine
+	./page
+	./slice
+	./tests
+)

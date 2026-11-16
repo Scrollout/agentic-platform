@@ -1,0 +1,11 @@
+# The new project's generated server and types (strict server on net/http), from its approved
+# contract api/openapi.yaml: a declaration of the api-feature-go pattern's generate step, which
+# runs oapi-codegen with it in gen/ (gen/generate.go). gen/api.gen.go is never edited by hand.
+package: gen
+generate:
+  std-http-server: true
+  strict-server: true
+  models: true
+output: api.gen.go
+compatibility:
+  always-prefix-enum-values: true

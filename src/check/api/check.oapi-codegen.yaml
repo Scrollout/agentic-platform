@@ -1,0 +1,15 @@
+# The check service's generated server interfaces, client and types (strict server on net/http),
+# from the check contract. scripts/generate.sh writes them to gen/check.gen.go; never edit that
+# file by hand. The engine's machine.Checker uses the client; engine/checksvc serves the server.
+package: gen
+generate:
+  std-http-server: true
+  strict-server: true
+  client: true
+  models: true
+compatibility:
+  always-prefix-enum-values: true
+output-options:
+  overlay:
+    path: check.overlay.yaml
+    strict: true

@@ -1,0 +1,309 @@
+# The full checks on every push (research D41, ADR 0044): one job per scripts/check.sh step and
+# per acceptance suite, each on its own GitHub-hosted runner, then a summary of the run. A first
+# job reads the runner label and the tool versions from src/deploy/images.lock, their one home.
+# Never on pull requests, so a fork's change never runs here. Changing this file needs the
+# owner's Approved-by (scripts/hooks/commit-msg); scripts/tests/test_workflows.py checks its rules.
+name: check
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  config:
+    name: config
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      runner: ${{ steps.pins.outputs.runner }}
+      python: ${{ steps.pins.outputs.python }}
+      go: ${{ steps.pins.outputs.go }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: pins
+        name: Read the CI pins from src/deploy/images.lock
+        run: |
+          pin() { awk -v n="$1" '$1 == n { print $2 }' src/deploy/images.lock; }
+          runner=$(pin ci-runner)
+          python=$(pin ci-python)
+          go=$(pin golang-race | sed 's/^[a-z]*:\([0-9.]*\)-.*/\1/')
+          for v in runner python go; do
+            eval "val=\$$v"
+            [ -n "$val" ] || { echo "config: no $v pin in src/deploy/images.lock" >&2; exit 1; }
+            echo "$v=$val" >>"$GITHUB_OUTPUT"
+          done
+          cat "$GITHUB_OUTPUT"
+
+  py_tests:
+    name: py-tests
+    needs: config
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs:
+      seconds: ${{ steps.run.outputs.seconds }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ needs.config.outputs.python }}
+      - name: Install the pinned Python packages
+        run: python3 -m pip install --require-hashes -r scripts/tools/requirements-ci.txt
+      - name: Install the pinned gVisor
+        run: scripts/ci-gvisor.sh
+      - name: Generated code and module cache
+        run: scripts/check.sh --prepare
+      - name: Build and sign the check and agent images (a key made for this job)
+        run: |
+          COSIGN_PASSWORD=$(openssl rand -hex 32)
+          export COSIGN_PASSWORD
+          src/deploy/build.sh check
+          src/deploy/build.sh agent
+      - id: run
+        name: py-tests
+        run: scripts/ci-step.sh py-tests scripts/check.sh --only py-tests
+
+  layout:
+    name: layout
+    needs: config
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs:
+      seconds: ${{ steps.run.outputs.seconds }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ needs.config.outputs.python }}
+      - name: Install the pinned Python packages
+        run: python3 -m pip install --require-hashes -r scripts/tools/requirements-ci.txt
+      - id: run
+        name: layout
+        run: scripts/ci-step.sh layout scripts/check.sh --only layout
+
+  knowledge:
+    name: knowledge
+    needs: config
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs:
+      seconds: ${{ steps.run.outputs.seconds }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ needs.config.outputs.python }}
+      - name: Install the pinned Python packages
+        run: python3 -m pip install --require-hashes -r scripts/tools/requirements-ci.txt
+      - id: run
+        name: knowledge
+        run: scripts/ci-step.sh knowledge scripts/check.sh --only knowledge
+
+  markdown:
+    name: markdown
+    needs: config
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs:
+      seconds: ${{ steps.run.outputs.seconds }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: run
+        name: markdown
+        run: scripts/ci-step.sh markdown scripts/check.sh --only markdown
+
+  contracts:
+    name: contracts
+    needs: config
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs:
+      seconds: ${{ steps.run.outputs.seconds }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: run
+        name: contracts
+        run: scripts/ci-step.sh contracts scripts/check.sh --only contracts
+
+  contract_diff:
+    name: contract-diff
+    needs: config
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs:
+      seconds: ${{ steps.run.outputs.seconds }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: run
+        name: contract-diff
+        run: scripts/ci-step.sh contract-diff scripts/check.sh --only contract-diff
+
+  gateway:
+    name: gateway
+    needs: config
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs:
+      seconds: ${{ steps.run.outputs.seconds }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: run
+        name: gateway
+        run: scripts/ci-step.sh gateway scripts/check.sh --only gateway
+
+  go:
+    name: go
+    needs: config
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs:
+      seconds: ${{ steps.run.outputs.seconds }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: run
+        name: go
+        run: scripts/ci-step.sh go scripts/check.sh --only go
+
+  docker:
+    name: docker
+    needs: config
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs:
+      seconds: ${{ steps.run.outputs.seconds }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Generated code and module cache
+        run: scripts/check.sh --prepare
+      - name: Install the pinned gVisor
+        run: scripts/ci-gvisor.sh
+      - id: run
+        name: docker
+        run: scripts/ci-step.sh docker scripts/check.sh --only docker
+
+  deps:
+    name: deps
+    needs: config
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs:
+      seconds: ${{ steps.run.outputs.seconds }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Generated code and module cache
+        run: scripts/check.sh --prepare
+      - id: run
+        name: deps
+        run: scripts/ci-step.sh deps scripts/check.sh --only deps
+
+  secrets:
+    name: secrets
+    needs: config
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs:
+      seconds: ${{ steps.run.outputs.seconds }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: run
+        name: secrets
+        run: scripts/ci-step.sh secrets scripts/check.sh --only secrets
+
+  ap_test_planted:
+    name: ap-test-planted
+    needs: config
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 120
+    outputs:
+      seconds: ${{ steps.run.outputs.seconds }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned gVisor
+        run: scripts/ci-gvisor.sh
+      - name: Generated code and module cache
+        run: scripts/check.sh --prepare
+      - id: run
+        name: ap-test-planted
+        run: scripts/ci-step.sh ap-test-planted src/deploy/ap test planted
+
+  ap_test_us2:
+    name: ap-test-us2
+    needs: config
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 120
+    outputs:
+      seconds: ${{ steps.run.outputs.seconds }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned gVisor
+        run: scripts/ci-gvisor.sh
+      - name: Generated code and module cache
+        run: scripts/check.sh --prepare
+      - id: run
+        name: ap-test-us2
+        run: scripts/ci-step.sh ap-test-us2 src/deploy/ap test us2
+
+  summary:
+    name: summary
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs:
+      - config
+      - py_tests
+      - layout
+      - knowledge
+      - markdown
+      - contracts
+      - contract_diff
+      - gateway
+      - go
+      - docker
+      - deps
+      - secrets
+      - ap_test_planted
+      - ap_test_us2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Summary of the run
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 scripts/ci-summary.py
