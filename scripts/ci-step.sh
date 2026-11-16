@@ -32,7 +32,7 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
     if grep -Eq "$results" "$log"; then
       echo; echo '```text'; grep -E "$results" "$log"; echo '```'
     fi
-    echo; echo "Free disk: $(df -h / | tail -n 1 | tr -s ' ')"
+    echo; df -hP / | awk 'NR == 2 { print "Free disk: " $4 " of " $2 }'
     if [ "$rc" -ne 0 ]; then
       echo; echo '<details><summary>Last 40 lines</summary>'; echo; echo '```text'; tail -n 40 "$log"; echo '```'; echo '</details>'
     fi

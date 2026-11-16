@@ -17,7 +17,7 @@ class CiStepSummaryTest(unittest.TestCase):
     def setUp(self):
         self.t = tmpdir(self)
         self.summary = self.t / "summary.md"
-        stubs = gitenv.stub_dir(self, {"df": 'echo "DF-HEADER Filesystem Size Avail"\necho "DF-ROW 14G free"\n'})
+        stubs = gitenv.stub_dir(self, {"df": "echo 'Filesystem Size Used Avail Use% Mounted on'\necho '/dev/root 145G 58G 88G 40% /'\n"})
         self.env = gitenv.with_path(base_env(self, {"GITHUB_STEP_SUMMARY": str(self.summary)}), stubs)
 
     def step(self, script):
@@ -65,10 +65,8 @@ class CiStepSummaryTest(unittest.TestCase):
         for tail in ("", "; exit 1"):
             with self.subTest(tail):
                 _, s = self.step("echo x" + tail)
-                lines = [l for l in s.splitlines() if "DF-" in l]
-                self.assertEqual(len(lines), 1, s)
-                self.assertIn("DF-ROW", lines[0])
-                self.assertLessEqual(len(lines[0]), 80)
+                lines = [l for l in s.splitlines() if "Free disk" in l]
+                self.assertEqual(lines, ["Free disk: 88G of 145G"], s)
                 self.clear()
 
     def test_no_partial_run_warning(self):

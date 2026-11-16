@@ -106,8 +106,12 @@ class CiStepTest(unittest.TestCase):
         self.assertRegex(s, r"\b7\b")
 
     def test_summary_records_the_runners_free_disk(self):
-        self.step("demo", "true")
-        self.assertIn("DF-STUB-ROW", self.text())
+        stubs = gitenv.stub_dir(self, {"df": "echo 'Filesystem Size Used Avail Use% Mounted on'\n"
+                                             "echo '/dev/root 145G 58G 88G 40% /'\n"})
+        env = gitenv.with_path(base_env(self, {"GITHUB_STEP_SUMMARY": str(self.summary),
+                                               "GITHUB_OUTPUT": str(self.output)}), stubs)
+        self.step("demo", "true", env=env)
+        self.assertIn("Free disk: 88G of 145G", self.text().splitlines())
 
     def test_summary_holds_no_timing_table_even_when_the_command_prints_one(self):
         self.step("demo", "sh", "-c", NOISE + "; " + TABLE)
