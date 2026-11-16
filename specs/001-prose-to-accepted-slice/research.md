@@ -1761,7 +1761,7 @@ page, none of which an existing project provides.
   `TestUS2`, so the committed `steps/happy` set and the analyst recordings answer them.
 - **Refusals**: `e2e.sh` exits 3, changing nothing, while a session exists or an
   `agentic-platform` container or network is present (the fixed subnets cannot coexist).
-- **Where it runs**: CI on every push, and on the host with `scripts/check.sh --only e2e`. The
+- **Where it runs**: CI on every push, as its own job; on the host only with `scripts/check.sh --only e2e` (owner, 2026-11-16: a full local run skips it, since the stack is heavy for the shared host). The
   pre-commit hook runs no suite since T108, so D20's "git hooks run them before every commit" no
   longer holds.
 - **Recorded as** [ADR 0047](../../docs/decisions/0047-end-to-end-on-the-compose-stack-with-the-recorded-model.md).
