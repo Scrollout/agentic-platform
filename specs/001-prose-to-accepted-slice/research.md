@@ -1815,11 +1815,18 @@ page, none of which an existing project provides.
   the agents' prompts (public in the repository) and token use; no key (the key reaches only the
   gateway, D41) and no user or tenant data. The repository is public, so any signed-in GitHub user
   can download it while it is kept; that is acceptable for this content. Its retention is the
-  configured retention of this eval data (constitution XI).
+  configured retention of this eval data (constitution XI). GitHub serves artifacts over TLS and
+  stores them encrypted at rest; the owner can delete one before it expires. No tenant or user
+  content can enter, since the inputs are the suites' own fixtures, so per-tenant and per-user
+  erasure does not apply. The report folder is outside `$RUNNER_TEMP`, where the key file is.
+- **Scanned first**: before the upload, the step runs the secret patterns of `scripts/check.sh`'s
+  `secrets` step over the folder and uploads only when none matches (defence in depth; the key
+  never reaches an agent).
 - **Tool**: `actions/upload-artifact` (GitHub's own; MIT; OpenSSF Scorecard 5.5 on 2026-11-09:
   Code-Review 10, Dangerous-Workflow 10, Maintained 3, no signed releases), pinned at v7.0.2 by
   commit `cf430e030ddbb5b0abf93d22962f4752f3646cd9`. No other action uploads and keeps files.
 - **Recorded as** [ADR 0050](../../docs/decisions/0050-failed-eval-jobs-keep-their-outputs.md).
 - Sources: [actions/upload-artifact](https://github.com/actions/upload-artifact);
   [GitHub: workflow artifacts](https://docs.github.com/en/actions/concepts/workflows-and-actions/workflow-artifacts);
+  [GitHub: security of artifact storage](https://docs.github.com/en/actions/reference/security/secure-use);
   [OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/actions/upload-artifact).
