@@ -1746,8 +1746,9 @@ page, none of which an existing project provides.
   (`0`, `400`), approve goals, rules and contract, `build-workers`, `build`, `replay`, `compare`.
   It passes only when every command exits 0, the replay reused every step with no model call,
   `compare` exits 0, the two projects' git trees are equal commit by commit, and the replay
-  server lists no miss. `scripts/check.sh` runs it as the step `e2e` (in a full run and with
-  `--only e2e`; CI runs it as its own job); the `ap-test-us2` and `ap-test-planted` jobs stay.
+  server lists no miss. It is the `scripts/check.sh` step `e2e`: CI runs it as its own job, the
+  host only with `--only e2e`, and a full local run skips it and says so; the `ap-test-us2` and
+  `ap-test-planted` jobs stay.
 - **The seam**: Compose's own override file. When `AP_COMPOSE_OVERRIDE` is set, `ap up` adds that
   one file after `compose.yaml` and keeps it in the session, so every later command uses it; it
   refuses any file outside `src/tests/e2e/` (exit 3) and says on standard error that the model is
