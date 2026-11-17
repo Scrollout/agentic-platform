@@ -9,7 +9,7 @@
 * [Distribution registry](distribution-registry.md) - The CNCF Distribution image registry, run on 127.0.0.1 to hold the platform's built images, their SBOM and provenance attestations, and their signatures.
 * [Docker Agent](docker-agent.md) - The agent runtime the platform is built on; here it runs the analyst as a long-lived serve api service.
 * [git](git.md) - The version control CLI the project worker runs to keep each new project's version history, one commit per accepted step.
-* [go-arch-lint](go-arch-lint.md) - Checks each platform Go module's imports against the components and allowed dependencies its .go-arch-lint.yml declares; an undeclared import or an unmapped package fails scripts/check.sh and the pre-commit hook.
+* [go-arch-lint](go-arch-lint.md) - Checks each platform Go module's imports against the components and allowed dependencies its .go-arch-lint.yml declares; an undeclared import or an unmapped package fails the arch step of scripts/check.sh, run in CI.
 * [go-yaml](go-yaml.md) - The YAML library (go.yaml.in/yaml/v3) the slice model and the engine use to read contracts, patterns and rules.
 * [golang.org/x/mod](x-mod.md) - The Go team's module library; the engine's DependenciesAllowed step check reads a project's go.mod with its modfile package.
 * [gotestsum](gotestsum.md) - Runs go test and writes its results as JUnit XML for the CI job summaries ([research D43](../../specs/001-prose-to-accepted-slice/research.md)); Apache-2.0, OpenSSF Scorecard 3.6 on 2026-10-19.

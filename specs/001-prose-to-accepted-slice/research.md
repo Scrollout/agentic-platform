@@ -1915,7 +1915,7 @@ page, none of which an existing project provides.
   - `py_tests`: every file except `specs/**`, `.specify/**` and `.claude/**`, since some of its
     tests read `docs/` and the root `README.md` (`test_pre_commit_quick.py`, `test_workflows.py`);
   - every other job (`contracts`, `contract_diff`, `gateway`, `go`, `docker`, `ap_test_us2`,
-    `ap_test_planted`, `e2e`): every file except `docs/**`, `specs/**`, `.specify/**`,
+    `ap_test_planted`, `e2e`, and `arch` once T098 adds it): every file except `docs/**`, `specs/**`, `.specify/**`,
     `.claude/**` and Markdown at the root; narrower lists per job are later changes to the
     declaration, not to code.
   - A test that reads a file must run in a job whose paths include that file; a path list is
@@ -1975,3 +1975,16 @@ page, none of which an existing project provides.
   the selectors, `needs` and the tests use them. The run summary shows the display names.
 - **Why**: the owner found ids such as `deps`, `ap-test-us2` and `evals-current` unreadable.
 - Sources: [GitHub: workflow syntax, `jobs.<job_id>.name`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax).
+
+### D54. The module-boundary check runs in CI, not in the pre-commit hook
+
+- **Decision** (owner, 2026-11-17; T098): the `arch` step of `scripts/check.sh` runs in its own
+  `check.yml` job, `arch` ("Module boundaries (go-arch-lint)"), with the code paths of D50; the
+  pre-commit hook does not run it. This supersedes D40's and ADR 0043's run "from the pre-commit
+  hook"; the rest of D40 stands, and `scripts/hooks/commit-msg` still protects the archfiles.
+- **Why**: since T108 the hook keeps only quick static checks and CI judges the rest (ADR 0044),
+  and the hook's tests (`scripts/tests/test_pre_commit_quick.py`) commit Go files into folders no
+  archfile maps, which the step refuses by design (D40: an unmapped package fails), so running it
+  in the hook would change those tests for no gain over the CI job.
+- Sources: [ADR 0043](../../docs/decisions/0043-module-boundaries-checked-by-go-arch-lint.md);
+  [ADR 0044](../../docs/decisions/0044-full-checks-run-on-github-hosted-runners.md).

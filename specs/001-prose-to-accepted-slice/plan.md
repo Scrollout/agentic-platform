@@ -102,6 +102,7 @@ Each decision that outlives this feature has a record in `docs/decisions/`, link
 | A test job whose tests all pass writes no JUnit results table to its summary (`skip_success_summary: true`); a failing one still shows the counts and each failed test; a step that finds no result fails (`require_tests: true`) (owner, 2026-11-17) | D47 | [ADR 0051](../../docs/decisions/0051-a-green-test-report-stays-quiet.md) |
 | A green test job writes no summary at all: the report steps set `job_summary` only when the job has failed (owner, 2026-11-17) | D49 | [ADR 0052](../../docs/decisions/0052-a-green-test-job-writes-no-summary.md) |
 | Each check job runs only when a file it judges changed since the last green `check` run, declared in `.github/check-jobs.yaml`; the analyses on every change always run (owner, 2026-11-17) | D50 | [ADR 0053](../../docs/decisions/0053-check-jobs-run-for-the-files-they-judge.md) |
+| The module-boundary check (`arch`, go-arch-lint) runs in its own `check.yml` job for code changes, not in the pre-commit hook (owner, 2026-11-17; supersedes ADR 0043 in part) | D54 | [ADR 0054](../../docs/decisions/0054-module-boundary-check-runs-in-ci.md) |
 
 ## Threat model
 
