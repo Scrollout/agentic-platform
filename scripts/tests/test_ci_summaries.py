@@ -1,6 +1,7 @@
 """The redesigned CI summaries (T110(b), owner-approved 2026-11-16), written before the scripts.
 
-scripts/ci-step.sh writes a one-line job summary; scripts/ci-summary.py writes one run table.
+scripts/ci-step.sh writes nothing to the job summary (T126, owner-approved 2026-11-17: the run
+table is enough; the output stays in the job's log); scripts/ci-summary.py writes one run table.
 Assumption (owner decision): a failed job's first error line arrives as the job output `error`.
 """
 import json
@@ -22,60 +23,34 @@ class CiStepSummaryTest(unittest.TestCase):
 
     def step(self, script):
         r = run([STEP, "my-job", "sh", "-c", script], env=self.env, cwd=self.t)
-        return r, self.summary.read_text()
+        return r, self.summary.read_text() if self.summary.exists() else ""
 
-    def clear(self):
-        self.summary.unlink()
+    def test_writes_nothing_to_the_summary_on_success_or_failure(self):
+        """T126: no job line, no `ap test` result lines, no last-40-lines section; the log has them."""
+        results = ("echo 'PASS  alpha  ok'; echo 'FAIL  beta  bad'; echo 'planted: 1 of 2'; echo 'us2: 1 of 2'")
+        cases = {"pass": ("echo ok", 0), "fail": ("exit 7", 7), "noise-fail": (NOISE + "; exit 1", 1),
+                 "noise-pass": (NOISE, 0), "results-pass": (NOISE + "; " + results, 0),
+                 "results-fail": (NOISE + "; " + results + "; exit 1", 1),
+                 "partial-run-pass": ("echo 'partial run: only some tests ran'", 0),
+                 "partial-run-fail": ("echo 'warning: not a full run'; exit 1", 1),
+                 "time-table-pass": (NOISE + "; " + TABLE, 0), "time-table-fail": (NOISE + "; " + TABLE + "; exit 1", 1)}
+        for label, (script, code) in cases.items():
+            with self.subTest(label):
+                self.summary.unlink(missing_ok=True)
+                r, s = self.step(script)
+                self.assertEqual(s, "")
+                self.assertEqual(r.returncode, code)
 
-    def test_pass_is_one_line(self):
-        _, s = self.step("echo ok")
-        self.assertRegex(s.splitlines()[0], r"^✅ my-job — \d+ s$")
-        self.assertNotIn("<details>", s)
-        self.assertNotIn("```text\nok", s)
-
-    def test_fail_is_one_line_with_exit_code(self):
-        _, s = self.step("exit 7")
-        self.assertRegex(s.splitlines()[0], r"^❌ my-job — \d+ s, exit 7$")
-
-    def test_last_40_lines_collapsed_only_on_failure(self):
-        _, s = self.step(NOISE + "; exit 1")
-        self.assertIn("<details>", s)
-        self.assertRegex(s, r"noise-100\b")
-        self.assertRegex(s, r"noise-61\b")
-        self.assertNotRegex(s, r"noise-60\b")
-        self.clear()
-        _, s = self.step(NOISE)
-        self.assertNotIn("<details>", s)
-        self.assertNotRegex(s, r"noise-100\b")
-
-    def test_ap_test_result_lines_always(self):
-        body = ("i=1; while [ $i -le 80 ]; do echo pre-$i; i=$((i+1)); done; "
-                "echo 'PASS  alpha  ok'; echo 'FAIL  beta  bad'; echo 'planted: 1 of 2'; "
-                "i=1; while [ $i -le 80 ]; do echo post-$i; i=$((i+1)); done")
-        for tail in ("", "; exit 1"):
-            with self.subTest(tail):
-                _, s = self.step(body + tail)
-                for l in ("PASS  alpha", "FAIL  beta", "planted: 1 of 2"):
-                    self.assertIn(l, s)
-                if not tail:
-                    self.assertNotIn("<details>", s)
-                self.clear()
-
-    def test_no_partial_run_warning(self):
-        for tail in ("", "; exit 1"):
-            with self.subTest(tail):
-                _, s = self.step("echo 'partial run: only some tests ran'; echo 'warning: not a full run'" + tail)
-                body = s.split("<details>")[0]
-                self.assertNotRegex(body, r"(?i)partial|warning|not a full run")
-                self.clear()
-
-    def test_no_time_table(self):
-        for tail in ("", "; exit 1"):
-            with self.subTest(tail):
-                _, s = self.step(NOISE + "; " + TABLE + tail)
-                self.assertNotIn("== time per step", s.split("<details>")[0])
-                self.assertNotIn("12.5  (1.0", s.split("<details>")[0])
-                self.clear()
+    def test_the_outputs_keep_seconds_and_on_failure_error(self):
+        out = self.t / "output.txt"
+        self.env["GITHUB_OUTPUT"] = str(out)
+        self.step("echo ok")
+        self.assertRegex(out.read_text(), r"^seconds=\d+\n$")
+        out.unlink()
+        r, s = self.step("echo 'error: boom'; exit 7")
+        self.assertRegex(out.read_text(), r"^seconds=\d+\nerror=error: boom\n$")
+        self.assertEqual(s, "")
+        self.assertIn("error: boom", r.stdout)
 
 
 class CiRunTableTest(unittest.TestCase):

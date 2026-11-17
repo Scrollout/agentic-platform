@@ -2,6 +2,7 @@
 
 ## 2026-11-17
 
+* **Implementation**: Feature 001, T126: `scripts/ci-step.sh` writes no job summary; the run summary keeps each job's time and first error line.
 * **Implementation**: Feature 001, T125, T119 and T120 done: the analyst-only evals run 44058647176, started by the owner after T125, passed pass^3 on all 15 cases, every trial in one attempt; a dispatch starts only the suites whose inputs changed.
 * **Implementation**: Feature 001, T125: the engine sends every traceability finding of the analyst's proposal back to it within `limits.attempts`; a slice with only broken links after the last attempt is stored with its failed checks (research D48). New tests by a separate author; one existing test changed with the owner's approval.
 * **Planning**: Feature 001, T125 (owner): the engine will send the analyst's broken links back to it, as it does broken text, so an injected instruction that drops the tags is corrected (T119's cause); T126 (owner): CI job summaries go, the run summary stays.
