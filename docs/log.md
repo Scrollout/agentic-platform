@@ -2,6 +2,7 @@
 
 ## 2026-11-17
 
+* **Implementation**: Feature 001, T155 done: evals run 44186514527 on `39ac63d` passed pass^3 in all four suites, the analyst's new revision cases included.
 * **Implementation**: Feature 001, T065 done: the quickstart on the owner's fresh VM from a clone of `39ac63d`; RUN-2 ended `done` on live Haiku in 233 s (SC-007: under 30 minutes), its replay found no difference; quickstart.md corrected (all seven images, a projects folder of mode 755, the run page starts); T165 filed.
 * **Implementation**: Feature 001, T156: the end-to-end job builds the run page and checks it answers through `page-proxy` (owner-approved change to `scripts/e2e.sh`, by a separate test author); `registerWorker` gets an approved Principle IV and XV exception; T065 blocks the MVP, T068 does not (owner).
 * **Review**: Feature 001, T066 round 1 (three fresh read-only reviewers): Phase 10 appended (T155 to T163); T155 (analyst revision and injection evals) and T156 (the run page in the walking skeleton) block the MVP (owner); T021 and T063 reopened; `registerWorker` gets an approved Principle XV exception; documentation findings fixed.
