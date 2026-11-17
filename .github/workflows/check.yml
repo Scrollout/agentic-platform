@@ -6,6 +6,7 @@
 # Never on pull requests, so a fork's change never runs here. Changing this file needs the
 # owner's Approved-by (scripts/hooks/commit-msg); scripts/tests/test_workflows.py checks its rules.
 name: check
+run-name: "check · ${{ github.ref_name }} · ${{ github.event_name == 'workflow_dispatch' && format('started by {0}', github.actor) || github.event.head_commit.message }}"
 
 on:
   push:

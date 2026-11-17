@@ -6,6 +6,7 @@
 # pull requests. Changing this file needs the owner's Approved-by (scripts/hooks/commit-msg);
 # scripts/tests/test_workflows.py checks its rules.
 name: evals
+run-name: "evals · ${{ github.ref_name }} · ${{ inputs.all && 'all suites' || 'changed suites' }} · started by ${{ github.actor }}"
 
 on:
   # Only by hand (research D45, ADR 0048, T120): gh workflow run evals.yml --ref <branch>, with
