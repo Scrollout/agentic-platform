@@ -2,6 +2,7 @@
 
 ## 2026-11-18
 
+* **Tests**: Feature 003, T004 and T005 written by separate test authors (new files only): `scripts/tests/test_build_changed.py` (real BuildKit, `build.sh --changed`, cases (a) to (k)) and `scripts/tests/test_ap_start.py` (the start stub, `ap start` and `--check`); T005 fails 10 of 11 against today's `ap` (the eleventh proves `ap up` unchanged); T004 is seen failing in CI's `py_tests` job (owner, option B).
 * **Implementation**: Feature 003, T003 done (separate test author): a new fixture `scripts/tests/fixtures/start/docker-stub`, a copy of the launcher's stub (unchanged) that also answers `docker info` (runtimes, version), BuildKit's metadata file per image, the certificate, password-hash and fingerprint runs, and a failing `compose up`.
 * **Implementation**: Feature 003, T002 done: build.sh's lock (`take_lock`, `release_lock` and the stale-lock rule) moves unchanged into `src/deploy/lock.sh`, which `build.sh` sources and `ap start` will (research R4); no behaviour change, judged by `test_signing.py`'s lock tests in CI.
 * **Implementation**: Feature 003, T001 done: `src/cli/contract.md` gains "Starting the platform" (`start`, `start --check`, `up`'s remote-access options and lines, `page`'s remote lines); `up` without them is unchanged; the draft in `specs/003-one-command-start/contracts/` is removed. `/speckit-analyze` passed in round 3 (no CRITICAL or HIGH).
