@@ -2,6 +2,7 @@
 
 ## 2026-11-18
 
+* **Specification**: Feature 002 (`specs/002-durable-execution/`), from feature 001's T151: runs and operations survive a platform stop on an adopted durable-execution engine (ADR 0056); two open questions for the owner; N-040 set to `yes` (Principle X); glossary gains Operation, Durable execution and Retry rule.
 * **Review**: Feature 001, T066 done: the final review's round 2 accepted the MVP (check run 44192519916 green, evals run 44186514527 green in all four suites, `okf.py check` OK).
 * **Planning**: Feature 001, T152 done: the 68 open tasks that do not block the MVP moved unchanged to `specs/backlog.md` for the next feature and are closed in `tasks.md`; T151 (adopt Temporal) stays open as the first task after the MVP.
 

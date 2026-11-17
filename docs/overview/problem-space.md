@@ -8,7 +8,7 @@ sources:
   - id: owner
     resource: https://claude.ai/code/session_01P2TmGw3MdjVyoyhGeQK7np
     title: Project owner's answers, 2026-11-11
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-17T22:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-18T09:00:00Z }
 ---
 
 # How to use these tables
@@ -27,7 +27,9 @@ constitution's Principle I makes this the one place needs are stated.
 - **State** is `todo`, `specified`, `in progress` or `done`.
 - Add, split or remove rows freely. This list is a first cut and has gaps.
 
-Every `yes` and `later` on this page was set by the project owner on 2026-11-11.
+Every `yes` and `later` on this page was set by the project owner on 2026-11-11, except N-040,
+set to `yes` by feature 002's spec on 2026-11-18 because constitution Principle X already requires
+it (pending the owner's confirmation).
 
 Feature 001's rows (2026-11-17): `done` where its acceptance tests and the planted suite pass in CI
 (check run 44157173351) and no open task records a gap; `in progress` where the MVP covers only
@@ -84,7 +86,7 @@ N-030 follows from N-002 and N-005: a hosted service serves several organization
 
 | ID | Need | In scope | Prior art | Spec | State |
 |----|------|----------|-----------|------|-------|
-| N-040 | Never silently lose work the platform has accepted | undecided | | | todo |
+| N-040 | Never silently lose work the platform has accepted | yes | | [002](../../specs/002-durable-execution/spec.md) | specified |
 | N-041 | Keep running agents working while management functions are down | undecided | | | todo |
 | N-042 | Show who did what, when, through an audit trail | undecided | | | todo |
 

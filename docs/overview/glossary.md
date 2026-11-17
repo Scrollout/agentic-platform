@@ -20,7 +20,10 @@ sources:
   - id: data-model-001
     resource: ../../specs/001-prose-to-accepted-slice/data-model.md
     title: Feature 001 data model
-generated: { by: claude-code/claude-sonnet-5-5, at: 2026-11-13T12:00:00Z }
+  - id: spec-002
+    resource: ../../specs/002-durable-execution/spec.md
+    title: Feature 002 specification, Key Entities
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-18T09:00:00Z }
 ---
 
 # Knowledge bundle terms
@@ -73,3 +76,15 @@ These terms come from the Feature 001 specification and data model.
 | Hand-over | The end of a run the platform could not finish within its attempts, review rounds or budgets, after which the developer takes the work over. It has three forms: the spec says a run is "handed over", the data model's outcome is `handed-over`, and the terminal client's command is `take-over`. |
 
 Sources: [Feature 001 specification](../../specs/001-prose-to-accepted-slice/spec.md); [Feature 001 data model](../../specs/001-prose-to-accepted-slice/data-model.md).
+
+# Feature 002 terms
+
+These terms come from the Feature 002 specification.
+
+| Term | Meaning |
+|------|---------|
+| Operation | A state-changing request the platform accepted, followed by its identifier until it ends succeeded, failed or cancelled. |
+| Durable execution | Running a multi-step process so that its progress survives a stop of whatever runs it: each finished step is recorded, and after a restart the process continues after the last one, never repeating it. |
+| Retry rule | The one declaration of how a failed call is retried: how many times, how long to wait, the jitter and the longest wait. |
+
+Sources: [Feature 002 specification](../../specs/002-durable-execution/spec.md).
