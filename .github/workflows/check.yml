@@ -5,7 +5,7 @@
 # job reads the runner label and the tool versions from src/deploy/images.lock, their one home.
 # Never on pull requests, so a fork's change never runs here. Changing this file needs the
 # owner's Approved-by (scripts/hooks/commit-msg); scripts/tests/test_workflows.py checks its rules.
-name: check
+name: Tests and checks
 
 on:
   push:
@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   config:
-    name: config
+    name: "Plan the run (choose jobs)"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # actions: read lists this workflow's runs, to find the branch's last green one (T117).
@@ -70,7 +70,7 @@ jobs:
           python3 scripts/ci-check-select.py
 
   py_tests:
-    name: py-tests
+    name: "Script and hook tests (Python)"
     needs: config
     if: contains(fromJSON(needs.config.outputs.jobs), 'py_tests')
     runs-on: ${{ needs.config.outputs.runner }}
@@ -120,7 +120,7 @@ jobs:
           job_summary: ${{ job.status != 'success' }}
 
   layout:
-    name: layout
+    name: "Repository layout"
     needs: config
     runs-on: ${{ needs.config.outputs.runner }}
     timeout-minutes: 90
@@ -141,7 +141,7 @@ jobs:
         run: scripts/ci-step.sh layout scripts/check.sh --only layout
 
   knowledge:
-    name: knowledge
+    name: "Documentation (knowledge bundle)"
     needs: config
     if: contains(fromJSON(needs.config.outputs.jobs), 'knowledge')
     runs-on: ${{ needs.config.outputs.runner }}
@@ -163,7 +163,7 @@ jobs:
         run: scripts/ci-step.sh knowledge scripts/check.sh --only knowledge
 
   markdown:
-    name: markdown
+    name: "Markdown style"
     needs: config
     if: contains(fromJSON(needs.config.outputs.jobs), 'markdown')
     runs-on: ${{ needs.config.outputs.runner }}
@@ -180,7 +180,7 @@ jobs:
         run: scripts/ci-step.sh markdown scripts/check.sh --only markdown
 
   contracts:
-    name: contracts
+    name: "API contracts lint"
     needs: config
     if: contains(fromJSON(needs.config.outputs.jobs), 'contracts')
     runs-on: ${{ needs.config.outputs.runner }}
@@ -197,7 +197,7 @@ jobs:
         run: scripts/ci-step.sh contracts scripts/check.sh --only contracts
 
   contract_diff:
-    name: contract-diff
+    name: "API breaking changes"
     needs: config
     if: contains(fromJSON(needs.config.outputs.jobs), 'contract_diff')
     runs-on: ${{ needs.config.outputs.runner }}
@@ -215,7 +215,7 @@ jobs:
         run: scripts/ci-step.sh contract-diff scripts/check.sh --only contract-diff
 
   gateway:
-    name: gateway
+    name: "Model gateway config"
     needs: config
     if: contains(fromJSON(needs.config.outputs.jobs), 'gateway')
     runs-on: ${{ needs.config.outputs.runner }}
@@ -232,7 +232,7 @@ jobs:
         run: scripts/ci-step.sh gateway scripts/check.sh --only gateway
 
   go:
-    name: go
+    name: "Go unit tests and vet"
     needs: config
     if: contains(fromJSON(needs.config.outputs.jobs), 'go')
     runs-on: ${{ needs.config.outputs.runner }}
@@ -266,7 +266,7 @@ jobs:
           job_summary: ${{ job.status != 'success' }}
 
   docker:
-    name: docker
+    name: "Service tests with Docker (recorded model)"
     needs: config
     if: contains(fromJSON(needs.config.outputs.jobs), 'docker')
     runs-on: ${{ needs.config.outputs.runner }}
@@ -304,7 +304,7 @@ jobs:
           job_summary: ${{ job.status != 'success' }}
 
   deps:
-    name: deps
+    name: "Dependencies and licences"
     needs: config
     runs-on: ${{ needs.config.outputs.runner }}
     timeout-minutes: 90
@@ -322,7 +322,7 @@ jobs:
         run: scripts/ci-step.sh deps scripts/check.sh --only deps
 
   secrets:
-    name: secrets
+    name: "Secret scan"
     needs: config
     runs-on: ${{ needs.config.outputs.runner }}
     timeout-minutes: 90
@@ -338,7 +338,7 @@ jobs:
         run: scripts/ci-step.sh secrets scripts/check.sh --only secrets
 
   ap_test_planted:
-    name: ap-test-planted
+    name: "Acceptance: planted defects are stopped"
     needs: config
     if: contains(fromJSON(needs.config.outputs.jobs), 'ap_test_planted')
     runs-on: ${{ needs.config.outputs.runner }}
@@ -359,7 +359,7 @@ jobs:
         run: scripts/ci-step.sh ap-test-planted src/deploy/ap test planted
 
   ap_test_us2:
-    name: ap-test-us2
+    name: "Acceptance: Story 2, slice to accepted change"
     needs: config
     if: contains(fromJSON(needs.config.outputs.jobs), 'ap_test_us2')
     runs-on: ${{ needs.config.outputs.runner }}
@@ -380,7 +380,7 @@ jobs:
         run: scripts/ci-step.sh ap-test-us2 src/deploy/ap test us2
 
   e2e:
-    name: e2e
+    name: "End-to-end: full stack in Compose"
     needs: config
     if: contains(fromJSON(needs.config.outputs.jobs), 'e2e')
     runs-on: ${{ needs.config.outputs.runner }}
@@ -409,7 +409,7 @@ jobs:
   # compares this commit with the last green evals run on a dev branch that is its ancestor. A
   # notice on the feature branch; on main it fails while a suite is pending. Runs on every push.
   evals-current:
-    name: evals-current
+    name: "Agent evals up to date"
     needs: config
     runs-on: ${{ needs.config.outputs.runner }}
     timeout-minutes: 10
@@ -442,7 +442,7 @@ jobs:
           scripts/ci-step.sh evals-current python3 scripts/ci-evals-select.py
 
   summary:
-    name: summary
+    name: "Run summary"
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -470,4 +470,5 @@ jobs:
       - name: Summary of the run
         env:
           NEEDS: ${{ toJSON(needs) }}
+          WORKFLOW: .github/workflows/check.yml
         run: python3 scripts/ci-summary.py

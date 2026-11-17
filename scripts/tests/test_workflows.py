@@ -578,9 +578,9 @@ def judge_fetch_depth(root):
             deep = any(str((st.get("with") or {}).get("fetch-depth")) == "0"
                        for st in job.get("steps") or [])
             key = jn.replace("_", "-")
-            if deep and key not in need and job.get("name") not in need:
+            if deep and key not in need:
                 v.append(f"{name} job {jn} has fetch-depth: 0 but needs no history")
-            if not deep and name == "check.yml" and (key in need or job.get("name") in need):
+            if not deep and name == "check.yml" and key in need:
                 v.append(f"{name} job {jn} needs history (fetch-depth: 0)")
     return v
 

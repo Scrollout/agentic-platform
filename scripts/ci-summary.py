@@ -11,10 +11,30 @@ job's output `jobs` (the JSON list of the jobs scripts/ci-check-select.py chose,
 D50) does not name it counts as passed, with a row that says so; without that list, every skipped
 job fails. The table goes to
 $GITHUB_STEP_SUMMARY, or to standard output without it. Exits 1 unless every job succeeded.
+Each row shows the job's display name from the workflow file that WORKFLOW names (T133, research
+D53), or its id when WORKFLOW is unset or the job has no name.
 """
 import json
 import os
+import re
 import sys
+
+
+def display_names():
+    """Job id to display name, from the workflow file WORKFLOW names; {} without it.
+
+    It reads only the `  <id>:` lines and the `    name:` line right under each, with the
+    standard library, so the summary needs no package and still runs when config failed.
+    A missing or unreadable file gives {}: every row then shows the job id.
+    """
+    path = os.environ.get("WORKFLOW", "")
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return {}
+    pairs = re.findall(r"^  ([A-Za-z0-9_-]+):\n    name: (.+)$", text, re.M)
+    return {j: n.strip().strip('"').strip("'") for j, n in pairs}
 
 
 def selected(needs):
@@ -32,15 +52,17 @@ def selected(needs):
 def main() -> int:
     needs = json.loads(os.environ.get("NEEDS", "{}"))
     chosen = selected(needs)
+    names = display_names()
     rows_ok, rows_skipped, rows_bad = [], [], []
-    for job, info in needs.items():
+    for jid, info in needs.items():
+        job = names.get(jid, jid)
         result = info.get("result", "unknown")
         outputs = info.get("outputs") or {}
         seconds = str(outputs.get("seconds") or "")
         took = f"{seconds} s" if seconds.isdigit() else "—"
         if result == "success":
             rows_ok.append(f"| ✅ | {job} | {took} | |")
-        elif result == "skipped" and chosen is not None and job not in chosen:
+        elif result == "skipped" and chosen is not None and jid not in chosen:
             rows_skipped.append(f"| ⏭️ | {job} (skipped: nothing it judges changed) | — | |")
         else:
             err = (str(outputs.get("error") or "").splitlines() or [""])[0].replace("|", "\\|")

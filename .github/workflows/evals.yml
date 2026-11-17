@@ -5,7 +5,7 @@
 # the secret ANTHROPIC_API_KEY of the environment dev and reaches only the evals job. Never on
 # pull requests. Changing this file needs the owner's Approved-by (scripts/hooks/commit-msg);
 # scripts/tests/test_workflows.py checks its rules.
-name: evals
+name: "Agent evals (paid, started by hand)"
 run-name: "evals · ${{ github.ref_name }} · ${{ inputs.all && 'all suites' || 'changed suites' }} · started by ${{ github.actor }}"
 
 on:
@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   config:
-    name: config
+    name: "Choose eval suites"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # actions: read lists this workflow's runs, to find the branch's last successful one (T115).
@@ -82,7 +82,7 @@ jobs:
           if [ "$matrix" = "[]" ]; then echo "No eval suite's inputs changed since the last green evals run; the evals job is skipped (all=true runs every suite)." >>"$GITHUB_STEP_SUMMARY"; fi
 
   evals:
-    name: evals (${{ matrix.suite }}${{ matrix.cases && format(' {0}', matrix.cases) || '' }})
+    name: "Evals: ${{ matrix.suite }}${{ matrix.cases && format(' {0}', matrix.cases) || '' }}"
     needs: config
     if: needs.config.outputs.matrix != '[]'
     runs-on: ${{ needs.config.outputs.runner }}
