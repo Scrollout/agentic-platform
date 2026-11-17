@@ -2,6 +2,7 @@
 
 ## 2026-11-17
 
+* **Implementation**: Feature 001, T129: the JUnit report steps write the job summary only when the job failed, so a green test job has no summary. New tests by a separate author.
 * **Decision**: Each check job runs only when a file it judges changed (owner, 2026-11-17; research D50, [ADR 0053](/decisions/0053-check-jobs-run-for-the-files-they-judge.md), superseding ADR 0044's every step on every push; T117); every CI run gets a name that says what it judges (D51, T128).
 * **Decision**: A green test job writes no summary at all (owner, 2026-11-17; research D49, [ADR 0052](/decisions/0052-a-green-test-job-writes-no-summary.md)): the JUnit report steps write the job summary only when the job failed (T129).
 * **Implementation**: Feature 001, T126: `scripts/ci-step.sh` writes no job summary; the run summary keeps each job's time and first error line.
