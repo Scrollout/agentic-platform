@@ -1872,3 +1872,20 @@ page, none of which an existing project provides.
   eval's output and `report.json`, so an answer that needed a second attempt remains visible.
 - Sources: `src/engine/slices/service.go` (`propose`, `unusable`); `src/slice/trace.go`;
   evals runs 43969653100, 43977860199, 44038977132 and 44044430905.
+
+### D49. A green test job writes no summary at all
+
+- **Decision** (owner, 2026-11-17): the `go`, `docker` and `py-tests` report steps of
+  `.github/workflows/check.yml` set `job_summary: ${{ job.status != 'success' }}`, so
+  `mikepenz/action-junit-report` writes to the job's summary only when the job has failed. With
+  D47's `skip_success_summary` alone a green job still got a summary holding only the action's
+  separator line, which GitHub shows as an empty summary (run 44061592726). `skip_success_summary`
+  and `require_tests` stay: a step that finds no result still fails, and a failing job still
+  shows the counts and each failed test. This replaces D47's "only a separator" for green jobs.
+- **Evidence**: at the pinned commit the action writes the summary only when its `job_summary`
+  input is `true` (`src/main.ts`); `attachSummary` always adds a separator and writes
+  (`src/annotator.ts`); the `job` context is available in a step's `with` and `job.status` is the
+  job's current status, `success`, `failure` or `cancelled` (GitHub Actions contexts reference).
+- **Recorded as** [ADR 0052](../../docs/decisions/0052-a-green-test-job-writes-no-summary.md).
+- Sources: [action-junit-report at v6.7.1](https://github.com/mikepenz/action-junit-report/tree/a16be3a69023e9bd7e748ede768b3282ea7b30ce);
+  [GitHub Actions: contexts reference](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts).

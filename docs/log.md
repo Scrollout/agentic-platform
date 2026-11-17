@@ -2,6 +2,7 @@
 
 ## 2026-11-17
 
+* **Decision**: A green test job writes no summary at all (owner, 2026-11-17; research D49, [ADR 0052](/decisions/0052-a-green-test-job-writes-no-summary.md)): the JUnit report steps write the job summary only when the job failed (T129).
 * **Implementation**: Feature 001, T126: `scripts/ci-step.sh` writes no job summary; the run summary keeps each job's time and first error line.
 * **Implementation**: Feature 001, T125, T119 and T120 done: the analyst-only evals run 44058647176, started by the owner after T125, passed pass^3 on all 15 cases, every trial in one attempt; a dispatch starts only the suites whose inputs changed.
 * **Implementation**: Feature 001, T125: the engine sends every traceability finding of the analyst's proposal back to it within `limits.attempts`; a slice with only broken links after the last attempt is stored with its failed checks (research D48). New tests by a separate author; one existing test changed with the owner's approval.
