@@ -15,7 +15,7 @@ sources:
   - id: nginx-docs
     resource: https://nginx.org/en/docs/
     title: nginx documentation
-generated: { by: claude-code/claude-sonnet-5-5, at: 2026-11-13T12:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-18T12:00:00Z }
 ---
 
 # Responsibility
@@ -23,7 +23,10 @@ generated: { by: claude-code/claude-sonnet-5-5, at: 2026-11-13T12:00:00Z }
 Two roles, both the official `nginx` image with templates only. The **model gateway** gives agent
 containers access to the Anthropic Messages API without their holding the provider key, and refuses
 everything else. The **page forwarder** is a static nginx that alone publishes the run page's
-port on 127.0.0.1. Licence BSD-2, OpenSSF Scorecard 7.9 (research D22).
+port on 127.0.0.1. With `ap up --listen` (feature 003, [ADR 0062](/decisions/0062-run-page-reached-remotely-over-tls-behind-a-sign-in-secret.md)) the
+forwarder also serves the page to other machines over TLS behind a sign-in secret, rate-limited
+and limited to the given names ([access control reference](/references/nginx-access-control.md)).
+Licence BSD-2, OpenSSF Scorecard 7.9 (research D22).
 
 Sources: [Feature 001 research](../../specs/001-prose-to-accepted-slice/research.md), [Model gateway README](../../src/deploy/gateway/README.md).
 

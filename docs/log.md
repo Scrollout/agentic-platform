@@ -2,6 +2,7 @@
 
 ## 2026-11-18
 
+* **Planning**: Feature 003 plan (`/speckit-plan`): `ap up` builds only the images whose reproducible candidate digest changed and asks for the signing password once ([ADR 0061](/decisions/0061-up-builds-only-changed-images-by-reproducible-digest.md)); `ap up --listen` serves the run page to other machines through the pinned nginx over TLS behind a sign-in secret ([ADR 0062](/decisions/0062-run-page-reached-remotely-over-tls-behind-a-sign-in-secret.md)); references for BuildKit reproducible builds and nginx access control; both proven by experiments on the host.
 * **Specification**: Feature 003 (`specs/003-one-command-start/`), owner: one command takes a fresh clone to a started platform, building, signing and verifying only what changed, with defaults for the key file and projects folder and named prerequisites (constitution XVII, XVIII); the signing key's password is asked once per start that builds (owner); User Story 4 lets the developer reach the run page from another machine as an explicit, recorded choice, encrypted and behind a sign-in secret (owner).
 * **Review**: Feature 001, T066 done: the final review's round 2 accepted the MVP (check run 44192519916 green, evals run 44186514527 green in all four suites, `okf.py check` OK).
 * **Planning**: Feature 001, T152 done: the 68 open tasks that do not block the MVP moved unchanged to `specs/backlog.md` for the next feature and are closed in `tasks.md`; T151 (adopt Temporal) stays open as the first task after the MVP.
