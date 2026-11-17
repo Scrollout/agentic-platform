@@ -173,9 +173,9 @@ The rationale the earlier text held (building inside `ap up`) is kept in R1's Re
 
 - **Decision**: the terminal contract `src/cli/contract.md` (the authoritative copy) gains `start`
   (options, defaults, steps, `--check`, its lines and exit codes) and `up`'s remote options and
-  lines, and `page`'s remote lines; `up` without the new options is unchanged. The draft is
-  [contracts/terminal-start.md](contracts/terminal-start.md), merged into `src/cli/contract.md`
-  before any code. New tests go in new files by a separate author, as [tasks.md](tasks.md) lists
+  lines, and `page`'s remote lines; `up` without the new options is unchanged. The draft was
+  merged into [`src/cli/contract.md`, "Starting the platform"](../../src/cli/contract.md#starting-the-platform)
+  before any code (T001), and removed. New tests go in new files by a separate author, as [tasks.md](tasks.md) lists
   them; new stub behaviour goes in a new fixture, `scripts/tests/fixtures/start/docker-stub`, never
   in the launcher's existing stub (analyze I2).
 - **Existing tests**: none changes. `ap up`'s behaviour without the new options, the launcher's

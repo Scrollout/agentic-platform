@@ -3,7 +3,7 @@
 **Input**: Design documents from `specs/003-one-command-start/`
 
 **Prerequisites**: [plan.md](plan.md), [spec.md](spec.md), [research.md](research.md),
-[data-model.md](data-model.md), [contracts/terminal-start.md](contracts/terminal-start.md),
+[data-model.md](data-model.md), [terminal contract](../../src/cli/contract.md#starting-the-platform),
 [quickstart.md](quickstart.md)
 
 **Tests**: Required. Contract-first and Outside-in put the contract and failing tests before code;
@@ -38,13 +38,13 @@ option B; ADR 0063).
   files, judging the CI run; at most 3 rounds (Review converges). Then `/speckit-converge` for the
   story.
 - **Gate**: `/speckit-analyze` (fresh reviewer) must report no CRITICAL or HIGH before T001, and
-  again after any change to spec, plan, tasks or a design artifact.
+  again after any change to spec, plan, tasks or a design artifact. Passed on 2026-11-18 in round 3 (fresh Sonnet reviewer; round 1: 2 CRITICAL, 3 HIGH, fixed with the owner's option B; round 2: 3 LOW, fixed; round 3: 1 LOW, fixed).
 
 ---
 
 ## Phase 1: Setup (contract first)
 
-- [ ] T001 Move the reviewed draft [contracts/terminal-start.md](contracts/terminal-start.md) into the authoritative terminal contract `src/cli/contract.md`: add `start` to the launcher's own commands (options, defaults, its five steps, `--check`, its lines and exit codes), add `up`'s remote-access options, refusals and lines and `page`'s remote lines, keep every other paragraph and `up`'s behaviour without the new options word for word; then delete `specs/003-one-command-start/contracts/terminal-start.md` and point every link to it (in `plan.md`, `research.md`, `data-model.md`, `quickstart.md` and `tasks.md`) at `src/cli/contract.md`; `python3 scripts/okf.py check` and the markdown hook pass; commit alone, before any code (Contract-first)
+- [x] T001 Move the reviewed draft `contracts/terminal-start.md` into the authoritative terminal contract `src/cli/contract.md`: add `start` to the launcher's own commands (options, defaults, its five steps, `--check`, its lines and exit codes), add `up`'s remote-access options, refusals and lines and `page`'s remote lines, keep every other paragraph and `up`'s behaviour without the new options word for word; then delete `specs/003-one-command-start/contracts/terminal-start.md` and point every link to it (in `plan.md`, `research.md`, `data-model.md`, `quickstart.md` and `tasks.md`) at `src/cli/contract.md`; `python3 scripts/okf.py check` and the markdown hook pass; commit alone, before any code (Contract-first)
 
 ---
 

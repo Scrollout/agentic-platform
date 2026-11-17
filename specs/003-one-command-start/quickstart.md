@@ -3,7 +3,7 @@
 Proves the feature end to end on a machine with Docker 28 or later and gVisor installed once
 ([install guide](../../docs/guides/install-gvisor.md)), and a model key in
 `~/.config/agentic-platform/anthropic_api_key` (mode 600). Commands run from the repository root.
-The terminal behaviour is in [the contract draft](contracts/terminal-start.md); the files are in
+The terminal behaviour is in [the terminal contract](../../src/cli/contract.md#starting-the-platform); the files are in
 [the data model](data-model.md).
 
 ## 1. One command from a fresh clone (User Story 1)

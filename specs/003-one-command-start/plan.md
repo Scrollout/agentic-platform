@@ -68,7 +68,7 @@ this feature adds none.*
 | XII. Tenant isolation | Not applicable | One developer |
 | XIII. Secure supply chain | Pass | No new pin; images built from pinned sources, signed, with SBOM and provenance, as before |
 | XIV. Safe defaults | Pass | Remote access off by default, an explicit and recorded choice when on; rate-limited; a failed check stops `up` before anything starts |
-| XV. Compatible public APIs | Pass | The terminal contract grows additively ([draft](contracts/terminal-start.md)); every existing command line keeps its meaning |
+| XV. Compatible public APIs | Pass | The terminal contract grows additively ([terminal contract](../../src/cli/contract.md#starting-the-platform)); every existing command line keeps its meaning |
 | XVI. Human control | Pass (feature 001's exception unchanged) | `src/deploy/`, `scripts/` and tests are protected paths needing the owner's `Approved-by:` |
 | XVII. Declare, derive, converge | Pass | `start` converges images and the platform in one command, safe to repeat, with no order of steps to know, and `start --check` shows the difference without changing anything (R7); build.sh remains the one engine for an image, `lock.sh` the one lock rule |
 | XVIII. Abstractions say what | Pass | `start`'s options are about the key, the projects and remote access; images, signing and generation leave the developer's interface; `up` stays as the lower command CI and tests use |
@@ -116,8 +116,6 @@ specs/003-one-command-start/
 ├── research.md          # Phase 0
 ├── data-model.md        # Phase 1
 ├── quickstart.md        # Phase 1
-├── contracts/
-│   └── terminal-start.md # draft of the terminal contract change, moved into src/cli/contract.md
 ├── checklists/
 │   └── requirements.md
 └── tasks.md             # /speckit-tasks

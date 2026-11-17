@@ -2,6 +2,7 @@
 
 ## 2026-11-18
 
+* **Implementation**: Feature 003, T001 done: `src/cli/contract.md` gains "Starting the platform" (`start`, `start --check`, `up`'s remote-access options and lines, `page`'s remote lines); `up` without them is unchanged; the draft in `specs/003-one-command-start/contracts/` is removed. `/speckit-analyze` passed in round 3 (no CRITICAL or HIGH).
 * **Planning**: Feature 003, `/speckit-analyze` round 1 (fresh reviewer): 2 CRITICAL, 3 HIGH, 9 MEDIUM, 4 LOW; the owner chose a new `ap start` with `ap up` unchanged ([ADR 0063](/decisions/0063-ap-start-is-the-start-command-ap-up-unchanged.md), superseding ADR 0061 in part), `ap start --check` added (XVII); spec, plan, research, data model, contract draft, quickstart and tasks revised.
 * **Documentation**: `README.md` rewritten for visitors to the repository: the problem, how it works, its status in one line, where to try it and how to contribute (owner).
 * **Planning**: Feature 003 plan (`/speckit-plan`): `ap up` builds only the images whose reproducible candidate digest changed and asks for the signing password once ([ADR 0061](/decisions/0061-up-builds-only-changed-images-by-reproducible-digest.md)); `ap up --listen` serves the run page to other machines through the pinned nginx over TLS behind a sign-in secret ([ADR 0062](/decisions/0062-run-page-reached-remotely-over-tls-behind-a-sign-in-secret.md)); references for BuildKit reproducible builds and nginx access control; both proven by experiments on the host.
