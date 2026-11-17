@@ -23,7 +23,7 @@ sources:
   - id: adr-0039
     resource: /decisions/0039-review-findings-confirmed-by-a-new-witness-test.md
     title: "ADR 0039: A blocking review finding is confirmed by a new failing witness test the review writes"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-17T21:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-17T21:30:00Z }
 ---
 
 # Context
@@ -38,7 +38,9 @@ Agents run on [Docker Agent](/references/docker-agent.md)
 ([ADR 0002](/decisions/0002-build-on-docker-agent.md)); interactive clients will share sessions
 through the [Agent Host Protocol](/references/agent-host-protocol.md)
 ([ADR 0003](/decisions/0003-ahp-client-session-protocol.md)). Feature 001 builds one slice of the
-platform on one machine ([ADR 0026](/decisions/0026-deterministic-workflow-engine.md)).
+platform on one machine ([ADR 0026](/decisions/0026-deterministic-workflow-engine.md)). Its durable
+execution (resume, checkpoints, retries, run history, the job queue) is the engine's own for the
+MVP; after the MVP it moves to Temporal ([ADR 0056](/decisions/0056-durable-execution-custom-for-the-mvp-temporal-after.md)).
 
 Shipped by Story 1:
 

@@ -2,6 +2,8 @@
 
 ## 2026-11-17
 
+* **Implementation**: Feature 001, T135 done: check run 44157173351 on `ace43ce` green, every job, the planted suite included.
+* **Decision**: The MVP keeps its own durable execution (step machine, run store, job queue), an approved Principle VI exception; the first task after the MVP (T151) adopts Temporal for it (owner, 2026-11-17; research D56, [ADR 0056](/decisions/0056-durable-execution-custom-for-the-mvp-temporal-after.md), [Temporal reference](/references/temporal.md)).
 * **Planning**: Feature 001, `/speckit-analyze` on T150 (fresh reviewer): no CRITICAL or HIGH finding; T135's planted out-of-scope case moved to T150 (owner, 2026-11-17), T150 placed in Phase 8 with `[US2]`, its reused-fix case states the expected `round_scope.changed_lines`.
 * **Implementation**: Feature 001, T135: in a review round after the first, NoBlockingFindingOpen keeps a confirmed finding blocking only within the round's scope (`checks.WithinRoundScope`), the check service refuses a missing or misplaced `round_scope` with 400, and the engine sends the round's open findings and the fix's changed lines (research D55, ADR 0055); the planted non-converging review's fixes now change the lines the next round's findings name (owner-approved). Tests by a separate author.
 * **Decision**: In a review round after the first, a confirmed finding blocks only when it repeats an open finding the round was given or sits on a line the fix before the round changed; NoBlockingFindingOpen applies it from the check request's new `round_scope` (owner, `/speckit-clarify`, 2026-11-17; FR-017, US2/AC6, research D55, [ADR 0055](/decisions/0055-a-later-review-round-blocks-only-within-its-scope.md); T135).

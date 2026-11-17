@@ -24,6 +24,7 @@ fresh review round 1.
 | S14 | RFC 8785, JSON Canonicalization Scheme |
 | S15 | [Sigstore cosign `sign`](https://github.com/sigstore/cosign/blob/main/doc/cosign_sign.md) and [`verify`](https://github.com/sigstore/cosign/blob/main/doc/cosign_verify.md) references; [Docker: DCT retirement and migration guidance](https://www.docker.com/blog/docker-content-trust-retirement-and-migration-guidance/) ("Digest pinning verifies content integrity ... it does not by itself prove publisher identity"); [CNCF Distribution: deploying a registry](https://distribution.github.io/distribution/about/deploying/) |
 | S16 | Experiment, 2026-11-12, in the session scratchpad: `registry:3` on 127.0.0.1 plus `ghcr.io/sigstore/cosign/cosign:v3.1.4` (by digest) in containers; results in D24 |
+| S17 | OSS check of durable execution, 2026-11-17: OpenSSF Scorecard API and `gh api` for temporalio/temporal, temporalio/sdk-go, dbos-inc/dbos-transact-golang, riverqueue/river and cenkalti/backoff; [Temporal reference](../../docs/references/temporal.md); results in D56 |
 
 ## Decisions
 
@@ -120,6 +121,8 @@ fresh review round 1.
 - **Rationale**: FR-018 to FR-020, SC-005, SC-006; agent output differs between runs while fixed
   inputs give identical generation (S3), so reuse is what makes a replay identical.
 - **Alternatives**: SQLite (not needed for one writer); a durable-execution engine (for hosting).
+  Neither was evaluated as Principle VI requires until D56 (2026-11-17), which keeps these files
+  for the MVP and moves run history to Temporal after it.
 - **Follow-up**: record the store format in a decision record.
 
 ### D9. Model access through an nginx gateway; Haiku; no other egress
@@ -278,7 +281,9 @@ fresh review round 1.
 | go-arch-lint | MIT | 4.7 (2026-10-19) | the module-boundary check (D40); low score, built from source by the checksum database and a pinned module hash; watch |
 
 Custom code is limited to the engine, its checks, the slice model, the terminal client and the run
-page, none of which an existing project provides.
+page, none of which an existing project provides. Corrected 2026-11-17 (D56): the engine's durable
+execution (resume, checkpoints, retries, timeouts), its run store and its job queue are a
+capability that durable-execution engines provide; they were not evaluated until D56.
 
 ### D23. Event names
 
@@ -2023,3 +2028,39 @@ page, none of which an existing project provides.
   finding of an open rule at another line of the same file still blocks.
 - Sources: constitution 2.2.0, Engineering Principles, Review converges; D11; D35; D39;
   `src/engine/machine/drive.go` (`review`, `recordedFindings`).
+
+### D56. Durable execution: the custom engine for the MVP, Temporal after it
+
+- **Decision** (owner, 2026-11-17): the MVP keeps its own durable execution: the step machine's
+  resume, checkpoints, retries and timeouts (`src/engine/machine`), the run store
+  (`src/engine/store`) and the job queue behind operations (`src/engine/api/operations.go`).
+  The first task after the MVP (T151) adopts Temporal for these, with the engine's checks, review
+  rules, reuse keys, slices and artifacts as its workflow and activities. Until then the retry
+  waits keep their three hand-written forms (`api/operations.go`, `machine/drive.go`,
+  `cli/runs.go`).
+- **Why**: Principle VI says custom code for a capability OSS covers needs a written
+  justification, and this one had none: D8 and D21 set durable-execution engines aside without
+  an evaluation. The evaluation (S17), on 2026-11-17:
+
+  | Project | Licence | Scorecard | Health | Store it needs |
+  |---------|---------|-----------|--------|----------------|
+  | Temporal server | MIT | 6.1 | v1.32.2 (2026-11-02), commits daily | PostgreSQL, MySQL or SQLite (persistence and visibility) |
+  | Temporal Go SDK | MIT | 7.0 | v1.51.0 (2026-11-10) | — |
+  | DBOS Transact Go | MIT | not published | v1.8.0 (2026-10-28), younger | PostgreSQL |
+  | River (job queue only) | MPL-2.0 | 6.2 | v0.51.2 (2026-11-09) | PostgreSQL or SQLite |
+  | cenkalti/backoff (retries only) | MIT | 5.5 | active | — |
+
+  Temporal covers all three parts in one project, has the highest Scorecard and the largest
+  community, and runs self-hosted in Compose and offline (its Compose examples are in
+  `temporalio/samples-server`). The MVP keeps its own because the engine is built, tested and
+  green in CI (run 44157173351), and moving now would rewrite `machine` (about 1,800 lines and
+  most of its tests, each test change needing the owner's approval) and add a Temporal server and
+  a database to a small host before the MVP is accepted.
+- **Rejected**: adopting Temporal before the MVP (the rewrite above, owner); DBOS Transact Go (no
+  published Scorecard, younger, a PostgreSQL server); River plus a store plus a retry library
+  (three projects for what Temporal does in one, and no durable step history).
+- **Stated limits**: Temporal's defaults cap a payload at 2 MB and a run's history at 50 MB or
+  51,200 events, so artifacts travel by hash, not inside Temporal (Reliable events: large payloads
+  by reference). The retries' three forms break "Single owner for rules" until T151.
+- Sources: S17; [Temporal reference](../../docs/references/temporal.md); constitution 2.2.0,
+  Principle VI; D8; D21; ADR 0026.
