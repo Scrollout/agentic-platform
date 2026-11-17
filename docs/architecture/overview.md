@@ -59,7 +59,8 @@ Shipped by Story 1:
 - **Model gateway**: [nginx](/components/nginx.md), the only container with egress and the only one
   that holds the provider key.
 - **Terminal client** (`src/cli`): calls the engine API. The read-only **run page** (`src/page`)
-  arrives with Story 2 (T056); until then `ap up` starts without it.
+  shows a run's record through `page-proxy` on 127.0.0.1 (`ap page` prints its address); the
+  end-to-end job builds and checks it (T156).
 
 Shipped by Story 2:
 

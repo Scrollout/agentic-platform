@@ -48,7 +48,7 @@ trap 'exit 143' TERM
 
 # shellcheck disable=SC2086
 docker volume rm -f $volumes >/dev/null 2>&1 || true
-for img in engine cli project check agent lint; do
+for img in engine cli project check agent lint page; do
   say "building $img"
   src/deploy/build.sh "$img" >"$work/build-$img.log" 2>&1 || { cat "$work/build-$img.log" >&2; fail "build.sh $img"; }
 done
@@ -63,7 +63,9 @@ AP_COMPOSE_OVERRIDE=$repo/src/tests/e2e/compose.recorded.yaml
 export AP_REPLAY_IMAGE AP_REPLAY_DIR AP_COMPOSE_OVERRIDE
 
 started=1
-"$ap" up --credentials "$work/credentials" --projects "$work/projects" || fail "ap up"
+"$ap" up --credentials "$work/credentials" --projects "$work/projects" >"$work/up.out" 2>&1 || { cat "$work/up.out" >&2; fail "ap up"; }
+cat "$work/up.out"
+! grep -q 'not built yet' "$work/up.out" || fail "ap up started the platform without the run page (its image is not built)"
 unset AP_COMPOSE_OVERRIDE
 
 # The example as the analyst recording holds it (src/tests/lab.Example), without a newline.
@@ -81,7 +83,14 @@ grep -q '  ResultReused  ' "$work/replay.out" || fail "the replay reused no step
 t1=$(git -C "$work/projects/notes" log --format=%T) || fail "git log of the project notes"
 t2=$(git -C "$work/projects/notes-replay" log --format=%T) || fail "git log of the project notes-replay"
 [ -n "$t1" ] && [ "$t1" = "$t2" ] || fail "the projects' trees differ commit by commit"
+# The run page answers through page-proxy on 127.0.0.1, with the one Host it accepts (127.0.0.1:port).
+# Its root is 404 by design; a run's page is the page (run RUN-1 exists after the replay).
+page_url=$("$ap" page) || fail "ap page"
+page_host=${page_url#http://}
+code=$(curl -s -o "$work/page.html" -w '%{http_code}' --max-time 20 -H "Host: $page_host" "$page_url/runs/RUN-1") || fail "the run page does not answer at $page_url"
+[ "$code" = 200 ] || fail "the run page answered $code at $page_url/runs/RUN-1, not 200"
+grep -qi '<!doctype html>' "$work/page.html" || fail "the run page's answer is not its HTML"
 misses=$(sh src/tests/recorded/replay.sh misses agentic-platform-gateway-1) || fail "cannot read the replay server's misses"
 python3 -c 'import json,sys; r=json.loads(sys.argv[1]).get("requests"); sys.exit(1 if r else 0)' "$misses" ||
   { printf '%s\n' "$misses" >&2; fail "the replay server matched no recording for some requests"; }
-say "PASS: built, replayed with every step reused, compare exit 0, equal trees, no replay miss"
+say "PASS: built, replayed with every step reused, compare exit 0, equal trees, the run page answers, no replay miss"
