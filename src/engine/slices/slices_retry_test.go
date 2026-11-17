@@ -173,27 +173,30 @@ func TestAlwaysUnparseableStopsAtTheAttemptLimit(t *testing.T) {
 	}
 }
 
-func TestGoalWithoutRuleIsNotRetried(t *testing.T) {
+func TestGoalWithoutRuleIsSentBack(t *testing.T) {
 	p := notesProposal(t)
 	p.Rules = p.Rules[:1] // G-2 has no rule now
 	p.Examples = "Feature: Notes\n  Rule: R-1\n    @R-1 @E-1\n    Scenario: Keep\n      Given a note\n"
 	p.Contract = strings.Replace(p.Contract, "x-rules: [R-2]", "x-rules: [R-1]", 1)
-	s, a := retryService(t, apiPattern(t), analystResult{p: p}, analystResult{p: notesProposal(t)})
+	good := notesProposal(t)
+	s, a := retryService(t, apiPattern(t), analystResult{p: p}, analystResult{p: good})
 	r, err := s.Create(context.Background(), "Let me keep notes.")
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if a.calls != 1 {
-		t.Errorf("analyst called %d times, want 1", a.calls)
+	if a.calls != 2 {
+		t.Fatalf("analyst called %d times, want 2", a.calls)
 	}
-	failed := false
+	if _, errs := analystFeedback(a.inputs[1]); !strings.Contains(strings.Join(errs, "\n"), "G-2") {
+		t.Errorf("second call's errors %q do not name the goal without a rule", errs)
+	}
+	if len(r.Slice.Rules) != len(good.Rules) || r.Slice.Examples != good.Examples {
+		t.Error("the stored slice does not hold the second answer")
+	}
 	for _, c := range r.Slice.Checks {
-		if !c.Passed && c.Part == "goals" || !c.Passed && strings.Contains(c.Reason, "G-2") {
-			failed = true
+		if !c.Passed {
+			t.Errorf("failed check stored: %+v", c)
 		}
-	}
-	if !failed {
-		t.Errorf("no failed check for the goal without a rule: %+v", r.Slice.Checks)
 	}
 }
 

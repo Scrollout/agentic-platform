@@ -289,40 +289,46 @@ func (s *Service) propose(ctx context.Context, base AnalystInput, asked int) (Pr
 			return Proposal{}, Slice{}, 0, &Error{Code: "TooManyQuestions",
 				Detail: fmt.Sprintf("the slice would need %d questions, more than %d; narrow the description", asked+len(p.Questions), maxQuestions)}
 		}
-		faults, err := s.unusable(&sl, p.Questions)
+		faults, links, err := s.unusable(&sl, p.Questions)
 		if err != nil {
 			return Proposal{}, Slice{}, 0, err
 		}
-		if len(faults) == 0 {
+		if len(faults) == 0 && len(links) == 0 {
 			return p, sl, attempt, nil
 		}
 		if attempt >= s.attempts {
+			if len(faults) == 0 { // only broken links: stored with its failed checks (research D48)
+				return p, sl, attempt, nil
+			}
 			return Proposal{}, Slice{}, 0, &Error{Code: "OperationFailed", Detail: fmt.Sprintf(
 				"the analyst's proposal was unusable after %d attempts (limits.attempts): %s", attempt, strings.Join(faults, "; "))}
 		}
 		prev := p
 		in = base
-		in.Previous, in.Errors = &prev, faults
+		in.Previous, in.Errors = &prev, append(faults, links...)
 	}
 }
 
 // unusable returns what makes the analyst's output, as the slice sl built from it and its
 // questions, unusable: each way it breaks slice-proposal.schema.json (model output is parsed
-// against its schema, never trusted; a nil list counts as the empty list), and each syntax finding
+// against its schema, never trusted; a nil list counts as the empty list), each syntax finding
 // of slice.Trace (examples that are not Gherkin or a contract that is not YAML), and a contract
-// checks.Fit cannot read as one YAML document without duplicate keys. Other faults are
-// check results, stored with the slice.
-func (s *Service) unusable(sl *Slice, questions []QuestionDraft) ([]string, error) {
+// checks.Fit cannot read as one YAML document without duplicate keys. It returns apart, as links,
+// each other finding of slice.Trace (a broken link between IDs, or a contract shape it cannot
+// follow, such as a YAML alias or an operation without an operationId): the analyst is asked to repair
+// those too, but a slice that still has them after the last attempt is stored with its failed
+// checks (research D48). Other faults are check results, stored with the slice.
+func (s *Service) unusable(sl *Slice, questions []QuestionDraft) (faults, links []string, err error) {
 	doc, err := json.Marshal(struct {
 		partsDoc
 		Questions []QuestionDraft `json:"questions,omitempty"`
 	}{partsDoc{Goals: sl.Goals, Terms: sl.Terms, Rules: sl.Rules, Examples: sl.Examples, Contract: sl.Contract}, questions})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	fails, err := schemaFailures(s.schemas.CheckProposal(doc))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var out []string
 	contractRead := true
@@ -335,10 +341,12 @@ func (s *Service) unusable(sl *Slice, questions []QuestionDraft) ([]string, erro
 	for _, f := range slice.Trace(doc) {
 		switch {
 		case f.Part == "": // the engine wrote the document, so this is a fault
-			return nil, fmt.Errorf("slices: traceability: %s", f.Reason)
+			return nil, nil, fmt.Errorf("slices: traceability: %s", f.Reason)
 		case f.Syntax: // the examples or the contract text does not parse
 			out = append(out, f.Reason)
 			contractRead = contractRead && f.Part != string(PartContract)
+		default: // a broken link, or a contract shape Trace cannot follow: the analyst can repair it (research D48)
+			links = append(links, f.Reason)
 		}
 	}
 	// A contract that YAML parses but checks.Fit cannot read (duplicate keys, several documents)
@@ -351,7 +359,7 @@ func (s *Service) unusable(sl *Slice, questions []QuestionDraft) ([]string, erro
 			}
 		}
 	}
-	return out, nil
+	return out, links, nil
 }
 
 // approvedFor returns the approved slice of exactly this description, if there is one.
