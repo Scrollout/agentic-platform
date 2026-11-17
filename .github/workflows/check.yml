@@ -77,7 +77,8 @@ jobs:
           AP_TEST_REPORT_DIR: ${{ runner.temp }}/test-reports
         run: scripts/ci-step.sh py-tests scripts/check.sh --only py-tests
       # The tests' results in the job's summary (research D43, ADR 0046): counts and each failed
-      # test with its message; annotate_only needs no checks: write.
+      # test with its message; annotate_only needs no checks: write. A green job writes no table
+      # and a step that finds no result fails (research D47, ADR 0051).
       - name: Test report
         if: always()
         uses: mikepenz/action-junit-report@a16be3a69023e9bd7e748ede768b3282ea7b30ce # v6.7.1
@@ -86,6 +87,8 @@ jobs:
           annotate_only: true
           detailed_summary: true
           include_passed: false
+          skip_success_summary: true
+          require_tests: true
 
   layout:
     name: layout
@@ -212,7 +215,8 @@ jobs:
           AP_TEST_REPORT_DIR: ${{ runner.temp }}/test-reports
         run: scripts/ci-step.sh go scripts/check.sh --only go
       # The tests' results in the job's summary (research D43, ADR 0046): counts and each failed
-      # test with its message; annotate_only needs no checks: write.
+      # test with its message; annotate_only needs no checks: write. A green job writes no table
+      # and a step that finds no result fails (research D47, ADR 0051).
       - name: Test report
         if: always()
         uses: mikepenz/action-junit-report@a16be3a69023e9bd7e748ede768b3282ea7b30ce # v6.7.1
@@ -221,6 +225,8 @@ jobs:
           annotate_only: true
           detailed_summary: true
           include_passed: false
+          skip_success_summary: true
+          require_tests: true
 
   docker:
     name: docker
@@ -244,7 +250,8 @@ jobs:
           AP_TEST_REPORT_DIR: ${{ runner.temp }}/test-reports
         run: scripts/ci-step.sh docker scripts/check.sh --only docker
       # The tests' results in the job's summary (research D43, ADR 0046): counts and each failed
-      # test with its message; annotate_only needs no checks: write.
+      # test with its message; annotate_only needs no checks: write. A green job writes no table
+      # and a step that finds no result fails (research D47, ADR 0051).
       - name: Test report
         if: always()
         uses: mikepenz/action-junit-report@a16be3a69023e9bd7e748ede768b3282ea7b30ce # v6.7.1
@@ -253,6 +260,8 @@ jobs:
           annotate_only: true
           detailed_summary: true
           include_passed: false
+          skip_success_summary: true
+          require_tests: true
 
   deps:
     name: deps

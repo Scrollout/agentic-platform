@@ -2,6 +2,7 @@
 
 ## 2026-11-17
 
+* **Implementation**: Feature 001, T124: the CI test jobs' report steps set `skip_success_summary` and `require_tests`, so a green job's summary holds no JUnit table and a step that finds no result fails. New tests by a separate author.
 * **Decision**: A green test report adds nothing to the job's summary (owner, 2026-11-17; research D47, [ADR 0051](/decisions/0051-a-green-test-report-stays-quiet.md)): the CI test jobs' JUnit table appears only when a test failed (T124).
 * **Implementation**: Feature 001, T109 done: the live evals in CI passed pass^3 in all four suites (run 43977860199) for $0.19 in all (1.44 M input, 0.17 M output tokens, Docker Agent's estimate).
 * **Implementation**: Feature 001, T122 done: evals run 43977860199, started by the owner, passed all four suites and kept no artifact, as a passing run should.
