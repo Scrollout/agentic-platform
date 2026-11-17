@@ -34,3 +34,5 @@
 - `ap`, `build.sh`, `generate.sh`, Docker and gVisor are named only to describe today's
   behaviour and the prerequisites the developer installs; requirements name no tool.
 - FR-007 settled by the owner on 2026-11-18 (Clarifications): asked once per start that builds.
+- User Story 4 (remote access to the run page) added on 2026-11-18 at the owner's request; checked
+  against every item again: no open marker, FR-012 to FR-017 testable through SC-006 and SC-007.

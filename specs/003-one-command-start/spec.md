@@ -1,4 +1,4 @@
-# Feature Specification: Start the platform with one command
+# Feature Specification: Start the platform with one command, and reach its run page from another machine
 
 **Feature Branch**: `003-one-command-start`
 
@@ -9,15 +9,16 @@
 **Input**: Project owner, 2026-11-18, after reading how to start the MVP (generate the code, set the
 signing password, build and sign seven images one by one, make a projects folder with the right
 mode, then `ap up --credentials <file> --projects <folder>`): "Build and start is complex. Apply
-abstraction principles." Constitution XVII (Converge, don't sequence: one command that makes
+abstraction principles." Then: "I need to be able to connect on the VM on external IP 0.0.0.0"
+and, after the SSH tunnel was offered, "add the direct remote access". Constitution XVII (Converge, don't sequence: one command that makes
 reality match the declarations, safe to run again, with no order of steps to know) and XVIII
 (Abstractions say what, not how: no name or option that exists only because of how it is built).
 
 **Serves needs** ([problem space](../../docs/overview/problem-space.md)): N-005 (run on the user's
-own infrastructure), for one developer's machine.
+own infrastructure), for one developer's machine, which may be a remote machine such as a VM.
 **Uses terms** ([glossary](../../docs/overview/glossary.md)): Slice, Run.
 **Builds on**: [feature 001](../001-prose-to-accepted-slice/spec.md); it changes how the platform is
-started, not what it does.
+started and where its run page can be reached, not what it does.
 
 ## Clarifications
 
@@ -27,6 +28,9 @@ started, not what it does.
   environment), or made and kept by the platform so the developer is never asked? → A: Asked once
   per start that has to build, or read from the environment; the platform does not keep it, so
   today's protection of the key stays (owner).
+- Q: May the run page be reached from another machine, without an SSH tunnel? → A: Yes, directly,
+  as an explicit choice at start (owner). Constitution XI (encrypted to every client), V
+  (authenticated access) and XIV (a less safe setting is explicit and audited) shape User Story 4.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -101,7 +105,45 @@ message names an internal part, except a diagnosis the developer must act on.
 1. **Given** the quickstart, **When** a developer follows it from a clean clone, **Then** it has
    one start command, then the slice and build commands, and no build, generator or signing step.
 2. **Given** the start command's usage, **When** the developer reads it, **Then** every option is
-   about where their key and projects are, and each has a default.
+   about where their key and projects are, or whether other machines may reach the run page, and
+   each has a default.
+
+---
+
+### User Story 4 - Reach the run page from another machine (Priority: P2)
+
+The developer runs the platform on a remote machine, such as a VM, and wants to inspect runs from
+their own computer's browser, without an SSH tunnel. They start the platform with an explicit
+choice to accept connections from other machines. The start command shows that choice, the
+address to open, the secret to sign in with and how to recognise the platform's certificate. From
+their computer, the developer opens the address over an encrypted connection, signs in with the
+secret and sees the run page as on the machine itself. Anyone without the secret sees nothing of
+any run.
+
+**Why this priority**: The owner runs the platform on a VM; without this, the run page is only
+reachable from the VM itself or through a tunnel.
+
+**Independent Test**: Start the platform with remote access on a VM. From another machine, open
+the address: with the secret the run page shows the runs; without it, or over an unencrypted
+connection, nothing of any run is shown. Start it without the choice: the page is not reachable
+from another machine.
+
+**Acceptance Scenarios**:
+
+1. **Given** a start with no remote-access choice, **When** another machine connects to the run
+   page's port, **Then** it cannot reach the page, as in feature 001.
+2. **Given** a start that chooses remote access, **When** it finishes, **Then** it says that the
+   page accepts connections from other machines, and prints the address, the sign-in secret and
+   the certificate's fingerprint; the choice is recorded with its time and address.
+3. **Given** remote access, **When** the developer opens the address from another machine and
+   signs in with the secret, **Then** they see the same runs, records and comparisons as on the
+   machine itself, and still cannot change anything.
+4. **Given** remote access, **When** someone connects without the secret, with a wrong one, or
+   without encryption, **Then** they see no run content, and repeated failed sign-ins are slowed
+   down.
+5. **Given** a platform started with remote access, **When** the developer stops it and starts it
+   again without the choice, **Then** the page is reachable only from the machine again, and the
+   old secret no longer works.
 
 ### Edge Cases
 
@@ -115,6 +157,14 @@ message names an internal part, except a diagnosis the developer must act on.
 - No network on the first start: the parts that need the network to build (the pinned tools and
   modules) cannot be built; the start command says so and starts nothing. Once built, the platform
   starts without the network.
+- Remote access is chosen while the platform is already started without it (or the other way
+  round): the start refuses and says to stop it first, as for another key file.
+- The remote address or port is already in use, or is not an address of this machine: the start
+  names it and starts nothing.
+- The certificate the platform made for remote access expires: the start makes a new one and prints
+  its new fingerprint.
+- The developer reaches the page by the machine's name rather than its address: the page accepts
+  the names and addresses the developer gave at start, and refuses any other.
 - Two start commands at once: one builds, the other waits for it or refuses; no part is built
   twice at the same time and no record is lost.
 
@@ -144,12 +194,39 @@ message names an internal part, except a diagnosis the developer must act on.
   build, generator, signing or registry step; those MAY stay available for the platform's own
   development and CI.
 - **FR-010**: Stopping the platform MUST stay one command that keeps run records and projects.
+
 - **FR-011**: Everything feature 001 delivered after the platform is started MUST work unchanged.
+
+#### Remote access to the run page
+
+- **FR-012**: By default the run page MUST be reachable only from the machine the platform runs
+  on, as in feature 001.
+- **FR-013**: The start command MUST accept an explicit choice to make the run page reachable from
+  other machines, naming the address (all of the machine's addresses, or one) and optionally the
+  names the page answers to; the platform MUST say so at start and record the choice with its time
+  and address (Principle XIV).
+- **FR-014**: With remote access, every connection to the run page MUST be encrypted; an
+  unencrypted request MUST get no run content. The platform MUST make its own certificate when
+  the developer gives none and MUST print its fingerprint; the developer MAY give their own
+  certificate and key.
+- **FR-015**: With remote access, every request MUST be authenticated with a sign-in secret the
+  platform makes at start and shows only to the developer; a request without a valid one MUST get
+  no run content. The secret MUST change when the platform is stopped and started again.
+- **FR-016**: With remote access, failed sign-ins and requests MUST be rate-limited per source
+  address, and each failed sign-in MUST be logged with its time and source, never with the secret
+  tried.
+- **FR-017**: Remote access MUST expose only the read-only run page: nothing reachable from another
+  machine may change a slice, a run or a project, or reach the engine, the model gateway or any
+  other part.
 
 ### Key Entities
 
 - **Platform part**: one container image the platform runs, built from the repository's source
   and pins, signed and verified before it starts.
+- **Remote-access choice**: the recorded decision, made at start, to let other machines reach the
+  run page: its address, the names it answers to, its time.
+- **Sign-in secret**: the secret the platform makes at a start with remote access; it proves a
+  viewer is the developer, and changes at every new start.
 - **Prerequisite**: something the platform needs from the machine and cannot provide itself: the
   container runtime with Compose, the gVisor runtime, a model key file.
 
@@ -167,6 +244,11 @@ message names an internal part, except a diagnosis the developer must act on.
   fix, in 4 out of 4 cases.
 - **SC-005**: The quickstart's start section is one command, and every feature 001 acceptance,
   planted and end-to-end suite passes.
+- **SC-006**: From another machine, the run page opens over an encrypted connection with the
+  sign-in secret, and shows no run content without it, with a wrong one or unencrypted, in 4 out of
+  4 cases.
+- **SC-007**: Started without the remote-access choice, the run page is unreachable from another
+  machine.
 
 ## Assumptions
 
@@ -182,3 +264,12 @@ message names an internal part, except a diagnosis the developer must act on.
   development and CI; this feature does not remove them.
 - The slice and build commands (`describe`, `questions`, `approve`, `build`, ...) are out of scope;
   only starting and stopping change.
+- Remote access covers the read-only run page only. The terminal client stays on the machine the
+  platform runs on (over SSH for a VM); reaching the engine API from another machine needs the web
+  console of a later feature (ADR 0027).
+- One developer, one secret: no accounts, roles or multiple viewers with separate access.
+- A certificate the platform makes for itself is not trusted by browsers; the developer compares
+  the printed fingerprint once, or gives a certificate of their own. Getting a public certificate
+  (for example through ACME) is out of scope.
+- Firewalls between the developer's computer and the machine (for example a cloud VM's security
+  group) are the developer's to open; the platform only says which port it listens on.
