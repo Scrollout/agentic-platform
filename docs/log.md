@@ -1,5 +1,10 @@
 # Directory Update Log
 
+## 2026-11-18
+
+* **Review**: Feature 001, T066 done: the final review's round 2 accepted the MVP (check run 44192519916 green, evals run 44186514527 green in all four suites, `okf.py check` OK).
+* **Planning**: Feature 001, T152 done: the 68 open tasks that do not block the MVP moved unchanged to `specs/backlog.md` for the next feature and are closed in `tasks.md`; T151 (adopt Temporal) stays open as the first task after the MVP.
+
 ## 2026-11-17
 
 * **Implementation**: Feature 001, T155 done: evals run 44186514527 on `39ac63d` passed pass^3 in all four suites, the analyst's new revision cases included.
