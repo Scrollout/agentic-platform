@@ -22,8 +22,10 @@ A fresh clone of the repository, or a change to the hooks.
    and removes the directory on exit. Untracked files and unstaged changes, such as another
    person's work in progress, cannot change the result, and a staged file whose working copy
    differs is checked as staged. It prints the snapshot, the staged files and each check it runs.
-   The full suite, `scripts/check.sh`, runs in CI (GitHub Actions) on every push, and a task is
-   done when that run is green ([ADR 0044](/decisions/0044-full-checks-run-on-github-hosted-runners.md)).
+   The full suite, `scripts/check.sh`, runs in CI (GitHub Actions): each push runs the jobs whose
+   files changed since the last green run, a dispatch runs them all, and a task is done when that
+   run is green ([ADR 0044](/decisions/0044-full-checks-run-on-github-hosted-runners.md),
+   [ADR 0053](/decisions/0053-check-jobs-run-for-the-files-they-judge.md)).
    Locally, run only targeted tests that take seconds to a few minutes; the Docker step, `ap test`
    and `e2e.sh` run in CI, and a fresh review judges that CI run
    ([ADR 0049](/decisions/0049-fresh-review-judges-the-ci-run.md)). The live evals run only when

@@ -21,41 +21,14 @@ reasons go to standard error. Exit 0, except as MODE=pending says.
 """
 import json
 import os
-import re
-import subprocess
 import sys
 
 import yaml
 
+from ci_select import changed_files, base_from_runs, git, is_commit, matches
+
 DECL = "src/tests/evals/suites.yaml"
-BRANCHES = ("main", "001-prose-to-accepted-slice")
 LOCK = "src/deploy/images.lock"
-
-
-def glob_re(glob):
-    """`**` crosses folders; `*` and `?` stay within one path segment."""
-    out, i = "", 0
-    while i < len(glob):
-        if glob.startswith("**/", i):   # any folders, none included: a/**/b matches a/b
-            out += "(?:.*/)?"
-            i += 3
-        elif glob.startswith("**", i):
-            out += ".*"
-            i += 2
-        elif glob[i] == "*":
-            out += "[^/]*"
-            i += 1
-        elif glob[i] == "?":
-            out += "[^/]"
-            i += 1
-        else:
-            out += re.escape(glob[i])
-            i += 1
-    return re.compile(out + r"\Z")
-
-
-def git(*args):
-    return subprocess.run(["git", *args], capture_output=True, text=True)
 
 
 def pins(text):
@@ -65,27 +38,6 @@ def pins(text):
         if len(f) >= 2 and not f[0].startswith("#"):
             out[f[0]] = f[1]
     return out
-
-
-def is_commit(sha):
-    return bool(sha) and set(sha) != {"0"} and git("cat-file", "-e", sha + "^{commit}").returncode == 0
-
-
-def base_from_runs(raw, sha):
-    """The newest successful run on a dev branch whose head is an ancestor of sha, or ""."""
-    try:
-        runs = json.loads(raw)
-    except ValueError:
-        return ""
-    if not isinstance(runs, list):
-        return ""
-    for r in runs:
-        if not isinstance(r, dict) or r.get("conclusion") != "success" or r.get("head_branch") not in BRANCHES:
-            continue
-        head = r.get("head_sha") or ""
-        if is_commit(head) and git("merge-base", "--is-ancestor", head, sha).returncode == 0:
-            return head
-    return ""
 
 
 def choose(suites, every, sha):
@@ -103,20 +55,17 @@ def choose(suites, every, sha):
             print("ci-evals-select: the base commit is unknown here: every suite", file=sys.stderr)
             return every
     print("ci-evals-select: base %s" % before, file=sys.stderr)
-    diff = git("diff", "-z", "--name-status", "--no-renames", before, sha)
-    if diff.returncode != 0:
-        print("ci-evals-select: git diff failed (%s): every suite" % diff.stderr.strip(), file=sys.stderr)
+    changed = changed_files(before, sha)
+    if changed is None:
+        print("ci-evals-select: git diff failed: every suite", file=sys.stderr)
         return every
-    # -z: status and path alternate, NUL-separated, paths unquoted (so non-ASCII paths match).
-    parts = diff.stdout.split("\0")
-    changed = [parts[k] for k in range(1, len(parts), 2) if parts[k]]
     old = git("show", "%s:%s" % (before, LOCK)).stdout
     new = git("show", "%s:%s" % (sha, LOCK)).stdout
     po, pn = pins(old), pins(new)
     moved = {k for k in set(po) | set(pn) if po.get(k) != pn.get(k)}
     out = []
     for s in suites:
-        why = [p for p in changed if any(glob_re(g).match(p) for g in s["paths"])]
+        why = [p for p in changed if matches(p, s["paths"])]
         why += ["pin " + k for k in sorted(moved & set(s["pins"]))]
         if why:
             print("ci-evals-select: %s: %s" % (name(s), ", ".join(why[:5])), file=sys.stderr)
