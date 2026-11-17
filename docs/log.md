@@ -2,6 +2,7 @@
 
 ## 2026-11-17
 
+* **Planning**: Feature 001, T070 converge round 1 (whole feature, two fresh read-only assessors): 15 tasks appended as Phase 8 (T135 to T149); T135 (the platform, not the review prompt, applies "Review converges" in later rounds; Principle XX) blocks the MVP, the other 14 do not.
 * **Implementation**: Feature 001, T098 done: check run 44118893082 on `fb4541d` green, the `arch` job included.
 * **Implementation**: Feature 001, T098 fix: the arch step's offline install sets `GOSUMDB=off`; CI run 44111866994 failed because go asked the checksum database for a newer tree with no network (research D40). Regression test by a separate author.
 * **Implementation**: Feature 001, T098: each Go module's imports are checked against its `.go-arch-lint.yml` by go-arch-lint v1.19.1 (pinned, built from source, run offline) in the `scripts/check.sh` step `arch` and the `check.yml` job `arch`; an archfile change needs the owner's `Approved-by:`. New tests by a separate author; T134 filed from its review.
