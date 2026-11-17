@@ -1945,3 +1945,18 @@ page, none of which an existing project provides.
   GitHub expressions cannot shorten a commit ID or cut a message to its first line, so the name
   shows what the expression gives; `run-name` is display only and never reaches a shell.
 - Sources: [GitHub: workflow syntax, `run-name`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax).
+
+### D52. The check selector lists runs without GitHub's status filter
+
+- **Decision** (owner, 2026-11-17; T131): `check.yml`'s `config` job lists the workflow's runs
+  without `status=success` and leaves the choice of green runs to the selector, which keeps only
+  runs whose conclusion is `success` (D50).
+- **Why** (reproduced 2026-11-17, 12:10 UTC): `GET …/actions/workflows/check.yml/runs?status=success`
+  did not list run 44073473710, completed with conclusion `success` at 12:03, while the same list
+  without the filter did; run 44079665093 therefore took `7d00a8c` as its base and ran every job.
+  GitHub's documentation names the filter but states no such delay, so the filter is not relied on.
+- **Limit**: the 100 runs listed now include failed and cancelled ones, so on a busy branch the
+  newest green run can fall outside them; the selector then finds no base and runs every job (an
+  over-run, never a skip). Paging is T121's.
+- Sources: [GitHub REST API: workflow runs](https://docs.github.com/en/rest/actions/workflow-runs);
+  runs 44073473710 and 44079665093.
