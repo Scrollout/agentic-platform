@@ -1906,6 +1906,11 @@ page, none of which an existing project provides.
   - `markdown`: Markdown files, the markdownlint configuration, `scripts/tools/**` and
     `scripts/check.sh`;
   - `knowledge`: `docs/**`, `specs/**`, `scripts/okf.py` and `scripts/check.sh`;
+  - `markdown` and `knowledge` also list the CI files every job depends on: `.github/**`,
+    `scripts/ci-*`, `scripts/ci_select.py`, `scripts/check.sh`, `src/deploy/images.lock` and
+    `scripts/tools/**`, and `markdown` also `scripts/npm-tool.sh` (owner, 2026-11-17, after T117's
+    fresh review: a change to the CI machinery, the declaration or a pin runs every job; the other
+    jobs list every file but documentation, so they include these already);
   - `py_tests`: every file except `specs/**`, `.specify/**` and `.claude/**`, since some of its
     tests read `docs/` and the root `README.md` (`test_pre_commit_quick.py`, `test_workflows.py`);
   - every other job (`contracts`, `contract_diff`, `gateway`, `go`, `docker`, `ap_test_us2`,
@@ -1913,7 +1918,8 @@ page, none of which an existing project provides.
     `.claude/**` and Markdown at the root; narrower lists per job are later changes to the
     declaration, not to code.
   - A test that reads a file must run in a job whose paths include that file; a path list is
-    narrowed only after checking what the job's tests read.
+    narrowed only after checking what the job's tests read; the CI files in `markdown` and
+    `knowledge` are the one deliberate exception and are never narrowed away as unjudged.
 - **Why**: a docs-only push started all 15 jobs, about 40 minutes of the `docker` job alone
   (run 44061592726); the owner wants the CI to run what a change needs. Comparing with the last
   green run, not the previous push, keeps a change whose run failed or was cancelled judged on
