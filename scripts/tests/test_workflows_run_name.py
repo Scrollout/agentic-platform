@@ -1,7 +1,8 @@
 """Tests for the CI run names (T128; research D51).
 
-check.yml and evals.yml each carry a top-level `run-name` exactly as T128 words it, built only
-from the `github` and `inputs` contexts. Each rule is a function judging a root directory; the
+evals.yml carries a top-level `run-name` exactly as T128 words it, built only from the `github`
+and `inputs` contexts. check.yml carries NO top-level `run-name`, so GitHub keeps its default run
+name (owner, 2026-11-17). Each rule is a function judging a root directory; the
 real files and planted copies in a temporary tree are judged by the same function, and every
 violation names its workflow.
 """
@@ -14,9 +15,8 @@ from pathlib import Path
 import yaml
 
 REPO = Path(__file__).resolve().parent.parent.parent
+NO_RUN_NAME = "check.yml"
 EXPECTED = {
-    "check.yml": "check · ${{ github.ref_name }} · ${{ github.event_name == 'workflow_dispatch' "
-                 "&& format('started by {0}', github.actor) || github.event.head_commit.message }}",
     "evals.yml": "evals · ${{ github.ref_name }} · ${{ inputs.all && 'all suites' || "
                  "'changed suites' }} · started by ${{ github.actor }}",
 }
@@ -28,7 +28,7 @@ STRING = re.compile(r"'(?:[^']|'')*'")
 
 def load(root):
     wf = {}
-    for name in EXPECTED:
+    for name in [NO_RUN_NAME, *EXPECTED]:
         p = Path(root) / ".github" / "workflows" / name
         wf[name] = yaml.safe_load(p.read_text()) if p.exists() else None
     print(f"workflows examined under {root}: {sorted(wf)}", file=sys.stderr)
@@ -51,6 +51,10 @@ def judge_run_name(root):
             out.append(f"{name}: workflow file is missing")
             continue
         rn = w.get("run-name")
+        if name == NO_RUN_NAME:
+            if "run-name" in w:
+                out.append(f"{name}: has a top-level run-name, it must have none")
+            continue
         if rn is None:
             out.append(f"{name}: no top-level run-name")
             continue
@@ -65,7 +69,7 @@ def judge_run_name(root):
 def plant(root, **overrides):
     d = Path(root) / ".github" / "workflows"
     d.mkdir(parents=True)
-    for name, rn in EXPECTED.items():
+    for name, rn in {NO_RUN_NAME: None, **EXPECTED}.items():
         rn = overrides.get(name, rn)
         lines = [f"name: {name[:-4]}"]
         if rn is not None:
@@ -76,13 +80,16 @@ def plant(root, **overrides):
 
 
 class RealWorkflows(unittest.TestCase):
-    def test_both_workflows_have_the_exact_run_name(self):
+    def test_evals_has_the_exact_run_name_and_check_has_none(self):
         w = load(REPO)
         for name, expected in EXPECTED.items():
             self.assertEqual(w[name].get("run-name"), expected, f"{name} run-name")
+        self.assertFalse("run-name" in w[NO_RUN_NAME], f"{NO_RUN_NAME} must have no run-name")
 
     def test_real_run_names_use_only_github_and_inputs(self):
         for name, w in load(REPO).items():
+            if name == NO_RUN_NAME:
+                continue
             rn = w.get("run-name")
             self.assertIsNotNone(rn, f"{name} has no run-name")
             self.assertLessEqual(contexts(rn), ALLOWED, f"{name} run-name contexts")
@@ -101,6 +108,12 @@ class Planted(unittest.TestCase):
     def test_clean_copy_passes(self):
         self.assertEqual(self.judged(), [])
 
+    def test_check_with_a_run_name_fails_naming_check(self):
+        for rn in ("check · ${{ github.ref_name }}", EXPECTED["evals.yml"]):
+            v = self.judged(**{NO_RUN_NAME: rn})
+            self.assertEqual(len(v), 1, v)
+            self.assertIn(NO_RUN_NAME, v[0])
+
     def test_missing_run_name_fails_naming_the_workflow(self):
         for name in EXPECTED:
             v = self.judged(**{name: None})
@@ -118,8 +131,7 @@ class Planted(unittest.TestCase):
                 rn = EXPECTED[name] + " ${{ " + ctx + " }}"
                 v = self.judged(**{name: rn})
                 self.assertTrue(any(name in x and ctx.split(".")[0] in x and "contexts" in x for x in v), (ctx, v))
-                other = [n for n in EXPECTED if n != name][0]
-                self.assertFalse(any(other in x for x in v), v)
+                self.assertFalse(any(NO_RUN_NAME in x for x in v), v)
 
 
 if __name__ == "__main__":
