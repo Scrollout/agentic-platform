@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -33,5 +33,4 @@
 
 - `ap`, `build.sh`, `generate.sh`, Docker and gVisor are named only to describe today's
   behaviour and the prerequisites the developer installs; requirements name no tool.
-- One marker remains, the owner's decision: FR-007 (the signing key's password: asked once per
-  start that builds, or kept by the platform). Resolve it before `/speckit-plan`.
+- FR-007 settled by the owner on 2026-11-18 (Clarifications): asked once per start that builds.

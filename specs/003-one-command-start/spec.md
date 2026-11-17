@@ -19,6 +19,15 @@ own infrastructure), for one developer's machine.
 **Builds on**: [feature 001](../001-prose-to-accepted-slice/spec.md); it changes how the platform is
 started, not what it does.
 
+## Clarifications
+
+### Session 2026-11-18
+
+- Q: Is the signing key's password asked once per start that has to build (or read from the
+  environment), or made and kept by the platform so the developer is never asked? → A: Asked once
+  per start that has to build, or read from the environment; the platform does not keep it, so
+  today's protection of the key stays (owner).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - One command takes a fresh clone to a started platform (Priority: P1)
@@ -126,9 +135,9 @@ message names an internal part, except a diagnosis the developer must act on.
   command needs no option; options MAY override them.
 - **FR-006**: The start command MUST make a missing default projects folder, readable by the
   platform's containers, and MUST refuse one they cannot open, naming its mode.
-- **FR-007**: The signing key's password MUST [NEEDS CLARIFICATION: be asked once per start that
-  has to build (or read from the environment), or be made and kept by the platform so the
-  developer is never asked?].
+- **FR-007**: The signing key's password MUST be asked at most once per start, and only when the
+  start has something to build; when the environment gives it (`COSIGN_PASSWORD`, as in CI), it
+  MUST NOT be asked. The platform MUST NOT store the password.
 - **FR-008**: The start command MUST say what it will do before a long step (which parts it
   builds) and what it did at the end (built, verified, started).
 - **FR-009**: The developer-facing commands, their usage and the quickstart MUST NOT require any
