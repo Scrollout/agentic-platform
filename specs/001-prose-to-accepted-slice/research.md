@@ -2050,8 +2050,12 @@ capability that durable-execution engines provide; they were not evaluated until
   | River (job queue only) | MPL-2.0 | 6.2 | v0.51.2 (2026-11-09) | PostgreSQL or SQLite |
   | cenkalti/backoff (retries only) | MIT | 5.5 | active | — |
 
-  Temporal covers all three parts in one project, has the highest Scorecard and the largest
-  community, and runs self-hosted in Compose and offline (its Compose examples are in
+  Against the OpenSSF Concise Guide, Temporal's server (Scorecard checks, 2026-11-09): maintained
+  (Maintained 10, a known owner, Temporal Technologies, 100 or more contributors), reviewed (Code-Review
+  10), MIT licence checked; release archives carry `checksums.txt` but are not signed
+  (Signed-Releases 0) and the repository has no security policy (Security-Policy 0), so T151 pins
+  its images by digest and records both gaps in its component concept. Temporal covers all three
+  parts in one project, has the highest Scorecard and the largest community, and runs self-hosted in Compose and offline (its Compose examples are in
   `temporalio/samples-server`). The MVP keeps its own because the engine is built, tested and
   green in CI (run 44157173351), and moving now would rewrite `machine` (about 1,800 lines and
   most of its tests, each test change needing the owner's approval) and add a Temporal server and

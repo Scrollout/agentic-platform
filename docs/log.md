@@ -2,6 +2,7 @@
 
 ## 2026-11-17
 
+* **Planning**: Feature 001, `/speckit-analyze` on D56 (fresh reviewer): D56 applies the OpenSSF Concise Guide to Temporal; the plan records the owner's Principle VI approval and a Single owner for rules exception for the three retry waits until T151; T151 gains its Done condition.
 * **Implementation**: Feature 001, T135 done: check run 44157173351 on `ace43ce` green, every job, the planted suite included.
 * **Decision**: The MVP keeps its own durable execution (step machine, run store, job queue), an approved Principle VI exception; the first task after the MVP (T151) adopts Temporal for it (owner, 2026-11-17; research D56, [ADR 0056](/decisions/0056-durable-execution-custom-for-the-mvp-temporal-after.md), [Temporal reference](/references/temporal.md)).
 * **Planning**: Feature 001, `/speckit-analyze` on T150 (fresh reviewer): no CRITICAL or HIGH finding; T135's planted out-of-scope case moved to T150 (owner, 2026-11-17), T150 placed in Phase 8 with `[US2]`, its reused-fix case states the expected `round_scope.changed_lines`.
