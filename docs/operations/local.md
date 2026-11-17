@@ -172,13 +172,33 @@ a defect.
 
 Sources: [Feature 001 tasks, T053a](../../specs/001-prose-to-accepted-slice/tasks.md) (the run of 2026-11-15).
 
+## End to end on the recorded model
+
+`scripts/e2e.sh` (the `check.sh` step `e2e`, feature 001 T024, [ADR 0047](/decisions/0047-end-to-end-on-the-compose-stack-with-the-recorded-model.md))
+runs the flow above on the real Compose stack with gVisor against the recorded model, with no key:
+`ap up` with the test-only override `src/tests/e2e/compose.recorded.yaml` (the replay server in
+place of the gateway, volumes of its own), then describe, questions (`0`, `400`), approvals,
+`build-workers`, `build`, `replay` and `compare`. It passes only when every command exits 0, the
+replay reused every step, `compare` exits 0, the two projects' trees are equal and the replay
+server lists no miss; it prints each container's last log lines when it fails. CI runs it on every
+push as the job `e2e` (5 min 4 s on 2026-11-16). On the host a full `scripts/check.sh` run skips
+it; run it alone, with no platform running, by
+`COSIGN_PASSWORD=$(cat ~/.config/agentic-platform/cosign.pass) scripts/check.sh --only e2e`; it
+exits 3 while a session or `agentic-platform` container or network exists.
+
+Sources: [Feature 001 research, D44](../../specs/001-prose-to-accepted-slice/research.md).
+
 # Checks
 
 The pre-commit hook runs the quick static checks of a commit
 ([playbook](/playbooks/protect-changes-locally.md)); CI on GitHub runs every step of
 `scripts/check.sh` and the acceptance suites on each push, and a task is done when that run is
-green ([ADR 0044](/decisions/0044-full-checks-run-on-github-hosted-runners.md)). `scripts/check.sh
---only <step>` runs one step on the host while working.
+green ([ADR 0044](/decisions/0044-full-checks-run-on-github-hosted-runners.md)). On the host, run
+only targeted tests that take seconds to a few minutes while working; the Docker step, `ap test`
+and `e2e.sh` are for CI, since the host is small and shared. The live evals run only when the
+owner starts them, `gh workflow run evals.yml --ref <branch>` (`-f all=true` for every suite),
+and each check run's `evals-current` job names the suites still pending; merge into `main` only
+when it names none, re-running it after the evals pass ([ADR 0048](/decisions/0048-evals-started-by-hand-and-gated-before-main.md)).
 
 # Observability
 

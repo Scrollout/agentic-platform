@@ -202,6 +202,10 @@ type CheckRequest struct {
 	Inputs  []string // hashes of the step's declared inputs, in order
 	Slice   string   // the slice the run builds
 	Project string   // the project folder the run builds into
+	// Open and ChangedLines are what the attempt was given (Request): in a review round after the
+	// first, the round's scope (research D55).
+	Open         []Finding
+	ChangedLines []Line
 }
 
 // CheckResult is a check's verdict; Refs are the slice items it concerns, if it names any.

@@ -10,12 +10,14 @@ launcher `src/deploy/ap`, which only calls `docker compose` ([terminal contract]
 - A model credentials file outside the repository that holds only the provider key (no variable
   name), owned by you and readable only by you (`chmod 600`), for example
   `~/.config/agentic-platform/anthropic_api_key`. Only the gateway container reads it.
-- The images built and signed with `src/deploy/build.sh <name>` (`engine`, `page`, `cli`, `agent`,
-  `check`), after `scripts/generate.sh`. The first build makes an encrypted signing key in
+- The images built and signed with `src/deploy/build.sh <name>` (`engine`, `cli`, `project`, `check`,
+  `agent`, `lint`, `page`), after `scripts/generate.sh`. The first build makes an encrypted signing key in
   `~/.config/agentic-platform/signing/`; set `COSIGN_PASSWORD` or type the password when cosign asks.
   `up` verifies each image's signature and starts nothing if one fails
   ([ADR 0028](../../docs/decisions/0028-sign-platform-images-locally.md)).
-- An empty folder for new projects, for example `~/projects`.
+- An empty folder for new projects, for example `~/projects`, that the platform's containers can
+  open: mode 755 (a folder made under `umask 077` is 700, and every check then fails with
+  `UnreadableProject`).
 
 ## 1. Start the platform
 
@@ -24,8 +26,7 @@ src/deploy/ap up --credentials ~/.config/agentic-platform/anthropic_api_key --pr
 src/deploy/ap page
 ```
 
-Expected: the gateway, engine and run page start (the terminal client runs per command; until the
-run page exists, T056, `ap up` says so and starts the rest); `page`
+Expected: the gateway, engine and run page start (the terminal client runs per command); `page`
 prints a `http://127.0.0.1:<port>` address (port 7878 unless `AP_PAGE_PORT` is set). Only the
 gateway has internet access. `src/deploy/ap down` stops everything and keeps run records and
 projects.

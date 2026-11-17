@@ -1,7 +1,7 @@
 ---
 type: Component
 title: go-arch-lint
-description: "Checks each platform Go module's imports against the components and allowed dependencies its .go-arch-lint.yml declares; an undeclared import or an unmapped package fails scripts/check.sh and the pre-commit hook."
+description: "Checks each platform Go module's imports against the components and allowed dependencies its .go-arch-lint.yml declares; an undeclared import or an unmapped package fails the arch step of scripts/check.sh, run in CI."
 tags: [components, go, architecture, static-analysis, checks]
 status: draft
 resource: https://github.com/fe3dback/go-arch-lint
@@ -39,8 +39,8 @@ Sources: [Feature 001 research, D40](../../specs/001-prose-to-accepted-slice/res
 - Run: `go-arch-lint check --project-path /src/<module> --output-color=false`, with `--json`
   where a test reads the result. Exit 0 means clean. Exit 1 means a violation, an unmatched file
   or a setup error (see the [reference](/references/go-arch-lint.md)).
-- Callers: the `arch` step of `scripts/check.sh`, and the pre-commit hook when a staged change
-  touches Go code, a `go.mod`, an archfile or `src/deploy/images.lock` (T098).
+- Callers: the `arch` step of `scripts/check.sh`, run by the `check.yml` job `arch` for code
+  changes; the pre-commit hook does not run it ([ADR 0054](/decisions/0054-module-boundary-check-runs-in-ci.md); T098).
 
 Sources: [go-arch-lint reference](/references/go-arch-lint.md), [Feature 001 tasks, T098](../../specs/001-prose-to-accepted-slice/tasks.md).
 

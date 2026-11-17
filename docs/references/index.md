@@ -11,3 +11,4 @@
 * [GitHub Actions](github-actions.md) - What GitHub Actions gives a public repository on standard hosted runners (cost, machine size, concurrency, job time) and how secrets reach workflows (forks, environments), as checked on 2026-11-16.
 * [go-arch-lint](go-arch-lint.md) - What go-arch-lint v1.19.1 checks, its archfile schema version 3, how it classifies imports, its exit codes and output, and how it builds and runs offline, as checked on 2026-11-15.
 * [Open Knowledge Format v0.2 specification](okf-spec.md) - The format the knowledge bundle in docs/ follows, pinned to the upstream commit it was written against.
+* [Temporal](temporal.md) - Temporal's licence, OpenSSF Scorecard, releases, self-hosted stores and default limits, as checked on 2026-11-17 for the platform's durable execution.

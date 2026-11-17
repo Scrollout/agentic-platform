@@ -38,6 +38,10 @@ state worker; *hand-over* is what ADR 0026 calls escalation.
 - Q: Once the fix step makes a witness test pass, does it stay in the delivered project? → A: Yes; witness tests stay in their own folder, named for their rule, and from the round that adds them every later step's checks treat them as unchangeable, like the derived tests.
 - Precise form of the first answer (after `/speckit-analyze` W1, 2026-11-14): printed text is no evidence, so "fails at the named file and line" means the witness test fails, having run the finding's line, as the coverage profile of that test's own run shows.
 
+### Session 2026-11-17
+
+- Q: In a review round after the first, which confirmed findings may block? → A: Only a finding that repeats an open finding the round was given (the same rule in the same file), or whose line is among the lines the fix before the round changed; any other confirmed finding is recorded as a suggestion. The platform applies this, not the review's instructions (constitution, Review converges; Principle XX). A regression on a line no fix changed is therefore only a suggestion (owner, 2026-11-17, T135).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Describe a use case and approve its slice (Priority: P1)
@@ -105,8 +109,8 @@ Each failure is stopped by a check, and a replay of the same run gives byte-iden
 5. **Given** a build in which an agent reports done without the work being complete, **When** the
    step is checked, **Then** the step is not accepted.
 6. **Given** a review that raises a new finding every round, each confirmed by a new failing witness
-   test, **When** 3 rounds have run, **Then** the run is handed over to the developer with the open
-   findings.
+   test and each on a line the fix before its round changed, **When** 3 rounds have run,
+   **Then** the run is handed over to the developer with the open findings.
 7. **Given** a step that keeps failing its checks, **When** 3 attempts have failed, **Then** the
    run is handed over to the developer with the reason.
 8. **Given** a run that has ended, **When** the developer replays it, **Then** every step reuses
@@ -193,7 +197,10 @@ Each failure is stopped by a check, and a replay of the same run gives byte-iden
   new witness test for its rule, written by the review in its own folder, that fails, having run
   the finding's line in a file the fix step may change; any other finding MUST be recorded as a suggestion. The fix step MUST
   make the witness test pass without changing it, and witness tests stay in the delivered project,
-  unchangeable by every later step, like the derived tests.
+  unchangeable by every later step, like the derived tests. In a review round after the first, a
+  confirmed finding MUST block only when it repeats an open finding the round was given (the same
+  rule in the same file) or its line is among the lines the fix before the round changed; any other
+  confirmed finding MUST be recorded as a suggestion.
 - **FR-018**: Every artifact, link, question, answer, check result, attempt and decision MUST be
   recorded in order with the model, agent definition and pattern version that produced it, so a
   run can be inspected, replayed and compared with another run.

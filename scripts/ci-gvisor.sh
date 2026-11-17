@@ -12,6 +12,9 @@ release=$(awk '$1=="gvisor-release"{print $2}' "$lock")
 sum=$(awk '$1=="gvisor-sha512"{print $2}' "$lock")
 [ -n "$release" ] || { echo "ci-gvisor: no gvisor-release pin in $lock" >&2; exit 1; }
 [ -n "$sum" ] || { echo "ci-gvisor: no gvisor-sha512 pin in $lock" >&2; exit 1; }
+# The smoke runs use the pinned alpine image, never an unpinned one (Principle XIII).
+alpine=$(awk '$1=="alpine"{print $2}' "$lock")
+[ -n "$alpine" ] || { echo "ci-gvisor: no alpine pin in $lock" >&2; exit 1; }
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 curl -fsSL -o "$work/gvisor.tar.bz2" "https://storage.googleapis.com/gvisor/releases/release/$release/x86_64/gvisor.tar.bz2"
@@ -29,6 +32,6 @@ fi
 sudo systemctl restart docker
 docker info --format '{{json .Runtimes}}' | grep -q '"runsc"' ||
   { echo "ci-gvisor: docker info does not list the runsc runtime after the install" >&2; exit 1; }
-docker run --rm --runtime=runsc hello-world >/dev/null
-docker run --rm --runtime=runsc --cpus 1 --memory 256m --pids-limit 64 hello-world >/dev/null
+docker run --rm --runtime=runsc "$alpine" true
+docker run --rm --runtime=runsc --cpus 1 --memory 256m --pids-limit 64 "$alpine" true
 "$dest/runsc" --version

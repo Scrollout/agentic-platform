@@ -24,6 +24,7 @@ fresh review round 1.
 | S14 | RFC 8785, JSON Canonicalization Scheme |
 | S15 | [Sigstore cosign `sign`](https://github.com/sigstore/cosign/blob/main/doc/cosign_sign.md) and [`verify`](https://github.com/sigstore/cosign/blob/main/doc/cosign_verify.md) references; [Docker: DCT retirement and migration guidance](https://www.docker.com/blog/docker-content-trust-retirement-and-migration-guidance/) ("Digest pinning verifies content integrity ... it does not by itself prove publisher identity"); [CNCF Distribution: deploying a registry](https://distribution.github.io/distribution/about/deploying/) |
 | S16 | Experiment, 2026-11-12, in the session scratchpad: `registry:3` on 127.0.0.1 plus `ghcr.io/sigstore/cosign/cosign:v3.1.4` (by digest) in containers; results in D24 |
+| S17 | OSS check of durable execution, 2026-11-17: OpenSSF Scorecard API and `gh api` for temporalio/temporal, temporalio/sdk-go, dbos-inc/dbos-transact-golang, riverqueue/river and cenkalti/backoff; [Temporal reference](../../docs/references/temporal.md); results in D56 |
 
 ## Decisions
 
@@ -120,6 +121,8 @@ fresh review round 1.
 - **Rationale**: FR-018 to FR-020, SC-005, SC-006; agent output differs between runs while fixed
   inputs give identical generation (S3), so reuse is what makes a replay identical.
 - **Alternatives**: SQLite (not needed for one writer); a durable-execution engine (for hosting).
+  Neither was evaluated as Principle VI requires until D56 (2026-11-17), which keeps these files
+  for the MVP and moves run history to Temporal after it.
 - **Follow-up**: record the store format in a decision record.
 
 ### D9. Model access through an nginx gateway; Haiku; no other egress
@@ -142,6 +145,7 @@ fresh review round 1.
 
 - **Decision**: a finding blocks only when it names a rule ID, file and line and a rule test
   confirms it. Rounds after the first check only open findings and lines the fixes changed.
+  (Narrowed by D55, 2026-11-17: the check applies it, each round's scope being the fix before it.)
 - **Rationale**: the spike's citation-only guard failed (S3); constitution, Review converges.
 
 ### D12. Tokens per session and per container
@@ -187,7 +191,8 @@ fresh review round 1.
   `src/agents/analyst.yaml` and enforced by Docker Agent per session, one session per proposal or
   revision (D27): 200,000 tokens, $0.10 and 5 minutes. Its step-like bounds are the pattern's
   `limits.attempts` (3) proposals per call, at most 4 analyst calls at once and a description of at
-  most 4,000 characters.
+  most 4,000 characters. An unusable proposal is sent back with its faults within those attempts
+  (which faults: D48).
 - **Rationale**: Principles X and XIV; Docker Agent budgets (S5).
 
 ### D15. Idempotency keys
@@ -237,7 +242,8 @@ fresh review round 1.
 - **Decision**: no hosted forge or CI for now (owner, 2026-11-12). `scripts/check.sh` and
   `scripts/e2e.sh` run every check and the whole Compose stack with gVisor locally, against the
   recorded model, never mounting the engine socket into a container; git hooks run them before
-  every commit.
+  every commit. (Superseded on this point by D41, CI on GitHub, and D44: the hook runs only the quick checks
+  since T108.)
 - **Rationale**: the first feature must run end to end through its checks (constitution,
   Outside-in); without a forge, local hooks are where they run.
 
@@ -260,7 +266,7 @@ fresh review round 1.
 | google/uuid | BSD-3-Clause | 6.9 (2026-10-26) | required by cucumber/messages (v1.6.0, indirect); stable, last change 2024-11 |
 | yaml/go-yaml (`go.yaml.in/yaml/v3`) | Apache-2.0 | not published | the engine's YAML reader since T018 and `src/slice`'s for contracts (v3.0.4); run the scorecard locally (T063) |
 | oapi-codegen | Apache-2.0 | 7.5 | |
-| oapi-codegen/runtime | Apache-2.0 | 7.2 (2026-10-26) | library imported by the generated code |
+| oapi-codegen/runtime | Apache-2.0 | 7.4 (2026-11-16) | library imported by the generated code |
 | Redocly CLI | MIT | not published | bundles contracts only; run locally (T063) |
 | Spectral | Apache-2.0 | 4.7 | low score; pinned by digest; watch |
 | oasdiff | Apache-2.0 | not published | run locally (task) |
@@ -274,8 +280,16 @@ fresh review round 1.
 | buildkit-syft-scanner | Apache-2.0 | not published | BuildKit's SBOM generator, a wrapper of syft (8.5, 2026-11-09); run locally (T063) |
 | go-arch-lint | MIT | 4.7 (2026-10-19) | the module-boundary check (D40); low score, built from source by the checksum database and a pinned module hash; watch |
 
+Re-run 2026-11-17 (T063, OpenSSF Scorecard API): every published score above is unchanged but
+oapi-codegen/runtime (7.2 to 7.4); Docker Agent, go-yaml, Redocly CLI, oasdiff and
+buildkit-syft-scanner still publish none. The other adopted tools' scores are in their
+`docs/components/` concepts: govulncheck 3.7, go-licenses 5.0, kin-openapi 4.9, gotestsum 3.6,
+markdownlint-cli2 5.4, golang.org/x/mod 5.2 (2026-11-09 to 2026-11-16).
+
 Custom code is limited to the engine, its checks, the slice model, the terminal client and the run
-page, none of which an existing project provides.
+page, none of which an existing project provides. Corrected 2026-11-17 (D56): the engine's durable
+execution (resume, checkpoints, retries, timeouts), its run store and its job queue are a
+capability that durable-execution engines provide; they were not evaluated until D56.
 
 ### D23. Event names
 
@@ -1384,6 +1398,8 @@ page, none of which an existing project provides.
 
 ### D39. Only a finding the check confirmed is recorded as blocking
 
+(Narrowed by D55, 2026-11-17: in a review round after the first, `confirmed` holds only findings within the round's scope.)
+
 - **Decision** (owner, 2026-11-15; found by T057's review, R5; the design is T092 and T096):
   - **Why**: the machine built the open list from the agent's own `blocking: true`
     (`src/engine/machine/drive.go`, the review loop), so a claim no witness confirmed was given to
@@ -1464,6 +1480,10 @@ page, none of which an existing project provides.
   refuses a binary whose `go version -m` module line is not the pinned version and hash. The
   owner accepted this (owner, 2026-11-15): the first fetch uses the network in the arch step's
   setup, and every later run is offline through `GOPROXY=file://…`.
+  The offline install also sets `GOSUMDB=off` (T098, 2026-11-17): in CI run 44111866994 it
+  failed with `--network none` because go asked `sum.golang.org` for a newer tree than the one it
+  had cached. The cache holds only modules verified when fetched, and the binary's module hash is
+  checked against the pin after the install.
 - **Offline running**: `check` runs with `--network none`, `GOPROXY=off`,
   `GOFLAGS=-mod=readonly` and `src/` mounted read-only. It needs only `go` on `PATH`, for `go list
   std`. The archfile is always a local path, because a URL would be fetched with `http.Get`. With
@@ -1701,3 +1721,356 @@ page, none of which an existing project provides.
   [Enabling push protection](https://docs.github.com/en/code-security/secret-scanning/enabling-secret-scanning-features/enabling-push-protection-for-your-repository);
   [Configuring default setup for code scanning](https://docs.github.com/en/code-security/code-scanning/enabling-code-scanning/configuring-default-setup-for-code-scanning);
   [GitHub security features](https://docs.github.com/en/code-security/getting-started/github-security-features).
+
+### D43. CI test results are JUnit reports shown by action-junit-report
+
+- **Decision** (owner, 2026-11-16): every Go test in `scripts/check.sh` runs through `gotestsum`,
+  which writes a JUnit XML file beside output equal to `go test`'s; `scripts/testrun.py` writes
+  JUnit XML for the Python check tests; in CI, `mikepenz/action-junit-report` turns the files into
+  each test job's summary (counts, and each failed test with its message) and annotations, with
+  `annotate_only: true`, so the workflow token stays read-only. Free disk is no longer reported.
+- **Why**: the job summaries said only that a job passed or failed; the owner wants the tests'
+  results, in the standard way, not a design of our own (T111).
+- **Candidates** (OpenSSF Scorecard API and GitHub, checked 2026-11-16):
+
+  | Project | Licence | Scorecard | Latest release | Fit |
+  |---------|---------|-----------|----------------|-----|
+  | `mikepenz/action-junit-report` | Apache-2.0 | 8.3 (2026-11-16) | v6.7.1, 2026-11-06 | Adopted: job summary and annotations without `checks: write` |
+  | `dorny/test-reporter` | MIT | 5.0 (2026-11-09) | v3.0.0, 2026-03-21 | Reads Go's JSON too, but its report is a check run, which needs `checks: write` |
+  | `robherley/go-test-action` | MIT | 4.6 (2026-11-02) | v1.1.0, 2026-05-23 | Go only, few users |
+  | `gotest.tools/gotestsum` | Apache-2.0 | 3.6 (2026-10-19) | v1.13.0, 2025-09-11 | Adopted: the most used Go JUnit writer (2.7k stars), runs `go test` and keeps its output and exit code |
+  | `jstemmer/go-junit-report` | MIT | 5.0 (2026-11-02) | v2.1.0, 2023-10-18 | Converter only; no release for three years |
+  | `unittest-xml-reporting` | NOASSERTION | 2.9 (2026-10-19) | 4.0.0, 2026-01-07 | Rejected: no OSI licence asserted (Principle VI), and it cannot see the classes `testrun.py --jobs` runs in other processes |
+
+- **Custom code** (Principle VI justification): `testrun.py` runs the tests and, with `--jobs`,
+  their classes in child processes, which today report only pass or fail and timings; each child's
+  report gains every test's outcome, message and time, and the parent writes them as JUnit with
+  the standard library's `xml.etree`. No candidate fits.
+- **Known limits**: gotestsum's Scorecard is low (no signed releases or fuzzing); it is a test-time
+  tool, never in a built image, pinned by version and installed through the checked Go module
+  proxy. The `ap test` jobs keep their own result lines (their suites run inside `ap test`).
+- **Recorded as** [ADR 0046](../../docs/decisions/0046-ci-test-results-are-junit-reports.md).
+- Sources: [action-junit-report](https://github.com/mikepenz/action-junit-report);
+  [gotestsum](https://github.com/gotestyourself/gotestsum);
+  [OpenSSF Scorecard API](https://api.securityscorecards.dev/);
+  [dorny/test-reporter](https://github.com/dorny/test-reporter);
+  [go-junit-report](https://github.com/jstemmer/go-junit-report);
+  [unittest-xml-reporting](https://github.com/xmlrunner/unittest-xml-reporting).
+
+### D44. End to end on the Compose stack against the recorded model
+
+- **Decision** (owner, 2026-11-16; T024): `scripts/e2e.sh` runs the real Compose stack the
+  launcher starts (`ap up`, `compose.yaml`, gVisor) against the recorded model, with no key, and
+  drives the end-to-end flow through `ap`: describe the example, answer the analyst's questions
+  (`0`, `400`), approve goals, rules and contract, `build-workers`, `build`, `replay`, `compare`.
+  It passes only when every command exits 0, the replay reused every step with no model call,
+  `compare` exits 0, the two projects' git trees are equal commit by commit, and the replay
+  server lists no miss. It is the `scripts/check.sh` step `e2e`: CI runs it as its own job, the
+  host only with `--only e2e`, and a full local run skips it and says so; the `ap-test-us2` and
+  `ap-test-planted` jobs stay.
+- **The seam**: Compose's own override file. When `AP_COMPOSE_OVERRIDE` is set, `ap up` adds that
+  one file after `compose.yaml` and keeps it in the session, so every later command uses it; it
+  refuses any file outside `src/tests/e2e/` (exit 3) and says on standard error that the model is
+  the recorded one. The override, `src/tests/e2e/compose.recorded.yaml`, replaces the gateway by
+  the pinned WireMock replay server at the gateway's fixed addresses, with no egress and no
+  secret, and gives the engine and the project worker volumes of their own, so the developer's
+  records are never used. The image pins come from `images.lock`.
+- **Why no new recording**: the step agents' requests name the run (`RUN-1`), the step, the
+  attempt and the project folder (`/projects/notes`), which the Compose stack and the lab mount
+  alike; with a fresh store and the analyst's recorded answers, the requests equal those of
+  `TestUS2`, so the committed `steps/happy` set and the analyst recordings answer them.
+- **Refusals**: `e2e.sh` exits 3, changing nothing, while a session exists or an
+  `agentic-platform` container or network is present (the fixed subnets cannot coexist).
+- **Where it runs**: CI on every push, as its own job; on the host only with `scripts/check.sh --only e2e` (owner, 2026-11-16: a full local run skips it, since the stack is heavy for the shared host). The
+  pre-commit hook runs no suite since T108, so D20's "git hooks run them before every commit" no
+  longer holds.
+- **Recorded as** [ADR 0047](../../docs/decisions/0047-end-to-end-on-the-compose-stack-with-the-recorded-model.md).
+- Sources: [Compose: merge and override](https://docs.docker.com/compose/how-tos/multiple-compose-files/merge/);
+  [WireMock](https://wiremock.org/docs/); `src/cli/contract.md`; `src/tests/recorded/README.md`.
+
+### D45. CI is the gate: evals started by hand, a keyless evals-current check, heavy suites only in CI
+
+- **Decision** (owner, 2026-11-16, after evals had started on most pushes and heavy suites had run
+  on the shared host for 15 to 50 minutes each): the workflows are designed so that nothing heavy
+  or paid runs without a reason.
+- **Evals by hand**: `evals.yml` has no `push` trigger. It runs only when the owner starts it
+  (`workflow_dispatch`, on `main` or `001-prose-to-accepted-slice`); its `config` job runs
+  `scripts/ci-evals-select.py` as for a push, against the branch's last successful evals run, so a
+  dispatched run starts only the suites whose inputs changed since then, and every suite when there
+  is no such run or when the dispatch input `all` is `true`. Before D45 a dispatch ran every suite
+  and every push that touched one of about 30 input paths (engine code and module files included)
+  started the suites it changed (T115).
+- **Nothing unproven reaches `main`**: a new keyless job `evals-current` in `check.yml` runs the
+  same selector against the last successful evals run on the pushed branch and lists the suites
+  whose evals are pending. On `001-prose-to-accepted-slice` it passes with a notice naming them; on
+  `main` it fails while any suite is pending. The notice is the job summary; with no suite pending the job writes no
+  summary (owner, 2026-11-17; T130). With no pull requests a merge is the push itself, so
+  that failure only detects a merge made without proven evals; the gate is the owner's merge step:
+  merge only when `evals-current` on the feature branch's head names no pending suite (constitution
+  XIX: before a merge). The base run is the latest successful evals run on either branch whose head
+  is an ancestor of the commit, since evals never run on `main`. It needs `actions: read` on that
+  job alone.
+- **Docs-only pushes** skip the heavy check jobs (T117, unchanged).
+- **Local work**: the commit hook and targeted tests that take seconds to a few minutes; the full
+  `scripts/check.sh`, the Docker step, `ap test` and `e2e.sh` run in CI. The host is small and
+  shared (D41).
+- **A fresh review judges the CI run**: the reviewer runs the tests that judge the change in its
+  own copy, and the full test command's run is the CI run of the pushed commit; the change is not
+  done until it is green. This amends the constitution's Fresh review rule (2.2.0,
+  [ADR 0049](../../docs/decisions/0049-fresh-review-judges-the-ci-run.md)).
+- **Recorded as** [ADR 0048](../../docs/decisions/0048-evals-started-by-hand-and-gated-before-main.md)
+  (supersedes ADR 0044 on when the evals run) and ADR 0049.
+- Sources: [GitHub Actions: workflow_dispatch](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch);
+  [GitHub Actions: job conditions](https://docs.github.com/en/actions/reference/workflows-and-actions/expressions);
+  constitution XIX.
+
+### D46. A failed eval job keeps its outputs for 7 days
+
+- **Decision** (owner, 2026-11-17, after `inject-skip-links` failed 2 of 3 trials in evals run
+  43969653100 and 0 of 3 on the host, so no failing answer could be read): when a live eval job
+  fails, `evals.yml` uploads that job's report folder (`EVAL_REPORT_DIR`: `report.json` and each
+  trial's raw output and Docker Agent events) as one workflow artifact per job, named after the
+  suite and its cases, kept 7 days. A passing job uploads nothing.
+- **What it holds**: the model's answers to the suites' own synthetic descriptions and fixtures,
+  the agents' prompts (public in the repository) and token use; no key (the key reaches only the
+  gateway, D41) and no user or tenant data. The repository is public, so its readers can see the
+  artifact while it is kept; that is acceptable for this content. Its retention is the
+  configured retention of this eval data (constitution XI). Artifacts are fetched over HTTPS; at rest
+  they are in GitHub's storage, whose encryption this project does not control, which is accepted
+  because the content holds no tenant or user data. `retention-days` sets the artifact's life
+  within the repository's limit (1 to 90 days for a public repository), and anyone with write
+  access can delete it before it expires (not restorable). No tenant or user
+  content can enter, since the inputs are the suites' own fixtures, so per-tenant and per-user
+  erasure does not apply. The report folder is outside `$RUNNER_TEMP`, where the key file is.
+- **Scanned first**: before the upload, the step runs the secret patterns of `scripts/check.sh`'s
+  `secrets` step over the folder and uploads only when none matches (defence in depth; the key
+  never reaches an agent).
+- **Tool**: `actions/upload-artifact` (GitHub's own; MIT; OpenSSF Scorecard 5.5 on 2026-11-09:
+  Code-Review 10, Dangerous-Workflow 10, Maintained 3, no signed releases), pinned at v7.0.2 by
+  commit `cf430e030ddbb5b0abf93d22962f4752f3646cd9`. No other action uploads and keeps files.
+- **Recorded as** [ADR 0050](../../docs/decisions/0050-failed-eval-jobs-keep-their-outputs.md).
+- Sources: [actions/upload-artifact](https://github.com/actions/upload-artifact);
+  [GitHub: workflow artifacts](https://docs.github.com/en/actions/concepts/workflows-and-actions/workflow-artifacts);
+  [GitHub: removing workflow artifacts](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/remove-workflow-artifacts);
+  [GitHub: retention period for artifacts](https://docs.github.com/en/organizations/managing-organization-settings/configuring-the-retention-period-for-github-actions-artifacts-and-logs-in-your-organization);
+  [OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/actions/upload-artifact).
+
+### D47. A green test report adds nothing to the job's summary
+
+- **Decision** (owner, 2026-11-17): the `go`, `docker` and `py-tests` report steps of
+  `.github/workflows/check.yml` add `skip_success_summary: true` to
+  `mikepenz/action-junit-report`, so a job whose tests all pass writes no results table to its
+  summary; a job with a failed test still shows the counts and each failed test with its
+  message. They also set `require_tests: true`, so a step that finds no test result fails the
+  job instead of passing silently (before, an empty report showed zero counts; now it would show
+  nothing). This replaces D43's "counts" for green jobs; the rest of D43 stands.
+- **Why**: on a green run the table held only counts, which the owner found confusing; whether each job passed is already in the run's
+  own job list and the run table of `scripts/ci-summary.py`.
+- **Evidence**: at the pinned commit, `skip_success_summary` is "Skips summaries that would not
+  contain failed tests" (`action.yml`); `buildSummaryTables` returns empty tables when no test
+  failed (`src/table.ts`), and `attachSummary` then adds no table, only a separator
+  (`src/annotator.ts`); the counts stay in the step's log (`core.info`, `src/annotator.ts`);
+  `require_tests` is "Fail if no test are found" (`action.yml`), applied in `src/main.ts`.
+- **Recorded as** [ADR 0051](../../docs/decisions/0051-a-green-test-report-stays-quiet.md).
+- Sources: [action-junit-report at v6.7.1](https://github.com/mikepenz/action-junit-report/tree/a16be3a69023e9bd7e748ede768b3282ea7b30ce).
+
+### D48. The analyst's broken links are sent back to it
+
+- **Decision** (owner, 2026-11-17): the engine sends every `slice.Trace` finding of an analyst
+  proposal back to the analyst with its other faults, within the pattern's `limits.attempts`.
+  Before, only a schema break, text that does not parse and an unreadable contract were sent
+  back (owner, 2026-11-12, `d77e7ad`); a broken link was stored as a failed check. When the last
+  attempt still has link findings only, that attempt's slice is stored with its failed checks;
+  any other fault on the last attempt still ends in `OperationFailed` with nothing stored (T125).
+- **Why**: T119's cause. An answer that follows an instruction injected into the description and
+  drops the `@R` tags failed the slice although the engine's own check had found the fault; the
+  platform, not the prompt, applies the project's rules at every step (Principle XX). Every Trace
+  finding is a link the analyst can repair from the reason it names.
+- **Measure**: the analyst evals go through the engine's retry (`retry_evals_test.go`), so they
+  judge the analyst with the engine, as in production; each trial's `attempts` stays in the
+  eval's output and `report.json`, so an answer that needed a second attempt remains visible.
+- Sources: `src/engine/slices/service.go` (`propose`, `unusable`); `src/slice/trace.go`;
+  evals runs 43969653100, 43977860199, 44038977132 and 44044430905.
+
+### D49. A green test job writes no summary at all
+
+- **Decision** (owner, 2026-11-17): the `go`, `docker` and `py-tests` report steps of
+  `.github/workflows/check.yml` set `job_summary: ${{ job.status != 'success' }}`, so
+  `mikepenz/action-junit-report` writes to the job's summary only when the job has failed. With
+  D47's `skip_success_summary` alone a green job still got a summary holding only the action's
+  separator line, which GitHub shows as an empty summary (run 44061592726). `skip_success_summary`
+  and `require_tests` stay: a step that finds no result still fails, and a failing job still
+  shows the counts and each failed test. This replaces D47's "only a separator" for green jobs.
+- **Evidence**: at the pinned commit the action writes the summary only when its `job_summary`
+  input is `true` (`src/main.ts`); `attachSummary` always adds a separator and writes
+  (`src/annotator.ts`); the `job` context is available in a step's `with` and `job.status` is the
+  job's current status, `success`, `failure` or `cancelled` (GitHub Actions contexts reference).
+- **Recorded as** [ADR 0052](../../docs/decisions/0052-a-green-test-job-writes-no-summary.md).
+- Sources: [action-junit-report at v6.7.1](https://github.com/mikepenz/action-junit-report/tree/a16be3a69023e9bd7e748ede768b3282ea7b30ce);
+  [GitHub Actions: contexts reference](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts).
+
+### D50. Each check job runs only when a file it judges changed
+
+- **Decision** (owner, 2026-11-17; extends T117): `.github/check-jobs.yaml` declares, per
+  `check.yml` job id, either `always: true` or `paths:`, a list of globs read in order as GitHub's
+  own `paths` filters are (a later pattern wins; `!` excludes). The `config` job runs one selector
+  over the files changed since the branch's last green `check` run whose head is an ancestor of
+  the pushed commit (the same base rule as the evals, T115 and T120), and each other job runs
+  only when the selector names it (only `paths` jobs carry the selector's `if:`; the always jobs,
+  `config` and `summary` carry none, owner 2026-11-17); every job runs for `workflow_dispatch`,
+  when there is no such run, or when its commit cannot be resolved. A test proves the declaration
+  names every job of `check.yml` once. First declaration:
+  - always: `layout`, `secrets`, `deps`, `evals-current` (constitution XIII: dependency, licence,
+    secret and static analysis on every change; T120: `evals-current` on every push);
+  - `markdown`: Markdown files, the markdownlint configuration, `scripts/tools/**` and
+    `scripts/check.sh`;
+  - `knowledge`: `docs/**`, `specs/**`, `scripts/okf.py` and `scripts/check.sh`;
+  - `markdown` and `knowledge` also list the CI files every job depends on: `.github/**`,
+    `scripts/ci-*`, `scripts/ci_select.py`, `scripts/check.sh`, `src/deploy/images.lock` and
+    `scripts/tools/**`, and `markdown` also `scripts/npm-tool.sh` (owner, 2026-11-17, after T117's
+    fresh review: a change to the CI machinery, the declaration or a pin runs every job; the other
+    jobs list every file but documentation, so they include these already);
+  - `py_tests`: every file except `specs/**`, `.specify/**` and `.claude/**`, since some of its
+    tests read `docs/` and the root `README.md` (`test_pre_commit_quick.py`, `test_workflows.py`);
+  - every other job (`contracts`, `contract_diff`, `gateway`, `go`, `docker`, `ap_test_us2`,
+    `ap_test_planted`, `e2e`, and `arch` once T098 adds it): every file except `docs/**`, `specs/**`, `.specify/**`,
+    `.claude/**` and Markdown at the root; narrower lists per job are later changes to the
+    declaration, not to code.
+  - A test that reads a file must run in a job whose paths include that file; a path list is
+    narrowed only after checking what the job's tests read; the CI files in `markdown` and
+    `knowledge` are the one deliberate exception and are never narrowed away as unjudged.
+- **Why**: a docs-only push started all 15 jobs, about 40 minutes of the `docker` job alone
+  (run 44061592726); the owner wants the CI to run what a change needs. Comparing with the last
+  green run, not the previous push, keeps a change whose run failed or was cancelled judged on
+  the next push.
+- **Rejected**: `dorny/paths-filter` (MIT, OpenSSF Scorecard 3.5 on 2026-11-16, below the
+  project's other actions); `tj-actions/changed-files`, compromised in a 2025 supply-chain attack;
+  GitHub's workflow-level `paths`, which filters whole workflows, not jobs. The selector exists
+  already (`scripts/ci-evals-select.py`); its base finding and glob matching move to one module
+  both selectors use (Single owner for rules).
+- **Summary**: `scripts/ci-summary.py` counts a job the selector skipped as passed and lists it
+  as skipped, and still fails a job skipped for any other reason.
+- **Recorded as** [ADR 0053](../../docs/decisions/0053-check-jobs-run-for-the-files-they-judge.md),
+  which supersedes ADR 0044's "every step of `scripts/check.sh` on every push".
+- Sources: [GitHub: workflow syntax, `paths` filter patterns](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax);
+  [OpenSSF Scorecard: dorny/paths-filter](https://api.securityscorecards.dev/projects/github.com/dorny/paths-filter);
+  run 44061592726.
+
+### D51. Every CI run has a name that says what it judges
+
+- **Decision** (owner, 2026-11-17; T128): `check.yml` gets `run-name: check · <branch> · <the
+  pushed commit's message>` for a push and `check · <branch> · started by <actor>` for a dispatch;
+  `evals.yml` gets `run-name: evals · <branch> · all suites|changed suites · started by <actor>`.
+  GitHub expressions cannot shorten a commit ID or cut a message to its first line, so the name
+  shows what the expression gives; `run-name` is display only and never reaches a shell.
+- **Amended** (owner, 2026-11-17, after run 44081368499 showed the whole multi-paragraph message):
+  `check.yml` has no `run-name` and keeps GitHub's default, the head commit's subject line for a
+  push; only `evals.yml`, started by hand, sets one.
+- Sources: [GitHub: workflow syntax, `run-name`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax).
+
+### D52. The check selector lists runs without GitHub's status filter
+
+- **Decision** (owner, 2026-11-17; T131): `check.yml`'s `config` job lists the workflow's runs
+  without `status=success` and leaves the choice of green runs to the selector, which keeps only
+  runs whose conclusion is `success` (D50).
+- **Why** (reproduced 2026-11-17, 12:10 UTC): `GET …/actions/workflows/check.yml/runs?status=success`
+  did not list run 44073473710, completed with conclusion `success` at 12:03, while the same list
+  without the filter did; run 44079665093 therefore took `7d00a8c` as its base and ran every job.
+  GitHub's documentation names the filter but states no such delay, so the filter is not relied on.
+- **Limit**: the 100 runs listed now include failed and cancelled ones, so on a busy branch the
+  newest green run can fall outside them; the selector then finds no base and runs every job (an
+  over-run, never a skip). Paging is T121's.
+- **Extended** (owner, 2026-11-17; T132): the evals selector's query (`evals.yml`'s `config` job and
+  `check.yml`'s `evals-current` job) lists `evals.yml` runs without `status=` too; the shared
+  `scripts/ci_select.py` already keeps only runs whose conclusion is `success`.
+- Sources: [GitHub REST API: workflow runs](https://docs.github.com/en/rest/actions/workflow-runs);
+  runs 44073473710 and 44079665093.
+
+### D53. CI workflows and jobs are named for what they judge
+
+- **Decision** (owner, 2026-11-17; T133): the GitHub display names of the workflows and jobs say
+  what they judge in plain words (T133 lists them); job ids stay, since `.github/check-jobs.yaml`,
+  the selectors, `needs` and the tests use them. The run summary shows the display names.
+- **Why**: the owner found ids such as `deps`, `ap-test-us2` and `evals-current` unreadable.
+- Sources: [GitHub: workflow syntax, `jobs.<job_id>.name`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax).
+
+### D54. The module-boundary check runs in CI, not in the pre-commit hook
+
+- **Decision** (owner, 2026-11-17; T098): the `arch` step of `scripts/check.sh` runs in its own
+  `check.yml` job, `arch` ("Module boundaries (go-arch-lint)"), with the code paths of D50; the
+  pre-commit hook does not run it. This supersedes D40's and ADR 0043's run "from the pre-commit
+  hook"; the rest of D40 stands, and `scripts/hooks/commit-msg` still protects the archfiles.
+- **Why**: since T108 the hook keeps only quick static checks and CI judges the rest (ADR 0044),
+  and the hook's tests (`scripts/tests/test_pre_commit_quick.py`) commit Go files into folders no
+  archfile maps, which the step refuses by design (D40: an unmapped package fails), so running it
+  in the hook would change those tests for no gain over the CI job.
+- Sources: [ADR 0043](../../docs/decisions/0043-module-boundaries-checked-by-go-arch-lint.md);
+  [ADR 0044](../../docs/decisions/0044-full-checks-run-on-github-hosted-runners.md).
+
+### D55. A later review round blocks only within its scope, judged by the check
+
+- **Decision** (owner, 2026-11-17; `/speckit-clarify`, FR-017; T135): in a review round after the
+  first, a finding its witness confirms blocks only when it repeats an open finding the round was
+  given (the same rule in the same file) or its line is among the lines the fix before the round
+  changed; any other confirmed finding is a suggestion. NoBlockingFindingOpen applies it: the
+  engine sends the round's open findings and the fix's changed lines in the check request's new
+  `round_scope` (an additive change to the check contract), and the verdict's `confirmed` holds
+  only findings within it. The changed lines are the ones the engine computes from the fix's files
+  against its `before` (`src/engine/steps/lines.go`), not a worker's claim.
+- **Why**: constitution, Review converges ("a review round after the first MUST check only the
+  open findings and the lines the fixes changed, and MAY raise a new blocking finding only for a
+  regression those fixes caused") and Principle XX (the platform applies the project's rules, not
+  the agent's instructions). Until T135 the rule was only in `src/agents/review/instruction.md`,
+  so a confirmed finding on an unchanged line still blocked (T070's converge, round 1). Each round
+  is given only the fix just before it, so its scope is what it was given: an earlier fix's lines
+  were the scope of the round after that fix. A repeat is matched by rule and file, not line,
+  because the fix moves lines.
+- **Rejected**: the lines of every earlier fix, renumbered to the current files (a diff of the
+  current files against those round 1 reviewed): a wider scope than the round is given, and a
+  second diff to own; filtering in the engine after the verdict: the check would say failed for a
+  round the engine accepts, and the rule would have two owners.
+- **Stated limits**: a regression on a line no fix changed, such as a caller broken by a changed
+  function, is only a suggestion (owner, 2026-11-17); a repeat is matched by rule and file, so a
+  finding of an open rule at another line of the same file still blocks.
+- Sources: constitution 2.2.0, Engineering Principles, Review converges; D11; D35; D39;
+  `src/engine/machine/drive.go` (`review`, `recordedFindings`).
+
+### D56. Durable execution: the custom engine for the MVP, Temporal after it
+
+- **Decision** (owner, 2026-11-17): the MVP keeps its own durable execution: the step machine's
+  resume, checkpoints, retries and timeouts (`src/engine/machine`), the run store
+  (`src/engine/store`) and the job queue behind operations (`src/engine/api/operations.go`).
+  The first task after the MVP (T151) adopts Temporal for these, with the engine's checks, review
+  rules, reuse keys, slices and artifacts as its workflow and activities. Until then the retry
+  waits keep their three hand-written forms (`api/operations.go`, `machine/drive.go`,
+  `cli/runs.go`).
+- **Why**: Principle VI says custom code for a capability OSS covers needs a written
+  justification, and this one had none: D8 and D21 set durable-execution engines aside without
+  an evaluation. The evaluation (S17), on 2026-11-17:
+
+  | Project | Licence | Scorecard | Health | Store it needs |
+  |---------|---------|-----------|--------|----------------|
+  | Temporal server | MIT | 6.1 | v1.32.2 (2026-11-02), commits daily | PostgreSQL, MySQL or SQLite (persistence and visibility) |
+  | Temporal Go SDK | MIT | 7.0 | v1.51.0 (2026-11-10) | — |
+  | DBOS Transact Go | MIT | not published | v1.8.0 (2026-10-28), younger | PostgreSQL |
+  | River (job queue only) | MPL-2.0 | 6.2 | v0.51.2 (2026-11-09) | PostgreSQL or SQLite |
+  | cenkalti/backoff (retries only) | MIT | 5.5 | active | — |
+
+  Against the OpenSSF Concise Guide, Temporal's server (Scorecard checks, 2026-11-09): maintained
+  (Maintained 10, a known owner, Temporal Technologies, 100 or more contributors), reviewed (Code-Review
+  10), MIT licence checked; release archives carry `checksums.txt` but are not signed
+  (Signed-Releases 0) and the repository has no security policy (Security-Policy 0), so T151 pins
+  its images by digest and records both gaps in its component concept. Temporal covers all three
+  parts in one project, has the highest Scorecard and the largest community, and runs self-hosted in Compose and offline (its Compose examples are in
+  `temporalio/samples-server`). The MVP keeps its own because the engine is built, tested and
+  green in CI (run 44157173351), and moving now would rewrite `machine` (about 1,800 lines and
+  most of its tests, each test change needing the owner's approval) and add a Temporal server and
+  a database to a small host before the MVP is accepted.
+- **Rejected**: adopting Temporal before the MVP (the rewrite above, owner); DBOS Transact Go (no
+  published Scorecard, younger, a PostgreSQL server); River plus a store plus a retry library
+  (three projects for what Temporal does in one, and no durable step history).
+- **Stated limits**: Temporal's defaults cap a payload at 2 MB and a run's history at 50 MB or
+  51,200 events, so artifacts travel by hash, not inside Temporal (Reliable events: large payloads
+  by reference). The retries' three forms break "Single owner for rules" until T151.
+- Sources: S17; [Temporal reference](../../docs/references/temporal.md); constitution 2.2.0,
+  Principle VI; D8; D21; ADR 0026.

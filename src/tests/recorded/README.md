@@ -44,6 +44,8 @@ stream). Do not edit either by hand; record or synthesise again.
 | Recording | Agent and input | Answer | Origin |
 |-----------|-----------------|--------|--------|
 | `analyst-example-notes` | The analyst (`src/agents/analyst.yaml`) with the quickstart example description (`Example` in `../evals/analyst/cases.go`) | One call of the structured-output tool with `../evals/analyst/testdata/proposals/good-notes.json` | Synthesised, no model call (below) |
+| `analyst-cli-python` | The analyst with `cliDescription` in `../acceptance/us1_test.go` (a Python command-line tool) | A proposal whose contract has `paths: {}` | Recorded from the provider (Haiku); prompt renewed (below) |
+| `analyst-notes-answered` | The analyst with the notes description and the developer's answers | A proposal for the notes service | Recorded from the provider (Haiku); prompt renewed (below) |
 
 `analyst-example-notes` was not recorded from the provider. Its request is the one the analyst sent
 to an empty replay server (taken from `misses`), and its answer was built by
@@ -57,6 +59,29 @@ cd src/tests
 go run ./recorded/recording synth -request <request-body.json> \
   -proposal evals/analyst/testdata/proposals/good-notes.json \
   | go run ./recorded/recording write -dir recorded/recordings -name analyst-example-notes
+```
+
+## After a change to an agent's instruction
+
+Every recording of an agent matches its request exactly, so a change to the agent's instruction
+makes them all miss. When the change is not meant to change what these replays show (they judge
+the platform's handling; the agent's live evals judge the model), the owner may renew them without
+a model call: in each of the agent's mappings the old instruction text (stripped, as JSON) is replaced by the
+new one and the answers stay byte-identical (T110 (g), 2026-11-16, for the three analyst
+recordings). A revision's request also names the agent definition's digest (`agent_digest` in its
+current proposal), which the instruction changes: replace the old digest by the new one too (the
+engine computes it from its generated copy, `scripts/generate.sh`; a replay miss logged by
+`Lab.Wait` shows it). From the repository root, with the old instruction in `old.md`:
+
+```sh
+python3 - old.md src/agents/analyst/instruction.md src/tests/recorded/recordings/mappings/analyst-*.json <<'PY'
+import json, sys
+old, new = (json.dumps(open(f).read().strip())[1:-1] for f in sys.argv[1:3])
+for m in sys.argv[3:]:
+    text = open(m).read()
+    assert text.count(old) == 1, m + " does not hold the old instruction once"
+    open(m, "w").write(text.replace(old, new))
+PY
 ```
 
 ## Recording from the provider (owner only, costs money)

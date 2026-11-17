@@ -440,8 +440,10 @@ the Core Principle wins and the conflict MUST be raised for an amendment.
 - **Fresh review**: The author MUST NOT review its own work, or write the tests that judge it. A
   fresh reviewer is a person, or an agent session that never saw the work being built, made
   read-only by tool permissions, not by instruction. It MUST work in its own copy of the
-  repository, including the working tree's uncommitted and untracked changes, and run the test
-  command there. Parallel fresh reviewers MUST NOT share a copy. A fresh agent review MUST NOT
+  repository, including the working tree's uncommitted and untracked changes, and run there the
+  tests that judge the change. The full test command's run is the CI run of the pushed commit, and
+  the change is not done until that run is green
+  ([ADR 0049](../../docs/decisions/0049-fresh-review-judges-the-ci-run.md)). Parallel fresh reviewers MUST NOT share a copy. A fresh agent review MUST NOT
   replace the human approval that Principle XVI requires.
 - **Existing tests change only with the owner's approval**: An existing test, test helper,
   fixture, test data, planted case, grader, threshold, or eval case MUST be modified, renamed,
@@ -573,4 +575,4 @@ Rationale: [ADR 0025](../../docs/decisions/0025-engineering-principles.md).
   - PATCH for clarifications and wording that do not change meaning
 - Compliance is checked in every plan's Constitution Check and in `/speckit-analyze`.
 
-**Version**: 2.1.0 | **Ratified**: 2026-11-11 | **Last Amended**: 2026-11-14
+**Version**: 2.2.0 | **Ratified**: 2026-11-11 | **Last Amended**: 2026-11-16

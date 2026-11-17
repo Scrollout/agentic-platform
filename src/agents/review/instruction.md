@@ -65,9 +65,12 @@ A witness shows, by running the code, that the fault is real. For a finding on r
 - Its package is `r<n>` (`package r1`). Every file in that folder is one package, so declare no
   name another file there already declares.
 - It imports only the standard library and the project's own packages, under the module path from
-  `go.mod`. To call the service, serve `gen.Handler(app.New())` (from `<module>/gen` and
-  `<module>/internal/app`) with `net/http/httptest`, as the tests do, and send the requests the
-  contract allows.
+  `go.mod`. To call the service, start `srv := httptest.NewServer(gen.Handler(app.New()))` (from
+  `net/http/httptest`, `<module>/gen` and `<module>/internal/app`), `defer srv.Close()`, and send
+  the requests the contract allows with `srv.Client()` to `srv.URL`. Never call the handler's
+  `ServeHTTP` yourself: if the code panics there, the panic stops the test before the platform
+  records which lines ran, and your finding is not confirmed. Through the server, a panic only
+  fails the request, and your witness fails having run the line.
 - It declares the test function the finding names, `func TestR<n><Name>(t *testing.T)`: `TestR`,
   the rule's number, then a name that starts with a letter (`TestR1ListKeepsEveryNote`).
 - It sends the request that reaches the faulty line, then checks what the rule and the contract

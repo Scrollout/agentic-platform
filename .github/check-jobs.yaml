@@ -1,0 +1,62 @@
+# What each job of .github/workflows/check.yml judges (T117; research D50, ADR 0053): `always: true`,
+# or `paths:`, globs read in order as GitHub's `paths` filters are (a later pattern wins, `!`
+# excludes). check.yml's config job runs scripts/ci-check-select.py, which names the jobs whose
+# paths a file changed since the branch's last green check run; only `paths` jobs carry its `if:`.
+# Every job of check.yml but config and summary is named here once
+# (scripts/tests/test_check_jobs_declaration.py). A test that reads a file must run in a job whose
+# paths include that file. Changing this file needs the owner's Approved-by.
+jobs:
+  # Constitution XIII: dependency, licence, secret and static analysis on every change; T120:
+  # evals-current on every push.
+  layout: {always: true}
+  secrets: {always: true}
+  deps: {always: true}
+  evals-current: {always: true}
+  # markdown and knowledge also list the CI files every job depends on, so a change to the CI
+  # machinery, this declaration or a pin runs every job (D50, owner 2026-11-17); the other jobs
+  # list every file but documentation, so they include these already.
+  markdown:
+    paths:
+      - .github/**
+      - scripts/ci-*
+      - scripts/ci_select.py
+      - scripts/check.sh
+      - src/deploy/images.lock
+      - scripts/tools/**
+      - scripts/npm-tool.sh
+      - "**.md"
+      - scripts/repo.markdownlint-cli2.jsonc
+  knowledge:
+    paths:
+      - .github/**
+      - scripts/ci-*
+      - scripts/ci_select.py
+      - scripts/check.sh
+      - src/deploy/images.lock
+      - scripts/tools/**
+      - docs/**
+      - specs/**
+      - scripts/okf.py
+  # Some of its tests read docs/ and the root README.md.
+  py_tests:
+    paths:
+      - "**"
+      - "!specs/**"
+      - "!.specify/**"
+      - "!.claude/**"
+  contracts:
+    paths: &code
+      - "**"
+      - "!docs/**"
+      - "!specs/**"
+      - "!.specify/**"
+      - "!.claude/**"
+      - "!*.md"
+  contract_diff: {paths: *code}
+  gateway: {paths: *code}
+  go: {paths: *code}
+  arch: {paths: *code}
+  docker: {paths: *code}
+  ap_test_planted: {paths: *code}
+  ap_test_us2: {paths: *code}
+  e2e: {paths: *code}

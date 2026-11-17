@@ -82,6 +82,7 @@ type Config struct {
 const (
 	contractLintPasses    = "ContractLintPasses"
 	findingsCarryEvidence = "FindingsCarryEvidence"
+	noBlockingFindingOpen = "NoBlockingFindingOpen"
 	// contractOutput is the output that holds the contract, one file (check contract, Artifacts).
 	contractOutput = "contract"
 )
@@ -578,6 +579,13 @@ func (c *checker) Check(ctx context.Context, r machine.CheckRequest) (machine.Ch
 	}
 	if lines := projectLines(r.Result.ChangedLines); len(lines) > 0 {
 		body.ChangedLines = &lines
+	}
+	if r.Name == noBlockingFindingOpen && r.Round > 1 { // the round's scope (research D55)
+		open, _, _ := projectFindings(r.Open)
+		body.RoundScope = &struct {
+			ChangedLines []gen.ChangedLine `json:"changed_lines"`
+			Open         []gen.Finding     `json:"open"`
+		}{ChangedLines: projectLines(r.ChangedLines), Open: open}
 	}
 	resp, err := c.check.RunCheckWithResponse(ctx, r.Name, &gen.RunCheckParams{ApiVersion: checksvc.APIVersion()}, body)
 	if err != nil {

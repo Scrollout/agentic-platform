@@ -432,7 +432,8 @@ func (x *driver) attempt(ctx context.Context, s Step, at attemptOf) (Result, ver
 	var confirmed []int       // NoBlockingFindingOpen's confirmed findings (ADR 0042)
 	for _, name := range s.Checks {
 		cr, cerr := x.m.cfg.Checker.Check(ctx, CheckRequest{Run: x.r.ID, Step: s, Attempt: at.n, Name: name, Result: res,
-			Round: at.round, Inputs: slices.Clone(at.inputs), Slice: x.r.Slice, Project: x.r.Project})
+			Round: at.round, Inputs: slices.Clone(at.inputs), Slice: x.r.Slice, Project: x.r.Project,
+			Open: slices.Clone(at.open), ChangedLines: slices.Clone(at.changed)})
 		if cerr != nil {
 			cr = CheckResult{Passed: false, Reason: "the check could not run: " + cerr.Error()}
 		}

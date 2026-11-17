@@ -2,7 +2,9 @@ package steps
 
 // The graders. Each one is a deterministic rule over the project the agent left (and the project it
 // started from), and each reuses the platform's own check in engine/checks, so the eval and the
-// engine cannot disagree about what a good step is. No grader calls a model (constitution XIX, XX).
+// engine cannot disagree about what a good step is; the one exception is WitnessServesThroughServer
+// (grade_server.go), a rule of the review agent's behaviour. No grader calls a model (constitution
+// XIX, XX).
 
 import (
 	"fmt"
@@ -29,6 +31,7 @@ const (
 	GPlantedFound = "PlantedFindingNamed"
 	GPlantedOpen  = "PlantedFindingConfirmed"
 	GNoneOpen     = "NoConfirmedBlockingFinding"
+	GThroughSrv   = "WitnessServesThroughServer"
 )
 
 // Result is one grader's verdict. Reason is never empty.

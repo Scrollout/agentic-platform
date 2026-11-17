@@ -1,7 +1,7 @@
 ---
 type: Decision
 title: "ADR 0025: Engineering Principles"
-description: Why the constitution adopts the Engineering Principles.
+description: Amended in part by ADR 0049 (the fresh review judges the CI run). Why the constitution adopts the Engineering Principles.
 tags: [decisions, constitution]
 status: draft
 decision: accepted
@@ -31,6 +31,8 @@ generated: { by: claude-code/claude-opus-5-5, at: 2026-11-11T20:40:00Z }
 ---
 
 # Origin
+
+> Amended in part by [ADR 0049](/decisions/0049-fresh-review-judges-the-ci-run.md): a fresh reviewer runs the tests that judge the change, and the full test command's run is the CI run of the pushed commit.
 
 The project owner ratified the constitution, with the Engineering Principles, on 2026-11-11.
 Constitution v1.4.0 moved this rationale out of the constitution into this record, without changing

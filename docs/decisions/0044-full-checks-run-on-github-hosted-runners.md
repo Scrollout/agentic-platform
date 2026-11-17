@@ -1,7 +1,7 @@
 ---
 type: Decision
 title: "ADR 0044: The full checks run on GitHub-hosted runners, in a public repository"
-description: The repository moves to github.com/Scrollout/agentic-platform, public; GitHub Actions runs the full scripts/check.sh and the acceptance suites on standard hosted runners on every push, the live evals with the test key from the environment dev when an agent, prompt, model or Docker Agent changes, and the pre-commit hook keeps only the quick static checks. No pull requests, branch protection or code owners.
+description: Superseded in part by ADR 0048 (when the evals run). The repository moves to github.com/Scrollout/agentic-platform, public; GitHub Actions runs the full scripts/check.sh and the acceptance suites on standard hosted runners on every push, the live evals with the test key from the environment dev when an agent, prompt, model or Docker Agent changes, and the pre-commit hook keeps only the quick static checks. No pull requests, branch protection or code owners.
 tags: [decisions, ci, supply-chain, security]
 status: draft
 decision: accepted
@@ -28,6 +28,8 @@ generated: { by: claude-code/claude-opus-5-5, at: 2026-11-16T12:00:00Z }
 ---
 
 # Origin
+
+> Superseded in part by [ADR 0048](/decisions/0048-evals-started-by-hand-and-gated-before-main.md): the live evals run only when the owner starts them, and a keyless check job fails on `main` while a suite's evals are pending.
 
 On 2026-11-12 the owner set GitHub aside, and `scripts/check.sh` with the git hooks became the
 project's CI on the owner's host. That host is small and shared with other projects: the

@@ -22,8 +22,18 @@ A fresh clone of the repository, or a change to the hooks.
    and removes the directory on exit. Untracked files and unstaged changes, such as another
    person's work in progress, cannot change the result, and a staged file whose working copy
    differs is checked as staged. It prints the snapshot, the staged files and each check it runs.
-   The full suite, `scripts/check.sh`, runs in CI (GitHub Actions) on every push, and a task is
-   done when that run is green ([ADR 0044](/decisions/0044-full-checks-run-on-github-hosted-runners.md)).
+   The full suite, `scripts/check.sh`, runs in CI (GitHub Actions): each push runs the jobs whose
+   files changed since the last green run, a dispatch runs them all, and a task is done when that
+   run is green ([ADR 0044](/decisions/0044-full-checks-run-on-github-hosted-runners.md),
+   [ADR 0053](/decisions/0053-check-jobs-run-for-the-files-they-judge.md)).
+   Locally, run only targeted tests that take seconds to a few minutes; the Docker step, `ap test`
+   and `e2e.sh` run in CI, and a fresh review judges that CI run
+   ([ADR 0049](/decisions/0049-fresh-review-judges-the-ci-run.md)). The live evals run only when
+   the owner starts them ([ADR 0048](/decisions/0048-evals-started-by-hand-and-gated-before-main.md)).
+   The owner merges the feature branch into `main` only when the `evals-current` job on the
+   feature branch's head names no pending suite: start the evals there first
+   (`gh workflow run evals.yml --ref <branch>`), and after they pass re-run that check run's
+   `evals-current` job (Actions page, or `gh run rerun <run-id> --job <job-id>`).
 3. The hook that judges a commit is the one in that commit. `core.hooksPath` points at the
    working tree, so git starts the working-tree copy of the hook, which may be half edited. The
    hook's first block reads the staged `scripts/hooks/pre-commit` from the index and, if it

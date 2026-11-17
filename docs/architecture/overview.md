@@ -23,7 +23,7 @@ sources:
   - id: adr-0039
     resource: /decisions/0039-review-findings-confirmed-by-a-new-witness-test.md
     title: "ADR 0039: A blocking review finding is confirmed by a new failing witness test the review writes"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-13T20:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-17T22:00:00Z }
 ---
 
 # Context
@@ -38,7 +38,9 @@ Agents run on [Docker Agent](/references/docker-agent.md)
 ([ADR 0002](/decisions/0002-build-on-docker-agent.md)); interactive clients will share sessions
 through the [Agent Host Protocol](/references/agent-host-protocol.md)
 ([ADR 0003](/decisions/0003-ahp-client-session-protocol.md)). Feature 001 builds one slice of the
-platform on one machine ([ADR 0026](/decisions/0026-deterministic-workflow-engine.md)).
+platform on one machine ([ADR 0026](/decisions/0026-deterministic-workflow-engine.md)). Its durable
+execution (resume, checkpoints, retries, run history, the job queue) is the engine's own for the
+MVP; after the MVP it moves to Temporal ([ADR 0056](/decisions/0056-durable-execution-custom-for-the-mvp-temporal-after.md)).
 
 Shipped by Story 1:
 
@@ -57,9 +59,10 @@ Shipped by Story 1:
 - **Model gateway**: [nginx](/components/nginx.md), the only container with egress and the only one
   that holds the provider key.
 - **Terminal client** (`src/cli`): calls the engine API. The read-only **run page** (`src/page`)
-  arrives with Story 2 (T056); until then `ap up` starts without it.
+  shows a run's record through `page-proxy` on 127.0.0.1 (`ap page` prints its address); the
+  end-to-end job builds and checks it (T156).
 
-Shipped by Story 2 so far:
+Shipped by Story 2:
 
 - **Check service** (`src/engine/cmd/check`, contract in `src/check`): serves one
   [contract](../../src/check/api/preview/2026-11-13-preview/openapi.yaml) that only the engine
@@ -77,6 +80,9 @@ Shipped by Story 2 so far:
   any other finding is a suggestion
   ([ADR 0039](/decisions/0039-review-findings-confirmed-by-a-new-witness-test.md), superseding the
   rule-test rerun of [ADR 0031](/decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md)).
+  In a review round after the first, the check keeps a confirmed finding blocking only when it
+  repeats an open finding or sits on a line the fix before the round changed; the engine sends it
+  that scope from the run ([ADR 0055](/decisions/0055-a-later-review-round-blocks-only-within-its-scope.md)).
   Before every attempt it calls the project worker's `restoreStep`, and after every accepted or
   reused step its `commitStep`, retried with backoff with jitter and otherwise interrupting the
   run (T053e).
@@ -113,8 +119,9 @@ Built for Story 2 (T053a, split into T053c to T053e, all done):
   writing nothing there
   ([ADR 0036](/decisions/0036-step-containers-per-project-resume-reuses-them.md)).
 
-Still planned: T053a's end-to-end run through `ap build-workers`, a real build and the hand-over
-(research D29 and D30, [ADR 0030](/decisions/0030-agent-steps-on-docker-agent-checks-in-a-check-service.md)).
+The end-to-end build through `ap build-workers` ran on live Haiku on 2026-11-15 (T053a): a run
+ended done, and its replay reused every step with no model call (research D29 and D30,
+[ADR 0030](/decisions/0030-agent-steps-on-docker-agent-checks-in-a-check-service.md)).
 
 Every container runs read-only with all capabilities dropped; the analyst, contract-lint, the check
 service and the workers run under [gVisor](/components/gvisor.md). Networks are internal and isolated: `clients`,

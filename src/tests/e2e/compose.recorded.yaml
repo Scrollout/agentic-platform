@@ -1,0 +1,51 @@
+# The recorded model for scripts/e2e.sh (T024; research D44, ADR 0047): a Compose override that
+# `ap up` takes from AP_COMPOSE_OVERRIDE, only from this folder (src/cli/contract.md "The recorded
+# model, for tests only"). It replaces the gateway by the pinned WireMock replay server at the
+# gateway's fixed addresses, with no egress and no secret, and gives the engine's store and the
+# project worker's history volumes of their own, so the developer's records are never used.
+# Inputs, set by scripts/e2e.sh: AP_REPLAY_IMAGE (the wiremock pin of src/deploy/images.lock) and
+# AP_REPLAY_DIR (the folder `src/tests/recorded/replay.sh prepare` wrote: mappings/, __files/ and
+# wiremock.env with the admin API's options, whose one home is replay.sh). A change here needs the
+# owner's Approved-by (scripts/hooks/commit-msg protects src/tests/).
+services:
+  gateway:
+    image: ${AP_REPLAY_IMAGE:?set AP_REPLAY_IMAGE to the wiremock pin in src/deploy/images.lock (scripts/e2e.sh does this)}
+    user: "65532:65532"
+    command: ["--port", "8080"]
+    # The image's own healthcheck asks the admin API without the credential, which now refuses it;
+    # ask with the credential, as replay.sh's admin does (and `ap up --wait` waits for it).
+    healthcheck:
+      test: ["CMD-SHELL", "set -- $$WIREMOCK_OPTIONS; wget -qO- \"http://$$2@127.0.0.1:8080/__admin/health\" >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+      start_interval: 2s
+    environment: !override {}
+    env_file: !override
+      - ${AP_REPLAY_DIR:?set AP_REPLAY_DIR to the folder replay.sh prepare wrote (scripts/e2e.sh does this)}/wiremock.env
+    secrets: !reset []
+    volumes: !override
+      - { type: bind, source: "${AP_REPLAY_DIR}", target: /home/wiremock, read_only: true }
+    tmpfs: !override
+      - /tmp:uid=65532,gid=65532,size=64m
+    networks: !override
+      agents: { ipv4_address: 10.231.1.3 }
+      analyst: { ipv4_address: 10.231.7.3 }
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 512m, pids: 256 }
+
+  engine:
+    volumes: !override
+      - { type: volume, source: e2e-engine-store, target: /var/lib/engine }
+      - { type: bind, source: "${AP_GRANTS_DIR:-/nonexistent/ap-grants-dir-is-set-by-ap-up}", target: /var/lib/engine-grants, read_only: true }
+
+  project-worker:
+    volumes: !override
+      - { type: bind, source: "${AP_PROJECTS_DIR:?set AP_PROJECTS_DIR to the projects folder (ap up does this)}", target: /projects }
+      - { type: volume, source: e2e-project-worker-state, target: /var/lib/project-worker }
+
+volumes:
+  e2e-engine-store: {}
+  e2e-project-worker-state: {}

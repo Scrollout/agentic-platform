@@ -264,7 +264,20 @@ paths:
         run only decides whether a finding blocks, so a blocking finding it does not confirm is a
         suggestion and leaves FindingsCarryEvidence passing; a blocking finding with no `witness`
         is a suggestion too. NoBlockingFindingOpen, no blocking finding is confirmed by its
-        witness run; any other finding is a suggestion and leaves it passing. Its verdict names the
+        witness run; any other finding is a suggestion and leaves it passing. In a review round
+        after the first (`round` above 1) it also needs `round_scope`, and a finding its witness run
+        confirms counts as confirmed only within that scope: its `rule` and `file` equal those of an
+        entry of `round_scope.open`, or its `file` and `line` equal an entry of
+        `round_scope.changed_lines` (a repeat needs both the rule and the file; with no changed
+        lines only a repeat can block); a finding confirmed outside the scope is a suggestion and is
+        not in `confirmed` or `refs`, and the reason gives, for each, `finding <position>
+        (<rule> <file>:<line>) is outside round <round>'s scope: a suggestion`, `<position>` being
+        its 0-based position in the request's `findings`, as in `confirmed`, joined with the
+        reason's other parts by "; " (FR-017, constitution Review converges; research D55). When
+        every confirmed finding is outside the scope the check passes, with `confirmed` empty. A
+        NoBlockingFindingOpen request with `round_scope` and no `round`, or with `round` 1, or with
+        `round` above 1 and no `round_scope`, is refused with 400 InvalidRequest; every other check
+        ignores `round_scope`. Its verdict names the
         confirmed findings in `confirmed`. The witness run
         (each of the two checks, once per finding that carries a witness): `go test -json
         -count=1 -covermode=set -coverpkg=./... -coverprofile=<a file outside the project> -run
@@ -1118,9 +1131,11 @@ components:
         platform data, not a step input, and the checks that compare the project with the approval
         read only this field. `inputs` are the step's declared inputs by hash, in the pattern's
         order. `outputs` are the attempt's outputs by hash,
-        one per declared output, as readStepFiles or runProcedure returned them. `findings` and
-        `changed_lines` are what the attempt's worker reported (the review step's findings; a fix's
-        changed lines); a check treats them as claims to verify, never as facts: FindingsCarryEvidence
+        one per declared output, as readStepFiles or runProcedure returned them. `findings` are what
+        the review step's worker reported, and `changed_lines` are the lines the attempt added or
+        changed, which the engine computes from the attempt's files against `before`, never from an
+        answer; no check reads `changed_lines`, and a later review round's scope comes only from
+        `round_scope`. A check treats `findings` as claims to verify, never as facts: FindingsCarryEvidence
         and NoBlockingFindingOpen confirm a finding only by running the witness test it names
         (runCheck).
       allOf:
@@ -1163,6 +1178,32 @@ components:
             maxItems: 2000
             items:
               $ref: ../../../../engine/api/preview/2026-11-12-preview/run-event.schema.json#/properties/changed_lines/items
+          round_scope:
+            type: object
+            description: >-
+              A review round after the first only: what the round was given, filled by the engine
+              from the run, never from a worker's answer (research D55). `open` are the findings
+              the round before recorded as blocking (those its NoBlockingFindingOpen confirmed), in
+              their recorded order; the check reads only their `rule` and `file`. `changed_lines` are
+              the lines the fix before the round changed, as the fix's accepted or reused result
+              recorded them (empty when the fix changed none). NoBlockingFindingOpen confirms a
+              finding only within this scope (runCheck).
+            required:
+            - open
+            - changed_lines
+            additionalProperties: false
+            properties:
+              open:
+                type: array
+                minItems: 1
+                maxItems: 100
+                items:
+                  $ref: '#/components/schemas/Finding'
+              changed_lines:
+                type: array
+                maxItems: 2000
+                items:
+                  $ref: ../../../../engine/api/preview/2026-11-12-preview/run-event.schema.json#/properties/changed_lines/items
       unevaluatedProperties: false
     CheckVerdict:
       type: object
@@ -1209,7 +1250,8 @@ components:
           uniqueItems: true
           description: "NoBlockingFindingOpen only, on every verdict it gives: the 0-based positions,
             ascending, in the request's `findings` of the blocking findings whose witness run
-            confirmed them (FR-017); empty when the check passes. The engine records exactly these
+            confirmed them and, in a review round after the first, that are within `round_scope`
+            (FR-017, research D55); empty when the check passes. The engine records exactly these
             findings as blocking, every other one as a suggestion. No other check sends it."
           items:
             type: integer

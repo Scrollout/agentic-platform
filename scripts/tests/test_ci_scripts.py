@@ -1,4 +1,6 @@
 """Contracts of the CI helper scripts (T107, T109; research D41, ADR 0044), written before them.
+T126 (owner-approved 2026-11-17): ci-step.sh writes nothing to $GITHUB_STEP_SUMMARY; its
+$GITHUB_OUTPUT keeps `seconds` and, on failure, `error`.
 
 scripts/ci-step.sh, scripts/ci-summary.py, scripts/ci-gvisor.sh, scripts/ci-evals-summary.py and
 the `--prepare` mode of scripts/check.sh. Where a real tool would be heavy or need root (docker,
@@ -73,7 +75,7 @@ class CiStepTest(unittest.TestCase):
         return run([STEP, name, *cmd], env=env or self.env, cwd=self.t)
 
     def text(self):
-        return self.summary.read_text()
+        return self.summary.read_text() if self.summary.exists() else ""
 
     def test_prints_the_commands_output(self):
         r = self.step("demo", "sh", "-c", "echo hello-out; echo hello-err >&2")
@@ -90,112 +92,41 @@ class CiStepTest(unittest.TestCase):
         r = self.step("demo", "sh", "-c", 'echo "[$1]"', "x", "a  b")
         self.assertIn("[a  b]", r.stdout + r.stderr)
 
-    def test_summary_of_a_passing_step(self):
-        self.step("my-step-name", "sh", "-c", "echo ok")
-        s = self.text()
-        self.assertIn("my-step-name", s)
-        self.assertRegex(s, r"(?i)pass")
-        self.assertNotRegex(s, r"(?i)fail")
-        self.assertIn("sh -c", s)                      # the command
-        self.assertRegex(s, r"(?i)time|seconds|\d+\s*s\b")
-
-    def test_summary_of_a_failing_step_names_the_exit_code(self):
-        self.step("my-step-name", "sh", "-c", "exit 7")
-        s = self.text()
-        self.assertRegex(s, r"(?i)fail")
-        self.assertNotRegex(s, r"(?i)\bpassed\b")
-        self.assertRegex(s, r"\b7\b")
-
-    def test_summary_records_the_runners_free_disk(self):
-        self.step("demo", "true")
-        self.assertIn("DF-STUB-ROW", self.text())
-        self.assertIn("-h", self.text().split("DF-STUB", 1)[1].split("\n", 1)[0])
-
-    def test_summary_holds_the_timing_table_when_the_command_prints_one(self):
-        self.step("demo", "sh", "-c", NOISE + "; " + TABLE)
-        s = self.text()
-        self.assertIn("== time per step", s)
-        self.assertIn("12.5  (1.0 / 10.5 / 1.0)", s)
-        self.assertNotRegex(s, r"noise-70\b")
-
-    def test_summary_holds_the_last_40_lines_without_a_table(self):
-        self.step("demo", "sh", "-c", NOISE)
-        s = self.text()
-        self.assertRegex(s, r"noise-100\b")
-        self.assertRegex(s, r"noise-61\b")
-        self.assertNotRegex(s, r"noise-60\b")
-        self.assertNotRegex(s, r"noise-1\b")
+    def test_writes_nothing_to_the_summary_whatever_the_command_does(self):
+        """T126: the job's line, the `ap test` result lines and the last 40 lines stay in the log."""
+        cases = {"pass": "echo ok", "fail": "exit 7", "noise-fail": NOISE + "; exit 1",
+                 "timing-table": NOISE + "; " + TABLE,
+                 "results-pass": self.results_cmd(80, 80), "results-fail": self.results_cmd(80, 80) + "; exit 1",
+                 "us2": self.results_cmd(60, 60, ["PASS  alpha  ok", "us2: 1 of 1"])}
+        for label, cmd in cases.items():
+            with self.subTest(label):
+                self.summary.unlink(missing_ok=True)
+                r = self.step("my-step-name", "sh", "-c", cmd)
+                self.assertEqual(self.text(), "")
+                self.assertEqual(r.returncode, 0 if label in ("pass", "timing-table", "results-pass", "us2") else (7 if label == "fail" else 1))
 
     RESULTS = ["PASS  scenario-one  all 3 trials", "FAIL  scenario-two  stopped in 2 out of 3 trials",
                "  detail of the failure", "planted: 1 of 2"]
 
     def results_cmd(self, before, after, lines=None):
-        """A script file (so the command text in the summary does not hold the lines) and its
-        command: noise, the result lines, noise."""
+        """A script file and its command: noise, the result lines, noise."""
         body = "".join(f"echo '{l}'\n" for l in (lines or self.RESULTS))
         loop = lambda tag, n: f"i=1; while [ $i -le {n} ]; do echo {tag}-$i; i=$((i+1)); done\n"
         f = self.t / "results.sh"
         f.write_text(loop("pre", before) + body + loop("post", after))
         return f"sh {f}"
 
-    def test_ap_test_result_lines_are_kept_when_more_than_40_lines_follow(self):
-        self.step("demo", "sh", "-c", self.results_cmd(5, 80))
-        s = self.text()
-        for l in ("PASS  scenario-one", "FAIL  scenario-two", "planted: 1 of 2"):
-            self.assertIn(l, s)
-
-    def test_ap_test_result_lines_are_kept_when_more_than_40_lines_precede(self):
-        self.step("demo", "sh", "-c", self.results_cmd(80, 3))
-        s = self.text()
-        for l in ("PASS  scenario-one", "FAIL  scenario-two", "planted: 1 of 2"):
-            self.assertIn(l, s)
-
-    def test_ap_test_result_lines_are_kept_in_the_middle_of_noise(self):
-        self.step("demo", "sh", "-c", self.results_cmd(80, 80))
-        s = self.text()
-        for l in ("PASS  scenario-one", "FAIL  scenario-two", "planted: 1 of 2"):
-            self.assertIn(l, s)
-        self.assertNotRegex(s, r"pre-40\b")      # noise is still cut, not everything is kept
-
-    def test_us2_total_line_is_kept(self):
-        self.step("demo", "sh", "-c", self.results_cmd(
-            60, 60, ["PASS  alpha  ok", "PASS  beta  ok", "us2: 2 of 2"]))
-        s = self.text()
-        for l in ("PASS  alpha", "PASS  beta", "us2: 2 of 2"):
-            self.assertIn(l, s)
-
-    def test_every_result_line_of_many_scenarios_is_kept(self):
-        lines = [f"PASS  scenario-{i}  ok" for i in range(30)] + ["planted: 30 of 30"]
-        self.step("demo", "sh", "-c", self.results_cmd(60, 60, lines))
-        s = self.text()
-        for l in lines:
-            self.assertRegex(s, re.escape(l) + r"\s*$|" + re.escape(l) + r"\b", l)
-
-    def test_result_lines_are_kept_alongside_the_timing_table(self):
-        self.step("demo", "sh", "-c", self.results_cmd(5, 0) + "; " + TABLE)
-        s = self.text()
-        self.assertIn("PASS  scenario-one", s)
-        self.assertIn("== time per step", s)
-
-    def test_a_single_space_or_other_word_is_not_a_result_line(self):
-        script = self.t / "noisy.sh"
-        script.write_text("i=1; while [ $i -le 80 ]; do echo pre-$i; i=$((i+1)); done\n"
-                          "echo 'PASS scenario-x one space'\necho 'PASSED  scenario-y'\n"
-                          "echo 'xFAIL  scenario-z'\n"
-                          "i=1; while [ $i -le 80 ]; do echo post-$i; i=$((i+1)); done\n")
-        self.step("demo", "sh", str(script))
-        s = self.text()
-        for l in ("scenario-x", "scenario-y", "scenario-z"):
-            self.assertNotIn(l, s)
-
-    def test_the_summary_is_appended_not_replaced(self):
+    def test_an_earlier_summary_is_left_as_it_is(self):
         self.summary.write_text("EARLIER-JOB\n")
         self.step("one", "true")
-        self.step("two", "true")
-        s = self.text()
-        self.assertTrue(s.startswith("EARLIER-JOB"))
-        self.assertIn("one", s)
-        self.assertIn("two", s)
+        self.step("two", "sh", "-c", "exit 1")
+        self.assertEqual(self.text(), "EARLIER-JOB\n")
+
+    def test_without_a_summary_file_it_creates_none(self):
+        self.step("one", "sh", "-c", "echo ok")
+        self.step("two", "sh", "-c", "exit 1")
+        self.assertFalse(self.summary.exists())
+
 
     def test_output_gets_seconds(self):
         self.output.write_text("earlier=1\n")
@@ -207,11 +138,13 @@ class CiStepTest(unittest.TestCase):
         self.assertRegex(sec[0], r"^seconds=\d+(\.\d+)?$")
         self.assertTrue(2 <= float(sec[0].split("=")[1]) < 12, sec)
 
-    def test_seconds_and_summary_are_written_for_a_failing_command_too(self):
-        r = self.step("demo", "sh", "-c", "exit 1")
+    def test_seconds_and_error_are_written_for_a_failing_command_too(self):
+        r = self.step("demo", "sh", "-c", "echo 'error: boom'; exit 1")
         self.assertEqual(r.returncode, 1)
-        self.assertIn("seconds=", self.output.read_text())
-        self.assertRegex(self.text(), r"(?i)fail")
+        out = self.output.read_text()
+        self.assertIn("seconds=", out)
+        self.assertIn("error=error: boom", out)
+        self.assertEqual(self.text(), "")
 
     def test_without_the_variables_it_only_runs_the_command(self):
         env = gitenv.with_path(base_env(self), self.stubs)
@@ -225,7 +158,8 @@ class CiStepTest(unittest.TestCase):
     def test_a_missing_command_fails_with_a_code(self):
         r = self.step("demo", "no-such-command-zz")
         self.assertNotEqual(r.returncode, 0)
-        self.assertRegex(self.text(), r"(?i)fail")
+        self.assertIn("seconds=", self.output.read_text())
+        self.assertEqual(self.text(), "")
 
 
 # ------------------------------------------------------------------ ci-summary.py
@@ -260,7 +194,7 @@ class CiSummaryTest(unittest.TestCase):
                           "beta-job": self.need("success", "345")})
         self.assertEqual(r.returncode, 0, r.stderr)
         a, b = self.row(out, "alpha-job"), self.row(out, "beta-job")
-        self.assertIn("success", a)
+        self.assertIn("✅", a)
         self.assertIn("12", a)
         self.assertIn("345", b)
         self.assertIn("|", a)       # a Markdown table
@@ -270,8 +204,8 @@ class CiSummaryTest(unittest.TestCase):
             with self.subTest(res):
                 r, out = self.go({"ok-job": self.need("success", "1"), "bad-job": self.need(res, "2")})
                 self.assertEqual(r.returncode, 1)
-                self.assertIn(res, self.row(out, "bad-job"))
-                self.assertIn("success", self.row(out, "ok-job"))
+                self.assertIn("❌", self.row(out, "bad-job"))
+                self.assertIn("✅", self.row(out, "ok-job"))
                 self.file.unlink()
 
     def test_missing_or_non_numeric_seconds_show_a_dash(self):
@@ -395,8 +329,10 @@ class CiGvisorTest(unittest.TestCase):
                                             "sudo": SUDO_STUB, "systemctl": SYSTEMCTL_STUB})
         self.lock()
 
-    def lock(self, release=RELEASE, sha=SHA):
+    def lock(self, release=RELEASE, sha=SHA, alpine="alpine:3.22@sha256:" + "a" * 64):
         lines = ["# test lock", "ci-runner ubuntu-26.04"]
+        if alpine is not None:
+            lines.append(f"alpine {alpine}")
         if release is not None:
             lines.append(f"gvisor-release {release}")
         if sha is not None:
@@ -441,6 +377,13 @@ class CiGvisorTest(unittest.TestCase):
         r = self.go()
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("gvisor-sha512", r.stdout + r.stderr)
+        self.none(r"^(curl|tar|sudo|systemctl) ", r"^docker run")
+
+    def test_missing_alpine_pin_is_refused_before_anything(self):
+        self.lock(alpine=None)
+        r = self.go()
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("alpine", r.stdout + r.stderr)
         self.none(r"^(curl|tar|sudo|systemctl) ", r"^docker run")
 
     def test_empty_pin_is_refused(self):
@@ -688,7 +631,7 @@ class CheckPrepareTest(unittest.TestCase):
         r = run([self.repo / "scripts" / "check.sh", "--prepare"], env=self.env, cwd=self.repo)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         c = "\n".join(self.calls())
-        self.assertNotRegex(c, r"go vet|go test|go install|go build")
+        self.assertNotRegex(c, r"go vet|go test|go build|go install(?! gotest\.tools/gotestsum@)")
         self.assertNotRegex(c, r"generate\.sh --check")
         self.assertNotIn("== time per step", r.stdout)
         self.assertNotIn("all checks passed", r.stdout)

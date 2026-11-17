@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/agentic-platform/slice"
+	"github.com/agentic-platform/tests/evals/runevents"
 )
 
 // ---- environment ----
@@ -217,6 +218,8 @@ type Trial struct {
 	Duration string   `json:"duration"`
 	Stderr   string   `json:"stderr,omitempty"`
 	ExitErr  string   `json:"exit_error,omitempty"`
+	// Usage is the token use and cost of every attempt of the trial, from the --json events.
+	Usage *runevents.Usage `json:"usage,omitempty"`
 }
 
 // CaseReport is every trial of one case; the case passes (pass^k) only when all trials pass.
@@ -228,13 +231,16 @@ type CaseReport struct {
 	Trials      []Trial `json:"trials"`
 }
 
-// analyst runs one throwaway analyst container with description on stdin and returns stdout.
-// agentDir is mounted read-only at /agents. The container has only the internal network.
-func (l *lab) analyst(agentDir, agentFile, description string) (out []byte, errOut []byte, err error) {
+// analyst runs one throwaway analyst container with description on stdin. It returns the
+// answer (the last assistant message, what --last printed), the raw --json events (stdout), the
+// usage they report (what was read, even when they do not parse) and stderr. agentDir is
+// mounted read-only at /agents. The container has only the internal network.
+func (l *lab) analyst(agentDir, agentFile, description string) (answer, events []byte, usage *runevents.Usage, errOut []byte, err error) {
 	flags := strings.Fields(os.Getenv("EVAL_RUN_FLAGS"))
 	if len(flags) == 0 {
-		flags = []string{"--exec", "--last"}
+		flags = []string{"--exec"}
 	}
+	flags = jsonFlags(flags)
 	timeout := 5 * time.Minute
 	if v, e := time.ParseDuration(os.Getenv("EVAL_TRIAL_TIMEOUT")); e == nil {
 		timeout = v
@@ -252,12 +258,29 @@ func (l *lab) analyst(agentDir, agentFile, description string) (out []byte, errO
 	args = append(args, "/agents/"+agentFile, "-")
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	out, errOut, err = docker(ctx, []byte(description), args...)
+	events, errOut, err = docker(ctx, []byte(description), args...)
 	if ctx.Err() != nil {
 		docker(context.Background(), nil, "rm", "-f", n)
 		err = fmt.Errorf("trial timed out after %s", timeout)
 	}
-	return
+	// Only docker-agent's exit code and the graders decide a trial, as with --last: a parse
+	// problem is logged, and the answer (possibly empty) and usage are what the events hold.
+	run, perr := runevents.Parse(bytes.NewReader(events))
+	if perr != nil && err == nil {
+		l.t.Logf("the docker-agent --json events: %v", perr)
+	}
+	return []byte(run.Answer), events, &run.Usage, errOut, err
+}
+
+// jsonFlags makes the docker-agent run flags print --json events instead of the --last answer.
+func jsonFlags(flags []string) []string {
+	var out []string
+	for _, f := range flags {
+		if f != "--last" && f != "--json" {
+			out = append(out, f)
+		}
+	}
+	return append(out, "--json")
 }
 
 func (l *lab) grader() *Grader {
@@ -278,8 +301,8 @@ func (l *lab) run(cases []Case, agentDir, agentFile, dir string) []CaseReport {
 		cr := CaseReport{Name: c.Name, Adversarial: c.Adversarial, Attack: c.Attack, Passed: true}
 		for i := 1; i <= Trials; i++ {
 			start := time.Now()
-			out, stderr, attempts, err := l.analystWithRetry(agentDir, agentFile, c.Description)
-			tr := Trial{N: i, Attempts: attempts, Duration: time.Since(start).Round(time.Millisecond).String()}
+			out, events, usage, stderr, attempts, err := l.analystWithRetry(agentDir, agentFile, c.Description)
+			tr := Trial{N: i, Attempts: attempts, Duration: time.Since(start).Round(time.Millisecond).String(), Usage: usage}
 			if err != nil {
 				tr.ExitErr = err.Error()
 				tr.Stderr = tail(string(stderr), 600)
@@ -287,6 +310,7 @@ func (l *lab) run(cases []Case, agentDir, agentFile, dir string) []CaseReport {
 			tr.Results = GradeCase(g, c.Name, out)
 			tr.Passed = err == nil && Passed(tr.Results)
 			must(l.t, os.WriteFile(filepath.Join(dir, fmt.Sprintf("%s.trial%d.out", c.Name, i)), out, 0o644))
+			must(l.t, os.WriteFile(filepath.Join(dir, fmt.Sprintf("%s.trial%d.ndjson", c.Name, i)), events, 0o644))
 			cr.Passed = cr.Passed && tr.Passed
 			cr.Trials = append(cr.Trials, tr)
 		}

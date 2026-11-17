@@ -1,9 +1,11 @@
-# The full checks on every push (research D41, ADR 0044): one job per scripts/check.sh step and
-# per acceptance suite, each on its own GitHub-hosted runner, then a summary of the run. A first
+# The checks a push needs (research D41, D50, ADR 0044, ADR 0053): one job per scripts/check.sh
+# step and per acceptance suite, each on its own GitHub-hosted runner, then a summary of the run.
+# The config job names the jobs whose files changed since the last green check run
+# (.github/check-jobs.yaml); the always jobs run on every push, every job on a dispatch. A first
 # job reads the runner label and the tool versions from src/deploy/images.lock, their one home.
 # Never on pull requests, so a fork's change never runs here. Changing this file needs the
 # owner's Approved-by (scripts/hooks/commit-msg); scripts/tests/test_workflows.py checks its rules.
-name: check
+name: Tests and checks
 
 on:
   push:
@@ -18,13 +20,18 @@ concurrency:
 
 jobs:
   config:
-    name: config
+    name: "Plan the run (choose jobs)"
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # actions: read lists this workflow's runs, to find the branch's last green one (T117).
+    permissions:
+      contents: read
+      actions: read
     outputs:
       runner: ${{ steps.pins.outputs.runner }}
       python: ${{ steps.pins.outputs.python }}
       go: ${{ steps.pins.outputs.go }}
+      jobs: ${{ steps.select.outputs.jobs }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -42,14 +49,35 @@ jobs:
             echo "$v=$val" >>"$GITHUB_OUTPUT"
           done
           cat "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ steps.pins.outputs.python }}
+      - name: Install the pinned Python packages
+        run: python3 -m pip install --require-hashes -r scripts/tools/requirements-ci.txt
+      # The jobs whose files changed since the last green check run on a dev branch that is an
+      # ancestor of this commit (T117; research D50, ADR 0053), so it needs the full history. No
+      # such run, the API not answering, or a dispatch: every job.
+      - id: select
+        name: Choose the jobs whose files changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          git fetch -q --unshallow --no-tags origin || echo "::warning::git fetch --unshallow failed: no base can be found, so every job runs"
+          RUNS=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/check.yml/runs?per_page=100" --jq '[.workflow_runs[] | {head_sha, head_branch, conclusion}]' 2>/dev/null || true)
+          export RUNS
+          python3 scripts/ci-check-select.py
 
   py_tests:
-    name: py-tests
+    name: "Script and hook tests (Python)"
     needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'py_tests')
     runs-on: ${{ needs.config.outputs.runner }}
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -72,15 +100,33 @@ jobs:
           src/deploy/build.sh agent
       - id: run
         name: py-tests
+        env:
+          AP_TEST_REPORT_DIR: ${{ runner.temp }}/test-reports
         run: scripts/ci-step.sh py-tests scripts/check.sh --only py-tests
+      # The tests' results in the job's summary (research D43, ADR 0046): counts and each failed
+      # test with its message; annotate_only needs no checks: write. A green job writes no table
+      # and a step that finds no result fails (research D47, ADR 0051); the summary is written only
+      # when the job has failed (research D49, ADR 0052).
+      - name: Test report
+        if: always()
+        uses: mikepenz/action-junit-report@a16be3a69023e9bd7e748ede768b3282ea7b30ce # v6.7.1
+        with:
+          report_paths: ${{ runner.temp }}/test-reports/*.xml
+          annotate_only: true
+          detailed_summary: true
+          include_passed: false
+          skip_success_summary: true
+          require_tests: true
+          job_summary: ${{ job.status != 'success' }}
 
   layout:
-    name: layout
+    name: "Repository layout"
     needs: config
     runs-on: ${{ needs.config.outputs.runner }}
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -95,12 +141,14 @@ jobs:
         run: scripts/ci-step.sh layout scripts/check.sh --only layout
 
   knowledge:
-    name: knowledge
+    name: "Documentation (knowledge bundle)"
     needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'knowledge')
     runs-on: ${{ needs.config.outputs.runner }}
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -115,12 +163,14 @@ jobs:
         run: scripts/ci-step.sh knowledge scripts/check.sh --only knowledge
 
   markdown:
-    name: markdown
+    name: "Markdown style"
     needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'markdown')
     runs-on: ${{ needs.config.outputs.runner }}
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -130,12 +180,14 @@ jobs:
         run: scripts/ci-step.sh markdown scripts/check.sh --only markdown
 
   contracts:
-    name: contracts
+    name: "API contracts lint"
     needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'contracts')
     runs-on: ${{ needs.config.outputs.runner }}
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -145,12 +197,14 @@ jobs:
         run: scripts/ci-step.sh contracts scripts/check.sh --only contracts
 
   contract_diff:
-    name: contract-diff
+    name: "API breaking changes"
     needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'contract_diff')
     runs-on: ${{ needs.config.outputs.runner }}
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -161,12 +215,14 @@ jobs:
         run: scripts/ci-step.sh contract-diff scripts/check.sh --only contract-diff
 
   gateway:
-    name: gateway
+    name: "Model gateway config"
     needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'gateway')
     runs-on: ${{ needs.config.outputs.runner }}
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -176,27 +232,69 @@ jobs:
         run: scripts/ci-step.sh gateway scripts/check.sh --only gateway
 
   go:
-    name: go
+    name: "Go unit tests and vet"
     needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'go')
     runs-on: ${{ needs.config.outputs.runner }}
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - id: run
         name: go
+        env:
+          AP_TEST_REPORT_DIR: ${{ runner.temp }}/test-reports
         run: scripts/ci-step.sh go scripts/check.sh --only go
+      # The tests' results in the job's summary (research D43, ADR 0046): counts and each failed
+      # test with its message; annotate_only needs no checks: write. A green job writes no table
+      # and a step that finds no result fails (research D47, ADR 0051); the summary is written only
+      # when the job has failed (research D49, ADR 0052).
+      - name: Test report
+        if: always()
+        uses: mikepenz/action-junit-report@a16be3a69023e9bd7e748ede768b3282ea7b30ce # v6.7.1
+        with:
+          report_paths: ${{ runner.temp }}/test-reports/*.xml
+          annotate_only: true
+          detailed_summary: true
+          include_passed: false
+          skip_success_summary: true
+          require_tests: true
+          job_summary: ${{ job.status != 'success' }}
 
-  docker:
-    name: docker
+  # Module boundaries (T098; research D40, D54): go-arch-lint over each Go module's archfile. The
+  # generated api/gen packages it maps are not in git, so --prepare makes them first.
+  arch:
+    name: "Module boundaries (go-arch-lint)"
     needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'arch')
     runs-on: ${{ needs.config.outputs.runner }}
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Generated code and module cache
+        run: scripts/check.sh --prepare
+      - id: run
+        name: arch
+        run: scripts/ci-step.sh arch scripts/check.sh --only arch
+
+  docker:
+    name: "Service tests with Docker (recorded model)"
+    needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'docker')
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs:
+      seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -207,15 +305,33 @@ jobs:
         run: scripts/ci-gvisor.sh
       - id: run
         name: docker
+        env:
+          AP_TEST_REPORT_DIR: ${{ runner.temp }}/test-reports
         run: scripts/ci-step.sh docker scripts/check.sh --only docker
+      # The tests' results in the job's summary (research D43, ADR 0046): counts and each failed
+      # test with its message; annotate_only needs no checks: write. A green job writes no table
+      # and a step that finds no result fails (research D47, ADR 0051); the summary is written only
+      # when the job has failed (research D49, ADR 0052).
+      - name: Test report
+        if: always()
+        uses: mikepenz/action-junit-report@a16be3a69023e9bd7e748ede768b3282ea7b30ce # v6.7.1
+        with:
+          report_paths: ${{ runner.temp }}/test-reports/*.xml
+          annotate_only: true
+          detailed_summary: true
+          include_passed: false
+          skip_success_summary: true
+          require_tests: true
+          job_summary: ${{ job.status != 'success' }}
 
   deps:
-    name: deps
+    name: "Dependencies and licences"
     needs: config
     runs-on: ${{ needs.config.outputs.runner }}
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -227,12 +343,13 @@ jobs:
         run: scripts/ci-step.sh deps scripts/check.sh --only deps
 
   secrets:
-    name: secrets
+    name: "Secret scan"
     needs: config
     runs-on: ${{ needs.config.outputs.runner }}
     timeout-minutes: 90
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -242,12 +359,14 @@ jobs:
         run: scripts/ci-step.sh secrets scripts/check.sh --only secrets
 
   ap_test_planted:
-    name: ap-test-planted
+    name: "Acceptance: planted defects are stopped"
     needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'ap_test_planted')
     runs-on: ${{ needs.config.outputs.runner }}
     timeout-minutes: 120
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -261,12 +380,14 @@ jobs:
         run: scripts/ci-step.sh ap-test-planted src/deploy/ap test planted
 
   ap_test_us2:
-    name: ap-test-us2
+    name: "Acceptance: Story 2, slice to accepted change"
     needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'ap_test_us2')
     runs-on: ${{ needs.config.outputs.runner }}
     timeout-minutes: 120
     outputs:
       seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -279,8 +400,70 @@ jobs:
         name: ap-test-us2
         run: scripts/ci-step.sh ap-test-us2 src/deploy/ap test us2
 
+  e2e:
+    name: "End-to-end: full stack in Compose"
+    needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'e2e')
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs:
+      seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned gVisor
+        run: scripts/ci-gvisor.sh
+      - name: Generated code and module cache
+        run: scripts/check.sh --prepare
+      # The Compose stack on the recorded model (research D44, ADR 0047); e2e.sh builds and signs
+      # the images with a key made for this job.
+      - id: run
+        name: e2e
+        run: |
+          COSIGN_PASSWORD=$(openssl rand -hex 32)
+          export COSIGN_PASSWORD
+          scripts/ci-step.sh e2e scripts/check.sh --only e2e
+
+  # The suites whose evals are pending (research D45, ADR 0048, T120): keyless; the selector
+  # compares this commit with the last green evals run on a dev branch that is its ancestor. A
+  # notice on the feature branch; on main it fails while a suite is pending. Runs on every push.
+  evals-current:
+    name: "Agent evals up to date"
+    needs: config
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ needs.config.outputs.python }}
+      - name: Install the pinned Python packages
+        run: python3 -m pip install --require-hashes -r scripts/tools/requirements-ci.txt
+      - id: run
+        name: evals-current
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: pending
+          REF: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          git fetch -q --unshallow --no-tags origin
+          RUNS=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/evals.yml/runs?per_page=100" --jq '[.workflow_runs[] | {head_sha, head_branch, conclusion}]' 2>/dev/null || true)
+          export RUNS
+          scripts/ci-step.sh evals-current python3 scripts/ci-evals-select.py
+
   summary:
-    name: summary
+    name: "Run summary"
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -294,11 +477,14 @@ jobs:
       - contract_diff
       - gateway
       - go
+      - arch
       - docker
       - deps
       - secrets
       - ap_test_planted
       - ap_test_us2
+      - e2e
+      - evals-current
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -306,4 +492,5 @@ jobs:
       - name: Summary of the run
         env:
           NEEDS: ${{ toJSON(needs) }}
+          WORKFLOW: .github/workflows/check.yml
         run: python3 scripts/ci-summary.py

@@ -9,18 +9,26 @@ GO_RACE_IMAGE=$(awk '$1=="golang-race"{print $2}' src/deploy/images.lock)
 
 GO_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/agentic-platform/go"  # shared with scripts/generate.sh
 mkdir -p "$GO_CACHE"
+# AP_TEST_REPORT_DIR (CI, research D43): when set, every test step writes JUnit reports into it; the
+# Go containers see it as /reports. Unset, no report is written and nothing else changes.
+REPORTS=
+# The folder's path must hold no space or glob character (CI's runner.temp holds none).
+if [ -n "${AP_TEST_REPORT_DIR:-}" ]; then
+  case $AP_TEST_REPORT_DIR in *[[:space:]*?[]*) echo "check: AP_TEST_REPORT_DIR holds a space or glob character" >&2; exit 2 ;; esac
+  mkdir -p "$AP_TEST_REPORT_DIR"; REPORTS="-v $AP_TEST_REPORT_DIR:/reports"
+fi
 go_run() {  # go_run <network: bridge|none> <script> [image]: a shell in a pinned Go container over src/
-  docker run --rm --network "$1" -v "$PWD/src:/src" -w /src -v "$GO_CACHE:/gopath" \
+  # shellcheck disable=SC2086
+  docker run --rm --network "$1" -v "$PWD/src:/src" -w /src -v "$GO_CACHE:/gopath" $REPORTS \
     --user "$(id -u):$(id -g)" -e GOPATH=/gopath -e GOCACHE=/gopath/cache -e GOTOOLCHAIN=local \
     "${3:-$GO_IMAGE}" sh -ec "$2"
 }
 GO_MODULES="check engine slice cli page tests"
 
-# prepare: what the offline Go builds need and the repository does not hold: the generated code
+# --prepare: what the offline Go builds need and the repository does not hold: the generated code
 # and a filled module cache. The go step does it first; CI jobs that build offline without the go
 # step run `scripts/check.sh --prepare` (research D41).
-prepare() {
-  scripts/generate.sh
+fill_module_cache() {
   go_run bridge "for m in $GO_MODULES; do (cd \$m && go mod download); done"
   # The step checks' godog run (TestGodogStrictReal) is offline: put the pinned godog and its
   # dependencies into the shared module cache now, from the fixture module that requires it.
@@ -29,6 +37,11 @@ prepare() {
   grep -q "github.com/cucumber/godog $godog\$" "src/$fixture/go.mod" ||
     { echo "check: $fixture/go.mod does not require godog $godog (src/deploy/images.lock)" >&2; exit 1; }
   go_run bridge "cd $fixture && GOWORK=off GOFLAGS=-mod=readonly go mod download"
+  # gotestsum (pinned, D43) runs the Go tests and writes their JUnit reports; static, so it also
+  # runs in the Debian race image.
+  gotestsum=$(awk '$1=="gotestsum"{print $2}' src/deploy/images.lock)
+  [ -n "$gotestsum" ] || { echo "check: no gotestsum pin in src/deploy/images.lock" >&2; exit 1; }
+  go_run bridge "CGO_ENABLED=0 go install $gotestsum"
 }
 
 go_checks() {
@@ -36,7 +49,8 @@ go_checks() {
   echo "== committed generated blocks: prove they match their sources"
   scripts/generate.sh --check-committed
   echo "== generated code: regenerate, fill the module cache, then prove a second run finds no difference"
-  prepare
+  scripts/generate.sh
+  fill_module_cache
   scripts/generate.sh --check
   # Both images must carry the same Go release, or the race run tests another compiler.
   [ -n "$GO_RACE_IMAGE" ] || { echo "check: no golang-race pin in src/deploy/images.lock" >&2; exit 1; }
@@ -53,15 +67,16 @@ go_checks() {
     done"
   # The tests run once, with the race detector, in the Debian image.
   echo "== go test -race ($vr, CGO_ENABLED=1)"
+  junit=; [ -z "$REPORTS" ] || junit="--junitfile /reports/go-\$m.xml"
   go_run none "
     export GOPROXY=off GOFLAGS=-mod=readonly CGO_ENABLED=1 AP_OAPI_CODEGEN=/gopath/bin/oapi-codegen
     for m in $GO_MODULES; do
       if [ -z \"\$(find \"\$m\" -name '*.go' -print -quit)\" ]; then echo \"skip \$m: no Go files yet\"; continue; fi
-      (cd \"\$m\" && go test -race -timeout 20m ./...)
+      (cd \"\$m\" && /gopath/bin/gotestsum --format standard-quiet $junit -- -race -timeout 20m ./...)
     done" "$GO_RACE_IMAGE"
 }
 if [ "${1:-}" = "--go-only" ]; then go_checks; exit 0; fi
-if [ "${1:-}" = "--prepare" ]; then prepare; exit 0; fi
+if [ "${1:-}" = "--prepare" ]; then scripts/generate.sh; fill_module_cache; exit 0; fi
 
 # Steps, in the order a full run takes them: one line each, name and title; the step's code is
 # the function s_<name> below (dashes become underscores). Usage:
@@ -81,9 +96,11 @@ contracts contracts
 contract-diff contract breaking changes: each service'"'"'s newest version against the previous one
 gateway model gateway
 go go vet and tests
+arch module boundaries (go-arch-lint)
 docker recorded model, contract-lint service, API conformance and Story 1 acceptance (Docker, no key)
 deps dependencies and licences
-secrets secrets'
+secrets secrets
+e2e end to end: the Compose stack on the recorded model (scripts/e2e.sh; Docker, gVisor, no key)'
 STEPS=$(echo "$STEP_TABLE" | cut -d' ' -f1)
 only=; py=
 while [ $# -gt 0 ]; do
@@ -118,7 +135,7 @@ s_py_tests() {
   # 6 test classes at a time: measured 26 minutes one at a time, 10 by module (4 at a time), 9 by
   # class (6 at a time), every test passing each time.
   # shellcheck disable=SC2086
-  python3 scripts/testrun.py --jobs 6 $py
+  python3 scripts/testrun.py --jobs 6 ${AP_TEST_REPORT_DIR:+--junit "$AP_TEST_REPORT_DIR/py-tests.xml"} $py
 }
 s_layout() { python3 scripts/layout-check.py; }
 s_knowledge() { python3 scripts/okf.py check; }
@@ -133,6 +150,50 @@ s_contracts() {
 s_contract_diff() { scripts/contract-diff.sh; }
 s_gateway() { sh src/deploy/gateway/test_gateway.sh >/dev/null && echo "gateway checks passed"; }
 s_go() { go_checks; }
+s_arch() {
+  # Module boundaries (T098; research D40, D54): each module of src/go.work against its archfile,
+  # with go-arch-lint, pinned in images.lock by version and module hash and built from source into
+  # /gopath/bin; it runs offline, src/ read-only. CI runs it; the pre-commit hook does not (D54).
+  phase setup
+  pin=$(awk '$1=="go-arch-lint"{print $2}' src/deploy/images.lock)
+  sum=$(awk '$1=="go-arch-lint-sum"{print $2}' src/deploy/images.lock)
+  [ -n "$pin" ] && [ -n "$sum" ] || { echo "arch: no go-arch-lint or go-arch-lint-sum pin in src/deploy/images.lock" >&2; exit 1; }
+  mods=$(sed -n 's#^[[:space:]]*\./\([^[:space:]]*\)[[:space:]]*$#\1#p' src/go.work)
+  for m in $mods; do arch_rules "$m"; done
+  if [ ! -e "$GO_CACHE/bin/go-arch-lint" ]; then
+    # Only the first fetch uses the network, verified by the checksum database (owner, 2026-11-15);
+    # later installs run offline through the module cache's file proxy. GOSUMDB=off there: the cache
+    # holds only modules verified when fetched, and go would otherwise fetch the database's newer
+    # tree, which needs the network (CI run 44111866994); the binary's module hash is checked below.
+    [ -e "$GO_CACHE/pkg/mod/cache/download/${pin%@*}/@v/${pin##*@}.zip" ] ||
+      go_run bridge "CGO_ENABLED=0 go install $pin"
+    [ -e "$GO_CACHE/bin/go-arch-lint" ] ||
+      go_run none "GOPROXY=file:///gopath/pkg/mod/cache/download GOSUMDB=off CGO_ENABLED=0 go install $pin"
+  fi
+  got=$(go_run none "go version -m /gopath/bin/go-arch-lint" 2>/dev/null | awk '$1=="mod"{print $2 "@" $3, $4}') || got=
+  [ "$got" = "$pin $sum" ] ||
+    { echo "arch: /gopath/bin/go-arch-lint is '${got:-not a Go binary}', not the pin '$pin $sum' (src/deploy/images.lock)" >&2; exit 1; }
+  phase test
+  echo "arch: modules: $(echo $mods)"
+  # shellcheck disable=SC2086
+  docker run --rm --network none -v "$PWD/src:/src:ro" -v "$GO_CACHE:/gopath" --user "$(id -u):$(id -g)" \
+    -e GOPATH=/gopath -e GOCACHE=/gopath/cache -e GOTOOLCHAIN=local -e GOPROXY=off -e GOFLAGS=-mod=readonly \
+    "$GO_IMAGE" sh -c 'rc=0; for m in "$@"; do echo "== arch: $m"; /gopath/bin/go-arch-lint check --project-path "/src/$m" --output-color=false || rc=1; done; exit $rc' arch $mods ||
+    { echo "arch: a module crosses a boundary its archfile forbids (above)" >&2; exit 1; }
+}
+arch_rules() {  # arch_rules <module>: the module has an archfile that keeps research D40's rules
+  f=src/$1/.go-arch-lint.yml
+  [ -f "$f" ] || { echo "arch: module $1 of src/go.work has no archfile $f" >&2; exit 1; }
+  bad=
+  grep -Eq '^version:[[:space:]]*3[[:space:]]*$' "$f" || bad="version must be 3"
+  grep -Eq '^[[:space:]]+depOnAnyVendor:[[:space:]]*false[[:space:]]*$' "$f" &&
+    ! grep -Eq 'depOnAnyVendor:[[:space:]]*true' "$f" || bad="allow.depOnAnyVendor must be false"
+  grep -Eq '^[[:space:]]+deepScan:[[:space:]]*false[[:space:]]*$' "$f" &&
+    ! grep -Eq 'deepScan:[[:space:]]*true' "$f" || bad="allow.deepScan must be false"
+  awk '/^components:/ { c = 1; next } /^[^[:space:]#]/ { c = 0 } c && /\*\*/ { b = 1 } END { exit b }' "$f" ||
+    bad="a component's in must be an exact folder, not **"
+  [ -z "$bad" ] || { echo "arch: $f: $bad" >&2; exit 1; }
+}
 s_docker() {
   # Built in the pinned Go container (setup), run on the host, where Docker is (test); each in its
   # package folder. The contract and acceptance suites build the engine they test in the pinned Go
@@ -142,7 +203,25 @@ s_docker() {
     phase setup
     go_run none "cd tests && GOPROXY=off GOFLAGS=-mod=readonly CGO_ENABLED=0 go test -c -tags docker -o /gopath/$p.test ./$p/"
     phase test
-    (cd "src/tests/$p" && "$GO_CACHE/$p.test" -test.count=1)
+    if [ -z "$REPORTS" ]; then
+      (cd "src/tests/$p" && "$GO_CACHE/$p.test" -test.count=1)
+    else
+      # For the report (D43): the binary's test2json output goes into a file and is shown while it
+      # runs (GNU tail, as on the CI runners; test2json's framing byte removed); its exit code is
+      # kept; then the file is converted into src/tests/$p's JUnit report.
+      out="$GO_CACHE/$p.out"; : >"$out"
+      (cd "src/tests/$p" && exec "$GO_CACHE/$p.test" -test.count=1 -test.v=test2json) >"$out" 2>&1 &
+      pid=$!
+      tail -n +1 -f --pid="$pid" "$out" | tr -d '\026'
+      rc=0; wait "$pid" || rc=$?
+      conv=0
+      go_run none "go tool test2json -p $p </gopath/$p.out >/gopath/$p.json &&
+        /gopath/bin/gotestsum --format standard-quiet --junitfile /reports/docker-$p.xml --raw-command -- cat /gopath/$p.json >/dev/null" ||
+        conv=$?
+      rm -f "$out" "$GO_CACHE/$p.json"
+      [ "$rc" -eq 0 ] || conv=$rc
+      [ "$conv" -eq 0 ] || { rm -f "$GO_CACHE/$p.test"; exit "$conv"; }
+    fi
     phase teardown
     rm -f "$GO_CACHE/$p.test"
   done
@@ -159,14 +238,17 @@ s_deps() {
       (cd \"\$m\" && /gopath/bin/govulncheck ./... && /gopath/bin/go-licenses check ./... --disallowed_types=forbidden,unknown --ignore github.com/agentic-platform)
     done"
 }
+s_e2e() { scripts/e2e.sh; }
 s_secrets() {
-  if git grep -nE 'sk-ant-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{30,}' -- . ; then echo "secret found"; exit 1; fi
+  scripts/secret-scan.sh || { echo "secret found"; exit 1; }
 }
 
 start=$(now)
 # The table is read on descriptor 3, so a step's own commands keep the caller's input.
 while read -r step title <&3; do
   [ -z "$only" ] || echo " $only " | grep -q " $step " || continue
+  # e2e runs in CI (its own job); on the shared host only when asked (owner, 2026-11-16).
+  if [ -z "$only" ] && [ "$step" = e2e ]; then echo "== e2e: runs in CI; here only with scripts/check.sh --only e2e"; continue; fi
   echo "== $title"
   phase test
   "s_$(echo "$step" | tr - _)"
