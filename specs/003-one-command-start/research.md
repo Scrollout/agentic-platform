@@ -140,8 +140,9 @@ The rationale the earlier text held (building inside `ap up`) is kept in R1's Re
     and the addresses `hostname -I` lists, plus `127.0.0.1` and `localhost`; with one address,
     that address. Any other Host gets 421 from a default server (S1).
   - **Address**: a `--listen` address that is neither `0.0.0.0`, `::` nor an address `hostname -I`
-    lists, or whose port Compose cannot publish (in use), stops `up` with exit 3 naming it, before
-    the forwarder is recreated.
+    lists stops `up` with exit 3 naming it, before anything starts. A port Compose cannot publish
+    on the address (in use) is found only when Compose publishes it, so `up` exits 1 naming the
+    address and port, as for any Compose failure.
   - **Rate limit**: 10 requests per second per source address with a burst of 20, answered 429
     beyond it, declared once in `nginx-remote.conf` (S1, S4).
   - **Record**: `ap` appends one line to
