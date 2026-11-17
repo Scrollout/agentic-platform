@@ -31,6 +31,10 @@ started and where its run page can be reached, not what it does.
 - Q: May the run page be reached from another machine, without an SSH tunnel? → A: Yes, directly,
   as an explicit choice at start (owner). Constitution XI (encrypted to every client), V
   (authenticated access) and XIV (a less safe setting is explicit and audited) shape User Story 4.
+- Q: After `/speckit-analyze` found that building inside `ap up` changes about seven existing test
+  files, which command is the start command? → A: A new `ap start`; `ap up` keeps what it does
+  today and is what CI and the test suites use (owner, option B). Remote access options go on
+  `ap up` and `ap start` passes them on.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -185,9 +189,10 @@ from another machine.
   command needs no option; options MAY override them.
 - **FR-006**: The start command MUST make a missing default projects folder, readable by the
   platform's containers, and MUST refuse one they cannot open, naming its mode.
-- **FR-007**: The signing key's password MUST be asked at most once per start, and only when the
-  start has something to build; when the environment gives it (`COSIGN_PASSWORD`, as in CI), it
-  MUST NOT be asked. The platform MUST NOT store the password.
+- **FR-007**: The signing key's password MUST be asked once per start, and only when the start
+  has something to build (entered a second time to confirm only when the signing key is first
+  made); when the environment gives it (`COSIGN_PASSWORD`, as in CI), it MUST NOT be asked. The
+  platform MUST NOT store the password.
 - **FR-008**: The start command MUST say what it will do before a long step (which parts it
   builds) and what it did at the end (built, verified, started).
 - **FR-009**: The developer-facing commands, their usage and the quickstart MUST NOT require any
@@ -196,6 +201,9 @@ from another machine.
 - **FR-010**: Stopping the platform MUST stay one command that keeps run records and projects.
 
 - **FR-011**: Everything feature 001 delivered after the platform is started MUST work unchanged.
+- **FR-018**: The start command MUST be able to show, without building, signing, recording or
+  starting anything, which prerequisites fail, which parts it would build, and whether it would
+  start the platform (constitution XVII, Prove agreement).
 
 #### Remote access to the run page
 
@@ -252,6 +260,8 @@ from another machine.
 
 ## Assumptions
 
+- The start command is `ap start`. `ap up`, which starts parts already built, stays as it is for
+  CI and the test suites (Clarifications, 2026-11-18).
 - The prerequisites stay what feature 001 needs: a container runtime with Compose (Docker 28 or
   later) and the gVisor runtime, installed once by the developer; installing them is out of scope.
 - The default key file is `~/.config/agentic-platform/anthropic_api_key` and the default projects

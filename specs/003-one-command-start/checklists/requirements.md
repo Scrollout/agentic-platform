@@ -36,3 +36,6 @@
 - FR-007 settled by the owner on 2026-11-18 (Clarifications): asked once per start that builds.
 - User Story 4 (remote access to the run page) added on 2026-11-18 at the owner's request; checked
   against every item again: no open marker, FR-012 to FR-017 testable through SC-006 and SC-007.
+- Revised 2026-11-18 after `/speckit-analyze` round 1: the start command is `ap start` (owner,
+  option B); FR-007 states the confirmation on first key creation; FR-018 adds the check mode.
+  Checked against every item again.
