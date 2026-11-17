@@ -1963,3 +1963,11 @@ page, none of which an existing project provides.
   over-run, never a skip). Paging is T121's.
 - Sources: [GitHub REST API: workflow runs](https://docs.github.com/en/rest/actions/workflow-runs);
   runs 44073473710 and 44079665093.
+
+### D53. CI workflows and jobs are named for what they judge
+
+- **Decision** (owner, 2026-11-17; T133): the GitHub display names of the workflows and jobs say
+  what they judge in plain words (T133 lists them); job ids stay, since `.github/check-jobs.yaml`,
+  the selectors, `needs` and the tests use them. The run summary shows the display names.
+- **Why**: the owner found ids such as `deps`, `ap-test-us2` and `evals-current` unreadable.
+- Sources: [GitHub: workflow syntax, `jobs.<job_id>.name`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax).
