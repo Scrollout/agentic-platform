@@ -2,6 +2,7 @@
 
 ## 2026-11-17
 
+* **Implementation**: Feature 001, T098 fix: the arch step's offline install sets `GOSUMDB=off`; CI run 44111866994 failed because go asked the checksum database for a newer tree with no network (research D40). Regression test by a separate author.
 * **Implementation**: Feature 001, T098: each Go module's imports are checked against its `.go-arch-lint.yml` by go-arch-lint v1.19.1 (pinned, built from source, run offline) in the `scripts/check.sh` step `arch` and the `check.yml` job `arch`; an archfile change needs the owner's `Approved-by:`. New tests by a separate author; T134 filed from its review.
 * **Decision**: The module-boundary check runs in CI, not in the pre-commit hook (owner, 2026-11-17; research D54, [ADR 0054](/decisions/0054-module-boundary-check-runs-in-ci.md), superseding ADR 0043 in part; T098).
 * **Planning**: Feature 001, T098 (owner, 2026-11-17): a `check.yml` job `arch` ("Module boundaries (go-arch-lint)") runs the step; the one existing-test change is `test_ci_names.py`'s job list.

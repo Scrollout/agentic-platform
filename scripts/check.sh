@@ -162,11 +162,13 @@ s_arch() {
   for m in $mods; do arch_rules "$m"; done
   if [ ! -e "$GO_CACHE/bin/go-arch-lint" ]; then
     # Only the first fetch uses the network, verified by the checksum database (owner, 2026-11-15);
-    # later installs run offline through the module cache's file proxy.
+    # later installs run offline through the module cache's file proxy. GOSUMDB=off there: the cache
+    # holds only modules verified when fetched, and go would otherwise fetch the database's newer
+    # tree, which needs the network (CI run 44111866994); the binary's module hash is checked below.
     [ -e "$GO_CACHE/pkg/mod/cache/download/${pin%@*}/@v/${pin##*@}.zip" ] ||
       go_run bridge "CGO_ENABLED=0 go install $pin"
     [ -e "$GO_CACHE/bin/go-arch-lint" ] ||
-      go_run none "GOPROXY=file:///gopath/pkg/mod/cache/download CGO_ENABLED=0 go install $pin"
+      go_run none "GOPROXY=file:///gopath/pkg/mod/cache/download GOSUMDB=off CGO_ENABLED=0 go install $pin"
   fi
   got=$(go_run none "go version -m /gopath/bin/go-arch-lint" 2>/dev/null | awk '$1=="mod"{print $2 "@" $3, $4}') || got=
   [ "$got" = "$pin $sum" ] ||

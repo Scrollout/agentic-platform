@@ -1466,6 +1466,10 @@ page, none of which an existing project provides.
   refuses a binary whose `go version -m` module line is not the pinned version and hash. The
   owner accepted this (owner, 2026-11-15): the first fetch uses the network in the arch step's
   setup, and every later run is offline through `GOPROXY=file://…`.
+  The offline install also sets `GOSUMDB=off` (T098, 2026-11-17): in CI run 44111866994 it
+  failed with `--network none` because go asked `sum.golang.org` for a newer tree than the one it
+  had cached. The cache holds only modules verified when fetched, and the binary's module hash is
+  checked against the pin after the install.
 - **Offline running**: `check` runs with `--network none`, `GOPROXY=off`,
   `GOFLAGS=-mod=readonly` and `src/` mounted read-only. It needs only `go` on `PATH`, for `go list
   std`. The archfile is always a local path, because a URL would be fetched with `http.Get`. With
