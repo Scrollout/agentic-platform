@@ -138,10 +138,9 @@ before action).
   defaults, `--listen`, `--name`, `--certificate`, `--key`, the remote lines of `ap up` and `ap
   page`, and the build lines; the draft is [contracts/terminal-up.md](contracts/terminal-up.md),
   merged into `src/cli/contract.md` before any code. New tests go in new files by a separate
-  author: `scripts/tests/test_ap_up_defaults.py` (defaults and prerequisites, docker stub),
-  `scripts/tests/test_build_changed.py` (fingerprints, one prompt, nothing rebuilt; real
-  BuildKit, CI), `scripts/tests/test_page_remote.py` (the forwarder's TLS, sign-in, names and
-  rate limit on the pinned nginx, as in S1, CI).
+  author, as [tasks.md](tasks.md) lists them: `test_build_changed.py` (real BuildKit, CI),
+  `test_ap_up_builds.py`, `test_ap_up_defaults.py`, `test_ap_up_remote.py` and `test_ap_usage.py`
+  (the launcher's docker stub), and `test_page_remote.py` (the pinned nginx, as in S1, CI).
 - **Existing tests that change (approved by the owner, 2026-11-18, for exactly these)**: the launcher's
   docker stub (`scripts/tests/fixtures/launcher/docker-stub`) and `test_launcher.py`'s set-up
   must answer the new candidate builds as unchanged, so that `ap up` goes on to verify and start

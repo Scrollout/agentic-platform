@@ -133,9 +133,12 @@ src/
     ├── page-proxy/nginx-remote.conf   # new: TLS, Basic authentication, limit_req, server_name include
     └── README.md                      # variables and files
 scripts/tests/
-├── test_ap_up_defaults.py             # new: defaults and prerequisites (docker stub)
 ├── test_build_changed.py              # new: fingerprints, one prompt, nothing rebuilt (real BuildKit)
-└── test_page_remote.py                # new: TLS, sign-in, names, rate limit (pinned nginx)
+├── test_ap_up_builds.py               # new: up runs the build step, lock, messages (docker stub)
+├── test_ap_up_defaults.py             # new: defaults and prerequisites (docker stub)
+├── test_page_remote.py                # new: TLS, sign-in, names, rate limit (pinned nginx), the override
+├── test_ap_up_remote.py               # new: --listen, secret, names, record (docker stub)
+└── test_ap_usage.py                   # new: usage and guides name no internal part
 docs/operations/local.md               # start, remote access, firewall note
 ```
 
