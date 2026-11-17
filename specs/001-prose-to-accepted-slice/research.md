@@ -1944,6 +1944,9 @@ page, none of which an existing project provides.
   `evals.yml` gets `run-name: evals · <branch> · all suites|changed suites · started by <actor>`.
   GitHub expressions cannot shorten a commit ID or cut a message to its first line, so the name
   shows what the expression gives; `run-name` is display only and never reaches a shell.
+- **Amended** (owner, 2026-11-17, after run 44081368499 showed the whole multi-paragraph message):
+  `check.yml` has no `run-name` and keeps GitHub's default, the head commit's subject line for a
+  push; only `evals.yml`, started by hand, sets one.
 - Sources: [GitHub: workflow syntax, `run-name`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax).
 
 ### D52. The check selector lists runs without GitHub's status filter
