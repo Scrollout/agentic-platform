@@ -1,7 +1,7 @@
 # AGENTS.md
 
 This file wires coding agents to the project. It adds no rules of its own.
-`CLAUDE.md` only imports it.
+`CLAUDE.md` only imports this file and the constitution.
 
 **The binding rules are in the constitution,
 [`.specify/memory/constitution.md`](.specify/memory/constitution.md).** It is the
