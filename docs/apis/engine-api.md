@@ -43,7 +43,8 @@ Each operation names its permission in `x-operation-name`.
 | workers | `POST /workers` (a step worker announces that it is ready) |
 | provider | `GET /providers/Agentic.Engine/operations` (lists this service's operations) |
 
-Every state change returns an operation (HTTP 202) that the client follows with `getOperation`.
+Every state change but `registerWorker` returns an operation (HTTP 202) that the client follows with
+`getOperation`; `registerWorker` answers 200 at once and replaces the step's endpoint when repeated.
 
 Sources: [Engine OpenAPI contract](../../src/engine/api/preview/2026-11-12-preview/openapi.yaml).
 
@@ -76,7 +77,7 @@ Sources: [Engine OpenAPI contract](../../src/engine/api/preview/2026-11-12-previ
   return `next_page_token`. Slices and runs are newest first, at most 50 per page. Run events
   are in `seq` order, at most 100 per page. Until a run ends, the last page still carries a
   token, and using it later returns the events recorded since.
-- State-changing operations accept an `Idempotency-Key`. The engine keeps a key and its first
+- State-changing operations but `registerWorker` accept an `Idempotency-Key`. The engine keeps a key and its first
   result for 24 hours. Repeating a request with the same key returns the first result. The same
   key with a different body returns 409 `IdempotencyKeyReused`.
 

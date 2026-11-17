@@ -42,7 +42,8 @@ Sources: [Feature 001 research](../../specs/001-prose-to-accepted-slice/research
 
 - Library: the generated project's tests import `github.com/cucumber/godog` and its `colors`
   package. The template's `vendortools` package imports both so the later steps build offline.
-- Command: `godog`, built into the check image from the `godog` pin.
+- Command: none in the platform's images; the `godog` pin in `images.lock` names the version the
+  template's tests are vendored at.
 - Related: [cucumber-gherkin](/components/cucumber-gherkin.md), which parses the feature files.
 
 Sources: [api-feature-go template go.mod](../../src/catalogue/api-feature-go/template/go.mod), [Dockerfile.check](../../src/deploy/Dockerfile.check).

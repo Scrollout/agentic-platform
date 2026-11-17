@@ -77,4 +77,8 @@ Sources: [Check OpenAPI contract](../../src/check/api/preview/2026-11-13-preview
 # Examples
 
 `POST /checks/{checkName}/run?api-version=2026-11-13-preview` with a `CheckRequest` body returns a
-`CheckVerdict` with its `Finding` entries.
+`CheckVerdict`: `passed`, `reason`, `refs` and `project_files`, and for NoBlockingFindingOpen the
+`confirmed` positions of the request's findings. In a review round after the first the request
+also carries `round_scope` (the round's open findings and the lines the fix before it changed);
+the service refuses it without `round` or in round 1, and refuses its absence after round 1,
+with 400 `InvalidRequest`.

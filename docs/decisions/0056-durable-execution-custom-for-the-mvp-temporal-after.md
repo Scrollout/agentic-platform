@@ -56,6 +56,8 @@ Sources: [Temporal reference](/references/temporal.md), [Feature 001 research, D
   as the workflow and activities Temporal runs.
 - Artifacts travel by hash, never inside Temporal's history.
 
+Sources: [Feature 001 research, D56](../../specs/001-prose-to-accepted-slice/research.md), [Feature 001 plan, Decisions and Complexity Tracking](../../specs/001-prose-to-accepted-slice/plan.md).
+
 # Consequences
 
 - The MVP ships on code that is built and green in CI, without a rewrite before acceptance.
