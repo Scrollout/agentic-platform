@@ -109,8 +109,8 @@ Each failure is stopped by a check, and a replay of the same run gives byte-iden
 5. **Given** a build in which an agent reports done without the work being complete, **When** the
    step is checked, **Then** the step is not accepted.
 6. **Given** a review that raises a new finding every round, each confirmed by a new failing witness
-   test and each on a line the fix before its round changed, **When** 3 rounds have run, **Then** the run is handed over to the developer with the open
-   findings.
+   test and each on a line the fix before its round changed, **When** 3 rounds have run,
+   **Then** the run is handed over to the developer with the open findings.
 7. **Given** a step that keeps failing its checks, **When** 3 attempts have failed, **Then** the
    run is handed over to the developer with the reason.
 8. **Given** a run that has ended, **When** the developer replays it, **Then** every step reuses

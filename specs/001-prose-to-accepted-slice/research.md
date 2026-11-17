@@ -142,6 +142,7 @@ fresh review round 1.
 
 - **Decision**: a finding blocks only when it names a rule ID, file and line and a rule test
   confirms it. Rounds after the first check only open findings and lines the fixes changed.
+  (Narrowed by D55, 2026-11-17: the check applies it, each round's scope being the fix before it.)
 - **Rationale**: the spike's citation-only guard failed (S3); constitution, Review converges.
 
 ### D12. Tokens per session and per container
@@ -1386,6 +1387,8 @@ page, none of which an existing project provides.
 
 ### D39. Only a finding the check confirmed is recorded as blocking
 
+(Narrowed by D55, 2026-11-17: in a review round after the first, `confirmed` holds only findings within the round's scope.)
+
 - **Decision** (owner, 2026-11-15; found by T057's review, R5; the design is T092 and T096):
   - **Why**: the machine built the open list from the agent's own `blocking: true`
     (`src/engine/machine/drive.go`, the review loop), so a claim no witness confirmed was given to
@@ -2015,7 +2018,8 @@ page, none of which an existing project provides.
   current files against those round 1 reviewed): a wider scope than the round is given, and a
   second diff to own; filtering in the engine after the verdict: the check would say failed for a
   round the engine accepts, and the rule would have two owners.
-- **Stated limit**: a regression on a line no fix changed, such as a caller broken by a changed
-  function, is only a suggestion (owner, 2026-11-17).
+- **Stated limits**: a regression on a line no fix changed, such as a caller broken by a changed
+  function, is only a suggestion (owner, 2026-11-17); a repeat is matched by rule and file, so a
+  finding of an open rule at another line of the same file still blocks.
 - Sources: constitution 2.2.0, Engineering Principles, Review converges; D11; D35; D39;
   `src/engine/machine/drive.go` (`review`, `recordedFindings`).

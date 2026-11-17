@@ -200,8 +200,10 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
     owns the rule: the engine sends it the round's scope (check contract, `round_scope`) from the
     run, never from an answer, and records as blocking exactly the findings in its `confirmed`. A
     round whose confirmed findings all fall outside the scope passes NoBlockingFindingOpen and is
-    accepted when its other checks pass. Stated limit: a regression on a line no fix changed is
-    only a suggestion.
+    accepted when its other checks pass. A reused or resumed round gets the same scope: the open
+    findings and the fix's `changed_lines` are kept in the record. Stated limits: a regression on a
+    line no fix changed is only a suggestion; a repeat is matched by rule and file, so a finding of
+    an open rule at another line of the same file still blocks.
   - **An open round reused** (owner, 2026-11-15; research D36; T088): an open review round's
     result is kept under its reuse key like an accepted step's, marked open, so a later run of the
     same input reuses it; the fix's key then matches, and so do the later rounds' (FR-019, SC-005).

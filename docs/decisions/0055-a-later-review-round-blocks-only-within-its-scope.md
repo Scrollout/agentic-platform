@@ -59,6 +59,8 @@ Sources: [Feature 001 research, D55](../../specs/001-prose-to-accepted-slice/res
   by the prompt.
 - A regression on a line no fix changed, such as a caller broken by a changed function, is only a
   suggestion (a stated limit the owner accepted).
+- A repeat is matched by rule and file, since the fix moves lines, so a finding of an open rule at
+  another line of the same file still blocks (a stated limit).
 - The planted non-converging review (SC-003, US2.6) must raise each later round's finding on a line
   the fix before it changed.
 
