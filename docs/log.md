@@ -2,6 +2,7 @@
 
 ## 2026-11-17
 
+* **Implementation**: Feature 001 polish before T066: T021 (images, seen in the e2e job), T060 (ADRs 0057 to 0060: Go, `serve api`, run store, slice format), T061 (govulncheck, go-licenses and godog concepts, engine and check API concepts), T063 (Scorecard re-run, D22) and T064 (Story 2 in the architecture overview; feature 001's problem-space rows set to `done` or `in progress`).
 * **Planning**: Feature 001, T070 done (owner): converge round 2 found nothing that blocks the MVP; T153 and T154 go to the backlog with T152. Next: T066, the final fresh review.
 * **Planning**: Feature 001, T070 converge round 2 (changes since round 1, one fresh read-only assessor): 2 tasks appended as Phase 9 (T153, T154), neither blocking the MVP; nothing else found.
 * **Planning**: Feature 001, T152 (owner): after T066, every open task that does not block the MVP moves to `specs/backlog.md` and is closed here with that reason.

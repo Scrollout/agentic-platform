@@ -23,7 +23,7 @@ sources:
   - id: adr-0039
     resource: /decisions/0039-review-findings-confirmed-by-a-new-witness-test.md
     title: "ADR 0039: A blocking review finding is confirmed by a new failing witness test the review writes"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-17T21:30:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-17T22:00:00Z }
 ---
 
 # Context
@@ -61,7 +61,7 @@ Shipped by Story 1:
 - **Terminal client** (`src/cli`): calls the engine API. The read-only **run page** (`src/page`)
   arrives with Story 2 (T056); until then `ap up` starts without it.
 
-Shipped by Story 2 so far:
+Shipped by Story 2:
 
 - **Check service** (`src/engine/cmd/check`, contract in `src/check`): serves one
   [contract](../../src/check/api/preview/2026-11-13-preview/openapi.yaml) that only the engine
@@ -118,8 +118,9 @@ Built for Story 2 (T053a, split into T053c to T053e, all done):
   writing nothing there
   ([ADR 0036](/decisions/0036-step-containers-per-project-resume-reuses-them.md)).
 
-Still planned: T053a's end-to-end run through `ap build-workers`, a real build and the hand-over
-(research D29 and D30, [ADR 0030](/decisions/0030-agent-steps-on-docker-agent-checks-in-a-check-service.md)).
+The end-to-end build through `ap build-workers` ran on live Haiku on 2026-11-15 (T053a): a run
+ended done, and its replay reused every step with no model call (research D29 and D30,
+[ADR 0030](/decisions/0030-agent-steps-on-docker-agent-checks-in-a-check-service.md)).
 
 Every container runs read-only with all capabilities dropped; the analyst, contract-lint, the check
 service and the workers run under [gVisor](/components/gvisor.md). Networks are internal and isolated: `clients`,

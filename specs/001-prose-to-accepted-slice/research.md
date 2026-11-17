@@ -266,7 +266,7 @@ fresh review round 1.
 | google/uuid | BSD-3-Clause | 6.9 (2026-10-26) | required by cucumber/messages (v1.6.0, indirect); stable, last change 2024-11 |
 | yaml/go-yaml (`go.yaml.in/yaml/v3`) | Apache-2.0 | not published | the engine's YAML reader since T018 and `src/slice`'s for contracts (v3.0.4); run the scorecard locally (T063) |
 | oapi-codegen | Apache-2.0 | 7.5 | |
-| oapi-codegen/runtime | Apache-2.0 | 7.2 (2026-10-26) | library imported by the generated code |
+| oapi-codegen/runtime | Apache-2.0 | 7.4 (2026-11-16) | library imported by the generated code |
 | Redocly CLI | MIT | not published | bundles contracts only; run locally (T063) |
 | Spectral | Apache-2.0 | 4.7 | low score; pinned by digest; watch |
 | oasdiff | Apache-2.0 | not published | run locally (task) |
@@ -279,6 +279,12 @@ fresh review round 1.
 | WireMock | Apache-2.0 | 5.8 (2026-11-09) | the recorded-model replay server and recorder for tests (D26) |
 | buildkit-syft-scanner | Apache-2.0 | not published | BuildKit's SBOM generator, a wrapper of syft (8.5, 2026-11-09); run locally (T063) |
 | go-arch-lint | MIT | 4.7 (2026-10-19) | the module-boundary check (D40); low score, built from source by the checksum database and a pinned module hash; watch |
+
+Re-run 2026-11-17 (T063, OpenSSF Scorecard API): every published score above is unchanged but
+oapi-codegen/runtime (7.2 to 7.4); Docker Agent, go-yaml, Redocly CLI, oasdiff and
+buildkit-syft-scanner still publish none. The other adopted tools' scores are in their
+`docs/components/` concepts: govulncheck 3.7, go-licenses 5.0, kin-openapi 4.9, gotestsum 3.6,
+markdownlint-cli2 5.4, golang.org/x/mod 5.2 (2026-11-09 to 2026-11-16).
 
 Custom code is limited to the engine, its checks, the slice model, the terminal client and the run
 page, none of which an existing project provides. Corrected 2026-11-17 (D56): the engine's durable

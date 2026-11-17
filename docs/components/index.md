@@ -10,9 +10,12 @@
 * [Docker Agent](docker-agent.md) - The agent runtime the platform is built on; here it runs the analyst as a long-lived serve api service.
 * [git](git.md) - The version control CLI the project worker runs to keep each new project's version history, one commit per accepted step.
 * [go-arch-lint](go-arch-lint.md) - Checks each platform Go module's imports against the components and allowed dependencies its .go-arch-lint.yml declares; an undeclared import or an unmapped package fails the arch step of scripts/check.sh, run in CI.
+* [go-licenses](go-licenses.md) - Google's Go dependency licence checker, pinned at v2.0.1, run over every platform Go module by the deps step of scripts/check.sh with forbidden and unknown licence types disallowed.
 * [go-yaml](go-yaml.md) - The YAML library (go.yaml.in/yaml/v3) the slice model and the engine use to read contracts, patterns and rules.
+* [godog](godog.md) - The Cucumber test runner for Go, v0.16.0, which runs a slice's Gherkin examples with --strict so that an undefined step fails and every example is proven bound to a test.
 * [golang.org/x/mod](x-mod.md) - The Go team's module library; the engine's DependenciesAllowed step check reads a project's go.mod with its modfile package.
 * [gotestsum](gotestsum.md) - Runs go test and writes its results as JUnit XML for the CI job summaries ([research D43](../../specs/001-prose-to-accepted-slice/research.md)); Apache-2.0, OpenSSF Scorecard 3.6 on 2026-10-19.
+* [govulncheck](govulncheck.md) - The Go team's vulnerability scanner, pinned at v1.9.0, run over every platform Go module by the deps step of scripts/check.sh in the deps CI job.
 * [gVisor](gvisor.md) - The application-kernel sandbox (runtime runsc) that every step, check, analyst and contract-lint container runs under.
 * [kin-openapi](kin-openapi.md) - The Go OpenAPI 3 parser that oasdiff uses as a library, and which the engine imports for contract loading.
 * [markdownlint-cli2](markdownlint-cli2.md) - The Markdown linter scripts/check.sh and the commit hook run on docs, specs and source Markdown.

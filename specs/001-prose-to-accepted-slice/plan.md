@@ -105,6 +105,10 @@ Each decision that outlives this feature has a record in `docs/decisions/`, link
 | The module-boundary check (`arch`, go-arch-lint) runs in its own `check.yml` job for code changes, not in the pre-commit hook (owner, 2026-11-17; supersedes ADR 0043 in part) | D54 | [ADR 0054](../../docs/decisions/0054-module-boundary-check-runs-in-ci.md) |
 | In a review round after the first, a confirmed finding blocks only when it repeats an open finding the round was given (same rule and file) or sits on a line the fix before the round changed; NoBlockingFindingOpen applies it from the check request's `round_scope`, which the engine fills from the run; any other confirmed finding is a suggestion (owner, 2026-11-17; `/speckit-clarify`, FR-017) | D55 | [ADR 0055](../../docs/decisions/0055-a-later-review-round-blocks-only-within-its-scope.md) |
 | The MVP keeps its own durable execution (step machine, run store, job queue); the first task after the MVP adopts Temporal for them (owner, 2026-11-17) | D56 | [ADR 0056](../../docs/decisions/0056-durable-execution-custom-for-the-mvp-temporal-after.md) |
+| All platform code is Go 1.26 | D1 | [ADR 0057](../../docs/decisions/0057-go-is-the-platform-stack.md) |
+| Docker Agent runs as a pinned `serve api` service, one session per call, not embedded through its Go SDK | D27, D29 | [ADR 0058](../../docs/decisions/0058-docker-agent-integrated-through-serve-api.md) |
+| Run records are JSON Lines; artifacts are stored under their SHA-256 | D8 | [ADR 0059](../../docs/decisions/0059-run-store-is-json-lines-and-a-content-addressed-store.md) |
+| A rule is a structured record with its EARS text derived; examples are Gherkin scenarios run by godog `--strict` | D2, D3 | [ADR 0060](../../docs/decisions/0060-slice-rules-are-structured-records-examples-are-gherkin.md) |
 
 ## Threat model
 
