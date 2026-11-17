@@ -2,6 +2,7 @@
 
 ## 2026-11-17
 
+* **Implementation**: Feature 001, T128, T129, T131 and T133 done (check run 44083757282 green, owner confirmed the names and the empty summaries); T117 waits for a green `specs/`-only and `docs/`-only push.
 * **Planning**: Feature 001, T133 (owner, 2026-11-17; research D53): the CI workflows and jobs get display names that say what they judge; the run summary shows them.
 * **Planning**: Feature 001, T128 amended (owner, 2026-11-17; research D51): `check.yml` keeps GitHub's default run name, the commit's subject line; only `evals.yml` sets `run-name`.
 * **Planning**: Feature 001, T131 (owner, 2026-11-17; research D52): GitHub's `status=success` runs list left out a green run for over an hour, so the check selector took an old base and ran every job; the selector lists runs unfiltered. T132 does the same for the evals selector.
