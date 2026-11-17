@@ -24,6 +24,7 @@ CHECK_JOBS = {
     "contract_diff": "API breaking changes",
     "gateway": "Model gateway config",
     "go": "Go unit tests and vet",
+    "arch": "Module boundaries (go-arch-lint)",
     "docker": "Service tests with Docker (recorded model)",
     "deps": "Dependencies and licences",
     "secrets": "Secret scan",

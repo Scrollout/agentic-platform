@@ -1,0 +1,25 @@
+# Module boundaries of src/slice (T098; research D40, ADR 0043): every package is one component with
+# its exact folder, and may import only the components (mayDependOn) and vendor packages
+# (canUse) listed here; any other import, and any package no component maps, fails
+# scripts/check.sh --only arch. Changing this file needs the owner's Approved-by.
+version: 3
+workdir: .
+allow:
+  depOnAnyVendor: false
+  deepScan: false
+excludeFiles:
+  - "^.*/testdata/.*$"
+vendors:
+  gherkin:
+    in: [github.com/cucumber/gherkin/go/v42]
+  jsonschema:
+    in: [github.com/santhosh-tekuri/jsonschema/v6, github.com/santhosh-tekuri/jsonschema/v6/kind]
+  messages:
+    in: [github.com/cucumber/messages/go/v34]
+  yaml:
+    in: [go.yaml.in/yaml/v3]
+components:
+  root: { in: . }
+deps:
+  root:
+    canUse: [gherkin, jsonschema, messages, yaml]

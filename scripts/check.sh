@@ -96,6 +96,7 @@ contracts contracts
 contract-diff contract breaking changes: each service'"'"'s newest version against the previous one
 gateway model gateway
 go go vet and tests
+arch module boundaries (go-arch-lint)
 docker recorded model, contract-lint service, API conformance and Story 1 acceptance (Docker, no key)
 deps dependencies and licences
 secrets secrets
@@ -149,6 +150,48 @@ s_contracts() {
 s_contract_diff() { scripts/contract-diff.sh; }
 s_gateway() { sh src/deploy/gateway/test_gateway.sh >/dev/null && echo "gateway checks passed"; }
 s_go() { go_checks; }
+s_arch() {
+  # Module boundaries (T098; research D40, D54): each module of src/go.work against its archfile,
+  # with go-arch-lint, pinned in images.lock by version and module hash and built from source into
+  # /gopath/bin; it runs offline, src/ read-only. CI runs it; the pre-commit hook does not (D54).
+  phase setup
+  pin=$(awk '$1=="go-arch-lint"{print $2}' src/deploy/images.lock)
+  sum=$(awk '$1=="go-arch-lint-sum"{print $2}' src/deploy/images.lock)
+  [ -n "$pin" ] && [ -n "$sum" ] || { echo "arch: no go-arch-lint or go-arch-lint-sum pin in src/deploy/images.lock" >&2; exit 1; }
+  mods=$(sed -n 's#^[[:space:]]*\./\([^[:space:]]*\)[[:space:]]*$#\1#p' src/go.work)
+  for m in $mods; do arch_rules "$m"; done
+  if [ ! -e "$GO_CACHE/bin/go-arch-lint" ]; then
+    # Only the first fetch uses the network, verified by the checksum database (owner, 2026-11-15);
+    # later installs run offline through the module cache's file proxy.
+    [ -e "$GO_CACHE/pkg/mod/cache/download/${pin%@*}/@v/${pin##*@}.zip" ] ||
+      go_run bridge "CGO_ENABLED=0 go install $pin"
+    [ -e "$GO_CACHE/bin/go-arch-lint" ] ||
+      go_run none "GOPROXY=file:///gopath/pkg/mod/cache/download CGO_ENABLED=0 go install $pin"
+  fi
+  got=$(go_run none "go version -m /gopath/bin/go-arch-lint" 2>/dev/null | awk '$1=="mod"{print $2 "@" $3, $4}') || got=
+  [ "$got" = "$pin $sum" ] ||
+    { echo "arch: /gopath/bin/go-arch-lint is '${got:-not a Go binary}', not the pin '$pin $sum' (src/deploy/images.lock)" >&2; exit 1; }
+  phase test
+  echo "arch: modules: $(echo $mods)"
+  # shellcheck disable=SC2086
+  docker run --rm --network none -v "$PWD/src:/src:ro" -v "$GO_CACHE:/gopath" --user "$(id -u):$(id -g)" \
+    -e GOPATH=/gopath -e GOCACHE=/gopath/cache -e GOTOOLCHAIN=local -e GOPROXY=off -e GOFLAGS=-mod=readonly \
+    "$GO_IMAGE" sh -c 'rc=0; for m in "$@"; do echo "== arch: $m"; /gopath/bin/go-arch-lint check --project-path "/src/$m" --output-color=false || rc=1; done; exit $rc' arch $mods ||
+    { echo "arch: a module crosses a boundary its archfile forbids (above)" >&2; exit 1; }
+}
+arch_rules() {  # arch_rules <module>: the module has an archfile that keeps research D40's rules
+  f=src/$1/.go-arch-lint.yml
+  [ -f "$f" ] || { echo "arch: module $1 of src/go.work has no archfile $f" >&2; exit 1; }
+  bad=
+  grep -Eq '^version:[[:space:]]*3[[:space:]]*$' "$f" || bad="version must be 3"
+  grep -Eq '^[[:space:]]+depOnAnyVendor:[[:space:]]*false[[:space:]]*$' "$f" &&
+    ! grep -Eq 'depOnAnyVendor:[[:space:]]*true' "$f" || bad="allow.depOnAnyVendor must be false"
+  grep -Eq '^[[:space:]]+deepScan:[[:space:]]*false[[:space:]]*$' "$f" &&
+    ! grep -Eq 'deepScan:[[:space:]]*true' "$f" || bad="allow.deepScan must be false"
+  awk '/^components:/ { c = 1; next } /^[^[:space:]#]/ { c = 0 } c && /\*\*/ { b = 1 } END { exit b }' "$f" ||
+    bad="a component's in must be an exact folder, not **"
+  [ -z "$bad" ] || { echo "arch: $f: $bad" >&2; exit 1; }
+}
 s_docker() {
   # Built in the pinned Go container (setup), run on the host, where Docker is (test); each in its
   # package folder. The contract and acceptance suites build the engine they test in the pinned Go

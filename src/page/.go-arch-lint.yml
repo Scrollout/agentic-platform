@@ -1,0 +1,25 @@
+# Module boundaries of src/page (T098; research D40, ADR 0043): every package is one component with
+# its exact folder, and may import only the components (mayDependOn) and vendor packages
+# (canUse) listed here; any other import, and any package no component maps, fails
+# scripts/check.sh --only arch. Changing this file needs the owner's Approved-by.
+version: 3
+workdir: .
+allow:
+  depOnAnyVendor: false
+  deepScan: false
+excludeFiles:
+  - "^.*/testdata/.*$"
+vendors:
+  oapi-runtime:
+    in: [github.com/oapi-codegen/runtime]
+components:
+  root: { in: . }
+  api-gen: { in: api/gen }
+  cmd-page: { in: cmd/page }
+deps:
+  root:
+    mayDependOn: [api-gen, root]
+  api-gen:
+    canUse: [oapi-runtime]
+  cmd-page:
+    mayDependOn: [root]

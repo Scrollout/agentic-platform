@@ -1,0 +1,88 @@
+# Module boundaries of src/engine (T098; research D40, ADR 0043): every package is one component with
+# its exact folder, and may import only the components (mayDependOn) and vendor packages
+# (canUse) listed here; any other import, and any package no component maps, fails
+# scripts/check.sh --only arch. Changing this file needs the owner's Approved-by.
+version: 3
+workdir: .
+allow:
+  depOnAnyVendor: false
+  deepScan: false
+excludeFiles:
+  - "^.*/testdata/.*$"
+vendors:
+  check-api-gen:
+    in: [github.com/agentic-platform/check/api/gen]
+  gherkin:
+    in: [github.com/cucumber/gherkin/go/v42]
+  jsonschema:
+    in: [github.com/santhosh-tekuri/jsonschema/v6, github.com/santhosh-tekuri/jsonschema/v6/kind]
+  kin-openapi:
+    in: [github.com/getkin/kin-openapi/openapi3]
+  messages:
+    in: [github.com/cucumber/messages/go/v34]
+  modfile:
+    in: [golang.org/x/mod/modfile]
+  oapi-runtime:
+    in: [github.com/oapi-codegen/runtime]
+  oasdiff:
+    in: [github.com/oasdiff/oasdiff/checker, github.com/oasdiff/oasdiff/diff, github.com/oasdiff/oasdiff/load]
+  slice-module:
+    in: [github.com/agentic-platform/slice]
+  yaml:
+    in: [go.yaml.in/yaml/v3]
+components:
+  agentcall: { in: agentcall }
+  analyst: { in: analyst }
+  api: { in: api }
+  api-gen: { in: api/gen }
+  canonical: { in: canonical }
+  checks: { in: checks }
+  checksvc: { in: checksvc }
+  cmd-check: { in: cmd/check }
+  cmd-engine: { in: cmd/engine }
+  contracts: { in: contracts }
+  machine: { in: machine }
+  procedures: { in: procedures }
+  slices: { in: slices }
+  steps: { in: steps }
+  store: { in: store }
+deps:
+  analyst:
+    mayDependOn: [agentcall, analyst, slices]
+  api:
+    mayDependOn: [api-gen, machine, slices, store]
+    canUse: [jsonschema, slice-module, yaml]
+  api-gen:
+    canUse: [oapi-runtime]
+  checks:
+    mayDependOn: [canonical, checks]
+    canUse: [gherkin, messages, modfile, slice-module, yaml]
+  checksvc:
+    mayDependOn: [canonical, checks, checksvc, procedures]
+    canUse: [check-api-gen, jsonschema, yaml]
+  cmd-check:
+    mayDependOn: [checksvc]
+  cmd-engine:
+    # A named exception (D40 F2): setup.go holds logic (sliceWorkers, the agent-definition digest),
+    # not only wiring; moving it into a package is follow-up T097.
+    mayDependOn: [analyst, api, canonical, contracts, machine, slices, steps, store]
+    canUse: [slice-module, yaml]
+  contracts:
+    mayDependOn: [contracts, slices]
+    canUse: [kin-openapi, oasdiff]
+  machine:
+    mayDependOn: [machine]
+    canUse: [jsonschema]
+  procedures:
+    mayDependOn: [canonical, checks, procedures]
+    canUse: [modfile]
+  slices:
+    mayDependOn: [canonical, checks, slices]
+    canUse: [jsonschema, slice-module, yaml]
+  steps:
+    # checksvc is a named exception (D40 F1): steps reads only checksvc.APIVersion() and
+    # checksvc.CallTimeLimitMax(), which belong in the check contract; follow-up T097.
+    mayDependOn: [agentcall, canonical, checksvc, machine, procedures, steps]
+    canUse: [check-api-gen]
+  store:
+    canUse: [slice-module]

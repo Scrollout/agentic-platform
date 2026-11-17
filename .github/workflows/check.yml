@@ -265,6 +265,27 @@ jobs:
           require_tests: true
           job_summary: ${{ job.status != 'success' }}
 
+  # Module boundaries (T098; research D40, D54): go-arch-lint over each Go module's archfile. The
+  # generated api/gen packages it maps are not in git, so --prepare makes them first.
+  arch:
+    name: "Module boundaries (go-arch-lint)"
+    needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'arch')
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs:
+      seconds: ${{ steps.run.outputs.seconds }}
+      error: ${{ steps.run.outputs.error }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Generated code and module cache
+        run: scripts/check.sh --prepare
+      - id: run
+        name: arch
+        run: scripts/ci-step.sh arch scripts/check.sh --only arch
+
   docker:
     name: "Service tests with Docker (recorded model)"
     needs: config
@@ -456,6 +477,7 @@ jobs:
       - contract_diff
       - gateway
       - go
+      - arch
       - docker
       - deps
       - secrets

@@ -55,6 +55,7 @@ jobs:
   contract_diff: {paths: *code}
   gateway: {paths: *code}
   go: {paths: *code}
+  arch: {paths: *code}
   docker: {paths: *code}
   ap_test_planted: {paths: *code}
   ap_test_us2: {paths: *code}

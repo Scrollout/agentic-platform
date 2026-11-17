@@ -1,0 +1,65 @@
+# Module boundaries of src/tests (T098; research D40, ADR 0043): every package is one component with
+# its exact folder, and may import only the components (mayDependOn) and vendor packages
+# (canUse) listed here; any other import, and any package no component maps, fails
+# scripts/check.sh --only arch. Changing this file needs the owner's Approved-by.
+version: 3
+workdir: .
+allow:
+  depOnAnyVendor: false
+  deepScan: false
+excludeFiles:
+  - "^.*/testdata/.*$"
+vendors:
+  engine-analyst:
+    in: [github.com/agentic-platform/engine/analyst]
+  engine-canonical:
+    in: [github.com/agentic-platform/engine/canonical]
+  engine-checks:
+    in: [github.com/agentic-platform/engine/checks]
+  engine-procedures:
+    in: [github.com/agentic-platform/engine/procedures]
+  engine-slices:
+    in: [github.com/agentic-platform/engine/slices]
+  gherkin:
+    in: [github.com/cucumber/gherkin/go/v42]
+  jsonschema:
+    in: [github.com/santhosh-tekuri/jsonschema/v6, github.com/santhosh-tekuri/jsonschema/v6/kind]
+  messages:
+    in: [github.com/cucumber/messages/go/v34]
+  slice-module:
+    in: [github.com/agentic-platform/slice]
+  yaml:
+    in: [go.yaml.in/yaml/v3]
+components:
+  acceptance: { in: acceptance }
+  analystsvc: { in: analystsvc }
+  analystsvc-client: { in: analystsvc/client }
+  contract: { in: contract }
+  evals-analyst: { in: evals/analyst }
+  evals-runevents: { in: evals/runevents }
+  evals-steps: { in: evals/steps }
+  lab: { in: lab }
+  lab-httpc: { in: lab/httpc }
+  lint: { in: lint }
+  recorded: { in: recorded }
+  recorded-recording: { in: recorded/recording }
+  recorded-scripted: { in: recorded/scripted }
+deps:
+  acceptance:
+    mayDependOn: [lab]
+  analystsvc:
+    mayDependOn: [evals-analyst]
+    canUse: [engine-slices]
+  analystsvc-client:
+    canUse: [engine-analyst, engine-slices]
+  contract:
+    mayDependOn: [lab]
+    canUse: [jsonschema, yaml]
+  evals-analyst:
+    mayDependOn: [evals-runevents]
+    canUse: [engine-checks, engine-slices, gherkin, messages, slice-module, yaml]
+  evals-steps:
+    mayDependOn: [evals-runevents]
+    canUse: [engine-canonical, engine-checks, engine-procedures, yaml]
+  lab:
+    canUse: [yaml]
