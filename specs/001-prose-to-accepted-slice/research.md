@@ -1889,3 +1889,52 @@ page, none of which an existing project provides.
 - **Recorded as** [ADR 0052](../../docs/decisions/0052-a-green-test-job-writes-no-summary.md).
 - Sources: [action-junit-report at v6.7.1](https://github.com/mikepenz/action-junit-report/tree/a16be3a69023e9bd7e748ede768b3282ea7b30ce);
   [GitHub Actions: contexts reference](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts).
+
+### D50. Each check job runs only when a file it judges changed
+
+- **Decision** (owner, 2026-11-17; extends T117): `.github/check-jobs.yaml` declares, per
+  `check.yml` job id, either `always: true` or `paths:`, a list of globs read in order as GitHub's
+  own `paths` filters are (a later pattern wins; `!` excludes). The `config` job runs one selector
+  over the files changed since the branch's last green `check` run whose head is an ancestor of
+  the pushed commit (the same base rule as the evals, T115 and T120), and each other job runs
+  only when the selector names it; every job runs for `workflow_dispatch`, when there is no such
+  run, or when its commit cannot be resolved. A test proves the declaration names every job of
+  `check.yml` once. First declaration:
+  - always: `layout`, `secrets`, `deps`, `evals-current` (constitution XIII: dependency, licence,
+    secret and static analysis on every change; T120: `evals-current` on every push);
+  - `markdown`: Markdown files, the markdownlint configuration, `scripts/tools/**` and
+    `scripts/check.sh`;
+  - `knowledge`: `docs/**`, `specs/**`, `scripts/okf.py` and `scripts/check.sh`;
+  - `py_tests`: every file except `specs/**`, `.specify/**` and `.claude/**`, since some of its
+    tests read `docs/` and the root `README.md` (`test_pre_commit_quick.py`, `test_workflows.py`);
+  - every other job (`contracts`, `contract_diff`, `gateway`, `go`, `docker`, `ap_test_us2`,
+    `ap_test_planted`, `e2e`): every file except `docs/**`, `specs/**`, `.specify/**`,
+    `.claude/**` and Markdown at the root; narrower lists per job are later changes to the
+    declaration, not to code.
+  - A test that reads a file must run in a job whose paths include that file; a path list is
+    narrowed only after checking what the job's tests read.
+- **Why**: a docs-only push started all 15 jobs, about 40 minutes of the `docker` job alone
+  (run 44061592726); the owner wants the CI to run what a change needs. Comparing with the last
+  green run, not the previous push, keeps a change whose run failed or was cancelled judged on
+  the next push.
+- **Rejected**: `dorny/paths-filter` (MIT, OpenSSF Scorecard 3.5 on 2026-11-16, below the
+  project's other actions); `tj-actions/changed-files`, compromised in a 2025 supply-chain attack;
+  GitHub's workflow-level `paths`, which filters whole workflows, not jobs. The selector exists
+  already (`scripts/ci-evals-select.py`); its base finding and glob matching move to one module
+  both selectors use (Single owner for rules).
+- **Summary**: `scripts/ci-summary.py` counts a job the selector skipped as passed and lists it
+  as skipped, and still fails a job skipped for any other reason.
+- **Recorded as** [ADR 0053](../../docs/decisions/0053-check-jobs-run-for-the-files-they-judge.md),
+  which supersedes ADR 0044's "every step of `scripts/check.sh` on every push".
+- Sources: [GitHub: workflow syntax, `paths` filter patterns](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax);
+  [OpenSSF Scorecard: dorny/paths-filter](https://api.securityscorecards.dev/projects/github.com/dorny/paths-filter);
+  run 44061592726.
+
+### D51. Every CI run has a name that says what it judges
+
+- **Decision** (owner, 2026-11-17; T128): `check.yml` gets `run-name: check · <branch> · <the
+  pushed commit's message>` for a push and `check · <branch> · started by <actor>` for a dispatch;
+  `evals.yml` gets `run-name: evals · <branch> · all suites|changed suites · started by <actor>`.
+  GitHub expressions cannot shorten a commit ID or cut a message to its first line, so the name
+  shows what the expression gives; `run-name` is display only and never reaches a shell.
+- Sources: [GitHub: workflow syntax, `run-name`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax).
