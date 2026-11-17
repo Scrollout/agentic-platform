@@ -70,7 +70,7 @@ The rationale the earlier text held (building inside `ap up`) is kept in R1's Re
   candidate; the time with nothing changed is measured against SC-002 (T021). S2 ran on Docker
   29.10 with the containerd image store; reproducibility on Docker 28 or the classic image store
   is not measured (analyze I5); if a digest is not stable there, the cost is an extra rebuild,
-  never an unverified image. Reproducibility of the other six images is proven by T003 in CI.
+  never an unverified image. Reproducibility of the other six images is proven by T004 in CI. After the build cache is pruned (`docker builder prune`), the check image's template stage runs again and its warm cache gets new times, so that image is rebuilt and signed once more.
 
 ### R2. The signing password is asked once, only when something must be signed
 
