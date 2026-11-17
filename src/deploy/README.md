@@ -34,7 +34,8 @@ the one that records last wins, and an image whose tag another build has since m
 back into the local store by digest. Builds that start together on a machine with no registry
 running and no key pair yet are safe too: `ap registry` lets each of them find the one registry
 the first made (see below), and only one makes the key pair, under the lock `keys.lock` in the
-signing folder, while the others wait for it and then sign with it.
+signing folder, while the others wait for it and then sign with it. Both locks follow one rule,
+kept in `lock.sh`, which `build.sh` sources.
 
 The key's password comes from `COSIGN_PASSWORD`, or cosign asks on the terminal; with neither,
 `build.sh` stops before building. It exits 0 when the image is built, signed and recorded, 1 when a

@@ -2,6 +2,8 @@
 
 ## 2026-11-18
 
+* **Implementation**: Feature 003, T003 done (separate test author): a new fixture `scripts/tests/fixtures/start/docker-stub`, a copy of the launcher's stub (unchanged) that also answers `docker info` (runtimes, version), BuildKit's metadata file per image, the certificate, password-hash and fingerprint runs, and a failing `compose up`.
+* **Implementation**: Feature 003, T002 done: build.sh's lock (`take_lock`, `release_lock` and the stale-lock rule) moves unchanged into `src/deploy/lock.sh`, which `build.sh` sources and `ap start` will (research R4); no behaviour change, judged by `test_signing.py`'s lock tests in CI.
 * **Implementation**: Feature 003, T001 done: `src/cli/contract.md` gains "Starting the platform" (`start`, `start --check`, `up`'s remote-access options and lines, `page`'s remote lines); `up` without them is unchanged; the draft in `specs/003-one-command-start/contracts/` is removed. `/speckit-analyze` passed in round 3 (no CRITICAL or HIGH).
 * **Planning**: Feature 003, `/speckit-analyze` round 1 (fresh reviewer): 2 CRITICAL, 3 HIGH, 9 MEDIUM, 4 LOW; the owner chose a new `ap start` with `ap up` unchanged ([ADR 0063](/decisions/0063-ap-start-is-the-start-command-ap-up-unchanged.md), superseding ADR 0061 in part), `ap start --check` added (XVII); spec, plan, research, data model, contract draft, quickstart and tasks revised.
 * **Documentation**: `README.md` rewritten for visitors to the repository: the problem, how it works, its status in one line, where to try it and how to contribute (owner).

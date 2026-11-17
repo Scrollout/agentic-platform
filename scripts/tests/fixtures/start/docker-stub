@@ -1,0 +1,188 @@
+#!/usr/bin/env python3
+"""Recording stand-in for `docker`: appends {"argv", "env"} as a JSON line to $STUB_LOG.
+
+A copy of ../launcher/docker-stub with every behaviour of it kept (same variables, same log
+format), so the docker calls of `ap up` logged by either stub can be compared. It also answers
+what `ap start` and `ap up --listen` ask. STUB_* variables are not recorded.
+
+From the launcher's stub:
+STUB_EXIT is the exit code of every call; STUB_EXIT_CLI overrides it for `... run ... cli ...`
+calls. `port` calls print a loopback address.
+STUB_VERIFY_FAIL makes a `run ... verify ...` call (the signature check) exit 1 with a cosign-like
+message when it is "*" or any argument contains it, e.g. STUB_VERIFY_FAIL=/ap-engine@ fails the
+engine image's check only.
+STUB_LABELS         a JSON object; `docker container inspect -f '{{index .Config.Labels "k"}}' <name>`
+                    prints its value for k (and exits 0), as a container made earlier would
+STUB_REGISTRY_ABSENT  `docker container inspect` exits 1 (no such container)
+STUB_DOCKER_VERSION  the server version `docker version --format ...` prints (default 29.9.3; empty: exit 1);
+                    `docker info --format '{{.ServerVersion}}'` prints it too
+STUB_EXIT_PULL      exit code of a `pull` call
+STUB_IMAGE_MISSING  an `inspect` of an image reference (one containing "@sha256:") exits 1
+
+Added for `ap start` and `ap up --listen`. When STUB_EXIT is set non-zero, it still wins: the
+call below exits with it and does nothing else.
+STUB_RUNTIMES       space-separated runtime names (default "runc runsc"); `docker info --format <fmt>`
+                    with "Runtimes" in <fmt> prints {"<name>": {"path": "<name>"}, ...}
+STUB_BUILD_FAIL     space-separated image names; `docker buildx build ... --metadata-file <f>` for one of
+                    them (the name in `-f .../Dockerfile.<name>`) prints a BuildKit-like error naming it
+                    on stderr, exits 1 and writes no metadata
+STUB_BUILD_DIGEST_<NAME>  the digest (whole "sha256:<64 hex>") a build of image <name> (<NAME> upper-case)
+                    writes to the metadata file as {"containerimage.digest": "..."}; when unset it is
+                    "sha256:" + hashlib.sha256(("ap-" + name).encode()).hexdigest()
+(`docker run` of the golang image pinned in src/deploy/images.lock, any argument containing
+`generate_cert`: writes a fake cert.pem and key.pem into the host folder of the mount whose container
+path is the -w/--workdir value, or of the first -v/--volume/--mount bind mount when there is no -w.)
+(`docker run` of the pinned nginx image: with `mkpasswd` in an argument, reads standard input, logs it as
+a third field "stdin" of that call's line and prints "$6$stubsalt$" + 86 characters of [A-Za-z0-9./]
+derived from the input; with `sha256sum`, prints STUB_CERT_SHA256 and "  -".)
+STUB_CERT_SHA256    the fingerprint the sha256sum call prints (default hashlib.sha256(b"ap-cert").hexdigest())
+STUB_COMPOSE_UP_FAIL  a message; a `compose` call with `up` among its arguments prints it on stderr and
+                    exits 1 (for "address already in use"); other calls are unaffected
+"""
+import hashlib, json, os, re, sys
+argv = sys.argv[1:]
+env = {k: v for k, v in os.environ.items() if not k.startswith("STUB_")}
+
+
+def pinned(name):
+    """The image reference after `name` in src/deploy/images.lock (found from this file's path)."""
+    lock = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../../../src/deploy/images.lock")
+    try:
+        with open(lock) as f:
+            for line in f:
+                p = line.split()
+                if len(p) >= 2 and p[0] == name and not line.startswith("#"):
+                    return p[1]
+    except OSError:
+        pass
+    return None
+
+
+def opt(names):
+    """The value of the first of the options in names, as `--o v` or `--o=v`."""
+    for i, a in enumerate(argv):
+        for n in names:
+            if a == n and i + 1 < len(argv):
+                return argv[i + 1]
+            if n.startswith("--") and a.startswith(n + "="):
+                return a[len(n) + 1:]
+    return None
+
+
+def mounts():
+    """(host, container) of every bind mount: -v host:container[:opts] and --mount type=bind,source=,target=."""
+    out = []
+    for i, a in enumerate(argv):
+        v = None
+        if a in ("-v", "--volume") and i + 1 < len(argv):
+            v = argv[i + 1]
+        elif a.startswith("--volume="):
+            v = a[9:]
+        if v:
+            p = v.split(":")
+            if len(p) >= 2:
+                out.append((p[0], p[1]))
+        m = argv[i + 1] if a == "--mount" and i + 1 < len(argv) else (a[8:] if a.startswith("--mount=") else None)
+        if m:
+            kv = dict(x.split("=", 1) for x in m.split(",") if "=" in x)
+            src, dst = kv.get("source") or kv.get("src"), kv.get("target") or kv.get("destination") or kv.get("dst")
+            if src and dst:
+                out.append((src, dst))
+    return out
+
+
+record = {"argv": argv, "env": env}
+golang, nginx = pinned("golang"), pinned("nginx")
+stdin = None
+if argv[:1] == ["run"] and nginx in argv and any("mkpasswd" in a for a in argv):
+    stdin = sys.stdin.read()
+    record["stdin"] = stdin
+with open(os.environ["STUB_LOG"], "a") as f:
+    f.write(json.dumps(record) + "\n")
+if argv[:1] == ["run"] and "verify" in argv:
+    pat = os.environ.get("STUB_VERIFY_FAIL")
+    if pat and (pat == "*" or any(pat in a for a in argv)):
+        sys.stderr.write("Error: no signatures found\n")
+        sys.exit(1)
+if argv[:2] == ["container", "inspect"]:
+    if os.environ.get("STUB_REGISTRY_ABSENT"):
+        sys.stderr.write("Error: No such container\n")
+        sys.exit(1)
+    m = re.search(r'index \.Config\.Labels "([^"]+)"', " ".join(argv))
+    if m and "STUB_LABELS" in os.environ:
+        print(json.loads(os.environ["STUB_LABELS"]).get(m.group(1), ""))
+        sys.exit(0)
+if "inspect" in argv and os.environ.get("STUB_IMAGE_MISSING") and any("@sha256:" in a for a in argv):
+    sys.stderr.write("Error: No such image\n")
+    sys.exit(1)
+if argv[:1] == ["version"]:
+    v = os.environ.get("STUB_DOCKER_VERSION", "29.9.3")
+    if not v:
+        sys.exit(1)
+    print(v)
+    sys.exit(0)
+if "pull" in argv[:2] and "STUB_EXIT_PULL" in os.environ:
+    sys.exit(int(os.environ["STUB_EXIT_PULL"]))
+if "port" in argv:
+    # the registry's published port (ap checks it is published): the one ap was asked for
+    print("127.0.0.1:" + os.environ.get("AP_REGISTRY_PORT", "5005") if "5000/tcp" in argv else "127.0.0.1:49999")
+code = int(os.environ.get("STUB_EXIT", "0"))
+if "run" in argv and "cli" in argv and "STUB_EXIT_CLI" in os.environ:
+    code = int(os.environ["STUB_EXIT_CLI"])
+
+# --- answers added for ap start / ap up --listen; a non-zero STUB_EXIT wins over all of them ---
+if code == 0:
+    if argv[:1] == ["info"]:
+        fmt = opt(["--format", "-f"]) or ""
+        if "Runtimes" in fmt:
+            names = os.environ.get("STUB_RUNTIMES", "runc runsc").split()
+            print(json.dumps({n: {"path": n} for n in names}))
+            sys.exit(0)
+        if "ServerVersion" in fmt:
+            v = os.environ.get("STUB_DOCKER_VERSION", "29.9.3")
+            if not v:
+                sys.exit(1)
+            print(v)
+            sys.exit(0)
+    if argv[:2] == ["buildx", "build"] and opt(["--metadata-file"]):
+        fl = opt(["-f", "--file"]) or ""
+        m = re.search(r"Dockerfile\.([A-Za-z0-9_.-]+)$", fl)
+        name = m.group(1) if m else "unknown"
+        if name in os.environ.get("STUB_BUILD_FAIL", "").split():
+            sys.stderr.write("ERROR: failed to solve: process \"/bin/sh -c build\" did not complete "
+                             "successfully: exit code: 1 (image %s)\n" % name)
+            sys.exit(1)
+        var = "STUB_BUILD_DIGEST_" + re.sub(r"[^A-Za-z0-9]", "_", name).upper()
+        digest = os.environ.get(var) or "sha256:" + hashlib.sha256(("ap-" + name).encode()).hexdigest()
+        with open(opt(["--metadata-file"]), "w") as f:
+            json.dump({"containerimage.digest": digest}, f)
+        sys.exit(0)
+    if argv[:1] == ["run"] and golang in argv and any("generate_cert" in a for a in argv):
+        ms, wd, dest = mounts(), opt(["-w", "--workdir"]), None
+        if wd is not None:
+            dest = next((h for h, c in ms if c == wd), None)
+        elif ms:
+            dest = ms[0][0]
+        if dest:
+            os.makedirs(dest, exist_ok=True)
+            with open(os.path.join(dest, "cert.pem"), "w") as f:
+                f.write("-----BEGIN CERTIFICATE-----\nc3R1Yi1jZXJ0aWZpY2F0ZQ==\n-----END CERTIFICATE-----\n")
+            with open(os.path.join(dest, "key.pem"), "w") as f:
+                f.write("-----BEGIN PRIVATE KEY-----\nc3R1Yi1rZXk=\n-----END PRIVATE KEY-----\n")
+        sys.exit(0)
+    if argv[:1] == ["run"] and nginx in argv:
+        if stdin is not None:
+            alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789./"
+            stream, n = b"", 0
+            while len(stream) < 86:
+                stream += hashlib.sha512(stdin.encode() + bytes([n])).digest()
+                n += 1
+            print("$6$stubsalt$" + "".join(alphabet[b % 64] for b in stream[:86]))
+            sys.exit(0)
+        if any("sha256sum" in a for a in argv):
+            print(os.environ.get("STUB_CERT_SHA256") or hashlib.sha256(b"ap-cert").hexdigest(), " -", sep=" ")
+            sys.exit(0)
+    if "compose" in argv and "up" in argv and os.environ.get("STUB_COMPOSE_UP_FAIL"):
+        sys.stderr.write(os.environ["STUB_COMPOSE_UP_FAIL"] + "\n")
+        sys.exit(1)
+sys.exit(code)
