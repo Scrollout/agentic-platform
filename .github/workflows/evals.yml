@@ -75,7 +75,7 @@ jobs:
           ALL: ${{ inputs.all }}
         run: |
           git fetch -q --unshallow --no-tags origin || echo "::warning::git fetch --unshallow failed: no base can be found, so every suite runs"
-          RUNS=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/evals.yml/runs?status=success&per_page=100" --jq '[.workflow_runs[] | {head_sha, head_branch, conclusion}]' 2>/dev/null || true)
+          RUNS=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/evals.yml/runs?per_page=100" --jq '[.workflow_runs[] | {head_sha, head_branch, conclusion}]' 2>/dev/null || true)
           export RUNS
           matrix=$(python3 scripts/ci-evals-select.py)
           echo "matrix=$matrix" >>"$GITHUB_OUTPUT"

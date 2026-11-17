@@ -11,7 +11,7 @@ planted violation in a temporary tree that is valid otherwise (a baseline test p
   expression naming `inputs`;
 - selector_base: in evals.yml's config job and in check.yml's evals-current job, the step that
   runs scripts/ci-evals-select.py gets RUNS (the successful evals runs, listed with `gh api` on
-  actions/workflows/evals.yml/runs with status=success and GH_TOKEN `${{ github.token }}`) and no
+  actions/workflows/evals.yml/runs, with no status= filter (any value is rejected), and GH_TOKEN `${{ github.token }}`) and no
   BEFORE: the selector, not the workflow, chooses the base run; each job has the history the
   ancestry test needs (checkout fetch-depth 0, or `git fetch --unshallow` before the selector);
 - evals_current: check.yml has a job evals-current: no secret, no environment, permissions exactly
@@ -39,8 +39,8 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 HASH = "a" * 40
 SELECT = re.compile(r"scripts/ci-evals-select\.py")
-API = [re.compile(r"\bgh\s+api\b"), re.compile(r"actions/workflows/evals\.yml/runs\b"),
-       re.compile(r"\bstatus=success\b")]
+API = [re.compile(r"\bgh\s+api\b"), re.compile(r"actions/workflows/evals\.yml/runs\b")]
+STATUS = re.compile(r"\bstatus=")
 TOKEN = re.compile(r"\s*\$\{\{\s*github\.token\s*\}\}\s*")
 ALL_ENV = re.compile(r"\s*\$\{\{\s*(?:github\.event\.)?inputs\.all\s*\}\}\s*")
 REF_ENV = re.compile(r"\s*\$\{\{\s*github\.ref_name\s*\}\}\s*")
@@ -124,7 +124,10 @@ def base_violations(label, job):
     if "RUNS" not in env and not re.search(r"\bRUNS=", str(st.get("run", ""))):
         v.append(f"{label}: the selector step gets no RUNS")
     if not asking:
-        v.append(f"{label}: no step up to the selector lists evals.yml runs with gh api and status=success")
+        v.append(f"{label}: no step up to the selector lists evals.yml runs with gh api")
+    for s in asking:
+        if STATUS.search(str(s.get("run", ""))):
+            v.append(f"{label}: the runs query filters by status=, which hides recent runs")
     for s in asking:
         tok = (s.get("env") or {}).get("GH_TOKEN")
         if tok is None or not TOKEN.fullmatch(str(tok)):
@@ -215,7 +218,7 @@ SETUP_PY = {"uses": f"actions/setup-python@{HASH}",
             "with": {"python-version": "${{ needs.config.outputs.python }}"}}
 PIP = {"run": "python3 -m pip install --require-hashes -r scripts/tools/requirements-ci.txt"}
 LIST_RUNS = ("RUNS=$(gh api \"repos/$GITHUB_REPOSITORY/actions/workflows/evals.yml/runs"
-             "?status=success&per_page=100\" --jq '[.workflow_runs[] | {head_sha, head_branch, "
+             "?per_page=100\" --jq '[.workflow_runs[] | {head_sha, head_branch, "
              "conclusion}]' || true)\nexport RUNS\n")
 
 

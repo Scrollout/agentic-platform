@@ -437,7 +437,7 @@ jobs:
           SHA: ${{ github.sha }}
         run: |
           git fetch -q --unshallow --no-tags origin
-          RUNS=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/evals.yml/runs?status=success&per_page=100" --jq '[.workflow_runs[] | {head_sha, head_branch, conclusion}]' 2>/dev/null || true)
+          RUNS=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/evals.yml/runs?per_page=100" --jq '[.workflow_runs[] | {head_sha, head_branch, conclusion}]' 2>/dev/null || true)
           export RUNS
           scripts/ci-step.sh evals-current python3 scripts/ci-evals-select.py
 

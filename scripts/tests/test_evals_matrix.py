@@ -140,7 +140,7 @@ def judge_history(root):
 RULES = (judge_matrix, judge_skipped, judge_env, judge_history)
 SELECT_RUN = ("git fetch -q --no-tags --unshallow origin\n"
               "RUNS=$(gh api \"repos/$GITHUB_REPOSITORY/actions/workflows/evals.yml/runs"
-              "?status=success&per_page=100\" --jq '[.workflow_runs[] | {head_sha, head_branch, "
+              "?per_page=100\" --jq '[.workflow_runs[] | {head_sha, head_branch, "
               "conclusion}]' || true)\nexport RUNS\n"
               "matrix=$(python3 scripts/ci-evals-select.py)\n"
               "echo \"matrix=$matrix\" >>\"$GITHUB_OUTPUT\"")

@@ -2,6 +2,7 @@
 
 ## 2026-11-17
 
+* **Implementation**: Feature 001, T132: the evals selector's runs query in `evals.yml` and `check.yml` lists `evals.yml` runs without GitHub's `status=` filter; the selector keeps only green runs (research D52). New tests by a separate author.
 * **Implementation**: Feature 001, T130: the `evals-current` job writes no job summary when no eval suite is pending; a pending suite is still listed there. New tests by a separate author.
 * **Planning**: Feature 001, T130 and T132 (owner, 2026-11-17): a pending eval suite stays in the `evals-current` job summary and none pending writes nothing (research D45); the evals selector's runs query drops `status=success` as the check selector's did (research D52, extended); the owner approved the existing-test changes both need.
 * **Implementation**: Feature 001, T128, T129, T131 and T133 done (check run 44083757282 green, owner confirmed the names and the empty summaries); T117 waits for a green `specs/`-only and `docs/`-only push.
