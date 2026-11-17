@@ -1785,7 +1785,8 @@ page, none of which an existing project provides.
 - **Nothing unproven reaches `main`**: a new keyless job `evals-current` in `check.yml` runs the
   same selector against the last successful evals run on the pushed branch and lists the suites
   whose evals are pending. On `001-prose-to-accepted-slice` it passes with a notice naming them; on
-  `main` it fails while any suite is pending. With no pull requests a merge is the push itself, so
+  `main` it fails while any suite is pending. The notice is the job summary; with no suite pending the job writes no
+  summary (owner, 2026-11-17; T130). With no pull requests a merge is the push itself, so
   that failure only detects a merge made without proven evals; the gate is the owner's merge step:
   merge only when `evals-current` on the feature branch's head names no pending suite (constitution
   XIX: before a merge). The base run is the latest successful evals run on either branch whose head
@@ -1961,6 +1962,9 @@ page, none of which an existing project provides.
 - **Limit**: the 100 runs listed now include failed and cancelled ones, so on a busy branch the
   newest green run can fall outside them; the selector then finds no base and runs every job (an
   over-run, never a skip). Paging is T121's.
+- **Extended** (owner, 2026-11-17; T132): the evals selector's query (`evals.yml`'s `config` job and
+  `check.yml`'s `evals-current` job) lists `evals.yml` runs without `status=` too; the shared
+  `scripts/ci_select.py` already keeps only runs whose conclusion is `success`.
 - Sources: [GitHub REST API: workflow runs](https://docs.github.com/en/rest/actions/workflow-runs);
   runs 44073473710 and 44079665093.
 

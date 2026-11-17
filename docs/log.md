@@ -2,6 +2,7 @@
 
 ## 2026-11-17
 
+* **Planning**: Feature 001, T130 and T132 (owner, 2026-11-17): a pending eval suite stays in the `evals-current` job summary and none pending writes nothing (research D45); the evals selector's runs query drops `status=success` as the check selector's did (research D52, extended); the owner approved the existing-test changes both need.
 * **Implementation**: Feature 001, T128, T129, T131 and T133 done (check run 44083757282 green, owner confirmed the names and the empty summaries); T117 waits for a green `specs/`-only and `docs/`-only push.
 * **Planning**: Feature 001, T133 (owner, 2026-11-17; research D53): the CI workflows and jobs get display names that say what they judge; the run summary shows them.
 * **Planning**: Feature 001, T128 amended (owner, 2026-11-17; research D51): `check.yml` keeps GitHub's default run name, the commit's subject line; only `evals.yml` sets `run-name`.
