@@ -17,8 +17,9 @@ violations in a temporary tree that is valid otherwise (a baseline test proves i
   `always: true`, `config` and `summary` has no `if:` besides the summary's `always()`;
 - config_selects: check.yml's `config` job has `permissions: {contents: read, actions: read}`,
   an output `jobs` that is `${{ steps.<id>.outputs.jobs }}` of the step running
-  scripts/ci-check-select.py; that step lists check.yml's successful runs (`gh api` on
-  actions/workflows/check.yml/runs with status=success) into RUNS with GH_TOKEN
+  scripts/ci-check-select.py; that step lists check.yml's runs (`gh api` on
+  actions/workflows/check.yml/runs, with no status= filter: GitHub's status=success list lagged
+  behind the unfiltered one, T131) into RUNS with GH_TOKEN
   `${{ github.token }}`, has SHA `${{ github.sha }}` and EVENT `${{ github.event_name }}` in its
   env and no `${{ }}` in its run; the job has the full history before it (checkout fetch-depth 0
   or, as expected, `git fetch --unshallow` in the selector step), and setup-python and the hashed PyYAML install before it.
@@ -220,9 +221,12 @@ def judge_config_selects(root):
         v.append("check.yml config: the selector step's run holds a ${{ }} expression")
     m = SELECTOR.search(run)
     sel = m.start() if m else len(run)
-    lists = re.search(r"\bgh\s+api\b[^\n]*actions/workflows/check\.yml/runs[^\n]*status=success", run)
+    lists = re.search(r"\bgh\s+api\b[^\n]*actions/workflows/check\.yml/runs[^\n]*", run)
     if not lists or lists.start() > sel or not re.search(r"\bRUNS=", run[:sel]):
-        v.append("check.yml config: the selector step does not list check.yml's successful runs into RUNS first")
+        v.append("check.yml config: the selector step does not list check.yml's runs into RUNS first")
+    if lists and "status=" in lists.group(0):
+        v.append("check.yml config: the runs query filters by status=, which hides recent runs; "
+                 "list them unfiltered")
     env = st.get("env") or {}
     for k, val in (("GH_TOKEN", "github.token"), ("SHA", "github.sha"),
                    ("EVENT", "github.event_name")):
@@ -246,8 +250,8 @@ def judge_config_selects(root):
 # ---------------------------------------------------------------- planted tree
 
 CHECKOUT = {"uses": f"actions/checkout@{HASH}", "with": {"persist-credentials": False}}
-LIST = ('RUNS=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/check.yml/runs?status=success'
-        '&per_page=100" --jq \'[.workflow_runs[] | {head_sha, head_branch, conclusion}]\' || true)\n'
+LIST = ('RUNS=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/check.yml/runs?per_page=100"'
+        ' --jq \'[.workflow_runs[] | {head_sha, head_branch, conclusion}]\' || true)\n'
         "export RUNS\n")
 SELECT_RUN = "git fetch -q --unshallow --no-tags origin\n" + LIST + "python3 scripts/ci-check-select.py\n"
 
@@ -527,13 +531,22 @@ class ConfigSelectsTest(unittest.TestCase):
         for run in ("git fetch -q --unshallow origin\npython3 scripts/ci-check-select.py\n",
                     "git fetch -q --unshallow origin\n" + LIST.replace("check.yml", "evals.yml")
                     + "python3 scripts/ci-check-select.py\n",
-                    "git fetch -q --unshallow origin\n" + LIST.replace("status=success", "status=completed")
+                    "git fetch -q --unshallow origin\n" + LIST.replace("runs?per_page", "runs?status=success&per_page")
                     + "python3 scripts/ci-check-select.py\n",
                     "git fetch -q --unshallow origin\npython3 scripts/ci-check-select.py\n" + LIST):
             with self.subTest(run):
                 def m(w, run=run):
                     w["jobs"]["config"]["steps"][-1]["run"] = run
                 self.assertTrue(self.mutated(m))
+
+    def test_planted_status_filter_names_config(self):
+        run = ("git fetch -q --unshallow origin\n"
+               + LIST.replace("runs?per_page", "runs?status=success&per_page")
+               + "python3 scripts/ci-check-select.py\n")
+        def m(w):
+            w["jobs"]["config"]["steps"][-1]["run"] = run
+        msgs = self.mutated(m)
+        self.assertTrue(any("config" in x and "status=" in x for x in msgs), msgs)
 
     def test_planted_env_fails(self):
         for k, val in (("GH_TOKEN", None), ("SHA", None), ("SHA", "HEAD"), ("EVENT", None),
