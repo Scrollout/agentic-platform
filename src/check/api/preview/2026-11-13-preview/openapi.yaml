@@ -271,7 +271,8 @@ paths:
         `round_scope.changed_lines` (a repeat needs both the rule and the file; with no changed
         lines only a repeat can block); a finding confirmed outside the scope is a suggestion and is
         not in `confirmed` or `refs`, and the reason gives, for each, `finding <position>
-        (<rule> <file>:<line>) is outside round <round>'s scope: a suggestion`, joined with the
+        (<rule> <file>:<line>) is outside round <round>'s scope: a suggestion`, `<position>` being
+        its 0-based position in the request's `findings`, as in `confirmed`, joined with the
         reason's other parts by "; " (FR-017, constitution Review converges; research D55). When
         every confirmed finding is outside the scope the check passes, with `confirmed` empty. A
         NoBlockingFindingOpen request with `round_scope` and no `round`, or with `round` 1, or with
