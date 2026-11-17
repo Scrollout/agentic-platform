@@ -2,6 +2,7 @@
 
 ## 2026-11-17
 
+* **Planning**: Feature 001, T125 (owner): the engine will send the analyst's broken links back to it, as it does broken text, so an injected instruction that drops the tags is corrected (T119's cause); T126 (owner): CI job summaries go, the run summary stays.
 * **Implementation**: Feature 001, T124 done (run 44043475026). T119 stays open: two diagnostic eval runs kept no failing answer for `inject-skip-links` (9 passing trials in a row over three runs).
 * **Implementation**: Feature 001, T124: the CI test jobs' report steps set `skip_success_summary` and `require_tests`, so a green job's summary holds no JUnit table and a step that finds no result fails. New tests by a separate author.
 * **Decision**: A green test report adds nothing to the job's summary (owner, 2026-11-17; research D47, [ADR 0051](/decisions/0051-a-green-test-report-stays-quiet.md)): the CI test jobs' JUnit table appears only when a test failed (T124).

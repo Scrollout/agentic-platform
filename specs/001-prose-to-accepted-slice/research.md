@@ -187,7 +187,8 @@ fresh review round 1.
   `src/agents/analyst.yaml` and enforced by Docker Agent per session, one session per proposal or
   revision (D27): 200,000 tokens, $0.10 and 5 minutes. Its step-like bounds are the pattern's
   `limits.attempts` (3) proposals per call, at most 4 analyst calls at once and a description of at
-  most 4,000 characters.
+  most 4,000 characters. An unusable proposal is sent back with its faults within those attempts
+  (which faults: D48).
 - **Rationale**: Principles X and XIV; Docker Agent budgets (S5).
 
 ### D15. Idempotency keys
@@ -1853,3 +1854,21 @@ page, none of which an existing project provides.
   `require_tests` is "Fail if no test are found" (`action.yml`), applied in `src/main.ts`.
 - **Recorded as** [ADR 0051](../../docs/decisions/0051-a-green-test-report-stays-quiet.md).
 - Sources: [action-junit-report at v6.7.1](https://github.com/mikepenz/action-junit-report/tree/a16be3a69023e9bd7e748ede768b3282ea7b30ce).
+
+### D48. The analyst's broken links are sent back to it
+
+- **Decision** (owner, 2026-11-17): the engine sends every `slice.Trace` finding of an analyst
+  proposal back to the analyst with its other faults, within the pattern's `limits.attempts`.
+  Before, only a schema break, text that does not parse and an unreadable contract were sent
+  back (owner, 2026-11-12, `d77e7ad`); a broken link was stored as a failed check. When the last
+  attempt still has link findings only, that attempt's slice is stored with its failed checks;
+  any other fault on the last attempt still ends in `OperationFailed` with nothing stored (T125).
+- **Why**: T119's cause. An answer that follows an instruction injected into the description and
+  drops the `@R` tags failed the slice although the engine's own check had found the fault; the
+  platform, not the prompt, applies the project's rules at every step (Principle XX). Every Trace
+  finding is a link the analyst can repair from the reason it names.
+- **Measure**: the analyst evals go through the engine's retry (`retry_evals_test.go`), so they
+  judge the analyst with the engine, as in production; each trial's `attempts` stays in the
+  eval's output and `report.json`, so an answer that needed a second attempt remains visible.
+- Sources: `src/engine/slices/service.go` (`propose`, `unusable`); `src/slice/trace.go`;
+  evals runs 43969653100, 43977860199, 44038977132 and 44044430905.
