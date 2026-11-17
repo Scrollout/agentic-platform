@@ -2,6 +2,7 @@
 
 ## 2026-11-17
 
+* **Planning**: Feature 001, T130 (owner, 2026-11-17): the `evals-current` job will write nothing when no eval suite is pending; today it writes a job summary on every push, so a green check run is not yet free of job summaries.
 * **Planning**: Feature 001, T117 (owner, 2026-11-17, after its fresh review): a change to a CI file (the workflows, the declaration, the selector, `scripts/check.sh`, the pins, the tool locks) runs every check job (research D50).
 * **Implementation**: Feature 001, T117: each `check.yml` job runs only when a file it judges changed since the branch's last green check run (`.github/check-jobs.yaml`, `scripts/ci-check-select.py`); the evals selector shares `scripts/ci_select.py`; the run summary lists a job the selector skipped as skipped and passed. New tests by a separate author.
 * **Planning**: Feature 001, T117 (owner, 2026-11-17): only the jobs with paths carry the selector's `if:`; the always jobs carry none, so the `if:` itself changes no existing workflow test.
