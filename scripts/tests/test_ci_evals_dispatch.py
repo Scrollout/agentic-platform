@@ -279,8 +279,7 @@ class PendingModeTest(unittest.TestCase):
     def test_feature_branch_says_none_is_pending(self):
         res = self.pending(self.docs, FEATURE)
         self.assertEqual((res.code, res.pairs), (0, []), res.stderr)
-        self.assertTrue(res.summary.strip(), "the summary is empty")
-        self.assert_names(res.summary, [])
+        self.assertEqual(res.summary.strip(), "", "no suite is pending: nothing is written")
 
     def test_planted_main_with_a_pending_suite_fails(self):
         res = self.pending(self.rev, "main")

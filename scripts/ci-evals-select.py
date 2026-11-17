@@ -9,8 +9,9 @@ Run from the repository root, with its inputs in the environment:
           ancestor of SHA (SHA itself included). When RUNS is unset, BEFORE names the base (T115).
   SHA     the commit judged (default HEAD)
   ALL     true chooses every suite (evals.yml's dispatch input `all`)
-  MODE    pending: check.yml's evals-current job; the choice is written to $GITHUB_STEP_SUMMARY
-          and the exit is 1 when REF is exactly main and a suite is pending
+  MODE    pending: check.yml's evals-current job; the pending suites are written to
+          $GITHUB_STEP_SUMMARY (nothing when none is pending) and the exit is 1 when REF is
+          exactly main and a suite is pending
   REF     the branch, for MODE=pending
 It reads src/tests/evals/suites.yaml, each suite's path globs and images.lock pins, and prints one
 JSON list of {"suite", "cases"}: every suite whose globs a changed file matches (both paths of a
@@ -88,16 +89,15 @@ def main():
     if os.environ.get("MODE", "") != "pending":
         return 0
     ref = os.environ.get("REF", "")
-    if out:
-        lines = ["Evals pending (start them with `gh workflow run evals.yml --ref %s`):" % (ref or "<branch>"), ""]
-        lines += ["- %s" % name(s) for s in out]
-    else:
-        lines = ["No eval suite is pending: every suite's inputs passed their evals."]
+    if not out:
+        return 0  # nothing pending: no job summary (T130, research D45)
+    lines = ["Evals pending (start them with `gh workflow run evals.yml --ref %s`):" % (ref or "<branch>"), ""]
+    lines += ["- %s" % name(s) for s in out]
     summary = os.environ.get("GITHUB_STEP_SUMMARY", "")
     if summary:
         with open(summary, "a", encoding="utf-8") as f:
             f.write("\n".join(lines) + "\n")
-    if out and ref == "main":
+    if ref == "main":
         print("ci-evals-select: main has pending evals: merge only after they pass on the feature branch (ADR 0048)", file=sys.stderr)
         return 1
     return 0
