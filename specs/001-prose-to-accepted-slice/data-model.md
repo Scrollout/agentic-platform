@@ -191,6 +191,17 @@ These settle what the spec leaves open; the machine tests (T043) and check tests
     commit, and the fix's restore keeps the witnesses. Every step container mounts `review/`
     read-only except the review's, the generate worker's writable root included (as `.git`), so
     the mount and ScopeKept both guard it.
+  - **A later round's scope** (owner, 2026-11-17; FR-017; research D55; T135): in a review round
+    after the first, a finding whose witness confirms it is recorded as blocking only when it
+    repeats an open finding the round was given (the same `rule` and `file`; its line may have
+    moved with the fix) or its `file` and `line` are among the lines the fix before the round
+    changed (`changed_lines` of the fix's `StepAccepted` or `ResultReused`, as the round was
+    given them); any other confirmed finding is recorded as a suggestion. NoBlockingFindingOpen
+    owns the rule: the engine sends it the round's scope (check contract, `round_scope`) from the
+    run, never from an answer, and records as blocking exactly the findings in its `confirmed`. A
+    round whose confirmed findings all fall outside the scope passes NoBlockingFindingOpen and is
+    accepted when its other checks pass. Stated limit: a regression on a line no fix changed is
+    only a suggestion.
   - **An open round reused** (owner, 2026-11-15; research D36; T088): an open review round's
     result is kept under its reuse key like an accepted step's, marked open, so a later run of the
     same input reuses it; the fix's key then matches, and so do the later rounds' (FR-019, SC-005).

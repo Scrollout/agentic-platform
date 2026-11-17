@@ -264,7 +264,14 @@ paths:
         run only decides whether a finding blocks, so a blocking finding it does not confirm is a
         suggestion and leaves FindingsCarryEvidence passing; a blocking finding with no `witness`
         is a suggestion too. NoBlockingFindingOpen, no blocking finding is confirmed by its
-        witness run; any other finding is a suggestion and leaves it passing. Its verdict names the
+        witness run; any other finding is a suggestion and leaves it passing. In a review round
+        after the first (`round` above 1) it also needs `round_scope`, and a finding its witness run
+        confirms counts as confirmed only within that scope: its `rule` and `file` equal those of an
+        entry of `round_scope.open`, or its `file` and `line` equal an entry of
+        `round_scope.changed_lines`; a finding confirmed outside the scope is a suggestion, which the
+        reason names as outside the round's scope (FR-017, constitution Review converges; research
+        D55). A NoBlockingFindingOpen request whose `round` is above 1 without `round_scope`, or 1
+        with it, is refused with 400 InvalidRequest; every other check ignores `round_scope`. Its verdict names the
         confirmed findings in `confirmed`. The witness run
         (each of the two checks, once per finding that carries a witness): `go test -json
         -count=1 -covermode=set -coverpkg=./... -coverprofile=<a file outside the project> -run
@@ -1163,6 +1170,31 @@ components:
             maxItems: 2000
             items:
               $ref: ../../../../engine/api/preview/2026-11-12-preview/run-event.schema.json#/properties/changed_lines/items
+          round_scope:
+            type: object
+            description: >-
+              A review round after the first only: what the round was given, filled by the engine
+              from the run, never from a worker's answer (research D55). `open` are the open
+              blocking findings of the round before, in their recorded order; `changed_lines` are
+              the lines the fix before the round changed, as the fix's accepted or reused result
+              recorded them (empty when the fix changed none). NoBlockingFindingOpen confirms a
+              finding only within this scope (runCheck).
+            required:
+            - open
+            - changed_lines
+            additionalProperties: false
+            properties:
+              open:
+                type: array
+                minItems: 1
+                maxItems: 100
+                items:
+                  $ref: '#/components/schemas/Finding'
+              changed_lines:
+                type: array
+                maxItems: 2000
+                items:
+                  $ref: ../../../../engine/api/preview/2026-11-12-preview/run-event.schema.json#/properties/changed_lines/items
       unevaluatedProperties: false
     CheckVerdict:
       type: object

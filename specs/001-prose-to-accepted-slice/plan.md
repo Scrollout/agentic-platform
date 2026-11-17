@@ -103,6 +103,7 @@ Each decision that outlives this feature has a record in `docs/decisions/`, link
 | A green test job writes no summary at all: the report steps set `job_summary` only when the job has failed (owner, 2026-11-17) | D49 | [ADR 0052](../../docs/decisions/0052-a-green-test-job-writes-no-summary.md) |
 | Each check job runs only when a file it judges changed since the last green `check` run, declared in `.github/check-jobs.yaml`; the analyses on every change always run (owner, 2026-11-17) | D50 | [ADR 0053](../../docs/decisions/0053-check-jobs-run-for-the-files-they-judge.md) |
 | The module-boundary check (`arch`, go-arch-lint) runs in its own `check.yml` job for code changes, not in the pre-commit hook (owner, 2026-11-17; supersedes ADR 0043 in part) | D54 | [ADR 0054](../../docs/decisions/0054-module-boundary-check-runs-in-ci.md) |
+| In a review round after the first, a confirmed finding blocks only when it repeats an open finding the round was given (same rule and file) or sits on a line the fix before the round changed; NoBlockingFindingOpen applies it from the check request's `round_scope`, which the engine fills from the run; any other confirmed finding is a suggestion (owner, 2026-11-17; `/speckit-clarify`, FR-017) | D55 | [ADR 0055](../../docs/decisions/0055-a-later-review-round-blocks-only-within-its-scope.md) |
 
 ## Threat model
 

@@ -1992,3 +1992,30 @@ page, none of which an existing project provides.
   in the hook would change those tests for no gain over the CI job.
 - Sources: [ADR 0043](../../docs/decisions/0043-module-boundaries-checked-by-go-arch-lint.md);
   [ADR 0044](../../docs/decisions/0044-full-checks-run-on-github-hosted-runners.md).
+
+### D55. A later review round blocks only within its scope, judged by the check
+
+- **Decision** (owner, 2026-11-17; `/speckit-clarify`, FR-017; T135): in a review round after the
+  first, a finding its witness confirms blocks only when it repeats an open finding the round was
+  given (the same rule in the same file) or its line is among the lines the fix before the round
+  changed; any other confirmed finding is a suggestion. NoBlockingFindingOpen applies it: the
+  engine sends the round's open findings and the fix's changed lines in the check request's new
+  `round_scope` (an additive change to the check contract), and the verdict's `confirmed` holds
+  only findings within it. The changed lines are the ones the engine computes from the fix's files
+  against its `before` (`src/engine/steps/lines.go`), not a worker's claim.
+- **Why**: constitution, Review converges ("a review round after the first MUST check only the
+  open findings and the lines the fixes changed, and MAY raise a new blocking finding only for a
+  regression those fixes caused") and Principle XX (the platform applies the project's rules, not
+  the agent's instructions). Until T135 the rule was only in `src/agents/review/instruction.md`,
+  so a confirmed finding on an unchanged line still blocked (T070's converge, round 1). Each round
+  is given only the fix just before it, so its scope is what it was given: an earlier fix's lines
+  were the scope of the round after that fix. A repeat is matched by rule and file, not line,
+  because the fix moves lines.
+- **Rejected**: the lines of every earlier fix, renumbered to the current files (a diff of the
+  current files against those round 1 reviewed): a wider scope than the round is given, and a
+  second diff to own; filtering in the engine after the verdict: the check would say failed for a
+  round the engine accepts, and the rule would have two owners.
+- **Stated limit**: a regression on a line no fix changed, such as a caller broken by a changed
+  function, is only a suggestion (owner, 2026-11-17).
+- Sources: constitution 2.2.0, Engineering Principles, Review converges; D11; D35; D39;
+  `src/engine/machine/drive.go` (`review`, `recordedFindings`).
