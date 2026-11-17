@@ -147,7 +147,7 @@ tests under `scripts/tests/`, as feature 001's launcher does. No product code un
 
 | Rule | Location | Reason |
 |------|----------|--------|
-| Existing tests change only with the owner's approval | `scripts/tests/fixtures/launcher/docker-stub`, `scripts/tests/test_launcher.py` (set-up and the `["up"]` usage case) | `ap up` now makes candidate builds before it verifies, so the stub must answer them as unchanged, and `up` with no options is no longer a usage error; asked of the owner before the change (research R6) |
+| Existing tests change only with the owner's approval | `scripts/tests/fixtures/launcher/docker-stub`, `scripts/tests/test_launcher.py` (set-up and the `["up"]` usage case) | `ap up` now makes candidate builds before it verifies, so the stub must answer them as unchanged, and `up` with no options is no longer a usage error; approved by the project owner on 2026-11-18 for exactly these changes (research R6); the commit that makes them carries `Tests-approved-by:` |
 
 ## Complexity Tracking
 

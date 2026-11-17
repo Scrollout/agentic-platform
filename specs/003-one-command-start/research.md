@@ -142,7 +142,7 @@ before action).
   `scripts/tests/test_build_changed.py` (fingerprints, one prompt, nothing rebuilt; real
   BuildKit, CI), `scripts/tests/test_page_remote.py` (the forwarder's TLS, sign-in, names and
   rate limit on the pinned nginx, as in S1, CI).
-- **Existing tests that change, each only with the owner's approval first**: the launcher's
+- **Existing tests that change (approved by the owner, 2026-11-18, for exactly these)**: the launcher's
   docker stub (`scripts/tests/fixtures/launcher/docker-stub`) and `test_launcher.py`'s set-up
   must answer the new candidate builds as unchanged, so that `ap up` goes on to verify and start
   as these tests expect; `test_launcher.py`'s `["up"]` usage case becomes a missing-key case
