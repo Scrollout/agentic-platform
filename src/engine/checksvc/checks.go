@@ -74,7 +74,11 @@ var checkByName = map[string]func(c *call) []checks.CheckResult{
 		return checks.FindingsCarryEvidence(c.runner, c.dir, c.review(), c.findings())
 	},
 	"NoBlockingFindingOpen": func(c *call) []checks.CheckResult {
-		return checks.NoBlockingFindingOpen(c.runner, c.dir, c.review(), c.findings())
+		results := checks.NoBlockingFindingOpen(c.runner, c.dir, c.review(), c.findings())
+		if s := c.req.RoundScope; s != nil && c.req.Round != nil { // a later round (research D55)
+			return checks.WithinRoundScope(results, c.findings(), *c.req.Round, c.roundScope())
+		}
+		return results
 	},
 }
 
@@ -125,6 +129,22 @@ func (c *call) witnessWritable() (writable []string, own bool) {
 func (c *call) review() checks.Review {
 	fixable, _ := c.earlierWritable("code")
 	return checks.Review{Before: c.before, Own: c.req.Step.Writable, Fixable: fixable}
+}
+
+// roundScope is the request's round_scope as the checks read it.
+func (c *call) roundScope() checks.RoundScope {
+	var s checks.RoundScope
+	for _, o := range c.req.RoundScope.Open {
+		f := checks.Finding{Rule: o.Rule}
+		if o.File != nil {
+			f.File = *o.File
+		}
+		s.Open = append(s.Open, f)
+	}
+	for _, l := range c.req.RoundScope.ChangedLines {
+		s.Changed = append(s.Changed, checks.ScopeLine{File: l.File, Line: l.Line})
+	}
+	return s
 }
 
 func (c *call) findings() []checks.Finding {

@@ -826,7 +826,12 @@ func TestSameRequestSameResponse(t *testing.T) {
 			for i, tweak := range []func(){
 				func() {},
 				func() { b["run"], b["attempt"] = "RUN-77", 3 },
-				func() { b["round"] = 2 },
+				func() {
+					b["round"] = 2
+					if path == "/checks/NoBlockingFindingOpen/run" {
+						b["round_scope"] = map[string]any{"open": b["findings"], "changed_lines": []any{}}
+					}
+				},
 			} {
 				tweak()
 				again := post(t, base, path, b)

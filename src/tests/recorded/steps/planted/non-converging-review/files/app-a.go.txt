@@ -46,13 +46,13 @@ func (s *Service) CreateNote(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Text string `json:"text"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Text == "" {
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || strings.TrimSpace(in.Text) == "" {
 		write(w, http.StatusBadRequest, map[string]string{"message": "the text of a note must not be empty"})
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	n := Note{ID: len(s.notes) + 1, Text: strings.ToLower(in.Text)}
+	n := Note{ID: len(s.notes) + 1, Text: in.Text}
 	s.notes = append(s.notes, n)
 	write(w, http.StatusCreated, n)
 }

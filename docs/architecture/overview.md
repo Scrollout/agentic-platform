@@ -23,7 +23,7 @@ sources:
   - id: adr-0039
     resource: /decisions/0039-review-findings-confirmed-by-a-new-witness-test.md
     title: "ADR 0039: A blocking review finding is confirmed by a new failing witness test the review writes"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-13T20:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-17T21:00:00Z }
 ---
 
 # Context
@@ -77,6 +77,9 @@ Shipped by Story 2 so far:
   any other finding is a suggestion
   ([ADR 0039](/decisions/0039-review-findings-confirmed-by-a-new-witness-test.md), superseding the
   rule-test rerun of [ADR 0031](/decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md)).
+  In a review round after the first, the check keeps a confirmed finding blocking only when it
+  repeats an open finding or sits on a line the fix before the round changed; the engine sends it
+  that scope from the run ([ADR 0055](/decisions/0055-a-later-review-round-blocks-only-within-its-scope.md)).
   Before every attempt it calls the project worker's `restoreStep`, and after every accepted or
   reused step its `commitStep`, retried with backoff with jitter and otherwise interrupting the
   run (T053e).

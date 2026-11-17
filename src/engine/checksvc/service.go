@@ -115,6 +115,16 @@ func (s *service) RunCheck(ctx context.Context, req gen.RunCheckRequestObject) (
 		return nil, fault(404, gen.ErrorCodeUnknownCheck, why)
 	}
 	body := *req.Body
+	if name == "NoBlockingFindingOpen" { // research D55: a later round, and only it, has a scope
+		switch later := body.Round != nil && *body.Round > 1; {
+		case body.RoundScope != nil && body.Round == nil:
+			return nil, fault(400, gen.ErrorCodeInvalidRequest, "round_scope is sent without round")
+		case body.RoundScope != nil && !later:
+			return nil, fault(400, gen.ErrorCodeInvalidRequest, "round_scope is sent for round 1")
+		case body.RoundScope == nil && later:
+			return nil, fault(400, gen.ErrorCodeInvalidRequest, "a review round after the first needs round_scope")
+		}
+	}
 	for _, a := range body.Approved {
 		if sum(a.Content) != a.HashValue {
 			return nil, fault(422, gen.ErrorCodeInputHashMismatch, "the approved "+string(a.Part)+" part's content does not have its sha256")
