@@ -1897,9 +1897,10 @@ page, none of which an existing project provides.
   own `paths` filters are (a later pattern wins; `!` excludes). The `config` job runs one selector
   over the files changed since the branch's last green `check` run whose head is an ancestor of
   the pushed commit (the same base rule as the evals, T115 and T120), and each other job runs
-  only when the selector names it; every job runs for `workflow_dispatch`, when there is no such
-  run, or when its commit cannot be resolved. A test proves the declaration names every job of
-  `check.yml` once. First declaration:
+  only when the selector names it (only `paths` jobs carry the selector's `if:`; the always jobs,
+  `config` and `summary` carry none, owner 2026-11-17); every job runs for `workflow_dispatch`,
+  when there is no such run, or when its commit cannot be resolved. A test proves the declaration
+  names every job of `check.yml` once. First declaration:
   - always: `layout`, `secrets`, `deps`, `evals-current` (constitution XIII: dependency, licence,
     secret and static analysis on every change; T120: `evals-current` on every push);
   - `markdown`: Markdown files, the markdownlint configuration, `scripts/tools/**` and
