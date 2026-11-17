@@ -99,6 +99,7 @@ Each decision that outlives this feature has a record in `docs/decisions/`, link
 | The live evals run only when the owner starts them (`workflow_dispatch`), for the suites whose inputs changed since the branch's last green evals run (every suite with the input `all` or when there is none); a keyless `evals-current` job in `check.yml` lists pending suites, a notice on the feature branch and a failure on `main`; docs-only pushes skip the heavy check jobs (T117); heavy suites run only in CI (owner, 2026-11-16) | D45 | [ADR 0048](../../docs/decisions/0048-evals-started-by-hand-and-gated-before-main.md) |
 | A fresh review runs the tests that judge the change in its own copy; the full test command's run is the CI run of the pushed commit (constitution 2.2.0, owner 2026-11-16) | D45 | [ADR 0049](../../docs/decisions/0049-fresh-review-judges-the-ci-run.md) |
 | A failed live eval job uploads its report folder (each trial's answer and events, `report.json`) as an artifact kept 7 days, with `actions/upload-artifact` pinned by hash; a passing job uploads nothing (owner, 2026-11-17) | D46 | [ADR 0050](../../docs/decisions/0050-failed-eval-jobs-keep-their-outputs.md) |
+| A test job whose tests all pass writes no JUnit results table to its summary (`skip_success_summary: true`); a failing one still shows the counts and each failed test; a step that finds no result fails (`require_tests: true`) (owner, 2026-11-17) | D47 | [ADR 0051](../../docs/decisions/0051-a-green-test-report-stays-quiet.md) |
 
 ## Threat model
 

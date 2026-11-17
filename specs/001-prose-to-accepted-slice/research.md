@@ -1834,3 +1834,22 @@ page, none of which an existing project provides.
   [GitHub: removing workflow artifacts](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/remove-workflow-artifacts);
   [GitHub: retention period for artifacts](https://docs.github.com/en/organizations/managing-organization-settings/configuring-the-retention-period-for-github-actions-artifacts-and-logs-in-your-organization);
   [OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/actions/upload-artifact).
+
+### D47. A green test report adds nothing to the job's summary
+
+- **Decision** (owner, 2026-11-17): the `go`, `docker` and `py-tests` report steps of
+  `.github/workflows/check.yml` add `skip_success_summary: true` to
+  `mikepenz/action-junit-report`, so a job whose tests all pass writes no results table to its
+  summary; a job with a failed test still shows the counts and each failed test with its
+  message. They also set `require_tests: true`, so a step that finds no test result fails the
+  job instead of passing silently (before, an empty report showed zero counts; now it would show
+  nothing). This replaces D43's "counts" for green jobs; the rest of D43 stands.
+- **Why**: on a green run the table held only counts, which the owner found confusing; whether each job passed is already in the run's
+  own job list and the run table of `scripts/ci-summary.py`.
+- **Evidence**: at the pinned commit, `skip_success_summary` is "Skips summaries that would not
+  contain failed tests" (`action.yml`); `buildSummaryTables` returns empty tables when no test
+  failed (`src/table.ts`), and `attachSummary` then adds no table, only a separator
+  (`src/annotator.ts`); the counts stay in the step's log (`core.info`, `src/annotator.ts`);
+  `require_tests` is "Fail if no test are found" (`action.yml`), applied in `src/main.ts`.
+- **Recorded as** [ADR 0051](../../docs/decisions/0051-a-green-test-report-stays-quiet.md).
+- Sources: [action-junit-report at v6.7.1](https://github.com/mikepenz/action-junit-report/tree/a16be3a69023e9bd7e748ede768b3282ea7b30ce).

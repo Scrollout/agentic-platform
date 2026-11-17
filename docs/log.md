@@ -2,6 +2,7 @@
 
 ## 2026-11-17
 
+* **Decision**: A green test report adds nothing to the job's summary (owner, 2026-11-17; research D47, [ADR 0051](/decisions/0051-a-green-test-report-stays-quiet.md)): the CI test jobs' JUnit table appears only when a test failed (T124).
 * **Implementation**: Feature 001, T109 done: the live evals in CI passed pass^3 in all four suites (run 43977860199) for $0.19 in all (1.44 M input, 0.17 M output tokens, Docker Agent's estimate).
 * **Implementation**: Feature 001, T122 done: evals run 43977860199, started by the owner, passed all four suites and kept no artifact, as a passing run should.
 * **Implementation**: Feature 001, T122: a failed live eval job scans its report folder with the new `scripts/secret-scan.sh` (now also behind `check.sh`'s `secrets` step) and, when clean, uploads it as an artifact kept 7 days. New tests by a separate author.

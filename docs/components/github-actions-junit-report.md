@@ -17,7 +17,7 @@ generated: { by: claude-code/claude-opus-5-5, at: 2026-11-16T16:00:00Z }
 
 # Responsibility
 
-Reads the JUnit files the `go`, `docker` and `py-tests` jobs write and puts the counts and each failed test with its message into the job's summary, with `annotate_only: true`, so no check run and no `checks: write` ([ADR 0046](/decisions/0046-ci-test-results-are-junit-reports.md)).
+Reads the JUnit files the `go`, `docker` and `py-tests` jobs write and puts the counts and each failed test with its message into the job's summary, with `annotate_only: true`, so no check run and no `checks: write` ([ADR 0046](/decisions/0046-ci-test-results-are-junit-reports.md)). With `skip_success_summary: true`, a job whose tests all pass writes no table ([ADR 0051](/decisions/0051-a-green-test-report-stays-quiet.md)).
 
 # Pin and health
 
