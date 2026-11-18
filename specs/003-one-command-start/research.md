@@ -72,7 +72,9 @@ cache holds it" in **Why** held for the small cli image of S2 only.
     - **Order**: a run makes every cached build first, then the candidates it still needs, then
       the signed builds. The pair is the cached digest taken *before* that image's candidate,
       never one from a later build, so a source edited between them gives a pair whose digest
-      the next start does not see again (a slow start, never a stale image counted current).
+      the next start does not see again: a slow start, not a stale image counted current, unless
+      the edit is undone within the same run (the stated limit below on a source edited while
+      `build.sh` runs).
     - **Which**: without `--check`, every named image gets a cached build (a pair, valid or
       not, is renewed from it); with `--check`, only an image with a pair does, so `--check`
       without pairs makes the candidates alone, as before. An image whose generated code is
@@ -98,8 +100,9 @@ cache holds it" in **Why** held for the small cli image of S2 only.
   change test nor signing).
 - **Stated limits**: a change to a pin used only for the SBOM or signing (`sbom-scanner`,
   `cosign`) does not change a fingerprint, so it does not rebuild by itself. An image built
-  before this feature has no recorded fingerprint and is built again once. A source edited while `build.sh` runs can still give a recorded fingerprint other than the
-  pushed image's, as before the cached digest. Each start made every
+  before this feature has no recorded fingerprint and is built again once. A source edited
+  while `build.sh` runs can still give a recorded fingerprint other than the pushed image's, as
+  before the cached digest. Each start made every
   candidate; the time with nothing changed, measured against SC-002 (T023), was 38 to 40 s on the
   VM (S11), hence the cached digest. A cached digest lasts only while the build cache holds the
   image's layers: after `docker builder prune`, on the first start after this change, or after an
