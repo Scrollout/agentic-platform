@@ -47,6 +47,8 @@ env = {k: v for k, v in os.environ.items() if not k.startswith("STUB_")}
 def pinned(name):
     """The image reference after `name` in src/deploy/images.lock (found from this file's path)."""
     lock = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../../../src/deploy/images.lock")
+    if not os.path.exists(lock):
+        lock = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../repo/src/deploy/images.lock")
     try:
         with open(lock) as f:
             for line in f:
