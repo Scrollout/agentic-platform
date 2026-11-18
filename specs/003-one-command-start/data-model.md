@@ -29,7 +29,9 @@ fingerprint it was paired with. Mode 600, in the state folder, written by `build
 `images.env.lock` it takes for `built.env`.
 
 - **Written**: by every signed build, with `AP_BUILT_<NAME>`; and by `--changed` (never with
-  `--check`) for an image its candidate found current.
+  `--check`) for an image its candidate found current. The digest is always from the cached build
+  made before that image's candidate in the same run (research R1, Order); a failed cached build
+  writes no pair.
 - **Rule**: an image is current without a candidate when its cached build's digest equals the
   first value, the second value equals its `AP_BUILT_<NAME>` and its `AP_IMAGE_<NAME>` image is in
   the local store. Otherwise the fingerprint's rule above decides. A missing or malformed line

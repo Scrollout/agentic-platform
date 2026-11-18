@@ -68,7 +68,19 @@ cache holds it" in **Why** held for the small cli image of S2 only.
     decides, as above; an image it finds current gets a new pair from a cached build, except with
     `--check`, which records nothing. Sound because equal digests mean equal layers and the
     rewrite depends only on the layers. The builds run one after another: in parallel they were
-    not faster on the VM (S12).
+    not faster on the VM (S12). Revised after `/speckit-analyze` round 9:
+    - **Order**: a run makes every cached build first, then the candidates it still needs, then
+      the signed builds. The pair is the cached digest taken *before* that image's candidate,
+      never one from a later build, so a source edited between them gives a pair whose digest
+      the next start does not see again (a slow start, never a stale image counted current).
+    - **Which**: without `--check`, every named image gets a cached build (a pair, valid or
+      not, is renewed from it); with `--check`, only an image with a pair does, so `--check`
+      without pairs makes the candidates alone, as before. An image whose generated code is
+      stale (only with `--check`) gets neither, as before. A plain `build.sh <name>` makes the
+      cached build, then the candidate, then the signed build.
+    - **Failure**: a cached build that fails counts as no pair and records none; the candidate
+      then runs and reports the failure as before (`the build of <name> failed`, naming the
+      network on a first build).
 - **Why**: S2 shows the candidate digest stays the same for unchanged inputs and costs about a
   second when the build cache holds it, so asking BuildKit is both exact and cheap. The Go images
   all `COPY . .` from `src/`, so only the built result, not the file list, tells whether an image
@@ -86,7 +98,8 @@ cache holds it" in **Why** held for the small cli image of S2 only.
   change test nor signing).
 - **Stated limits**: a change to a pin used only for the SBOM or signing (`sbom-scanner`,
   `cosign`) does not change a fingerprint, so it does not rebuild by itself. An image built
-  before this feature has no recorded fingerprint and is built again once. Each start made every
+  before this feature has no recorded fingerprint and is built again once. A source edited while `build.sh` runs can still give a recorded fingerprint other than the
+  pushed image's, as before the cached digest. Each start made every
   candidate; the time with nothing changed, measured against SC-002 (T023), was 38 to 40 s on the
   VM (S11), hence the cached digest. A cached digest lasts only while the build cache holds the
   image's layers: after `docker builder prune`, on the first start after this change, or after an

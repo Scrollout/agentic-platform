@@ -209,7 +209,7 @@ Each further building block gets its own concept:
 - [ADR 0031: A review finding blocks only when its rule's tests fail at the file it names](/decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md)
 - [ADR 0032: The new project's version history is a git repository kept by a project worker](/decisions/0032-project-version-history-kept-by-a-project-worker.md)
 - [ADR 0039: A blocking review finding is confirmed by a new failing witness test the review writes](/decisions/0039-review-findings-confirmed-by-a-new-witness-test.md)
-- [ADR 0061: ap up builds only the images that changed, judged by a reproducible digest](/decisions/0061-up-builds-only-changed-images-by-reproducible-digest.md) (superseded in part by ADR 0063)
+- [ADR 0061: ap up builds only the images that changed, judged by a reproducible digest](/decisions/0061-up-builds-only-changed-images-by-reproducible-digest.md) (superseded in part by ADR 0063 and ADR 0064)
 - [ADR 0062: The run page is reached from other machines only over TLS behind a sign-in secret](/decisions/0062-run-page-reached-remotely-over-tls-behind-a-sign-in-secret.md)
 - [ADR 0063: ap start is the start command; ap up stays unchanged](/decisions/0063-ap-start-is-the-start-command-ap-up-unchanged.md)
 - [ADR 0064: A cached digest spares the reproducible candidate build when nothing changed](/decisions/0064-a-cached-digest-spares-the-reproducible-rebuild.md)

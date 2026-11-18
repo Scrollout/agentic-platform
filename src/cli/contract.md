@@ -152,7 +152,8 @@ erases nothing on any other answer. `--yes` skips the question, for scripts.
 
 Added by feature 003 ([ADR 0063](../../docs/decisions/0063-ap-start-is-the-start-command-ap-up-unchanged.md),
 [ADR 0061](../../docs/decisions/0061-up-builds-only-changed-images-by-reproducible-digest.md),
-[ADR 0062](../../docs/decisions/0062-run-page-reached-remotely-over-tls-behind-a-sign-in-secret.md)).
+[ADR 0062](../../docs/decisions/0062-run-page-reached-remotely-over-tls-behind-a-sign-in-secret.md),
+[ADR 0064](../../docs/decisions/0064-a-cached-digest-spares-the-reproducible-rebuild.md)).
 `up` without the options below behaves exactly as described above.
 
 ### `start`
@@ -194,7 +195,8 @@ What `start` does, in this order:
 5. Prints, on standard error, `start: started` or `start: already started; nothing changed`,
    then the run page's address (or, with remote access, `up`'s remote lines).
 
-`start --check` does steps 1 and 2, makes the candidate builds of step 3, and prints, changing no
+`start --check` does steps 1 and 2, makes the builds of step 3 that decide what changed (no image's
+reproducible build when its quick build settles it, ADR 0064), and prints, changing no
 recorded, signed or running image and no session, and making no projects folder: each failing
 prerequisite; `start: would make the projects folder <folder>` when the default one is missing (a change:
 exit 1);
