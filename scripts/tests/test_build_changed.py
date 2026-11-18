@@ -187,7 +187,7 @@ class BuildChangedTest(unittest.TestCase):
                 "registry": cls.registry(), "config": cls.tree(config)}
 
     @classmethod
-    def run(cls, key, args, state=None, config=None, password=True, timeout=900):
+    def run_build(cls, key, args, state=None, config=None, password=True, timeout=900):
         """Run build.sh with no terminal. Records the Run under `key`."""
         gen = cls.base / ("gen-%s.log" % key)
         gen.write_text("")
@@ -262,27 +262,27 @@ class BuildChangedTest(unittest.TestCase):
         pw = cls.password
         # 0. plain builds: record the images and their fingerprints (case (a)); makes the key pair
         for n in CANDIDATE_IMAGES:
-            cls.run("plain-" + n, [n], timeout=1500)
+            cls.run_build("plain-" + n, [n], timeout=1500)
         cls.facts["after_plain"] = cls.snapshot()
 
         # (b) nothing changed, in a copy of the state with no key pair and no signing configuration
         state_b, config_b = cls.base / "state-b", cls.base / "config-b"
         shutil.copytree(cls.state, state_b)
         config_b.mkdir()
-        cls.run("b", ["--changed", "cli"], state=state_b, config=config_b, password=False, timeout=600)
+        cls.run_build("b", ["--changed", "cli"], state=state_b, config=config_b, password=False, timeout=600)
 
         # (c) a change that changes the cli binary; page is untouched
         cls.marker("cli", "t004-cli-1")
-        cls.run("c", ["--changed", "cli", "page"])
+        cls.run_build("c", ["--changed", "cli", "page"])
 
         # (d) a string in page; check must not move (its own stage)
         cls.marker("page", "t004-page-1")
-        cls.run("d", ["--changed", "page", "check"])
+        cls.run_build("d", ["--changed", "page", "check"])
 
         # (e) no AP_BUILT_CLI line: built again, and, the source being the same, to the same result
         lines = [ln for ln in cls.built_env.read_text().splitlines() if not ln.startswith("AP_BUILT_CLI=")]
         cls.built_env.write_text("".join(ln + "\n" for ln in lines))
-        cls.run("e", ["--changed", "cli"])
+        cls.run_build("e", ["--changed", "cli"])
 
         # (f) two images to sign on a terminal, key pair present: one prompt
         cls.marker("cli", "t004-cli-2")
@@ -294,26 +294,26 @@ class BuildChangedTest(unittest.TestCase):
 
         # (g) no terminal, no password, an image to sign
         cls.marker("cli", "t004-cli-4")
-        cls.run("g", ["--changed", "cli"], password=False, timeout=600)
+        cls.run_build("g", ["--changed", "cli"], password=False, timeout=600)
 
         # (h) a failing build (page does not compile), then the second run with it fixed
         broken = cls.repo / "src/page/cmd/page/t004_broken.go"
         broken.write_text("package main\n\nfunc {\n")
-        cls.run("h1", ["--changed", "cli", "page"])
+        cls.run_build("h1", ["--changed", "cli", "page"])
         broken.unlink()
-        cls.run("h2", ["--changed", "cli", "page"])
+        cls.run_build("h2", ["--changed", "cli", "page"])
 
         # (j) --check: nothing to build, then a change
-        cls.run("j1", ["--changed", "--check", "cli", "page", "check"], password=False, timeout=600)
+        cls.run_build("j1", ["--changed", "--check", "cli", "page", "check"], password=False, timeout=600)
         cls.marker("page", "t004-page-5")
-        cls.run("j2", ["--changed", "--check", "cli", "page", "check"], password=False, timeout=600)
+        cls.run_build("j2", ["--changed", "--check", "cli", "page", "check"], password=False, timeout=600)
 
         # (k) a first build that needs the network: the golang pin names a registry nothing listens on
         # (127.0.0.1:1), so the base image cannot be fetched whatever the machine's cache holds
         lock = cls.repo / "src/deploy/images.lock"
         text = lock.read_text()
         lock.write_text(re.sub(r"(?m)^(golang\s+)\S+$", r"\g<1>127.0.0.1:1/golang:1.26-alpine@sha256:" + "0" * 64, text))
-        cls.run("k", ["--changed", "cli"], timeout=600)
+        cls.run_build("k", ["--changed", "cli"], timeout=600)
         lock.write_text(text)
 
     # ---------- helpers for the tests
