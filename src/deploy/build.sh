@@ -11,7 +11,9 @@
 #
 # Each image also has a fingerprint (feature 003, research R1, ADR 0061): the digest of its
 # candidate, the same build with SOURCE_DATE_EPOCH=0 and rewrite-timestamp=true, without SBOM,
-# provenance or push, into the local image store. Reproducible, so unchanged sources give the same
+# provenance or push, into the local image store (not unpacked). The pushed image is built with
+# SOURCE_DATE_EPOCH=0 but without rewrite-timestamp, which the store's unpacking refuses; its
+# fingerprint is its candidate's. Reproducible, so unchanged sources give the same
 # fingerprint, and cheap when the build cache holds it. A signed build records it as AP_BUILT_<NAME>
 # in built.env, next to images.env. --changed builds, signs and records only the named images whose
 # fingerprint differs from AP_BUILT_<NAME> or that have no AP_IMAGE_<NAME>, printing `build:
@@ -170,8 +172,10 @@ candidate() {
   shift
   m=$work/$n.meta log=$work/$n.log
   contexts_of "$n"
+  # unpack=false: rewrite-timestamp conflicts with unpacking into the store's snapshotter (Docker's
+  # default with the containerd image store on some versions), and a candidate is never run.
   if ! docker buildx build -f "$here/Dockerfile.$n" --sbom=false --provenance=false \
-    --output type=image,rewrite-timestamp=true --metadata-file "$m" \
+    --output type=image,rewrite-timestamp=true,unpack=false --metadata-file "$m" \
     "${build_args[@]}" "${contexts[@]}" "$@" "$here/.." >"$log" 2>&1; then
     cat -- "$log" >&2
     die 1 "the build of $n failed; its error is above (a first build needs the network, to fetch the pinned images and modules)"
@@ -242,8 +246,7 @@ build_one() {
   contexts_of "$n"
   meta=$(mktemp "${TMPDIR:-/tmp}/ap-build-meta.XXXXXX")
   docker buildx build -f "$here/Dockerfile.$n" -t "$tag" \
-    --sbom="generator=$sbom_image" --provenance=mode=max --push \
-    --output type=image,rewrite-timestamp=true --metadata-file "$meta" \
+    --sbom="generator=$sbom_image" --provenance=mode=max --push --metadata-file "$meta" \
     "${build_args[@]}" "${contexts[@]}" "$@" "$here/.." || die 1 "docker buildx build failed for $n"
   digest=$(digest_in "$meta") || die 1 "the build of $n reported no pushed digest"
   rm -f -- "$meta"

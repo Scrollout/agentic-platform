@@ -16,6 +16,7 @@ before action).
 | S6 | [Compose file: merge rules, `!override` and `!reset`](https://docs.docker.com/reference/compose-file/merge/) |
 | S7 | [Docker: packet filtering and firewalls](https://docs.docker.com/engine/network/packet-filtering-firewalls/) (published ports bypass rules such as ufw's) |
 | S8 | Feature 001: [research D22](../001-prose-to-accepted-slice/research.md) (nginx: BSD-2, Scorecard 7.9), [ADR 0028](../../docs/decisions/0028-sign-platform-images-locally.md) (local signing), `src/deploy/ap`, `src/deploy/build.sh`, `src/deploy/compose.yaml`, `src/deploy/page-proxy/nginx.conf`, `scripts/tests/test_launcher.py`, `scripts/tests/test_signing.py`, `scripts/tests/test_compose.py` |
+| S10 | CI run 44209970342 (2026-11-18, GitHub-hosted runner, containerd image store): `--output type=image,rewrite-timestamp=true` failed with `exporter option "rewrite-timestamp" conflicts with "unpack"`; on the owner's host (Docker 29.10.0) the same output, and the same with `unpack=false`, gave one digest. So a candidate is exported with `unpack=false`, and the pushed build keeps `--push` without `rewrite-timestamp` |
 | S9 | [Go source: `cmd/go/internal/cache/cache.go`](https://go.dev/src/cmd/go/internal/cache/cache.go): each action entry records the time it was written, so a build cache made in a build stage differs from run to run |
 
 ## Decisions
@@ -30,16 +31,18 @@ The rationale the earlier text held (building inside `ap up`) is kept in R1's Re
   (R3) it runs `src/deploy/build.sh --changed engine cli page agent check project lint`, then
   `ap up` with the resolved options, unchanged. For each image, build.sh first makes a
   *candidate*: the image built as it always is, with `SOURCE_DATE_EPOCH=0` and
-  `rewrite-timestamp=true`, without SBOM, provenance or push, into the local image store. The
+  `rewrite-timestamp=true`, without SBOM, provenance or push, into the local image store, not
+  unpacked (`unpack=false`, S10). The
   candidate's digest is the image's *fingerprint*. An image whose fingerprint equals the one
   recorded at its last signed build, and whose recorded digest is still in `images.env`, is
   current and left alone; `ap up` verifies it as today. Every other image is built, pushed with
   its SBOM and provenance, signed and recorded as today (ADR 0028), and its fingerprint recorded
   with it. build.sh prints `build: building <names>` (in the order given) before it builds, and
   `build: built and signed <names>` at the end; with nothing to build it prints nothing. A plain
-  `build.sh <name>` keeps its behaviour and also records the fingerprint, and also builds with
-  `SOURCE_DATE_EPOCH=0` and `rewrite-timestamp=true`, so its fingerprint matches a later
-  candidate.
+  `build.sh <name>` keeps its behaviour and also records the fingerprint, from a candidate build
+  of its own, so it matches a later candidate. The pushed image is built with
+  `SOURCE_DATE_EPOCH=0` but without `rewrite-timestamp`, which the image store refuses together
+  with unpacking (S10); it is judged only by its candidate's fingerprint.
   - `--changed` runs `scripts/generate.sh --check` once per run, not once per Go image (analyze
     I4), and only makes the signing key pair and signing configuration when something must be
     signed, so a run with nothing to build needs neither (analyze I6).
