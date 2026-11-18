@@ -40,7 +40,7 @@ or projects folder is today.
 | File | Content | Mode | Made |
 |------|---------|------|------|
 | `cert.pem`, `key.pem` | The certificate (SAN = `AP_PAGE_NAMES`, ECDSA P-256, 365 days) and its key, or copies of the developer's own | 600 | When missing, when the names change, when older than 358 days, or when the developer gives others |
-| `cert.names` | The names the certificate was made for, the time it was made (epoch seconds), whether it is the developer's (`own`) or made by `ap`, and its SHA-256 fingerprint, as `key=value` lines | 600 | With the certificate |
+| `cert.names` | The names the certificate was made for, the time it was made (epoch seconds), whether it is the developer's (`own`) or made by `ap`, and its SHA-256 fingerprint, as the lines `names=<names>`, `made=<epoch seconds>`, `source=own` or `source=made`, `sha256=<AB:CD:...>`; `up` and `page` print the fingerprint from it | 600 | With the certificate |
 | `htpasswd` | `ap:<SHA-512 crypt of AP_PAGE_SECRET>` | 600 | At each new session |
 | `names.conf` | `server_name <names>;` and the page's own Host (`127.0.0.1:<port>`), as nginx directives | 600 | At each start with remote access, from `AP_PAGE_NAMES` checked by the rule above |
 
@@ -62,7 +62,8 @@ one with it. The secret is never written here.
 
 ```text
 stopped ──ap up --listen A──▶ remote(A, names, secret₁)
-remote ──ap up (same)──▶ remote (nothing changes)
+remote ──ap up (same)──▶ remote (nothing changes; with the developer's own certificate, "same"
+                         includes the same --certificate and --key)
 remote ──ap up --listen B, other names, or no --listen──▶ refused: run ap down first
 local (started) ──ap up --listen A──▶ refused: run ap down first
 remote ──ap down──▶ stopped (secret₁ removed with the session)

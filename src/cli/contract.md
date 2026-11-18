@@ -196,7 +196,8 @@ What `start` does, in this order:
 
 `start --check` does steps 1 and 2, makes the candidate builds of step 3, and prints, changing no
 recorded, signed or running image and no session, and making no projects folder: each failing
-prerequisite; `start: would make the projects folder <folder>` when the default one is missing;
+prerequisite; `start: would make the projects folder <folder>` when the default one is missing (a change:
+exit 1);
 `start: would build <names>` or `start: nothing to build`; and `start: would start` or `start:
 already started`. It exits 0 when nothing would change, 1 when something would, and 3 for a
 failed prerequisite.
@@ -225,7 +226,10 @@ Without `--listen`, `up` is unchanged in every respect.
 hyphens, joined by dots) or an IP address; `--name`, `--certificate` or `--key` without
 `--listen`; one of `--certificate` and `--key` without the other; a certificate or key that is not
 readable PEM; and, on a started session, any change of remote access (turning it on or off, or
-another address, names or certificate), telling to run `down` first. A port Compose cannot
+another address, names or certificate), telling to run `down` first. On a session started with
+the developer's own certificate, a second `up` or `start` must give the same `--certificate` and
+`--key` again (leaving them out is a change); on one with a certificate the platform made,
+`--certificate` is a change. A port Compose cannot
 publish on that address exits 1 naming it, as any Compose failure does.
 
 With `--listen`, `up` also prints on standard error:

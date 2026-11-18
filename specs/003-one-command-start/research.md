@@ -98,7 +98,7 @@ The rationale the earlier text held (building inside `ap up`) is kept in R1's Re
   [install guide](../../docs/guides/install-gvisor.md)), the key file (`check_credentials`, as
   `up`: present, not empty, owned by the developer, not readable or writable by group or others,
   outside the projects folder), and the projects folder. A missing *default* projects folder is
-  made with mode 755; a folder given with `--projects` must exist. A folder others cannot open
+  made with mode 755 (`start --check` reports it and makes nothing: exit 1); a folder given with `--projects` must exist. A folder others cannot open
   and search (no `o+rx`) is refused, naming its mode (closes backlog T165). `ap up` keeps its
   own checks and required options.
 - **Why**: FR-004 to FR-006; the default paths are the ones the quickstart already uses; the
