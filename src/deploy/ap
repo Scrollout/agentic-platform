@@ -593,23 +593,33 @@ cmd_start() {
     die 3 "no key file at '$cred'; put the model provider's key there (chmod 600) or give one with --credentials <file>"
   fi
   check_credentials "$cred"
+  make_proj=''
   if [ -n "$default_proj" ] && [ ! -e "$proj" ] && [ ! -L "$proj" ]; then
-    mkdir -m 755 -- "$proj" || die 3 "cannot make the projects folder '$proj'; make it or give one with --projects <folder>"
+    if [ -n "$check" ]; then
+      make_proj=1   # --check makes nothing: it says so, and the folder checks wait for the folder
+    else
+      mkdir -m 755 -- "$proj" || die 3 "cannot make the projects folder '$proj'; make it or give one with --projects <folder>"
+    fi
   fi
-  if [ -d "$proj" ]; then
+  if [ -z "$make_proj" ] && [ -d "$proj" ]; then
     mode=$(stat -L -c '%a' -- "$proj") || die 3 "cannot read the mode of the projects folder '$proj'"
     case $(ls -ldL -- "$proj") in
       d??????r?x* | d??????r?t*) ;;
       *) die 3 "the platform's containers cannot open the projects folder '$proj' (mode $mode); run: chmod o+rx '$proj'" ;;
     esac
   fi
-  check_paths
+  if [ -n "$make_proj" ]; then
+    cred=$(abs_file "$cred") || die 3 "credentials file '$cred' cannot be resolved"
+  else
+    check_paths
+  fi
   resolve_override
   check_session
   started=''
   if [ -e "$sess" ] || [ -L "$sess" ]; then started=1; fi
 
   if [ -n "$check" ]; then
+    [ -z "$make_proj" ] || tell "would make the projects folder $proj"
     out=$(mktemp "${TMPDIR:-/tmp}/ap-start.XXXXXX") || die 1 "cannot make a temporary file"
     # shellcheck disable=SC2086
     "$here/build.sh" --changed --check $start_images 2>"$out"
@@ -620,6 +630,7 @@ cmd_start() {
     rm -f -- "$out"
     case $rc in 0 | 1) ;; *) exit "$rc" ;; esac
     [ "$rc" -eq 0 ] || [ -n "$would" ] || exit 1
+    [ -z "$make_proj" ] || would=1
     if [ -n "$started" ]; then tell "already started"; else tell "would start"; would=1; fi
     [ -z "$would" ] || exit 1
     exit 0
