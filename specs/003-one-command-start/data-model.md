@@ -12,7 +12,9 @@ already takes for `images.env`, after the image is signed and recorded. `images.
 its `AP_IMAGE_*` lines, which `ap up` reads as today.
 
 - **Value**: the digest of the image's candidate build (research R1): the same Dockerfile, build
-  arguments and context, `SOURCE_DATE_EPOCH=0`, `rewrite-timestamp=true`, no SBOM or provenance.
+  arguments and context, `SOURCE_DATE_EPOCH=0`, `rewrite-timestamp=true`, no SBOM or provenance,
+  exported with `unpack=false` (research S10). The pushed image's own digest is not the
+  fingerprint.
 - **Rule**: an image is *current* when its candidate digest equals its `AP_BUILT_<NAME>` and its
   `AP_IMAGE_<NAME>` line exists; otherwise it is built, signed and both lines are replaced. A
   missing line means not current. `ap up` then verifies every image it starts, as today.

@@ -16,8 +16,8 @@ before action).
 | S6 | [Compose file: merge rules, `!override` and `!reset`](https://docs.docker.com/reference/compose-file/merge/) |
 | S7 | [Docker: packet filtering and firewalls](https://docs.docker.com/engine/network/packet-filtering-firewalls/) (published ports bypass rules such as ufw's) |
 | S8 | Feature 001: [research D22](../001-prose-to-accepted-slice/research.md) (nginx: BSD-2, Scorecard 7.9), [ADR 0028](../../docs/decisions/0028-sign-platform-images-locally.md) (local signing), `src/deploy/ap`, `src/deploy/build.sh`, `src/deploy/compose.yaml`, `src/deploy/page-proxy/nginx.conf`, `scripts/tests/test_launcher.py`, `scripts/tests/test_signing.py`, `scripts/tests/test_compose.py` |
-| S10 | CI run 44209970342 (2026-11-18, GitHub-hosted runner, containerd image store): `--output type=image,rewrite-timestamp=true` failed with `exporter option "rewrite-timestamp" conflicts with "unpack"`; on the owner's host (Docker 29.10.0) the same output, and the same with `unpack=false`, gave one digest. So a candidate is exported with `unpack=false`, and the pushed build keeps `--push` without `rewrite-timestamp` |
 | S9 | [Go source: `cmd/go/internal/cache/cache.go`](https://go.dev/src/cmd/go/internal/cache/cache.go): each action entry records the time it was written, so a build cache made in a build stage differs from run to run |
+| S10 | CI run 44209970342 (2026-11-18, GitHub-hosted runner, containerd image store): `--output type=image,rewrite-timestamp=true` failed with `exporter option "rewrite-timestamp" conflicts with "unpack"`; on the owner's host (Docker 29.10.0) the same output, and the same with `unpack=false`, gave one digest. So a candidate is exported with `unpack=false`, and the pushed build keeps `--push` without `rewrite-timestamp` |
 
 ## Decisions
 
@@ -70,10 +70,12 @@ The rationale the earlier text held (building inside `ap up`) is kept in R1's Re
 - **Stated limits**: a change to a pin used only for the SBOM or signing (`sbom-scanner`,
   `cosign`) does not change a fingerprint, so it does not rebuild by itself. An image built
   before this feature has no recorded fingerprint and is built again once. Each start makes every
-  candidate; the time with nothing changed is measured against SC-002 (T021). S2 ran on Docker
+  candidate; the time with nothing changed is measured against SC-002 (T023). S2 ran on Docker
   29.10 with the containerd image store; reproducibility on Docker 28 or the classic image store
   is not measured (analyze I5); if a digest is not stable there, the cost is an extra rebuild,
-  never an unverified image. Reproducibility of the other six images is proven by T004 in CI. After the build cache is pruned (`docker builder prune`), the check image's template stage runs again and its warm cache gets new times, so that image is rebuilt and signed once more.
+  never an unverified image. On a GitHub-hosted runner the exporter refused `rewrite-timestamp`
+  while unpacking (S10), so candidates are not unpacked and the pushed build does not rewrite
+  timestamps. Reproducibility of the other six images is proven by T004 in CI. After the build cache is pruned (`docker builder prune`), the check image's template stage runs again and its warm cache gets new times, so that image is rebuilt and signed once more.
 
 ### R2. The signing password is asked once, only when something must be signed
 

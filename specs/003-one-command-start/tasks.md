@@ -40,6 +40,10 @@ option B; ADR 0063).
 - **Gate**: `/speckit-analyze` (fresh reviewer) must report no CRITICAL or HIGH before T001, and
   again after any change to spec, plan, tasks or a design artifact. Passed on 2026-11-18 in round 3 (fresh Sonnet reviewer; round 1: 2 CRITICAL, 3 HIGH, fixed with the owner's option B; round 2: 3 LOW, fixed; round 3: 1 LOW, fixed).
 
+- **Known gap** (owner, 2026-11-18): FR-001's "stopped" state is not fully met while a session
+  file outlives its containers (after a reboot `start` says `already started; nothing changed` and
+  `start --check` exits 0); it is backlog T166, after the MVP, from US1's fresh review.
+
 ---
 
 ## Phase 1: Setup (contract first)
@@ -77,7 +81,7 @@ nothing, and `ap start --check` exits 0; after a change to the page's code, `ap 
 - [X] T007 [US1] Code author: `src/deploy/build.sh` builds every image with `--build-arg SOURCE_DATE_EPOCH=0`, and every candidate also with `rewrite-timestamp=true,unpack=false` (research S10: the pushed build cannot rewrite timestamps); records `AP_BUILT_<NAME>=<candidate digest>` in `${XDG_STATE_HOME:-~/.local/state}/agentic-platform/built.env` under the `images.env.lock`, replacing only that name's line; and gains `--changed [--check] <name>...`: `generate.sh --check` once (under `--changed --check` it never regenerates, only reports stale generated code as a change); candidate builds (`--sbom=false --provenance=false`, output to the local image store); the images whose candidate digest differs from `AP_BUILT_<NAME>` or whose `AP_IMAGE_<NAME>` is missing; with `--check`, the contract's lines and nothing else; otherwise `build: building <names>`, the key pair and signing configuration made only then, one password prompt without echo when `COSIGN_PASSWORD` is unset (a second to confirm only when making the key pair), the password exported only to that run's cosign calls, then today's build, push, sign and record for each, and `build: built and signed <names>`; a plain `build.sh <name>` keeps its behaviour (research R1, R2; data model, Image fingerprint). Make T004 pass without changing it
 - [X] T008 [US1] Code author: `src/deploy/ap start` (and its usage line): sources `lock.sh`, takes `start.lock` in the state folder, runs the prerequisite checks (US2 adds the defaults and the gVisor check), runs `build.sh --changed` with the seven images, then `cmd_up` with the resolved options, and prints the contract's `start:` lines; `--check` as the contract says (research R4, R7). `ap up` without the new options unchanged. Make T005 pass without changing it, and every existing launcher test still passes
 - [X] T009 [US1] Push (after telling the owner which jobs it runs) and fix until the CI run is green; then a fresh read-only review of US1 (rules above) against the spec, research R1, R2, R4, R7 and the contract; findings fixed or recorded as tasks. Done 2026-11-18: CI runs 44214595497 and 44264572517 green; fresh review (Sonnet) round 1: 3 blocking, 2 fixed with `test_ap_start_review.py`, 1 filed as backlog T166 (owner); round 2 closed both; suggestions and untested cases in backlog T167
-- [ ] T010 [US1] `/speckit-converge` for US1 (appends tasks only)
+- [X] T010 [US1] `/speckit-converge` for US1 (appends tasks only). Done 2026-11-18: one finding, T025 and T026 (Phase 8); the kept-session gap is backlog T166 (owner)
 
 **Checkpoint**: US1 works on its own: a second start builds nothing.
 
@@ -145,11 +149,13 @@ key, the projects and remote access.
 
 - [ ] T022 Knowledge bundle: `docs/architecture/overview.md` (the `start` command; the forwarder's remote mode; ADR 0061, 0062, 0063), `docs/overview/problem-space.md` (N-005: spec 003, state), `docs/components/nginx.md` if the shipped behaviour differs from it, `docs/log.md`; `python3 scripts/okf.py index` and `check` report OK
 - [ ] T023 Measure on the owner's clean VM, the owner running it: the first `ap start` from a fresh clone (time, images built), a second `ap start` (under 30 s, SC-002), `ap down && ap start`, `ap start --check`; record the figures in `quickstart.md` and research R1, and whether the digests stayed stable on that machine's Docker
-- [ ] T024 `/speckit-converge` for the whole feature, then a final fresh read-only review of the feature against every FR and SC, judging the CI run of the last pushed commit (Review converges); every finding fixed or recorded; the owner decides the merge to `main`
+- [ ] T024 `/speckit-converge` for the whole feature, then a final fresh read-only review of the feature against every FR and SC, judging the CI run of the last pushed commit (Review converges), with backlog T166 and T167 as known open items; every finding fixed or recorded; the owner decides the merge to `main`
 
 ## Dependencies & Execution Order
 
-- T001 → T002, T003 → every story. Stories: US1 (T004–T010) first; US2 (T011–T013) after T008,
+- T001 → T002, T003 → every story. Stories: US1 (T004–T010) first, then its convergence tasks
+  T025 and T026 before US2 (all three change `ap start`; T017 then reuses T026's one session
+  comparison); US2 (T011–T013) after T008,
   since both change `ap start`; US4 (T014–T018) after T012 for the same reason, though T014 and
   T016 (nginx and Compose files only) may run alongside US2; US3 (T019–T021) after US4, since it
   documents every option; Polish last.
@@ -170,3 +176,8 @@ key, the projects and remote access.
   prompt. Then US2 makes a fresh clone need only `ap start`; US4 gives the owner the VM page; US3
   cleans the interface and guides.
 - Each story is pushed and judged by its CI run before the next starts.
+
+## Phase 8: Convergence
+
+- [ ] T025 [US1] Test author: new file `scripts/tests/test_ap_start_session.py` (the start stub of T003): on a started session with another `--credentials` or `--projects`, `ap start` and `ap start --check` exit 3 telling to run `ap down` first, before any candidate build, push, sign or `compose up` call; show it failing against today's `ap`, per spec Edge Cases ("already started with another key file or projects folder: refuses, as today") and FR-004 (checks before it builds) (partial)
+- [ ] T026 [US1] Code author: move `up`'s comparison of a started session with the given key file and projects folder (and override) into one function that `cmd_up` and `cmd_start` both call, `start` calling it before `build.sh`; `up`'s behaviour and messages unchanged; make T025 pass without changing it. T166 will later change how "started" is decided in the same place, per spec Edge Cases and FR-004 (partial)
