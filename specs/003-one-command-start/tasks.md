@@ -102,7 +102,7 @@ starts nothing.
 ### Implementation for User Story 2
 
 - [X] T012 [US2] Code author: `src/deploy/ap start`: options optional with the contract's defaults; the checks in the contract's order before the build step, reusing `need_docker` and `check_credentials`, plus `runsc` in `docker info`'s runtimes and the projects folder (make the default with mode 755 when missing, refuse a folder without `o+rx` naming its mode); each failure exit 3 naming its fix (research R3). Make T011 pass without changing it. Close backlog T165 in `specs/backlog.md` as `closed: done by feature 003 (T012)`
-- [ ] T013 [US2] Push (owner told first), CI green, fresh read-only review of US2, findings fixed or recorded; then `/speckit-converge` for US2
+- [X] T013 [US2] Push (owner told first), CI green, fresh read-only review of US2, findings fixed or recorded; then `/speckit-converge` for US2. Done 2026-11-18: CI runs 44273312536 and 44279658801 green; fresh review (Sonnet) round 1: 1 blocking (`start --check` made the default projects folder), fixed with `test_ap_start_check_review.py`; round 2 closed it; suggestions and untested cases in backlog T168; converge found nothing to append
 
 **Checkpoint**: US1 and US2 work; a fresh clone needs only `ap start`.
 
