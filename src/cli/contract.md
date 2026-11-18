@@ -195,9 +195,11 @@ What `start` does, in this order:
    then the run page's address (or, with remote access, `up`'s remote lines).
 
 `start --check` does steps 1 and 2, makes the candidate builds of step 3, and prints, changing no
-recorded, signed or running image and no session: each failing prerequisite; `start: would build
-<names>` or `start: nothing to build`; and `start: would start` or `start: already started`. It
-exits 0 when nothing would change, 1 when something would, and 3 for a failed prerequisite.
+recorded, signed or running image and no session, and making no projects folder: each failing
+prerequisite; `start: would make the projects folder <folder>` when the default one is missing;
+`start: would build <names>` or `start: nothing to build`; and `start: would start` or `start:
+already started`. It exits 0 when nothing would change, 1 when something would, and 3 for a
+failed prerequisite.
 
 Exit codes: 0 started (or, with `--check`, nothing would change); 1 a build, the signing, a
 verification or Compose failed (or, with `--check`, something would change); 3 a usage error or a
