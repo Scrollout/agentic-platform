@@ -133,8 +133,8 @@ remote_option() {
   case $1 in
     --listen) page_listen=$2 ;;
     --name)
-      is_page_name "$2" || die 3 "--name '$2' is not a host name (labels of letters, digits and inner hyphens, joined by dots) or an IP address"
-      page_names="${page_names:+$page_names }$2" ;;
+      # Refused by check_remote, so `start` names it after the machine's other failures.
+      if is_page_name "$2"; then page_names="${page_names:+$page_names }$2"; else page_bad_name=${page_bad_name:-$2}; fi ;;
     --certificate) page_cert=$2 ;;
     --key) page_key=$2 ;;
   esac
@@ -371,6 +371,8 @@ is_page_name() {
 # before anything is built or started: $page_listen, $page_names, $page_cert and $page_key as given;
 # with --listen, $page_names gets its defaults when no --name was given. Exit 3 for each refusal.
 check_remote() {
+  [ -z "$page_bad_name" ] ||
+    die 3 "--name '$page_bad_name' is not a host name (labels of letters, digits and inner hyphens, joined by dots) or an IP address"
   if [ -z "$page_listen" ]; then
     [ -z "$page_names" ] || die 3 "--name needs --listen <address>: without it the run page is reachable from this machine only"
     [ -z "$page_cert$page_key" ] || die 3 "--certificate and --key need --listen <address>: without it the run page is reachable from this machine only"
@@ -686,7 +688,7 @@ verify_image() {
 
 cmd_up() {
   cred='' proj=''
-  page_listen='' page_names='' page_cert='' page_key=''
+  page_listen='' page_names='' page_cert='' page_key='' page_bad_name=''
   while [ $# -gt 0 ]; do
     case $1 in
       --credentials) [ $# -ge 2 ] || usage; cred=$2; shift 2 ;;
@@ -833,6 +835,18 @@ remote_lines() {
 # changes nothing: exit 0 when nothing would change, 1 when something would.
 start_images="engine cli page agent check project lint"
 tell() { printf 'start: %s\n' "$*" >&2; }
+# One of `start`'s prerequisite checks, "$@", run in a subshell: a refusal (exit 3) is named and
+# sets $failed, so the next check still runs; any other failure exits at once.
+prereq() {
+  ( "$@" )
+  pr_rc=$?
+  case $pr_rc in
+    0) return 0 ;;
+    3) failed=1; return 3 ;;
+    *) exit "$pr_rc" ;;
+  esac
+}
+
 # The gVisor runtime registered with Docker, as `start` needs it.
 check_gvisor() {
   docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q '"runsc"' ||
@@ -852,7 +866,7 @@ check_projects_folder() {
 
 cmd_start() {
   check='' cred='' proj=''
-  page_listen='' page_names='' page_cert='' page_key=''
+  page_listen='' page_names='' page_cert='' page_key='' page_bad_name=''
   while [ $# -gt 0 ]; do
     case $1 in
       --check) check=1; shift ;;
@@ -880,20 +894,11 @@ cmd_start() {
   # Every check runs and names its failure (exit 3 in a subshell); any other failure, such as a
   # Docker that does not answer, stops at once. A check whose input already failed is skipped.
   failed=''
-  prereq() {
-    ( "$@" )
-    pr_rc=$?
-    case $pr_rc in
-      0) return 0 ;;
-      3) failed=1; return 3 ;;
-      *) exit "$pr_rc" ;;
-    esac
-  }
   prereq need_docker
   prereq check_gvisor
   cred_ok=''
   if [ ! -e "$cred" ] && [ ! -L "$cred" ]; then
-    say "no key file at '$cred'; put the model provider's key there (chmod 600) or give one with --credentials <file>"
+    say "no key file at '$cred'; put the model provider's key there (chmod 600) or give another with --credentials <file>"
     failed=1
   elif prereq check_credentials "$cred"; then
     cred_ok=1
