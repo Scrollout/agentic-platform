@@ -40,7 +40,7 @@ or projects folder is today.
 | File | Content | Mode | Made |
 |------|---------|------|------|
 | `cert.pem`, `key.pem` | The certificate (SAN = `AP_PAGE_NAMES`, ECDSA P-256, 365 days) and its key, or copies of the developer's own | 600 | When missing, when the names change, when older than 358 days, or when the developer gives others |
-| `cert.names` | The names the certificate was made for, and the time it was made | 600 | With the certificate |
+| `cert.names` | The names the certificate was made for, the time it was made (epoch seconds), whether it is the developer's (`own`) or made by `ap`, and its SHA-256 fingerprint, as `key=value` lines | 600 | With the certificate |
 | `htpasswd` | `ap:<SHA-512 crypt of AP_PAGE_SECRET>` | 600 | At each new session |
 | `names.conf` | `server_name <names>;` and the page's own Host (`127.0.0.1:<port>`), as nginx directives | 600 | At each start with remote access, from `AP_PAGE_NAMES` checked by the rule above |
 
