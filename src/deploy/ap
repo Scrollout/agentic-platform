@@ -325,9 +325,14 @@ check_session() {
     if [ -n "$page_listen" ]; then
       [ "$page_names" = "$old_names" ] ||
         die 3 "the platform is running with remote access for the names $old_names (--name); run ap down first to start it with others"
-      if [ -n "$page_cert" ]; then
-        cmp -s -- "$page_cert" "$page_remote_dir/cert.pem" ||
-          die 3 "the platform is running with remote access and another certificate (--certificate); run ap down first to start it with this one"
+      # The certificate too: the developer's own needs the same --certificate and --key again; a
+      # made one, none.
+      if [ "$(cert_value source)" = own ]; then
+        [ -n "$page_cert" ] && cmp -s -- "$page_cert" "$page_remote_dir/cert.pem" &&
+          cmp -s -- "$page_key" "$page_remote_dir/key.pem" ||
+          die 3 "the platform is running with remote access and your own certificate; give the same --certificate and --key, or run ap down first to start it with another certificate"
+      elif [ -n "$page_cert" ]; then
+        die 3 "the platform is running with remote access and a certificate it made; run ap down first to start it with your own --certificate"
       fi
     fi
   fi
