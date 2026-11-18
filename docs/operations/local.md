@@ -5,7 +5,7 @@ description: The platform on one developer's machine, started by the ap launcher
 tags: [operations, deployment, local]
 status: draft
 resource: /src/deploy/compose.yaml
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-15T12:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-18T16:00:00Z }
 ---
 
 # Purpose
@@ -65,6 +65,18 @@ Sources: [Docker: port publishing and gateway modes](https://docs.docker.com/eng
 
 # Deployment
 
+The developer starts the platform with one command, `src/deploy/ap start` (feature 003,
+[ADR 0063](/decisions/0063-ap-start-is-the-start-command-ap-up-unchanged.md)). It checks the
+machine first (Docker 28 or later, the gVisor runtime, the key file, by default
+`~/.config/agentic-platform/anthropic_api_key`, and the projects folder, by default `~/projects`,
+made with mode 755 when missing) and names each failure with its fix; then it builds, signs and
+records only the images whose reproducible build changed since their last signed build, asking
+for the signing key's password once and only then
+([ADR 0061](/decisions/0061-up-builds-only-changed-images-by-reproducible-digest.md)); then it runs
+`ap up`. Running it again with nothing changed changes nothing, and `ap start --check` shows what
+it would do without changing anything. The rest of this section describes the lower commands it
+uses, which the platform's own development and CI call directly.
+
 `src/deploy/ap up --credentials <file> --projects <folder>` checks its inputs and creates new
 session tokens, or keeps those of a started session, so running it twice changes nothing. It passes the tokens and paths to Compose through environment variables only.
 `ap down` stops everything and keeps run records and projects: the engine's store is the named
@@ -82,9 +94,11 @@ image a rebuild dropped from the local store is taken back by digest from the lo
 [Distribution registry](/components/distribution-registry.md)). The signature proves that `up`
 starts exactly what `build.sh` built, not who built it, because the key is on the same machine.
 Upstream images (nginx, Docker Agent, Go) are pinned by digest only; their publishers sign none.
-`ap up` starts contract-lint, the check service and the project worker, so build them first with
-`src/deploy/build.sh lint`, `src/deploy/build.sh check` and `src/deploy/build.sh project` (the check image fetches the pinned
-oapi-codegen and the template's modules while it is built, so that build needs the network).
+`ap up` starts contract-lint, the check service and the project worker, so without `ap start`
+build them first with `src/deploy/build.sh lint`, `src/deploy/build.sh check` and
+`src/deploy/build.sh project` (the check image fetches the pinned oapi-codegen and the template's
+modules while it is built, so the first build needs the network; `ap start` names the image and
+the network when it is missing).
 
 `src/deploy/ap test <suite>` (`planted` or `us2`) runs a T046 acceptance suite without a session,
 Compose or a tests image ([ADR 0037](/decisions/0037-terminal-run-commands-exit-codes-and-test-on-host.md)).
@@ -206,10 +220,33 @@ when it names none, re-running it after the evals pass ([ADR 0048](/decisions/00
 
 # Access
 
-The developer reaches the platform through the launcher and the run page on `127.0.0.1`. The
+The developer reaches the platform through the launcher and the run page on `127.0.0.1`, or,
+when they choose it, the run page from other machines (below). The
 provider key file holds only the key, owned by the developer with mode 600. The gateway runs as
 the developer's user so it can read the file, because Compose cannot change a file secret's owner
 outside Swarm.
+
+## Remote access to the run page
+
+`ap start --listen <address>` (or `ap up --listen`) lets other machines reach the read-only run
+page on `<address>` (`0.0.0.0`, `::`, or an address of this machine), port 7878 unless
+`AP_PAGE_PORT` is set; `--name <host>` limits the names it answers to, and `--certificate <cert>
+--key <key>` serves the developer's own certificate. The page forwarder then answers only over
+TLS, only the given names, only with HTTP Basic authentication as `ap` with a secret new at each
+start after `ap down`, and at most 10 requests per second per client address. The start prints
+the address, the secret and the certificate's SHA-256 fingerprint, which the developer compares
+once in their browser, and records the choice in
+`~/.local/state/agentic-platform/access.log`; failed sign-ins are in
+`docker compose logs page-proxy`, never with the secret tried. To turn it on, off or change it,
+run `ap down` first. The terminal client stays on this machine (over SSH for a VM)
+([ADR 0062](/decisions/0062-run-page-reached-remotely-over-tls-behind-a-sign-in-secret.md);
+[terminal contract](../../src/cli/contract.md#starting-the-platform)).
+
+Docker's published ports bypass host firewall rules such as `ufw`'s, so with `--listen 0.0.0.0`
+the port is open on every address of the machine whatever those rules say; a cloud VM's security
+group or firewall is the developer's to open or close.
+
+Sources: [Docker: packet filtering and firewalls](https://docs.docker.com/engine/network/packet-filtering-firewalls/); [Feature 003 research, R5 and S1](../../specs/003-one-command-start/research.md).
 
 ## Optional host firewall rule
 

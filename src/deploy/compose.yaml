@@ -4,7 +4,8 @@
 #
 #   AP_CREDENTIALS_FILE  absolute path of the file holding only the model provider key
 #   AP_PROJECTS_DIR      absolute path of the folder new projects are built in
-#   AP_PAGE_PORT         host port of the run page, published on 127.0.0.1 only
+#   AP_PAGE_PORT         host port of the run page, published on 127.0.0.1 only (with remote
+#                        access, compose.remote.yaml publishes it on AP_PAGE_ADDRESS instead)
 #   AP_CLIENT_TOKEN      this session's token for the terminal client and the test harness
 #   AP_PAGE_TOKEN        this session's token for the run page
 #   AP_WORKER_TOKEN      this session's token for step and check workers

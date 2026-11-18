@@ -1,0 +1,14 @@
+# Remote access to the run page (feature 003, research R5, ADR 0062): merged after compose.yaml
+# only by `ap up --listen`. It changes the page forwarder alone: its one port is published on
+# AP_PAGE_ADDRESS (0.0.0.0, ::, or one address of the machine) over TLS, with the remote
+# configuration page-proxy/nginx-remote.conf and the session's files in AP_PAGE_CERT_DIR (mode 600,
+# so the forwarder runs as the developer, as the gateway does). Everything else, including its
+# read-only root, dropped capabilities and networks, is compose.yaml's.
+services:
+  page-proxy:
+    user: "${AP_HOST_USER:?set AP_HOST_USER (ap up does this)}"
+    volumes: !override
+      - { type: bind, source: ./page-proxy/nginx-remote.conf, target: /etc/ap/nginx.conf, read_only: true }
+      - { type: bind, source: "${AP_PAGE_CERT_DIR:?set AP_PAGE_CERT_DIR (ap up --listen does this)}", target: /etc/ap/remote, read_only: true }
+    ports: !override
+      - { target: 8443, published: "${AP_PAGE_PORT:?set AP_PAGE_PORT (ap up does this)}", host_ip: "${AP_PAGE_ADDRESS:?set AP_PAGE_ADDRESS (ap up --listen does this)}", protocol: tcp }

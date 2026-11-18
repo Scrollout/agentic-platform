@@ -2,16 +2,18 @@
 # with, the pinned oapi-codegen, the catalogue's module template and the module cache of the
 # template's go.mod, so the checks run with no network. Build context: src/. Pins come from build
 # args that deploy/build.sh reads from images.lock (OAPI_CODEGEN is the oapi-codegen line, one home).
+#
+# Two build stages, so the image changes only when its inputs do (feature 003, research R1): the
+# template stage copies only the catalogue's module template and makes oapi-codegen, the module
+# cache and the warm base cache, whose Go cache entries carry the time they were made; the build
+# stage copies all of src/ and builds only the check program. A change elsewhere in src/ then
+# reuses the template stage from the build cache, and the image keeps its digest.
 ARG GOLANG_IMAGE
-FROM ${GOLANG_IMAGE} AS build
+FROM ${GOLANG_IMAGE} AS template
 ARG OAPI_CODEGEN
 WORKDIR /src
-COPY . .
-# src/tests is excluded from the context (src/.dockerignore), so the workspace must not use it.
-RUN go work edit -dropuse=./tests
+COPY catalogue/api-feature-go/template catalogue/api-feature-go/template
 ENV CGO_ENABLED=0 GOFLAGS=-trimpath\ -buildvcs=false GOTOOLCHAIN=local GOTELEMETRY=off
-RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    cd engine && go build -ldflags="-s -w -buildid=" -o /out/check ./cmd/check
 # The pinned oapi-codegen (the Go checksum database verifies the module), built in its own module
 # cache so the image's cache holds only what the template needs.
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
@@ -48,6 +50,15 @@ RUN set -e; mkdir -p /out/warm/warm /tmp/warm-bin; \
     go test -c -count=1 -vet=off -o /tmp/warm-bin/ ./... >/dev/null; \
     rm -rf /out/warm /tmp/warm-bin /tmp/warm.out /tmp/warm-home /tmp/warm-gopath /tmp/warm-template
 
+FROM ${GOLANG_IMAGE} AS build
+WORKDIR /src
+COPY . .
+# src/tests is excluded from the context (src/.dockerignore), so the workspace must not use it.
+RUN go work edit -dropuse=./tests
+ENV CGO_ENABLED=0 GOFLAGS=-trimpath\ -buildvcs=false GOTOOLCHAIN=local GOTELEMETRY=off
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    cd engine && go build -ldflags="-s -w -buildid=" -o /out/check ./cmd/check
+
 FROM ${GOLANG_IMAGE} AS base
 RUN adduser -D -u 65532 -h /tmp/home check
 
@@ -57,10 +68,10 @@ FROM scratch
 COPY --from=base / /
 ENV PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 COPY --from=build /out/check /check
-COPY --from=build /out/oapi-codegen /usr/local/bin/oapi-codegen
-COPY --from=build /src/catalogue/api-feature-go/template /opt/template
-COPY --from=build /out/modcache /opt/gomodcache
-COPY --from=build /out/gocache-base /opt/gocache-base
+COPY --from=template /out/oapi-codegen /usr/local/bin/oapi-codegen
+COPY --from=template /src/catalogue/api-feature-go/template /opt/template
+COPY --from=template /out/modcache /opt/gomodcache
+COPY --from=template /out/gocache-base /opt/gocache-base
 # The module cache and the warm base cache are in the image, owned by root and read-only (COPY
 # makes them root's; the check user can write neither). The image sets no GOCACHE and no GOPATH:
 # each call of the check program makes its own new folder under /tmp, copies the base cache

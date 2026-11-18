@@ -3,7 +3,7 @@
 #
 # Runs on the host and calls nothing but `docker` (Compose) and POSIX utilities, except `test`, which
 # also runs a test binary it built in the pinned Go container (ADR 0037). Its own commands
-# are up, down, build-workers, page, test and registry; build, resume and replay first make the slice's
+# are start, up, down, build-workers, page, test and registry; build, resume and replay first make the slice's
 # workers ready; every other command goes unchanged to the terminal client container, and its exit
 # code is returned. Exit codes are the terminal contract's: 3 is a usage error or a command that is
 # not available yet; 1 is a failed start or stop.
@@ -53,6 +53,11 @@ optional_images="page agent check project tests lint"
 image_vars=$(printf 'AP_IMAGE_%s ' $needed_images $optional_images | tr '[:lower:]' '[:upper:]')
 token_vars="AP_CLIENT_TOKEN AP_PAGE_TOKEN AP_WORKER_TOKEN AP_LINT_TOKEN AP_ANALYST_TOKEN AP_CHECK_TOKEN AP_PROJECT_TOKEN"
 vars="AP_CREDENTIALS_FILE AP_PROJECTS_DIR AP_PAGE_PORT $token_vars AP_HOST_USER AP_GATEWAY_IMAGE AP_GRANTS_DIR $image_vars"
+# A session with remote access to the run page (feature 003, research R5, data model) also has
+# these; one without has none of them.
+remote_vars="AP_PAGE_ADDRESS AP_PAGE_NAMES AP_PAGE_SECRET AP_PAGE_CERT_DIR"
+page_remote_dir=$state_dir/page-remote
+access_log=$state_dir/access.log
 # The step worker grants (research D31): one file per grant, named the SHA-256 of the worker's token
 # and holding {"slice","step","call_token"}, in a folder only the engine mounts (read-only). The
 # folder and its files belong to the engine's user, the `user` of the engine in compose.yaml, so no
@@ -90,32 +95,59 @@ die() { code=$1; shift; say "$*"; exit "$code"; }
 
 usage() {
   cat >&2 <<'EOF'
-usage: ap up --credentials <file> --projects <folder>
+usage: ap start [--check] [--credentials <file>] [--projects <folder>]
+                [--listen <address> [--name <host>]... [--certificate <cert> --key <key>]]
        ap down
        ap page
+       ap <terminal client command> [arguments]   (see src/cli/contract.md)
+
+start starts the platform from the current source; with nothing changed it changes nothing.
+  --check                show what start would do, changing nothing (default: off)
+  --credentials <file>   the file holding only the model provider key, readable only by you
+                         (default ${XDG_CONFIG_HOME:-~/.config}/agentic-platform/anthropic_api_key)
+  --projects <folder>    where new projects are built (default ~/projects, made when missing)
+  --listen <address>     let other machines reach the run page on <address> (0.0.0.0, ::, or an
+                         address of this machine), over TLS with a sign-in secret (default:
+                         none, the run page is reachable from this machine only)
+  --name <host>          a name the run page answers to there (repeatable; default with 0.0.0.0
+                         or ::: this machine's host name, the addresses hostname -I lists,
+                         127.0.0.1 and localhost; with one address: that address)
+  --certificate <cert> --key <key>
+                         serve this certificate (default: one start makes for the names)
+AP_PAGE_PORT, if set, chooses the run page's port (default 7878).
+down stops the platform and keeps run records and projects; page prints the run page's address.
+
+For the platform's own development and CI (src/deploy/README.md):
+       ap up --credentials <file> --projects <folder> [--listen <address> ...]
        ap build-workers <slice> <project>
        ap build-workers --resume <run>
        ap test <suite>
-       ap registry
-       ap <terminal client command> [arguments]   (see src/cli/contract.md)
-
-The credentials file holds only the model provider key and is readable only by you.
-AP_PAGE_PORT, if set, chooses the run page's port (default 7878).
-AP_REGISTRY_PORT, if set, chooses the local image registry's port (default 5005).
-AP_REGISTRY_NAME, if set, runs a second, independent registry under that name (e.g. for tests).
-Build the images first with src/deploy/build.sh <name>.
 EOF
   exit "${1:-3}"
 }
 
+# One remote-access option of `up` or `start` and its value ("$1" "$2"); a --name is checked here,
+# before it is split or stored.
+remote_option() {
+  [ $# -ge 2 ] || usage
+  case $1 in
+    --listen) page_listen=$2 ;;
+    --name)
+      # Refused by check_remote, so `start` names it after the machine's other failures.
+      if is_page_name "$2"; then page_names="${page_names:+$page_names }$2"; else page_bad_name=${page_bad_name:-$2}; fi ;;
+    --certificate) page_cert=$2 ;;
+    --key) page_key=$2 ;;
+  esac
+}
+
 # AP_COMPOSE_OVERRIDE (tests only, src/cli/contract.md "The recorded model, for tests only"): one
 # more Compose file, after compose.yaml; `up` checks it and the session keeps it.
+# With remote access (AP_PAGE_ADDRESS, set by `up --listen` and kept in the session), every Compose
+# call also gets compose.remote.yaml.
 compose() {
-  if [ -n "${AP_COMPOSE_OVERRIDE:-}" ]; then
-    docker compose -f "$here/compose.yaml" -f "$AP_COMPOSE_OVERRIDE" "$@"
-  else
-    docker compose -f "$here/compose.yaml" "$@"
-  fi
+  if [ -n "${AP_PAGE_ADDRESS:-}" ]; then set -- -f "$here/compose.remote.yaml" "$@"; fi
+  if [ -n "${AP_COMPOSE_OVERRIDE:-}" ]; then set -- -f "$AP_COMPOSE_OVERRIDE" "$@"; fi
+  docker compose -f "$here/compose.yaml" "$@"
 }
 
 # A one-off container of the session; without a terminal on stdin (a pipe, a script) Compose must
@@ -126,16 +158,14 @@ compose() {
 # so the client gets `ap`'s through descriptor 3.
 compose_run() {
   if [ -t 0 ]; then cr_tty=; else cr_tty=-T; fi
+  # shellcheck disable=SC2086
+  set -- run --rm $cr_tty "$@"
+  if [ -n "${AP_PAGE_ADDRESS:-}" ]; then set -- -f "$here/compose.remote.yaml" "$@"; fi
+  if [ -n "${AP_COMPOSE_OVERRIDE:-}" ]; then set -- -f "$AP_COMPOSE_OVERRIDE" "$@"; fi
   exec 3<&0
   # docker itself in the background (not the compose function, whose subshell would get the
   # signal instead of Compose).
-  if [ -n "${AP_COMPOSE_OVERRIDE:-}" ]; then
-    # shellcheck disable=SC2086
-    docker compose -f "$here/compose.yaml" -f "$AP_COMPOSE_OVERRIDE" run --rm $cr_tty "$@" <&3 3<&- &
-  else
-    # shellcheck disable=SC2086
-    docker compose -f "$here/compose.yaml" run --rm $cr_tty "$@" <&3 3<&- &
-  fi
+  docker compose -f "$here/compose.yaml" "$@" <&3 3<&- &
   cr_pid=$!
   exec 3<&-
   cr_sig=
@@ -196,15 +226,17 @@ session_ok() {
 # One value of the session file, read in a subshell so nothing else of it is kept.
 session_value() {
   # shellcheck disable=SC1090,SC2086
-  (unset $vars; . "$sess" >/dev/null 2>&1 || exit 1; eval "printf '%s' \"\${$1:-}\"")
+  (unset $vars $remote_vars; . "$sess" >/dev/null 2>&1 || exit 1; eval "printf '%s' \"\${$1:-}\"")
 }
 
 # Load the session, or stop if the platform was not started.
 load() {
   [ -e "$sess" ] || [ -L "$sess" ] || die 3 "the platform is not started; run: ap up --credentials <file> --projects <folder>"
   session_ok || die 1 "the session file $sess $why; it is not read; run: ap down"
-  # Only `up` reads AP_COMPOSE_OVERRIDE from the environment; later commands take the session's.
-  unset AP_COMPOSE_OVERRIDE
+  # Only `up` reads AP_COMPOSE_OVERRIDE and remote access from its options and environment; later
+  # commands take the session's.
+  # shellcheck disable=SC2086
+  unset AP_COMPOSE_OVERRIDE $remote_vars
   set -a
   # shellcheck disable=SC1090
   . "$sess"
@@ -228,6 +260,254 @@ check_credentials() {
     *) die 3 "credentials file '$f' must be readable and writable only by you (chmod 600 '$f')" ;;
   esac
   [ "$3" = "$(id -u)" ] || die 3 "credentials file '$f' must be owned by you"
+}
+
+# The key file $cred and the projects folder $proj, as `up` and `start` need them: checked, then
+# resolved to absolute, symlink-free paths in place.
+check_paths() {
+  check_credentials "$cred"
+  cred=$(abs_file "$cred") || die 3 "credentials file '$cred' cannot be resolved"
+  [ -d "$proj" ] || die 3 "projects folder '$proj' does not exist"
+  [ -w "$proj" ] || die 3 "projects folder '$proj' is not writable"
+  proj=$(CDPATH='' cd -- "$proj" && pwd -P) || die 3 "projects folder '$proj' cannot be resolved"
+  case $cred in "$proj"/*) die 3 "the credentials file must not be inside the projects folder" ;; esac
+}
+
+# The recorded model (tests only): one Compose file from src/tests/e2e/ of this repository, from
+# AP_COMPOSE_OVERRIDE, checked and resolved into $override ('' when unset).
+resolve_override() {
+  override=${AP_COMPOSE_OVERRIDE:-}
+  if [ -n "$override" ]; then
+    e2e_dir=$(CDPATH='' cd -- "$here/../tests/e2e" 2>/dev/null && pwd -P) || e2e_dir=$here/../tests/e2e
+    [ -f "$override" ] || die 3 "AP_COMPOSE_OVERRIDE '$override' is not a file under $e2e_dir (src/tests/e2e)"
+    override=$(abs_file "$override") || die 3 "AP_COMPOSE_OVERRIDE '$override' cannot be resolved under src/tests/e2e"
+    hops=0
+    while [ -L "$override" ]; do   # every link of a chain, so none can leave the folder
+      hops=$((hops + 1))
+      [ "$hops" -le 8 ] || die 3 "AP_COMPOSE_OVERRIDE '$override': too many symbolic links (src/tests/e2e)"
+      link=$(ls -ld -- "$override"); link=${link#* -> }
+      case $link in /*) ;; *) link=$(dirname -- "$override")/$link ;; esac
+      override=$(abs_file "$link") || die 3 "AP_COMPOSE_OVERRIDE '$override' cannot be resolved under src/tests/e2e"
+    done
+    case $override in
+      "$e2e_dir"/*) ;;
+      *) die 3 "AP_COMPOSE_OVERRIDE '$override' is not a file under $e2e_dir (src/tests/e2e)" ;;
+    esac
+  fi
+}
+
+# A started session is kept as it is (constitution XVII: a second `up` changes nothing): its
+# tokens and, unless AP_PAGE_PORT is set, its port, read into $old_tokens and $old_port ('' when no
+# session is started). A start with another key file, projects folder or override than the
+# session's ($cred, $proj and $override, resolved) is refused: they would recreate the gateway and
+# the workers under a running session. `up` and `start` (before it builds) both call it.
+check_session() {
+  old_tokens='' old_port=''
+  if [ -e "$sess" ] || [ -L "$sess" ]; then
+    session_ok || die 1 "the session file $sess $why; it is not read; run: ap down"
+    broken="the session file $sess is unreadable or incomplete; run: ap down"
+    old_port=$(session_value AP_PAGE_PORT) &&
+      old_cred=$(session_value AP_CREDENTIALS_FILE) && old_proj=$(session_value AP_PROJECTS_DIR) ||
+      die 1 "$broken"
+    [ -n "$old_port" ] && [ -n "$old_cred" ] && [ -n "$old_proj" ] || die 1 "$broken"
+    for v in $token_vars; do
+      t=$(session_value "$v") || die 1 "$broken"
+      old_tokens="$old_tokens $t"
+    done
+    # shellcheck disable=SC2086
+    tokens_ok $old_tokens || die 1 "$broken"
+    old_override=$(session_value AP_COMPOSE_OVERRIDE) || die 1 "$broken"
+    [ "$override" = "$old_override" ] ||
+      die 3 "the platform is running with AP_COMPOSE_OVERRIDE '${old_override}'; run ap down first to start it with another"
+    [ "$cred" = "$old_cred" ] && [ "$proj" = "$old_proj" ] ||
+      die 3 "the platform is running with --credentials '$old_cred' --projects '$old_proj'; run ap down first to start it with others"
+    # Remote access ($page_listen, $page_names, $page_cert, checked by check_remote) cannot change
+    # under a running session either, in either direction.
+    old_addr=$(session_value AP_PAGE_ADDRESS) && old_names=$(session_value AP_PAGE_NAMES) || die 1 "$broken"
+    if [ "$page_listen" != "$old_addr" ]; then
+      if [ -z "$old_addr" ]; then
+        die 3 "the platform is running without remote access; run ap down first to start it with --listen"
+      elif [ -z "$page_listen" ]; then
+        die 3 "the platform is running with remote access (--listen $old_addr); run ap down first to start it without"
+      fi
+      die 3 "the platform is running with remote access on --listen $old_addr; run ap down first to start it on another address"
+    fi
+    if [ -n "$page_listen" ]; then
+      [ "$page_names" = "$old_names" ] ||
+        die 3 "the platform is running with remote access for the names $old_names (--name); run ap down first to start it with others"
+      # The certificate too: the developer's own needs the same --certificate and --key again; a
+      # made one, none.
+      if [ "$(cert_value source)" = own ]; then
+        [ -n "$page_cert" ] && cmp -s -- "$page_cert" "$page_remote_dir/cert.pem" &&
+          cmp -s -- "$page_key" "$page_remote_dir/key.pem" ||
+          die 3 "the platform is running with remote access and your own certificate; give the same --certificate and --key, or run ap down first to start it with another certificate"
+      elif [ -n "$page_cert" ]; then
+        die 3 "the platform is running with remote access and a certificate it made; run ap down first to start it with your own --certificate"
+      fi
+    fi
+  fi
+}
+
+# A name or address the run page answers to (data model): a host name (labels of letters, digits
+# and inner hyphens, joined by dots) or an IP address. Nothing else reaches names.conf.
+is_page_name() {
+  case $1 in '' | *[!A-Za-z0-9.:-]*) return 1 ;; esac
+  case $1 in
+    *:*) case $1 in *[!0-9A-Fa-f:.]* | *:::*) return 1 ;; esac; return 0 ;;
+    .* | *. | *..*) return 1 ;;
+  esac
+  ipn_ifs=$IFS IFS=.
+  set -f
+  # shellcheck disable=SC2086
+  set -- $1
+  set +f
+  IFS=$ipn_ifs
+  for l in "$@"; do
+    case $l in -* | *-) return 1 ;; esac
+  done
+}
+
+# The remote-access options of `up` and `start` (src/cli/contract.md "up: remote access"), checked
+# before anything is built or started: $page_listen, $page_names, $page_cert and $page_key as given;
+# with --listen, $page_names gets its defaults when no --name was given. Exit 3 for each refusal.
+check_remote() {
+  [ -z "$page_bad_name" ] ||
+    die 3 "--name '$page_bad_name' is not a host name (labels of letters, digits and inner hyphens, joined by dots) or an IP address"
+  if [ -z "$page_listen" ]; then
+    [ -z "$page_names" ] || die 3 "--name needs --listen <address>: without it the run page is reachable from this machine only"
+    [ -z "$page_cert$page_key" ] || die 3 "--certificate and --key need --listen <address>: without it the run page is reachable from this machine only"
+    return 0
+  fi
+  case $page_listen in
+    0.0.0.0 | ::) ;;
+    *)
+      cr_on=''
+      for a in $(hostname -I 2>/dev/null); do [ "$a" != "$page_listen" ] || cr_on=1; done
+      [ -n "$cr_on" ] || die 3 "--listen '$page_listen' is not 0.0.0.0, :: or an address of this machine (hostname -I lists them)"
+      ;;
+  esac
+  if [ -n "$page_cert$page_key" ]; then
+    [ -n "$page_cert" ] || die 3 "--key needs --certificate <cert>"
+    [ -n "$page_key" ] || die 3 "--certificate needs --key <key>"
+    [ -f "$page_cert" ] && [ -r "$page_cert" ] && grep -q '^-----BEGIN CERTIFICATE-----' "$page_cert" ||
+      die 3 "--certificate '$page_cert' is not a readable PEM certificate"
+    [ -f "$page_key" ] && [ -r "$page_key" ] && grep -q '^-----BEGIN [A-Z ]*PRIVATE KEY-----' "$page_key" ||
+      die 3 "--key '$page_key' is not a readable PEM private key"
+    page_cert=$(abs_file "$page_cert") && page_key=$(abs_file "$page_key") ||
+      die 3 "--certificate or --key cannot be resolved"
+  fi
+  if [ -z "$page_names" ]; then
+    case $page_listen in
+      0.0.0.0 | ::) cr_all="$(hostname 2>/dev/null) $(hostname -I 2>/dev/null) 127.0.0.1 localhost" ;;
+      *) cr_all=$page_listen ;;
+    esac
+    for n in $cr_all; do
+      is_page_name "$n" || die 3 "this machine's name or address '$n' is not a host name or IP address; give the names with --name <host>"
+      case " $page_names " in *" $n "*) ;; *) page_names="$page_names $n" ;; esac
+    done
+  fi
+  page_names=${page_names# }
+}
+
+# A URL's host part for a name: an IPv6 address in brackets.
+url_host() { case $1 in *:*) printf '[%s]' "$1" ;; *) printf '%s' "$1" ;; esac; }
+
+# The fingerprint of the first certificate in cert.pem, as AB:CD:..., computed in the pinned nginx
+# image (busybox base64 and sha256sum) with no network.
+cert_fingerprint() {
+  cf=$(docker run --rm -i --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+    --entrypoint sh "$gateway_image" -c \
+    "awk '/-----END CERTIFICATE-----/ { exit } f { print } /-----BEGIN CERTIFICATE-----/ { f = 1 }' | base64 -d | sha256sum" \
+    <"$page_remote_dir/cert.pem") || return 1
+  cf=${cf%% *}
+  case $cf in *[!0-9a-f]* | '') return 1 ;; esac
+  [ "${#cf}" -eq 64 ] || return 1
+  printf '%s' "$cf" | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//'
+}
+
+# One value of page-remote/cert.names (names=, made=, source=, sha256=).
+cert_value() { sed -n "s/^$1=//p" "$page_remote_dir/cert.names" 2>/dev/null | head -n 1; }
+
+# page-remote/ for a start with remote access (data model, "Remote-access files"): the certificate
+# (the developer's, copied; or one made when missing, for other names, or older than 358 days),
+# cert.names, htpasswd for $page_secret (made at a new session, $1 = new), and names.conf for
+# $page_names and the page's own Host on $port. Sets $page_fingerprint.
+prepare_remote() {
+  (umask 077 && mkdir -p -- "$page_remote_dir") && chmod 700 -- "$page_remote_dir" ||
+    die 1 "cannot create $page_remote_dir or make it private (mode 700)"
+  old_umask=$(umask)
+  umask 077
+  now=$(date +%s)
+  if [ -n "$page_cert" ]; then
+    if [ "$(cert_value source)" != own ] || ! cmp -s -- "$page_cert" "$page_remote_dir/cert.pem" ||
+      ! cmp -s -- "$page_key" "$page_remote_dir/key.pem"; then
+      cp -- "$page_cert" "$page_remote_dir/cert.pem.new" && cp -- "$page_key" "$page_remote_dir/key.pem.new" &&
+        chmod 600 -- "$page_remote_dir/cert.pem.new" "$page_remote_dir/key.pem.new" &&
+        mv -f -- "$page_remote_dir/cert.pem.new" "$page_remote_dir/cert.pem" &&
+        mv -f -- "$page_remote_dir/key.pem.new" "$page_remote_dir/key.pem" ||
+        die 1 "cannot copy the certificate and key into $page_remote_dir"
+      cert_source=own
+    else
+      cert_source=''
+    fi
+  else
+    made=$(cert_value made)
+    case $made in '' | *[!0-9]*) made=0 ;; esac
+    if [ ! -f "$page_remote_dir/cert.pem" ] || [ ! -f "$page_remote_dir/key.pem" ] ||
+      [ "$(cert_value source)" != made ] || [ "$(cert_value names)" != "$page_names" ] ||
+      [ $((now - made)) -gt $((358 * 86400)) ]; then
+      golang_image=$(pin golang)
+      [ -n "$golang_image" ] || die 1 "no golang pin in $here/images.lock"
+      new=$(mktemp -d "$page_remote_dir/new.XXXXXX") || die 1 "cannot make a folder in $page_remote_dir"
+      hosts=$(printf '%s' "$page_names" | tr ' ' ',')
+      say "making a certificate for the run page ($hosts)"
+      docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+        --user "$(id -u):$(id -g)" --tmpfs /tmp:rw,exec,mode=1777,size=256m \
+        -e HOME=/tmp -e GOCACHE=/tmp/go-cache -e GOPATH=/tmp/go -e GOTOOLCHAIN=local -e GOFLAGS=-mod=mod \
+        -v "$new:/out" -w /out "$golang_image" \
+        go run /usr/local/go/src/crypto/tls/generate_cert.go --host "$hosts" --ecdsa-curve P256 --duration 8760h \
+        </dev/null >&2 && [ -s "$new/cert.pem" ] && [ -s "$new/key.pem" ] &&
+        chmod 600 -- "$new/cert.pem" "$new/key.pem" &&
+        mv -f -- "$new/cert.pem" "$page_remote_dir/cert.pem" && mv -f -- "$new/key.pem" "$page_remote_dir/key.pem" ||
+        { rm -rf -- "$new"; die 1 "cannot make the run page's certificate"; }
+      rm -rf -- "$new"
+      cert_source=made
+    else
+      cert_source=''
+    fi
+  fi
+  if [ -n "$cert_source" ] || [ -z "$(cert_value sha256)" ]; then
+    page_fingerprint=$(cert_fingerprint) || die 1 "cannot compute the fingerprint of $page_remote_dir/cert.pem"
+    [ -n "$cert_source" ] || cert_source=$(cert_value source)
+    printf 'names=%s
+made=%s
+source=%s
+sha256=%s
+' "$page_names" "$now" "$cert_source" "$page_fingerprint" \
+      >"$page_remote_dir/cert.names.new" && mv -f -- "$page_remote_dir/cert.names.new" "$page_remote_dir/cert.names" ||
+      die 1 "cannot write $page_remote_dir/cert.names"
+  else
+    page_fingerprint=$(cert_value sha256)
+  fi
+  if [ "$1" = new ] || [ ! -s "$page_remote_dir/htpasswd" ]; then
+    h=$(printf '%s\n' "$page_secret" | docker run --rm -i --network none --read-only --cap-drop ALL \
+      --security-opt no-new-privileges --entrypoint mkpasswd "$gateway_image" -m sha512) ||
+      die 1 "cannot make the run page's password file"
+    case $h in '$6$'*) ;; *) die 1 "cannot make the run page's password file (unexpected hash)" ;; esac
+    printf 'ap:%s\n' "$h" >"$page_remote_dir/htpasswd.new" &&
+      mv -f -- "$page_remote_dir/htpasswd.new" "$page_remote_dir/htpasswd" || die 1 "cannot write $page_remote_dir/htpasswd"
+  fi
+  printf 'server_name %s;\nset $page_host "127.0.0.1:%s";\n' "$page_names" "$port" >"$page_remote_dir/names.conf.new" &&
+    mv -f -- "$page_remote_dir/names.conf.new" "$page_remote_dir/names.conf" || die 1 "cannot write $page_remote_dir/names.conf"
+  chmod 600 -- "$page_remote_dir/cert.pem" "$page_remote_dir/key.pem" "$page_remote_dir/cert.names" \
+    "$page_remote_dir/htpasswd" "$page_remote_dir/names.conf" || die 1 "cannot make the files in $page_remote_dir private"
+  umask "$old_umask"
+}
+
+# One line of access.log (data model, "Access record"), never the secret.
+record_access() {
+  (umask 077 && printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >>"$access_log") ||
+    die 1 "cannot write $access_log"
 }
 
 # A network the registry joins, with the one driver option that matters: an internal network is
@@ -408,68 +688,25 @@ verify_image() {
 
 cmd_up() {
   cred='' proj=''
+  page_listen='' page_names='' page_cert='' page_key='' page_bad_name=''
   while [ $# -gt 0 ]; do
     case $1 in
       --credentials) [ $# -ge 2 ] || usage; cred=$2; shift 2 ;;
       --projects) [ $# -ge 2 ] || usage; proj=$2; shift 2 ;;
+      --listen | --name | --certificate | --key) remote_option "$@"; shift 2 ;;
       *) usage ;;
     esac
   done
   [ -n "$cred" ] && [ -n "$proj" ] || usage
   [ "$(id -u)" != 0 ] || die 3 "do not run ap as root: the gateway runs as your user"
+  # shellcheck disable=SC2086
+  unset $remote_vars   # only from the options
   need_docker
-
-  # The recorded model (tests only): one Compose file from src/tests/e2e/ of this repository.
-  override=${AP_COMPOSE_OVERRIDE:-}
+  resolve_override
   unset AP_COMPOSE_OVERRIDE
-  if [ -n "$override" ]; then
-    e2e_dir=$(CDPATH='' cd -- "$here/../tests/e2e" 2>/dev/null && pwd -P) || e2e_dir=$here/../tests/e2e
-    [ -f "$override" ] || die 3 "AP_COMPOSE_OVERRIDE '$override' is not a file under $e2e_dir (src/tests/e2e)"
-    override=$(abs_file "$override") || die 3 "AP_COMPOSE_OVERRIDE '$override' cannot be resolved under src/tests/e2e"
-    hops=0
-    while [ -L "$override" ]; do   # every link of a chain, so none can leave the folder
-      hops=$((hops + 1))
-      [ "$hops" -le 8 ] || die 3 "AP_COMPOSE_OVERRIDE '$override': too many symbolic links (src/tests/e2e)"
-      link=$(ls -ld -- "$override"); link=${link#* -> }
-      case $link in /*) ;; *) link=$(dirname -- "$override")/$link ;; esac
-      override=$(abs_file "$link") || die 3 "AP_COMPOSE_OVERRIDE '$override' cannot be resolved under src/tests/e2e"
-    done
-    case $override in
-      "$e2e_dir"/*) ;;
-      *) die 3 "AP_COMPOSE_OVERRIDE '$override' is not a file under $e2e_dir (src/tests/e2e)" ;;
-    esac
-  fi
-  check_credentials "$cred"
-  cred=$(abs_file "$cred") || die 3 "credentials file '$cred' cannot be resolved"
-  [ -d "$proj" ] || die 3 "projects folder '$proj' does not exist"
-  [ -w "$proj" ] || die 3 "projects folder '$proj' is not writable"
-  proj=$(CDPATH='' cd -- "$proj" && pwd -P) || die 3 "projects folder '$proj' cannot be resolved"
-  case $cred in "$proj"/*) die 3 "the credentials file must not be inside the projects folder" ;; esac
-
-  # A started session is kept as it is (constitution XVII: a second `up` changes nothing): its
-  # tokens and, unless AP_PAGE_PORT is set, its port. Only after `down` does `up` make new tokens.
-  # A second `up` with other credentials or projects is refused: they would recreate the gateway
-  # and the workers under a running session.
-  old_tokens='' old_port=''
-  if [ -e "$sess" ] || [ -L "$sess" ]; then
-    session_ok || die 1 "the session file $sess $why; it is not read; run: ap down"
-    broken="the session file $sess is unreadable or incomplete; run: ap down"
-    old_port=$(session_value AP_PAGE_PORT) &&
-      old_cred=$(session_value AP_CREDENTIALS_FILE) && old_proj=$(session_value AP_PROJECTS_DIR) ||
-      die 1 "$broken"
-    [ -n "$old_port" ] && [ -n "$old_cred" ] && [ -n "$old_proj" ] || die 1 "$broken"
-    for v in $token_vars; do
-      t=$(session_value "$v") || die 1 "$broken"
-      old_tokens="$old_tokens $t"
-    done
-    # shellcheck disable=SC2086
-    tokens_ok $old_tokens || die 1 "$broken"
-    old_override=$(session_value AP_COMPOSE_OVERRIDE) || die 1 "$broken"
-    [ "$override" = "$old_override" ] ||
-      die 3 "the platform is running with AP_COMPOSE_OVERRIDE '${old_override}'; run ap down first to start it with another"
-    [ "$cred" = "$old_cred" ] && [ "$proj" = "$old_proj" ] ||
-      die 3 "the platform is running with --credentials '$old_cred' --projects '$old_proj'; run ap down first to start it with others"
-  fi
+  check_paths
+  check_remote
+  check_session
 
   port=${AP_PAGE_PORT:-${old_port:-$default_page_port}}
   case $port in '' | *[!0-9]*) die 3 "AP_PAGE_PORT '$port' is not a port number" ;; esac
@@ -501,6 +738,18 @@ cmd_up() {
     # shellcheck disable=SC2086
     tokens_ok $tokens || die 1 "could not generate distinct session tokens"
   fi
+  page_secret=''
+  if [ -n "$page_listen" ]; then
+    if [ -n "$old_tokens" ]; then
+      page_secret=$(session_value AP_PAGE_SECRET) || die 1 "$broken"
+      case $page_secret in *[!0-9a-f]* | '') die 1 "$broken" ;; esac
+      [ "${#page_secret}" -eq 64 ] || die 1 "$broken"
+      prepare_remote kept
+    else
+      page_secret=$(rand)
+      prepare_remote new
+    fi
+  fi
   # shellcheck disable=SC2086
   set -- $tokens
   AP_CLIENT_TOKEN=$1 AP_PAGE_TOKEN=$2 AP_WORKER_TOKEN=$3 AP_LINT_TOKEN=$4 AP_ANALYST_TOKEN=$5 AP_CHECK_TOKEN=$6
@@ -519,8 +768,27 @@ cmd_up() {
     echo "# agentic-platform session, written by ap up; removed by ap down"
     for v in $vars; do eval "val=\$$v"; printf '%s=%s\n' "$v" "$(quote "$val")"; done
     [ -z "$override" ] || printf 'AP_COMPOSE_OVERRIDE=%s\n' "$(quote "$override")"
+    if [ -n "$page_listen" ]; then
+      printf 'AP_PAGE_ADDRESS=%s\nAP_PAGE_NAMES=%s\nAP_PAGE_SECRET=%s\nAP_PAGE_CERT_DIR=%s\n' "$(quote "$page_listen")" \
+        "$(quote "$page_names")" "$(quote "$page_secret")" "$(quote "$page_remote_dir")"
+    fi
   } >"$tmp" && chmod 600 "$tmp" && mv -f -- "$tmp" "$sess" || { rm -f -- "$tmp"; die 1 "cannot write $sess"; }
   umask "$old_umask"
+  # The choice of remote access, recorded once per session that turns it on, and once when the
+  # first session after one with it is started without it (data model, "Access record").
+  if [ -z "$old_tokens" ]; then
+    last=$(grep -E '^[^ ]+ (on|off)( |$)' "$access_log" 2>/dev/null | tail -n 1 | cut -d ' ' -f 2)
+    if [ -n "$page_listen" ]; then
+      record_access "on address=$page_listen port=$port names=$(printf '%s' "$page_names" | tr ' ' ',') sha256=$page_fingerprint"
+    elif [ "$last" = on ]; then
+      record_access off
+    fi
+  fi
+  if [ -n "$page_listen" ]; then
+    AP_PAGE_ADDRESS=$page_listen AP_PAGE_NAMES=$page_names AP_PAGE_SECRET=$page_secret AP_PAGE_CERT_DIR=$page_remote_dir
+    # shellcheck disable=SC2086
+    export $remote_vars
+  fi
   ensure_grants_dir
   if [ -n "$override" ]; then
     AP_COMPOSE_OVERRIDE=$override
@@ -533,16 +801,173 @@ cmd_up() {
     say "the run page is not built yet (T056); starting the platform without it (gateway, engine, contract-lint, analyst, check, project-worker)"
     set -- --scale page=0 --scale page-proxy=0
   else
-    say "starting the platform (gateway, engine, page, contract-lint, analyst, check, project-worker); run page on http://127.0.0.1:$port"
+    if [ -n "$page_listen" ]; then
+      say "starting the platform (gateway, engine, page, contract-lint, analyst, check, project-worker); run page on $page_listen:$port, with remote access"
+    else
+      say "starting the platform (gateway, engine, page, contract-lint, analyst, check, project-worker); run page on http://127.0.0.1:$port"
+    fi
     set --
   fi
   # --wait: return only when every service with a healthcheck is healthy (contract-lint, T113).
-  compose up -d --wait "$@" || die 1 "docker compose up failed; see the messages above; the session is kept until: ap down"
+  if [ -n "$page_listen" ]; then
+    compose up -d --wait "$@" ||
+      die 1 "docker compose up failed; if $page_listen:$port is already in use, free it or set AP_PAGE_PORT; see the messages above; the session is kept until: ap down"
+    remote_lines
+  else
+    compose up -d --wait "$@" || die 1 "docker compose up failed; see the messages above; the session is kept until: ap down"
+  fi
+}
+
+# `up`'s lines for a start with remote access (src/cli/contract.md "up: remote access").
+remote_lines() {
+  rl_first=${page_names%% *}
+  printf 'up: %s\n' "the run page accepts connections from other machines on $page_listen:$port" \
+    "open https://$(url_host "$rl_first"):$port  (names: $(printf '%s' "$page_names" | sed 's/ /, /g'))" \
+    "sign in as ap with $page_secret" \
+    "certificate sha256 $page_fingerprint  (compare it once in your browser)" \
+    "recorded in $access_log" >&2
+}
+
+# The developer's one start command (src/cli/contract.md "Starting the platform"; feature 003,
+# research R1, R4, R7, ADR 0063): one start at a time (start.lock, lock.sh's rule); the machine's
+# prerequisites before anything else; build.sh builds and signs only the images whose result
+# changed; then `up`, unchanged, verifies and starts. With --check it shows what it would do and
+# changes nothing: exit 0 when nothing would change, 1 when something would.
+start_images="engine cli page agent check project lint"
+tell() { printf 'start: %s\n' "$*" >&2; }
+# One of `start`'s prerequisite checks, "$@", run in a subshell: a refusal (exit 3) is named and
+# sets $failed, so the next check still runs; any other failure exits at once.
+prereq() {
+  ( "$@" )
+  pr_rc=$?
+  case $pr_rc in
+    0) return 0 ;;
+    3) failed=1; return 3 ;;
+    *) exit "$pr_rc" ;;
+  esac
+}
+
+# The gVisor runtime registered with Docker, as `start` needs it.
+check_gvisor() {
+  docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q '"runsc"' ||
+    die 3 "the gVisor runtime runsc is not registered with Docker; install it as docs/guides/install-gvisor.md says"
+}
+
+# The projects folder $1, as `start` needs it: a folder, writable, and open to the containers.
+check_projects_folder() {
+  [ -d "$1" ] || die 3 "projects folder '$1' does not exist"
+  [ -w "$1" ] || die 3 "projects folder '$1' is not writable"
+  mode=$(stat -L -c '%a' -- "$1") || die 3 "cannot read the mode of the projects folder '$1'"
+  case $(ls -ldL -- "$1") in
+    d??????r?x* | d??????r?t*) ;;
+    *) die 3 "the platform's containers cannot open the projects folder '$1' (mode $mode); run: chmod o+rx '$1'" ;;
+  esac
+}
+
+cmd_start() {
+  check='' cred='' proj=''
+  page_listen='' page_names='' page_cert='' page_key='' page_bad_name=''
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --check) check=1; shift ;;
+      --credentials) [ $# -ge 2 ] || usage; cred=$2; shift 2 ;;
+      --projects) [ $# -ge 2 ] || usage; proj=$2; shift 2 ;;
+      --listen | --name | --certificate | --key) remote_option "$@"; shift 2 ;;
+      *) usage ;;
+    esac
+  done
+  given_names=$page_names
+  [ "$(id -u)" != 0 ] || die 3 "do not run ap as root: the gateway runs as your user"
+  default_proj=''
+  [ -n "$cred" ] || cred=${XDG_CONFIG_HOME:-$HOME/.config}/agentic-platform/anthropic_api_key
+  [ -n "$proj" ] || { proj=$HOME/projects; default_proj=1; }
+
+  # shellcheck source=lock.sh
+  . "$here/lock.sh"
+  trap 'if [ -n "$locked" ]; then rm -rf -- "$locked"; fi' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  mkdir -p -- "$state_dir" && chmod 700 -- "$state_dir" || die 1 "cannot create $state_dir or make it private (mode 700)"
+  take_lock "$state_dir/start.lock" forever
+
+  # The machine's prerequisites, in the contract's order, before anything is built (research R3).
+  # Every check runs and names its failure (exit 3 in a subshell); any other failure, such as a
+  # Docker that does not answer, stops at once. A check whose input already failed is skipped.
+  failed=''
+  prereq need_docker
+  prereq check_gvisor
+  cred_ok=''
+  if [ ! -e "$cred" ] && [ ! -L "$cred" ]; then
+    say "no key file at '$cred'; put the model provider's key there (chmod 600) or give another with --credentials <file>"
+    failed=1
+  elif prereq check_credentials "$cred"; then
+    cred_ok=1
+  fi
+  make_proj=''
+  if [ -n "$default_proj" ] && [ ! -e "$proj" ] && [ ! -L "$proj" ]; then
+    make_proj=1   # made only when every check passed, and never by --check
+  elif prereq check_projects_folder "$proj" && [ -n "$cred_ok" ]; then
+    prereq check_paths
+  fi
+  prereq check_remote
+  [ -z "$failed" ] || exit 3
+  if [ -n "$make_proj" ] && [ -z "$check" ]; then
+    mkdir -m 755 -- "$proj" || die 3 "cannot make the projects folder '$proj'; make it or give one with --projects <folder>"
+    make_proj=''
+  fi
+  if [ -n "$make_proj" ]; then
+    cred=$(abs_file "$cred") || die 3 "credentials file '$cred' cannot be resolved"
+  else
+    check_paths
+  fi
+  check_remote
+  resolve_override
+  check_session
+  started=''
+  if [ -e "$sess" ] || [ -L "$sess" ]; then started=1; fi
+
+  if [ -n "$check" ]; then
+    [ -z "$make_proj" ] || tell "would make the projects folder $proj"
+    out=$(mktemp "${TMPDIR:-/tmp}/ap-start.XXXXXX") || die 1 "cannot make a temporary file"
+    # shellcheck disable=SC2086
+    "$here/build.sh" --changed --check $start_images 2>"$out"
+    rc=$?
+    sed -e 's/^build: would build /start: would build /' -e 's/^build: nothing to build$/start: nothing to build/' "$out" >&2
+    would=''
+    grep -q '^build: would build ' "$out" && would=1
+    rm -f -- "$out"
+    case $rc in 0 | 1) ;; *) exit "$rc" ;; esac
+    [ "$rc" -eq 0 ] || [ -n "$would" ] || exit 1
+    [ -z "$make_proj" ] || would=1
+    if [ -n "$started" ]; then tell "already started"; else tell "would start"; would=1; fi
+    [ -z "$would" ] || exit 1
+    exit 0
+  fi
+
+  before=$(cat -- "$images_env" 2>/dev/null) || before=''
+  # shellcheck disable=SC2086
+  "$here/build.sh" --changed $start_images || exit $?
+  after=$(cat -- "$images_env" 2>/dev/null) || after=''
+  # The remote options as given (each --name was checked when parsed), so `up` applies its own rules.
+  set -- --credentials "$cred" --projects "$proj"
+  [ -z "$page_listen" ] || set -- "$@" --listen "$page_listen"
+  for n in $given_names; do set -- "$@" --name "$n"; done
+  [ -z "$page_cert" ] || set -- "$@" --certificate "$page_cert" --key "$page_key"
+  (cmd_up "$@") || exit $?
+  if [ -n "$started" ] && [ "$before" = "$after" ]; then
+    tell "already started; nothing changed"
+  else
+    tell "started"
+  fi
+  [ -z "$page_listen" ] || return 0   # up printed the remote lines
+  port=$(session_value AP_PAGE_PORT) || port=''
+  tell "the run page is on http://127.0.0.1:${port:-$default_page_port}"
 }
 
 cmd_down() {
   [ $# -eq 0 ] || usage
-  unset AP_COMPOSE_OVERRIDE   # only the session's override, read by load below
+  # shellcheck disable=SC2086
+  unset AP_COMPOSE_OVERRIDE $remote_vars   # only the session's, read by load below
   # Compose needs every variable to read the file, though none is used to stop. A missing,
   # unreadable or broken session falls back to placeholders, so `down` always recovers.
   AP_CREDENTIALS_FILE=/nonexistent AP_PROJECTS_DIR=/nonexistent AP_PAGE_PORT=$default_page_port
@@ -576,7 +1001,13 @@ cmd_down() {
 cmd_page() {
   [ $# -eq 0 ] || usage
   load
-  echo "http://127.0.0.1:$AP_PAGE_PORT"
+  if [ -n "${AP_PAGE_ADDRESS:-}" ]; then
+    for n in $AP_PAGE_NAMES; do echo "https://$(url_host "$n"):$AP_PAGE_PORT"; done
+    echo "sign in as ap with $AP_PAGE_SECRET"
+    echo "certificate sha256 $(cert_value sha256)"
+  else
+    echo "http://127.0.0.1:$AP_PAGE_PORT"
+  fi
 }
 
 # The grants folder (research D31), made by `up` before the engine starts: mode 700 and owned by the
@@ -1252,6 +1683,7 @@ shift
 case $cmd in
   -h | --help) usage 0 ;;
   -*) usage ;;
+  start) cmd_start "$@" ;;
   up) cmd_up "$@" ;;
   down) cmd_down "$@" ;;
   page) cmd_page "$@" ;;

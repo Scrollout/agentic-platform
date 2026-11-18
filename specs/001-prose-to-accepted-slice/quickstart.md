@@ -8,28 +8,28 @@ launcher `src/deploy/ap`, which only calls `docker compose` ([terminal contract]
 - A container runtime with Compose, and the gVisor runtime installed once (research D13;
   [install guide](../../docs/guides/install-gvisor.md)).
 - A model credentials file outside the repository that holds only the provider key (no variable
-  name), owned by you and readable only by you (`chmod 600`), for example
-  `~/.config/agentic-platform/anthropic_api_key`. Only the gateway container reads it.
-- The images built and signed with `src/deploy/build.sh <name>` (`engine`, `cli`, `project`, `check`,
-  `agent`, `lint`, `page`), after `scripts/generate.sh`. The first build makes an encrypted signing key in
-  `~/.config/agentic-platform/signing/`; set `COSIGN_PASSWORD` or type the password when cosign asks.
-  `up` verifies each image's signature and starts nothing if one fails
-  ([ADR 0028](../../docs/decisions/0028-sign-platform-images-locally.md)).
-- An empty folder for new projects, for example `~/projects`, that the platform's containers can
-  open: mode 755 (a folder made under `umask 077` is 700, and every check then fails with
-  `UnreadableProject`).
+  name), owned by you and readable only by you (`chmod 600`), at
+  `~/.config/agentic-platform/anthropic_api_key` (or give another with `--credentials`). Only the
+  gateway container reads it.
 
 ## 1. Start the platform
 
 ```sh
-src/deploy/ap up --credentials ~/.config/agentic-platform/anthropic_api_key --projects ~/projects
-src/deploy/ap page
+src/deploy/ap start
 ```
 
-Expected: the gateway, engine and run page start (the terminal client runs per command); `page`
-prints a `http://127.0.0.1:<port>` address (port 7878 unless `AP_PAGE_PORT` is set). Only the
-gateway has internet access. `src/deploy/ap down` stops everything and keeps run records and
-projects.
+Expected: the first start builds the platform from the source and asks once for the signing key's
+password (twice the very first time, to make the key; `COSIGN_PASSWORD` gives it instead), makes
+`~/projects` with mode 755 when it is missing, verifies everything, starts the gateway, engine and
+run page (the terminal client runs per command) and prints a `http://127.0.0.1:<port>` address
+(port 7878 unless `AP_PAGE_PORT` is set). A missing prerequisite stops it before anything starts,
+naming the fix. Running it again with nothing changed changes nothing; `src/deploy/ap start
+--check` shows what it would do. Only the gateway has internet access. `src/deploy/ap down` stops
+everything and keeps run records and projects. To reach the run page from another machine, see
+[remote access](../../docs/operations/local.md#remote-access-to-the-run-page).
+
+The platform's own development and CI build single images with `src/deploy/build.sh <name>` and
+start them with `src/deploy/ap up` ([local environment](../../docs/operations/local.md)).
 
 ## 2. Describe and approve a slice (Story 1)
 
