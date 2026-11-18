@@ -102,14 +102,16 @@ usage: ap start [--check] [--credentials <file>] [--projects <folder>]
        ap <terminal client command> [arguments]   (see src/cli/contract.md)
 
 start starts the platform from the current source; with nothing changed it changes nothing.
-  --check                show what start would do, changing nothing
+  --check                show what start would do, changing nothing (default: off)
   --credentials <file>   the file holding only the model provider key, readable only by you
                          (default ${XDG_CONFIG_HOME:-~/.config}/agentic-platform/anthropic_api_key)
   --projects <folder>    where new projects are built (default ~/projects, made when missing)
   --listen <address>     let other machines reach the run page on <address> (0.0.0.0, ::, or an
-                         address of this machine), over TLS with a sign-in secret
-  --name <host>          a name the run page answers to there (repeatable; default: this
-                         machine's names and addresses)
+                         address of this machine), over TLS with a sign-in secret (default:
+                         none, the run page is reachable from this machine only)
+  --name <host>          a name the run page answers to there (repeatable; default with 0.0.0.0
+                         or ::: this machine's host name, the addresses hostname -I lists,
+                         127.0.0.1 and localhost; with one address: that address)
   --certificate <cert> --key <key>
                          serve this certificate (default: one start makes for the names)
 AP_PAGE_PORT, if set, chooses the run page's port (default 7878).
