@@ -181,3 +181,10 @@ key, the projects and remote access.
 
 - [X] T025 [US1] Test author: new file `scripts/tests/test_ap_start_session.py` (the start stub of T003): on a started session with another `--credentials` or `--projects`, `ap start` and `ap start --check` exit 3 telling to run `ap down` first, before any candidate build, push, sign or `compose up` call; show it failing against today's `ap`, per spec Edge Cases ("already started with another key file or projects folder: refuses, as today") and FR-004 (checks before it builds) (partial)
 - [X] T026 [US1] Code author: move `up`'s comparison of a started session with the given key file and projects folder (and override) into one function that `cmd_up` and `cmd_start` both call, `start` calling it before `build.sh`; `up`'s behaviour and messages unchanged; make T025 pass without changing it. T166 will later change how "started" is decided in the same place, per spec Edge Cases and FR-004 (partial)
+
+## Phase 9: Owner decision on T168 (2026-11-18)
+
+The owner: "start name every failing prereq." FR-004 and the contract (step 2, "naming each failure and its fix") already say so; today `ap start` stops at the first failing prerequisite, so this is a defect against agreed intent.
+
+- [ ] T027 [US2] Test author: new file `scripts/tests/test_ap_start_all_prerequisites.py` (the start stub of T003): with several prerequisites failing at once (for example `STUB_RUNTIMES=runc`, a missing `--credentials` file and a `--projects` folder of mode 700), `ap start` and `ap start --check` exit 3 and name every one of them with its fix, in the contract's order, before any candidate build, push, sign or `compose up` call; show it failing against today's `ap`, per FR-004 and the contract's `start` step 2
+- [ ] T028 [US2] Code author: `src/deploy/ap start` runs every prerequisite check of step 2, names each failure with its fix, then exits 3 if any failed; `up`'s own checks and messages unchanged; make T027 pass without changing it, per FR-004
