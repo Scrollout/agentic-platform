@@ -38,7 +38,7 @@ option B; ADR 0063).
   files, judging the CI run; at most 3 rounds (Review converges). Then `/speckit-converge` for the
   story.
 - **Gate**: `/speckit-analyze` (fresh reviewer) must report no CRITICAL or HIGH before T001, and
-  again after any change to spec, plan, tasks or a design artifact. Passed on 2026-11-18 in round 3 (fresh Sonnet reviewer; round 1: 2 CRITICAL, 3 HIGH, fixed with the owner's option B; round 2: 3 LOW, fixed; round 3: 1 LOW, fixed). After US1 (2026-11-18): round 4: 1 HIGH, 3 MEDIUM, 3 LOW, fixed; round 5: clean. After US2 and US4 (2026-11-18): round 6: 2 MEDIUM, 4 LOW, fixed in the contract, data model, research and tasks (FR-018 and the spec's status line unchanged: the folder line is covered by "whether it would start"; the status waits for T024).
+  again after any change to spec, plan, tasks or a design artifact. Passed on 2026-11-18 in round 3 (fresh Sonnet reviewer; round 1: 2 CRITICAL, 3 HIGH, fixed with the owner's option B; round 2: 3 LOW, fixed; round 3: 1 LOW, fixed). After US1 (2026-11-18): round 4: 1 HIGH, 3 MEDIUM, 3 LOW, fixed; round 5: clean. After US2 and US4 (2026-11-18): round 6: 2 MEDIUM, 4 LOW, fixed in the contract, data model, research and tasks (FR-018 and the spec's status line unchanged: the folder line is covered by "whether it would start"; the status waits for T024). After T018 and Phase 9 (2026-11-18): round 7: 2 MEDIUM, 4 LOW, fixed in tasks only (US4's Independent Test, the order of T027 and T028, T013's and T024's notes, T027's and T028's cases); no CRITICAL or HIGH.
 
 - **Known gap** (owner, 2026-11-18): FR-001's "stopped" state is not fully met while a session
   file outlives its containers (after a reboot `start` says `already started; nothing changed` and
@@ -102,7 +102,7 @@ starts nothing.
 ### Implementation for User Story 2
 
 - [X] T012 [US2] Code author: `src/deploy/ap start`: options optional with the contract's defaults; the checks in the contract's order before the build step, reusing `need_docker` and `check_credentials`, plus `runsc` in `docker info`'s runtimes and the projects folder (make the default with mode 755 when missing, refuse a folder without `o+rx` naming its mode); each failure exit 3 naming its fix (research R3). Make T011 pass without changing it. Close backlog T165 in `specs/backlog.md` as `closed: done by feature 003 (T012)`
-- [X] T013 [US2] Push (owner told first), CI green, fresh read-only review of US2, findings fixed or recorded; then `/speckit-converge` for US2. Done 2026-11-18: CI runs 44273312536 and 44279658801 green; fresh review (Sonnet) round 1: 1 blocking (`start --check` made the default projects folder), fixed with `test_ap_start_check_review.py`; round 2 closed it; suggestions and untested cases in backlog T168; converge found nothing to append
+- [X] T013 [US2] Push (owner told first), CI green, fresh read-only review of US2, findings fixed or recorded; then `/speckit-converge` for US2. Done 2026-11-18: CI runs 44273312536 and 44279658801 green; fresh review (Sonnet) round 1: 1 blocking (`start --check` made the default projects folder), fixed with `test_ap_start_check_review.py`; round 2 closed it; suggestions and untested cases in backlog T168; converge found nothing to append. Backlog T168's open question was decided by the owner: Phase 9 (T027, T028)
 
 **Checkpoint**: US1 and US2 work; a fresh clone needs only `ap start`.
 
@@ -115,7 +115,7 @@ TLS behind a sign-in secret, rate-limited, limited to the given names, recorded 
 FR-017; research R5; ADR 0062).
 
 **Independent Test**: on a VM, `ap start --listen 0.0.0.0`; from another machine 401 without the
-secret, 200 with it, 400 over plain HTTP; after `down` and `start` the port no longer answers.
+secret, the page's own 404 at `/` and 200 at `/runs/<run>` with it, 400 over plain HTTP; after `down` and `start` the port no longer answers.
 
 ### Tests for User Story 4
 
@@ -149,7 +149,7 @@ key, the projects and remote access.
 
 - [ ] T022 Knowledge bundle: `docs/architecture/overview.md` (the `start` command; the forwarder's remote mode; ADR 0061, 0062, 0063), `docs/overview/problem-space.md` (N-005: spec 003, state), `docs/components/nginx.md` if the shipped behaviour differs from it, `docs/log.md`; `python3 scripts/okf.py index` and `check` report OK
 - [ ] T023 Measure on the owner's clean VM, the owner running it: the first `ap start` from a fresh clone (time, images built), a second `ap start` (under 30 s, SC-002), `ap down && ap start`, `ap start --check`; record the figures in `quickstart.md` and research R1, and whether the digests stayed stable on that machine's Docker
-- [ ] T024 `/speckit-converge` for the whole feature, then a final fresh read-only review of the feature against every FR and SC, judging the CI run of the last pushed commit (Review converges), with backlog T166 and T167 as known open items; every finding fixed or recorded; the owner decides the merge to `main`
+- [ ] T024 `/speckit-converge` for the whole feature, then a final fresh read-only review of the feature against every FR and SC, judging the CI run of the last pushed commit (Review converges), including T027 and T028, with backlog T166 and T167 as known open items; every finding fixed or recorded; the owner decides the merge to `main`
 
 ## Dependencies & Execution Order
 
@@ -158,7 +158,9 @@ key, the projects and remote access.
   comparison); US2 (T011–T013) after T008,
   since both change `ap start`; US4 (T014–T018) after T012 for the same reason, though T014 and
   T016 (nginx and Compose files only) may run alongside US2; US3 (T019–T021) after US4, since it
-  documents every option; Polish last.
+  documents every option; Phase 9 (T027 → T028) after T026 and T017, since T028 changes `ap
+  start`'s checks, then pushed (owner told first), judged by its CI run and a fresh read-only
+  review as a story is; Polish (T022–T024) last.
 - Within a story: tests (seen failing) → code → push and CI → fresh review → converge.
 - One unit at a time on the host (small and shared): never two image builds or two Docker test
   files at once.
@@ -186,5 +188,5 @@ key, the projects and remote access.
 
 The owner: "start name every failing prereq." FR-004 and the contract (step 2, "naming each failure and its fix") already say so; today `ap start` stops at the first failing prerequisite, so this is a defect against agreed intent.
 
-- [ ] T027 [US2] Test author: new file `scripts/tests/test_ap_start_all_prerequisites.py` (the start stub of T003): with several prerequisites failing at once (for example `STUB_RUNTIMES=runc`, a missing `--credentials` file and a `--projects` folder of mode 700), `ap start` and `ap start --check` exit 3 and name every one of them with its fix, in the contract's order, before any candidate build, push, sign or `compose up` call; show it failing against today's `ap`, per FR-004 and the contract's `start` step 2
-- [ ] T028 [US2] Code author: `src/deploy/ap start` runs every prerequisite check of step 2, names each failure with its fix, then exits 3 if any failed; `up`'s own checks and messages unchanged; make T027 pass without changing it, per FR-004
+- [ ] T027 [US2] Test author: new file `scripts/tests/test_ap_start_all_prerequisites.py` (the start stub of T003): with several prerequisites failing at once (for example `STUB_RUNTIMES=runc`, a missing `--credentials` file, a `--projects` folder of mode 700 and `--name` without `--listen`), `ap start` and `ap start --check` exit 3 and name every one of them with its fix, in the contract's order, before any candidate build, push, sign or `compose up` call; and with a missing default projects folder and another failing prerequisite, `ap start` makes no folder and `ap start --check` prints each failure; show it failing against today's `ap`, per FR-004 and the contract's `start` step 2
+- [ ] T028 [US2] Code author: `src/deploy/ap start` runs every prerequisite check of step 2, names each failure with its fix, then exits 3 if any failed; a check whose input already failed (the key file's place relative to the projects folder, the started session's comparison) is skipped, and the default projects folder is made only when no check failed; `up`'s own checks and messages unchanged; make T027 pass without changing it, per FR-004
