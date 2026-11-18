@@ -2,6 +2,7 @@
 
 ## 2026-11-18
 
+* **Implementation**: Feature 003, T025 and T026 (US1 convergence): `ap start` and `ap start --check` refuse a started session with another key file, projects folder or recorded-model override before they build (exit 3, `run ap down first`); `up`'s session comparison and override check are now one function each (`check_session`, `resolve_override`) that `up` and `start` both call, `up`'s behaviour and messages unchanged. Test by a separate author (`scripts/tests/test_ap_start_session.py`).
 * **Planning**: Feature 003, `/speckit-analyze` round 5: every round-4 finding closed, no CRITICAL or HIGH.
 * **Planning**: Feature 003, T010 done: US1's `/speckit-converge` appended T025 and T026 (`ap start` refuses a session with another key file or projects folder before it builds); `/speckit-analyze` round 4 (fresh reviewer): 1 HIGH (the owner's deferral of backlog T166 not recorded in the feature), 3 MEDIUM, 3 LOW, all fixed in tasks, research and the data model.
 * **Review**: Feature 003, T009 done: US1 fresh review round 2 closed both fixed findings (CI run 44264572517 green); the kept-session finding is backlog T166 (owner: after the MVP), the suggestions and untested cases T167.

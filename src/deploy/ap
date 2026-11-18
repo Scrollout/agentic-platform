@@ -242,6 +242,57 @@ check_paths() {
   case $cred in "$proj"/*) die 3 "the credentials file must not be inside the projects folder" ;; esac
 }
 
+# The recorded model (tests only): one Compose file from src/tests/e2e/ of this repository, from
+# AP_COMPOSE_OVERRIDE, checked and resolved into $override ('' when unset).
+resolve_override() {
+  override=${AP_COMPOSE_OVERRIDE:-}
+  if [ -n "$override" ]; then
+    e2e_dir=$(CDPATH='' cd -- "$here/../tests/e2e" 2>/dev/null && pwd -P) || e2e_dir=$here/../tests/e2e
+    [ -f "$override" ] || die 3 "AP_COMPOSE_OVERRIDE '$override' is not a file under $e2e_dir (src/tests/e2e)"
+    override=$(abs_file "$override") || die 3 "AP_COMPOSE_OVERRIDE '$override' cannot be resolved under src/tests/e2e"
+    hops=0
+    while [ -L "$override" ]; do   # every link of a chain, so none can leave the folder
+      hops=$((hops + 1))
+      [ "$hops" -le 8 ] || die 3 "AP_COMPOSE_OVERRIDE '$override': too many symbolic links (src/tests/e2e)"
+      link=$(ls -ld -- "$override"); link=${link#* -> }
+      case $link in /*) ;; *) link=$(dirname -- "$override")/$link ;; esac
+      override=$(abs_file "$link") || die 3 "AP_COMPOSE_OVERRIDE '$override' cannot be resolved under src/tests/e2e"
+    done
+    case $override in
+      "$e2e_dir"/*) ;;
+      *) die 3 "AP_COMPOSE_OVERRIDE '$override' is not a file under $e2e_dir (src/tests/e2e)" ;;
+    esac
+  fi
+}
+
+# A started session is kept as it is (constitution XVII: a second `up` changes nothing): its
+# tokens and, unless AP_PAGE_PORT is set, its port, read into $old_tokens and $old_port ('' when no
+# session is started). A start with another key file, projects folder or override than the
+# session's ($cred, $proj and $override, resolved) is refused: they would recreate the gateway and
+# the workers under a running session. `up` and `start` (before it builds) both call it.
+check_session() {
+  old_tokens='' old_port=''
+  if [ -e "$sess" ] || [ -L "$sess" ]; then
+    session_ok || die 1 "the session file $sess $why; it is not read; run: ap down"
+    broken="the session file $sess is unreadable or incomplete; run: ap down"
+    old_port=$(session_value AP_PAGE_PORT) &&
+      old_cred=$(session_value AP_CREDENTIALS_FILE) && old_proj=$(session_value AP_PROJECTS_DIR) ||
+      die 1 "$broken"
+    [ -n "$old_port" ] && [ -n "$old_cred" ] && [ -n "$old_proj" ] || die 1 "$broken"
+    for v in $token_vars; do
+      t=$(session_value "$v") || die 1 "$broken"
+      old_tokens="$old_tokens $t"
+    done
+    # shellcheck disable=SC2086
+    tokens_ok $old_tokens || die 1 "$broken"
+    old_override=$(session_value AP_COMPOSE_OVERRIDE) || die 1 "$broken"
+    [ "$override" = "$old_override" ] ||
+      die 3 "the platform is running with AP_COMPOSE_OVERRIDE '${old_override}'; run ap down first to start it with another"
+    [ "$cred" = "$old_cred" ] && [ "$proj" = "$old_proj" ] ||
+      die 3 "the platform is running with --credentials '$old_cred' --projects '$old_proj'; run ap down first to start it with others"
+  fi
+}
+
 # A network the registry joins, with the one driver option that matters: an internal network is
 # `isolated` (its bridge has no host address, so nothing on it reaches the host), the publishing
 # network has IP masquerading off (no NAT, so no working route out); and its subnet when one is
@@ -430,53 +481,10 @@ cmd_up() {
   [ -n "$cred" ] && [ -n "$proj" ] || usage
   [ "$(id -u)" != 0 ] || die 3 "do not run ap as root: the gateway runs as your user"
   need_docker
-
-  # The recorded model (tests only): one Compose file from src/tests/e2e/ of this repository.
-  override=${AP_COMPOSE_OVERRIDE:-}
+  resolve_override
   unset AP_COMPOSE_OVERRIDE
-  if [ -n "$override" ]; then
-    e2e_dir=$(CDPATH='' cd -- "$here/../tests/e2e" 2>/dev/null && pwd -P) || e2e_dir=$here/../tests/e2e
-    [ -f "$override" ] || die 3 "AP_COMPOSE_OVERRIDE '$override' is not a file under $e2e_dir (src/tests/e2e)"
-    override=$(abs_file "$override") || die 3 "AP_COMPOSE_OVERRIDE '$override' cannot be resolved under src/tests/e2e"
-    hops=0
-    while [ -L "$override" ]; do   # every link of a chain, so none can leave the folder
-      hops=$((hops + 1))
-      [ "$hops" -le 8 ] || die 3 "AP_COMPOSE_OVERRIDE '$override': too many symbolic links (src/tests/e2e)"
-      link=$(ls -ld -- "$override"); link=${link#* -> }
-      case $link in /*) ;; *) link=$(dirname -- "$override")/$link ;; esac
-      override=$(abs_file "$link") || die 3 "AP_COMPOSE_OVERRIDE '$override' cannot be resolved under src/tests/e2e"
-    done
-    case $override in
-      "$e2e_dir"/*) ;;
-      *) die 3 "AP_COMPOSE_OVERRIDE '$override' is not a file under $e2e_dir (src/tests/e2e)" ;;
-    esac
-  fi
   check_paths
-
-  # A started session is kept as it is (constitution XVII: a second `up` changes nothing): its
-  # tokens and, unless AP_PAGE_PORT is set, its port. Only after `down` does `up` make new tokens.
-  # A second `up` with other credentials or projects is refused: they would recreate the gateway
-  # and the workers under a running session.
-  old_tokens='' old_port=''
-  if [ -e "$sess" ] || [ -L "$sess" ]; then
-    session_ok || die 1 "the session file $sess $why; it is not read; run: ap down"
-    broken="the session file $sess is unreadable or incomplete; run: ap down"
-    old_port=$(session_value AP_PAGE_PORT) &&
-      old_cred=$(session_value AP_CREDENTIALS_FILE) && old_proj=$(session_value AP_PROJECTS_DIR) ||
-      die 1 "$broken"
-    [ -n "$old_port" ] && [ -n "$old_cred" ] && [ -n "$old_proj" ] || die 1 "$broken"
-    for v in $token_vars; do
-      t=$(session_value "$v") || die 1 "$broken"
-      old_tokens="$old_tokens $t"
-    done
-    # shellcheck disable=SC2086
-    tokens_ok $old_tokens || die 1 "$broken"
-    old_override=$(session_value AP_COMPOSE_OVERRIDE) || die 1 "$broken"
-    [ "$override" = "$old_override" ] ||
-      die 3 "the platform is running with AP_COMPOSE_OVERRIDE '${old_override}'; run ap down first to start it with another"
-    [ "$cred" = "$old_cred" ] && [ "$proj" = "$old_proj" ] ||
-      die 3 "the platform is running with --credentials '$old_cred' --projects '$old_proj'; run ap down first to start it with others"
-  fi
+  check_session
 
   port=${AP_PAGE_PORT:-${old_port:-$default_page_port}}
   case $port in '' | *[!0-9]*) die 3 "AP_PAGE_PORT '$port' is not a port number" ;; esac
@@ -577,6 +585,8 @@ cmd_start() {
 
   need_docker
   check_paths
+  resolve_override
+  check_session
   started=''
   if [ -e "$sess" ] || [ -L "$sess" ]; then started=1; fi
 
