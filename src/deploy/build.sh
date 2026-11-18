@@ -61,20 +61,21 @@ is_go() { case $1 in engine | cli | page | check | project) return 0 ;; esac; re
 # the contracts first, so a fresh clone builds. generate.sh --check changes nothing; a second run
 # of generate.sh changes nothing either, so this converges. It runs once per run; --check never
 # regenerates, and counts the named Go images as changed when the generated code is stale.
-gen_stale=''
+gen_stale='' go_names=''
 for name in "${names[@]}"; do
-  is_go "$name" || continue
+  if is_go "$name"; then go_names="$go_names${go_names:+ }$name"; fi
+done
+if [ -n "$go_names" ]; then
   gen="$here/../../scripts/generate.sh"
   if ! "$gen" --check >/dev/null 2>&1; then
     if [ -n "$check" ]; then
       gen_stale=1
     else
       say "generated code is missing or stale; running scripts/generate.sh"
-      "$gen" >&2 || die 1 "scripts/generate.sh failed; see the messages above"
+      "$gen" >&2 || die 1 "scripts/generate.sh failed, so $go_names cannot be built; see the messages above (the first run needs the network, to fetch the pinned images and modules)"
     fi
   fi
-  break
-done
+fi
 
 pin() {
   local p
