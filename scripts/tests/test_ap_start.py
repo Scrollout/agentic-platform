@@ -263,7 +263,8 @@ class StartTest(StartCase):
         try:
             deadline = time.time() + 90
             while not Path(str(gate) + ".reached").exists():
-                self.assertIsNone(a.poll(), "the first start ended before it reached compose up: %s" % a.communicate()[1])
+                if a.poll() is not None:
+                    self.fail("the first start ended before it reached compose up: %s" % a.communicate()[1])
                 self.assertLess(time.time(), deadline, "the first start never reached compose up")
                 time.sleep(0.1)
             self.assertTrue(self.start_lock.is_dir(), "the first start holds start.lock while it runs")
