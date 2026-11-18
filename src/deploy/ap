@@ -90,7 +90,8 @@ die() { code=$1; shift; say "$*"; exit "$code"; }
 
 usage() {
   cat >&2 <<'EOF'
-usage: ap up --credentials <file> --projects <folder>
+usage: ap start [--check] --credentials <file> --projects <folder>
+       ap up --credentials <file> --projects <folder>
        ap down
        ap page
        ap build-workers <slice> <project>
@@ -228,6 +229,17 @@ check_credentials() {
     *) die 3 "credentials file '$f' must be readable and writable only by you (chmod 600 '$f')" ;;
   esac
   [ "$3" = "$(id -u)" ] || die 3 "credentials file '$f' must be owned by you"
+}
+
+# The key file $cred and the projects folder $proj, as `up` and `start` need them: checked, then
+# resolved to absolute, symlink-free paths in place.
+check_paths() {
+  check_credentials "$cred"
+  cred=$(abs_file "$cred") || die 3 "credentials file '$cred' cannot be resolved"
+  [ -d "$proj" ] || die 3 "projects folder '$proj' does not exist"
+  [ -w "$proj" ] || die 3 "projects folder '$proj' is not writable"
+  proj=$(CDPATH='' cd -- "$proj" && pwd -P) || die 3 "projects folder '$proj' cannot be resolved"
+  case $cred in "$proj"/*) die 3 "the credentials file must not be inside the projects folder" ;; esac
 }
 
 # A network the registry joins, with the one driver option that matters: an internal network is
@@ -439,12 +451,7 @@ cmd_up() {
       *) die 3 "AP_COMPOSE_OVERRIDE '$override' is not a file under $e2e_dir (src/tests/e2e)" ;;
     esac
   fi
-  check_credentials "$cred"
-  cred=$(abs_file "$cred") || die 3 "credentials file '$cred' cannot be resolved"
-  [ -d "$proj" ] || die 3 "projects folder '$proj' does not exist"
-  [ -w "$proj" ] || die 3 "projects folder '$proj' is not writable"
-  proj=$(CDPATH='' cd -- "$proj" && pwd -P) || die 3 "projects folder '$proj' cannot be resolved"
-  case $cred in "$proj"/*) die 3 "the credentials file must not be inside the projects folder" ;; esac
+  check_paths
 
   # A started session is kept as it is (constitution XVII: a second `up` changes nothing): its
   # tokens and, unless AP_PAGE_PORT is set, its port. Only after `down` does `up` make new tokens.
@@ -538,6 +545,69 @@ cmd_up() {
   fi
   # --wait: return only when every service with a healthcheck is healthy (contract-lint, T113).
   compose up -d --wait "$@" || die 1 "docker compose up failed; see the messages above; the session is kept until: ap down"
+}
+
+# The developer's one start command (src/cli/contract.md "Starting the platform"; feature 003,
+# research R1, R4, R7, ADR 0063): one start at a time (start.lock, lock.sh's rule); the machine's
+# prerequisites before anything else; build.sh builds and signs only the images whose result
+# changed; then `up`, unchanged, verifies and starts. With --check it shows what it would do and
+# changes nothing: exit 0 when nothing would change, 1 when something would.
+start_images="engine cli page agent check project lint"
+tell() { printf 'start: %s\n' "$*" >&2; }
+cmd_start() {
+  check='' cred='' proj=''
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --check) check=1; shift ;;
+      --credentials) [ $# -ge 2 ] || usage; cred=$2; shift 2 ;;
+      --projects) [ $# -ge 2 ] || usage; proj=$2; shift 2 ;;
+      *) usage ;;
+    esac
+  done
+  [ -n "$cred" ] && [ -n "$proj" ] || usage
+  [ "$(id -u)" != 0 ] || die 3 "do not run ap as root: the gateway runs as your user"
+
+  # shellcheck source=lock.sh
+  . "$here/lock.sh"
+  trap 'if [ -n "$locked" ]; then rm -rf -- "$locked"; fi' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  mkdir -p -- "$state_dir" && chmod 700 -- "$state_dir" || die 1 "cannot create $state_dir or make it private (mode 700)"
+  take_lock "$state_dir/start.lock"
+
+  need_docker
+  check_paths
+  started=''
+  if [ -e "$sess" ] || [ -L "$sess" ]; then started=1; fi
+
+  if [ -n "$check" ]; then
+    out=$(mktemp "${TMPDIR:-/tmp}/ap-start.XXXXXX") || die 1 "cannot make a temporary file"
+    # shellcheck disable=SC2086
+    "$here/build.sh" --changed --check $start_images 2>"$out"
+    rc=$?
+    sed -e 's/^build: would build /start: would build /' -e 's/^build: nothing to build$/start: nothing to build/' "$out" >&2
+    would=''
+    grep -q '^build: would build ' "$out" && would=1
+    rm -f -- "$out"
+    case $rc in 0 | 1) ;; *) exit "$rc" ;; esac
+    [ "$rc" -eq 0 ] || [ -n "$would" ] || exit 1
+    if [ -n "$started" ]; then tell "already started"; else tell "would start"; would=1; fi
+    [ -z "$would" ] || exit 1
+    exit 0
+  fi
+
+  before=$(cat -- "$images_env" 2>/dev/null) || before=''
+  # shellcheck disable=SC2086
+  "$here/build.sh" --changed $start_images || exit $?
+  after=$(cat -- "$images_env" 2>/dev/null) || after=''
+  (cmd_up --credentials "$cred" --projects "$proj") || exit $?
+  if [ -n "$started" ] && [ "$before" = "$after" ]; then
+    tell "already started; nothing changed"
+  else
+    tell "started"
+  fi
+  port=$(session_value AP_PAGE_PORT) || port=''
+  tell "the run page is on http://127.0.0.1:${port:-$default_page_port}"
 }
 
 cmd_down() {
@@ -1252,6 +1322,7 @@ shift
 case $cmd in
   -h | --help) usage 0 ;;
   -*) usage ;;
+  start) cmd_start "$@" ;;
   up) cmd_up "$@" ;;
   down) cmd_down "$@" ;;
   page) cmd_page "$@" ;;

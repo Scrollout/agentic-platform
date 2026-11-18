@@ -26,6 +26,14 @@ committed. It reads each base image from `images.lock` and passes it as a build 
    `${XDG_STATE_HOME:-~/.local/state}/agentic-platform/images.env` (mode 600, folder mode 700),
    replacing that name's line.
 
+Each signed build also records the image's fingerprint as `AP_BUILT_<NAME>` in `built.env`, next
+to `images.env`: the digest of a candidate build of the same sources (`SOURCE_DATE_EPOCH=0`,
+`rewrite-timestamp=true`, no SBOM, provenance or push), which stays the same while its inputs do.
+`build.sh --changed <name>...` builds, signs and records only the named images whose fingerprint
+changed or that are not recorded, asking for the signing key's password once and only when it must
+sign; `--changed --check` only says `would build <names>` (exit 1) or `nothing to build` (exit 0).
+`ap start` runs it before `up` (feature 003, ADR 0061, ADR 0063).
+
 Builds may run at the same time, of the same or of different images: recording takes the lock
 `images.env.lock` (a directory next to `images.env` holding the build's process ID), so no build
 loses another's line; a build waits for it up to two minutes, then exits 1 naming it. A lock whose
@@ -74,7 +82,7 @@ server and its recorder in tests (`src/tests/recorded/`, research D26). It stand
 gateway on test networks only; no image is built from it and Compose does not start it.
 
 - `Dockerfile.agent`: the agent step image, with Docker Agent copied from its pinned image, the Go toolchain, and `TELEMETRY_ENABLED=false`.
-- `Dockerfile.check`: the check service (`/check`, research D29) with the Go toolchain, the pinned oapi-codegen (`images.lock`, passed by `build.sh` as `OAPI_CODEGEN`), the catalogue's module template at `/opt/template` and the module cache of its `go.mod` at `/opt/gomodcache` (owned by root, read-only, shared by every call), so checks and the generate procedure run with no network and a read-only root. It sets no `GOCACHE` or `GOPATH`: each call of the check program makes its own folder under the `/tmp` tmpfs for `GOCACHE`, `GOTMPDIR`, `TMPDIR`, `HOME` and `GOPATH` and removes it when the call ends (research D37, ADR 0041); `HOME=/tmp/home` is the service process's own. Its runtime stage is `FROM scratch` with the golang image's files copied in, since that image's `ENV` sets `GOPATH=/go`. The build stage also compiles a warm base Go cache from the pinned sources only (the standard library dependencies of the template's vendored tools and of a derived test, through `go test`, `-cover` and `go test -c` with the service's settings) into `/opt/gocache-base` (root-owned, read-only, about 117 MB; the image grew from 418 MB to 569 MB), and `CHECK_GOCACHE_BASE=/opt/gocache-base` makes each call start from a copy of it.
+- `Dockerfile.check`: the check service (`/check`, research D29) with the Go toolchain, the pinned oapi-codegen (`images.lock`, passed by `build.sh` as `OAPI_CODEGEN`), the catalogue's module template at `/opt/template` and the module cache of its `go.mod` at `/opt/gomodcache` (owned by root, read-only, shared by every call), so checks and the generate procedure run with no network and a read-only root. It sets no `GOCACHE` or `GOPATH`: each call of the check program makes its own folder under the `/tmp` tmpfs for `GOCACHE`, `GOTMPDIR`, `TMPDIR`, `HOME` and `GOPATH` and removes it when the call ends (research D37, ADR 0041); `HOME=/tmp/home` is the service process's own. Its runtime stage is `FROM scratch` with the golang image's files copied in, since that image's `ENV` sets `GOPATH=/go`. A template stage, which copies only the catalogue's module template, makes oapi-codegen and the module cache, so a change elsewhere in `src/` leaves the image's digest unchanged (feature 003, research R1); it also compiles a warm base Go cache from the pinned sources only (the standard library dependencies of the template's vendored tools and of a derived test, through `go test`, `-cover` and `go test -c` with the service's settings) into `/opt/gocache-base` (root-owned, read-only, about 117 MB; the image grew from 418 MB to 569 MB), and `CHECK_GOCACHE_BASE=/opt/gocache-base` makes each call start from a copy of it.
 - `Dockerfile.project`: the project worker (research D30, ADRs 0032 and 0033), built as `build.sh project` (`ap-project`, `AP_IMAGE_PROJECT`): the static check binary from the golang pin on the `alpine` pin, with `git=<alpine-git>` from apk and a folder `/var/lib/project-worker` of mode 1777, which a new `project-worker-state` volume takes its mode from; no Go toolchain (about 45 MB).
 - `Dockerfile.engine`: the workflow engine, a static Go binary on `scratch`; expects the main package `src/engine/cmd/engine`.
 - `Dockerfile.cli`: the terminal client, a static Go binary on `scratch`; expects `src/cli/cmd/cli`.
