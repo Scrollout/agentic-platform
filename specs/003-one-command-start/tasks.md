@@ -38,7 +38,7 @@ option B; ADR 0063).
   files, judging the CI run; at most 3 rounds (Review converges). Then `/speckit-converge` for the
   story.
 - **Gate**: `/speckit-analyze` (fresh reviewer) must report no CRITICAL or HIGH before T001, and
-  again after any change to spec, plan, tasks or a design artifact. Passed on 2026-11-18 in round 3 (fresh Sonnet reviewer; round 1: 2 CRITICAL, 3 HIGH, fixed with the owner's option B; round 2: 3 LOW, fixed; round 3: 1 LOW, fixed).
+  again after any change to spec, plan, tasks or a design artifact. Passed on 2026-11-18 in round 3 (fresh Sonnet reviewer; round 1: 2 CRITICAL, 3 HIGH, fixed with the owner's option B; round 2: 3 LOW, fixed; round 3: 1 LOW, fixed). After US1 (2026-11-18): round 4: 1 HIGH, 3 MEDIUM, 3 LOW, fixed; round 5: clean.
 
 - **Known gap** (owner, 2026-11-18): FR-001's "stopped" state is not fully met while a session
   file outlives its containers (after a reboot `start` says `already started; nothing changed` and

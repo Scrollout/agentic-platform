@@ -2,6 +2,7 @@
 
 ## 2026-11-18
 
+* **Planning**: Feature 003, `/speckit-analyze` round 5: every round-4 finding closed, no CRITICAL or HIGH.
 * **Planning**: Feature 003, T010 done: US1's `/speckit-converge` appended T025 and T026 (`ap start` refuses a session with another key file or projects folder before it builds); `/speckit-analyze` round 4 (fresh reviewer): 1 HIGH (the owner's deferral of backlog T166 not recorded in the feature), 3 MEDIUM, 3 LOW, all fixed in tasks, research and the data model.
 * **Review**: Feature 003, T009 done: US1 fresh review round 2 closed both fixed findings (CI run 44264572517 green); the kept-session finding is backlog T166 (owner: after the MVP), the suggestions and untested cases T167.
 * **Review**: Feature 003, US1 fresh review round 1 (CI run 44214595497 green): 3 blocking findings. Fixed with regression tests: a second `ap start` now waits as long as the first runs (`take_lock ... forever` in `lock.sh`), and an image missing from the local store is built again. The third (a kept session file after a reboot reads as started) waits for the owner.
