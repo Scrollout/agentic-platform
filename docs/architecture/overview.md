@@ -23,7 +23,19 @@ sources:
   - id: adr-0039
     resource: /decisions/0039-review-findings-confirmed-by-a-new-witness-test.md
     title: "ADR 0039: A blocking review finding is confirmed by a new failing witness test the review writes"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-17T22:00:00Z }
+  - id: research-003
+    resource: ../../specs/003-one-command-start/research.md
+    title: Feature 003 research, R1, R2, R4 and R5
+  - id: adr-0061
+    resource: /decisions/0061-up-builds-only-changed-images-by-reproducible-digest.md
+    title: "ADR 0061: ap up builds only the images that changed, judged by a reproducible digest"
+  - id: adr-0062
+    resource: /decisions/0062-run-page-reached-remotely-over-tls-behind-a-sign-in-secret.md
+    title: "ADR 0062: The run page is reached from other machines only over TLS behind a sign-in secret"
+  - id: adr-0063
+    resource: /decisions/0063-ap-start-is-the-start-command-ap-up-unchanged.md
+    title: "ADR 0063: ap start is the start command; ap up stays unchanged"
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-18T21:00:00Z }
 ---
 
 # Context
@@ -123,10 +135,40 @@ The end-to-end build through `ap build-workers` ran on live Haiku on 2026-11-15 
 ended done, and its replay reused every step with no model call (research D29 and D30,
 [ADR 0030](/decisions/0030-agent-steps-on-docker-agent-checks-in-a-check-service.md)).
 
+Shipped by feature 003 ([spec](../../specs/003-one-command-start/spec.md)):
+
+- **Start command `ap start`**: one command takes a fresh clone to a started platform and is safe
+  to run again. It holds a start lock, checks the machine (Docker 28, gVisor's `runsc`, the key
+  file and the projects folder, both with defaults) and names every failing prerequisite with its
+  fix, then builds only what changed and runs `ap up` unchanged; `ap start --check` shows what it
+  would do and changes nothing. `ap up` stays the start command of CI and the test suites
+  ([ADR 0063](/decisions/0063-ap-start-is-the-start-command-ap-up-unchanged.md)).
+- **Build only what changed** (`src/deploy/build.sh --changed`): each image's reproducible
+  candidate build gives its fingerprint; only an image whose fingerprint differs from the one
+  recorded at its last signed build in `built.env`, or whose recorded digest no longer verifies,
+  is built, signed and recorded. The signing password is asked once, only when something must be
+  signed, and never kept
+  ([ADR 0061](/decisions/0061-up-builds-only-changed-images-by-reproducible-digest.md),
+  [BuildKit reproducible builds](/references/buildkit-reproducible-builds.md)).
+- **Remote run page** (`ap up --listen`, passed on by `start`): a Compose override
+  (`compose.remote.yaml`) changes the page forwarder alone, which then publishes the read-only
+  run page on the given address over TLS, behind HTTP Basic authentication with a secret new per
+  session, rate-limited per address and answering only the given names. Each change of remote
+  access is appended to `access.log`, without the secret. The engine API and the terminal client
+  stay on the machine
+  ([ADR 0062](/decisions/0062-run-page-reached-remotely-over-tls-behind-a-sign-in-secret.md),
+  [nginx](/components/nginx.md)).
+
+Sources: [Feature 003 research](../../specs/003-one-command-start/research.md),
+[ADR 0061](/decisions/0061-up-builds-only-changed-images-by-reproducible-digest.md),
+[ADR 0062](/decisions/0062-run-page-reached-remotely-over-tls-behind-a-sign-in-secret.md),
+[ADR 0063](/decisions/0063-ap-start-is-the-start-command-ap-up-unchanged.md).
+
 Every container runs read-only with all capabilities dropped; the analyst, contract-lint, the check
 service and the workers run under [gVisor](/components/gvisor.md). Networks are internal and isolated: `clients`,
 `agents` (engine, gateway, step workers), `checks`, `lint` and `analyst` (engine, gateway). Only the
-gateway joins `egress`, and only the page's forwarder joins `page-host` to publish 127.0.0.1.
+gateway joins `egress`, and only the page's forwarder joins `page-host` to publish 127.0.0.1, or,
+with `ap up --listen`, the given address (feature 003).
 See [Compose](../../src/deploy/compose.yaml) and the [component list](/components/index.md).
 
 Sources: [Feature 001 research](../../specs/001-prose-to-accepted-slice/research.md),
@@ -160,4 +202,7 @@ Each further building block gets its own concept:
 - [ADR 0031: A review finding blocks only when its rule's tests fail at the file it names](/decisions/0031-review-findings-confirmed-by-rerunning-rule-tests.md)
 - [ADR 0032: The new project's version history is a git repository kept by a project worker](/decisions/0032-project-version-history-kept-by-a-project-worker.md)
 - [ADR 0039: A blocking review finding is confirmed by a new failing witness test the review writes](/decisions/0039-review-findings-confirmed-by-a-new-witness-test.md)
+- [ADR 0061: ap up builds only the images that changed, judged by a reproducible digest](/decisions/0061-up-builds-only-changed-images-by-reproducible-digest.md) (superseded in part by ADR 0063)
+- [ADR 0062: The run page is reached from other machines only over TLS behind a sign-in secret](/decisions/0062-run-page-reached-remotely-over-tls-behind-a-sign-in-secret.md)
+- [ADR 0063: ap start is the start command; ap up stays unchanged](/decisions/0063-ap-start-is-the-start-command-ap-up-unchanged.md)
 - ADRs 0005 to 0025: why each constitution principle exists, starting with [ADR 0005](/decisions/0005-principle-i-needs-before-solutions.md)
