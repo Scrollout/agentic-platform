@@ -833,6 +833,23 @@ remote_lines() {
 # changes nothing: exit 0 when nothing would change, 1 when something would.
 start_images="engine cli page agent check project lint"
 tell() { printf 'start: %s\n' "$*" >&2; }
+# The gVisor runtime registered with Docker, as `start` needs it.
+check_gvisor() {
+  docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q '"runsc"' ||
+    die 3 "the gVisor runtime runsc is not registered with Docker; install it as docs/guides/install-gvisor.md says"
+}
+
+# The projects folder $1, as `start` needs it: a folder, writable, and open to the containers.
+check_projects_folder() {
+  [ -d "$1" ] || die 3 "projects folder '$1' does not exist"
+  [ -w "$1" ] || die 3 "projects folder '$1' is not writable"
+  mode=$(stat -L -c '%a' -- "$1") || die 3 "cannot read the mode of the projects folder '$1'"
+  case $(ls -ldL -- "$1") in
+    d??????r?x* | d??????r?t*) ;;
+    *) die 3 "the platform's containers cannot open the projects folder '$1' (mode $mode); run: chmod o+rx '$1'" ;;
+  esac
+}
+
 cmd_start() {
   check='' cred='' proj=''
   page_listen='' page_names='' page_cert='' page_key=''
@@ -847,8 +864,8 @@ cmd_start() {
   done
   given_names=$page_names
   [ "$(id -u)" != 0 ] || die 3 "do not run ap as root: the gateway runs as your user"
-  default_cred='' default_proj=''
-  [ -n "$cred" ] || { cred=${XDG_CONFIG_HOME:-$HOME/.config}/agentic-platform/anthropic_api_key; default_cred=1; }
+  default_proj=''
+  [ -n "$cred" ] || cred=${XDG_CONFIG_HOME:-$HOME/.config}/agentic-platform/anthropic_api_key
   [ -n "$proj" ] || { proj=$HOME/projects; default_proj=1; }
 
   # shellcheck source=lock.sh
@@ -860,27 +877,38 @@ cmd_start() {
   take_lock "$state_dir/start.lock" forever
 
   # The machine's prerequisites, in the contract's order, before anything is built (research R3).
-  need_docker
-  docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q '"runsc"' ||
-    die 3 "the gVisor runtime runsc is not registered with Docker; install it as docs/guides/install-gvisor.md says"
-  if [ -n "$default_cred" ] && [ ! -e "$cred" ] && [ ! -L "$cred" ]; then
-    die 3 "no key file at '$cred'; put the model provider's key there (chmod 600) or give one with --credentials <file>"
+  # Every check runs and names its failure (exit 3 in a subshell); any other failure, such as a
+  # Docker that does not answer, stops at once. A check whose input already failed is skipped.
+  failed=''
+  prereq() {
+    ( "$@" )
+    pr_rc=$?
+    case $pr_rc in
+      0) return 0 ;;
+      3) failed=1; return 3 ;;
+      *) exit "$pr_rc" ;;
+    esac
+  }
+  prereq need_docker
+  prereq check_gvisor
+  cred_ok=''
+  if [ ! -e "$cred" ] && [ ! -L "$cred" ]; then
+    say "no key file at '$cred'; put the model provider's key there (chmod 600) or give one with --credentials <file>"
+    failed=1
+  elif prereq check_credentials "$cred"; then
+    cred_ok=1
   fi
-  check_credentials "$cred"
   make_proj=''
   if [ -n "$default_proj" ] && [ ! -e "$proj" ] && [ ! -L "$proj" ]; then
-    if [ -n "$check" ]; then
-      make_proj=1   # --check makes nothing: it says so, and the folder checks wait for the folder
-    else
-      mkdir -m 755 -- "$proj" || die 3 "cannot make the projects folder '$proj'; make it or give one with --projects <folder>"
-    fi
+    make_proj=1   # made only when every check passed, and never by --check
+  elif prereq check_projects_folder "$proj" && [ -n "$cred_ok" ]; then
+    prereq check_paths
   fi
-  if [ -z "$make_proj" ] && [ -d "$proj" ]; then
-    mode=$(stat -L -c '%a' -- "$proj") || die 3 "cannot read the mode of the projects folder '$proj'"
-    case $(ls -ldL -- "$proj") in
-      d??????r?x* | d??????r?t*) ;;
-      *) die 3 "the platform's containers cannot open the projects folder '$proj' (mode $mode); run: chmod o+rx '$proj'" ;;
-    esac
+  prereq check_remote
+  [ -z "$failed" ] || exit 3
+  if [ -n "$make_proj" ] && [ -z "$check" ]; then
+    mkdir -m 755 -- "$proj" || die 3 "cannot make the projects folder '$proj'; make it or give one with --projects <folder>"
+    make_proj=''
   fi
   if [ -n "$make_proj" ]; then
     cred=$(abs_file "$cred") || die 3 "credentials file '$cred' cannot be resolved"
