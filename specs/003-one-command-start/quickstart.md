@@ -66,12 +66,17 @@ From another machine, with `<vm>` one of the printed names:
 ```sh
 curl -sk -o /dev/null -w '%{http_code}\n' https://<vm>:7878/                 # 401
 curl -sk -o /dev/null -w '%{http_code}\n' -u ap:wrong https://<vm>:7878/     # 401
-curl -sk -o /dev/null -w '%{http_code}\n' -u ap:<secret> https://<vm>:7878/  # 200
+curl -sk -o /dev/null -w '%{http_code}\n' -u ap:<secret> https://<vm>:7878/  # 404, the run page's own
 curl -s  -o /dev/null -w '%{http_code}\n' http://<vm>:7878/                  # 400
 ```
 
-In a browser, open `https://<vm>:7878`, compare the certificate's SHA-256 fingerprint with the
-printed one, accept it, sign in as `ap` with the secret: the run page lists the runs (SC-006).
+The run page has no index (feature 001: it shows one run or a comparison), so `/` with the secret
+gets the page's own 404, "There is no such page", which proves the request passed TLS and the
+sign-in and reached the page; with a run, `https://<vm>:7878/runs/<run>` gets 200.
+
+In a browser, open `https://<vm>:7878/runs/<run>` (or `/` without a run), compare the certificate's
+SHA-256 fingerprint with the printed one, accept it, sign in as `ap` with the secret: the page shows
+that run as on the machine (SC-006).
 
 Then `src/deploy/ap down && src/deploy/ap start`: from the other machine the port no longer answers
 (SC-007), the old secret is gone, and `access.log` ends with `off`.
