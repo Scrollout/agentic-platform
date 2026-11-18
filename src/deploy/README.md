@@ -38,6 +38,14 @@ changed or that are not recorded, asking for the signing key's password once and
 sign; `--changed --check` only says `would build <names>` (exit 1) or `nothing to build` (exit 0).
 `ap start` runs it before `up` (feature 003, ADR 0061, ADR 0063).
 
+BuildKit does not cache the candidate's timestamp rewrite (24 s for the check image on a 4-CPU
+machine), so each signed build also records `AP_CACHED_<NAME>=<digest> <fingerprint>` in
+`cached.env` (mode 600): the digest of the same build without `rewrite-timestamp`, which takes
+about a second while the build cache holds the image's layers. `--changed` makes these cached
+builds first and needs an image's candidate only when its cached digest, fingerprint or stored
+image no longer matches; a candidate that finds the image current renews the pair (not with
+`--check`). A failed cached build counts as no pair (feature 003, ADR 0064).
+
 Builds may run at the same time, of the same or of different images: recording takes the lock
 `images.env.lock` (a directory next to `images.env` holding the build's process ID), so no build
 loses another's line; a build waits for it up to two minutes, then exits 1 naming it. A lock whose

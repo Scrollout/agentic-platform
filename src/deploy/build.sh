@@ -14,8 +14,17 @@
 # provenance or push, into the local image store (not unpacked). The pushed image is built with
 # SOURCE_DATE_EPOCH=0 but without rewrite-timestamp, which the store's unpacking refuses; its
 # fingerprint is its candidate's. Reproducible, so unchanged sources give the same
-# fingerprint, and cheap when the build cache holds it. A signed build records it as AP_BUILT_<NAME>
-# in built.env, next to images.env. --changed builds, signs and records only the named images whose
+# fingerprint. A signed build records it as AP_BUILT_<NAME> in built.env, next to images.env.
+#
+# The timestamp rewrite is not cached, so a candidate costs seconds even when nothing changed (ADR
+# 0064). Each run therefore first makes every image's cached build: the candidate's build without
+# rewrite-timestamp, whose digest is equal exactly when the layers are. A signed build records it
+# with the fingerprint as AP_CACHED_<NAME>=<cached digest> <fingerprint> in cached.env. --changed
+# counts an image current with no candidate when its cached build has the pair's digest, the pair's
+# fingerprint is AP_BUILT_<NAME> and the recorded image is in the local store; otherwise its
+# candidate decides, and an image it finds current gets a new pair (not with --check, which makes a
+# cached build only for an image with a pair, and records nothing). A failed cached build counts as
+# no pair; the candidate then reports the failure. --changed builds, signs and records only the named images whose
 # fingerprint differs from AP_BUILT_<NAME> or that have no AP_IMAGE_<NAME>, printing `build:
 # building <names>` before and `build: built and signed <names>` after, and nothing when nothing
 # changed; it asks for the signing key's password once, only when it must sign. --changed --check
@@ -100,6 +109,7 @@ signing=${XDG_CONFIG_HOME:-$HOME/.config}/agentic-platform/signing
 state=${XDG_STATE_HOME:-$HOME/.local/state}/agentic-platform
 images_env=$state/images.env
 built_env=$state/built.env
+cached_env=$state/cached.env
 me=$(id -u):$(id -g)
 
 # cosign runs from its pin, as the developer (the key is readable only by them), with no
@@ -184,6 +194,33 @@ candidate() {
   fingerprint=$(digest_in "$m") || die 1 "the build of $n reported no digest"
 }
 
+# cached_build <name> [docker build options]: sets cached to the digest of the image's cached build,
+# or to nothing when that build fails (the candidate then shows why).
+cached_build() {
+  local n=$1 m
+  shift
+  m=$work/$n.cached.meta
+  contexts_of "$n"
+  cached=''
+  if docker buildx build -f "$here/Dockerfile.$n" --sbom=false --provenance=false \
+    --output type=image,unpack=false --metadata-file "$m" \
+    "${build_args[@]}" "${contexts[@]}" "$@" "$here/.." >"$work/$n.cached.log" 2>&1; then
+    cached=$(digest_in "$m") || cached=''
+  fi
+}
+
+# pair_holds <name> <cached digest>: the image's pair has this cached digest, its fingerprint is the
+# recorded one, and the recorded image is in the local store.
+pair_holds() {
+  local N pair ref
+  N=$(upper "$1")
+  pair=$(recorded "$cached_env" "AP_CACHED_$N")
+  [ -n "$2" ] && [[ $pair =~ ^(sha256:[0-9a-f]{64})\ (sha256:[0-9a-f]{64})$ ]] || return 1
+  [ "${BASH_REMATCH[1]}" = "$2" ] && [ "${BASH_REMATCH[2]}" = "$(recorded "$built_env" "AP_BUILT_$N")" ] || return 1
+  ref=$(recorded "$images_env" "AP_IMAGE_$N")
+  [ -n "$ref" ] && docker image inspect "$ref" >/dev/null 2>&1
+}
+
 # The registry: the launcher owns how it runs; this converges it (no change when it is running).
 start_registry() { "$here/ap" registry || die 1 "the local image registry could not be started"; }
 
@@ -232,13 +269,27 @@ replace_line() {
   } >"$tmp" && chmod 600 -- "$tmp" && mv -f -- "$tmp" "$1" || { rm -f -- "$tmp"; die 1 "cannot write $1"; }
 }
 
+# record_pair <NAME> <cached digest> <fingerprint>: write the pair, or drop it when there is no cached
+# digest. The caller holds the images.env.lock.
+record_pair() {
+  if [ -n "$2" ]; then
+    replace_line "$cached_env" "AP_CACHED_$1" "$2 $3"
+  elif [ -f "$cached_env" ] && grep -q "^AP_CACHED_$1=" "$cached_env"; then
+    local tmp
+    tmp=$(mktemp "$state/cached.env.XXXXXX")
+    { grep -v "^AP_CACHED_$1=" "$cached_env" || true; } >"$tmp" && chmod 600 -- "$tmp" &&
+      mv -f -- "$tmp" "$cached_env" || { rm -f -- "$tmp"; die 1 "cannot write $cached_env"; }
+  fi
+}
+
 # note: the per-image lines of a plain build; --changed prints only its two summary lines.
 note() { if [ -z "$changed" ]; then say "$@"; fi; }
 
-# build_one <name> <fingerprint> [docker build options]: build, push, sign and record one image.
+# build_one <name> <fingerprint> <cached digest> [docker build options]: build, push, sign and
+# record one image, with its fingerprint and the pair of its cached digest.
 build_one() {
-  local n=$1 fp=$2 N tag digest ref
-  shift 2
+  local n=$1 fp=$2 cd=$3 N tag digest ref
+  shift 3
   N=$(upper "$n")
   # BuildKit pushes from the container engine, which treats 127.0.0.1 as a plain-HTTP registry;
   # with the containerd image store the image also stays in the local store, so Compose starts it
@@ -275,6 +326,7 @@ build_one() {
   take_lock "$state/images.env.lock"
   replace_line "$images_env" "AP_IMAGE_$N" "$ref"
   replace_line "$built_env" "AP_BUILT_$N" "$fp"
+  record_pair "$N" "$cd" "$fp"
   release_lock
   note "recorded AP_IMAGE_$N=$ref in $images_env"
 }
@@ -282,28 +334,50 @@ build_one() {
 if [ -z "$changed" ]; then
   start_registry
   make_signing_material
+  cached_build "${names[0]}" "$@"
   candidate "${names[0]}" "$@"
-  build_one "${names[0]}" "$fingerprint" "$@"
+  build_one "${names[0]}" "$fingerprint" "$cached" "$@"
   exit 0
 fi
 
-# --changed: the images whose fingerprint differs from the recorded one, or that are not recorded.
-todo=() todo_fp=()
+# --changed: first every cached build (each before that image's candidate, so a pair never holds
+# a digest of a later source), then the candidates still needed.
+cached_of=()
 for name in "${names[@]}"; do
-  N=$(upper "$name")
+  cached=''
+  if ! { [ -n "$gen_stale" ] && is_go "$name"; } &&
+    { [ -z "$check" ] || [ -n "$(recorded "$cached_env" "AP_CACHED_$(upper "$name")")" ]; }; then
+    cached_build "$name"
+  fi
+  cached_of+=("$cached")
+done
+# The images whose fingerprint differs from the recorded one, or that are not recorded.
+todo=() todo_fp=() todo_cached=()
+i=0
+for name in "${names[@]}"; do
+  N=$(upper "$name") cd=${cached_of[$i]}
+  i=$((i + 1))
   if [ -n "$gen_stale" ] && is_go "$name"; then
-    todo+=("$name") todo_fp+=('')
+    todo+=("$name") todo_fp+=('') todo_cached+=('')
     continue
   fi
+  if pair_holds "$name" "$cd"; then continue; fi
   candidate "$name"
   # Current: the same fingerprint as at its last signed build, and that build's image still in the
   # local image store (a pruned store rebuilds it, so `up` finds every image it verifies).
   ref=$(recorded "$images_env" "AP_IMAGE_$N")
   if [ -n "$ref" ] && [ "$fingerprint" = "$(recorded "$built_env" "AP_BUILT_$N")" ] &&
     docker image inspect "$ref" >/dev/null 2>&1; then
+    if [ -z "$check" ] && [ -n "$cd" ]; then
+      mkdir -p -- "$state"
+      chmod 700 -- "$state"
+      take_lock "$state/images.env.lock"
+      record_pair "$N" "$cd" "$fingerprint"
+      release_lock
+    fi
     continue
   fi
-  todo+=("$name") todo_fp+=("$fingerprint")
+  todo+=("$name") todo_fp+=("$fingerprint") todo_cached+=("$cd")
 done
 if [ -n "$check" ]; then
   if [ -n "$gen_stale" ]; then say "the generated code is missing or stale; a build regenerates it"; fi
@@ -335,8 +409,13 @@ start_registry
 make_signing_material
 i=0
 for name in "${todo[@]}"; do
-  if [ -z "${todo_fp[$i]}" ]; then candidate "$name"; todo_fp[i]=$fingerprint; fi
-  build_one "$name" "${todo_fp[$i]}"
+  if [ -z "${todo_fp[$i]}" ]; then
+    cached_build "$name"
+    todo_cached[i]=$cached
+    candidate "$name"
+    todo_fp[i]=$fingerprint
+  fi
+  build_one "$name" "${todo_fp[$i]}" "${todo_cached[$i]}"
   i=$((i + 1))
 done
 say "built and signed ${todo[*]}"

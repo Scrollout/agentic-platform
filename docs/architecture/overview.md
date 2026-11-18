@@ -152,8 +152,7 @@ Shipped by feature 003 ([spec](../../specs/003-one-command-start/spec.md)):
   is built, signed and recorded. The signing password is asked once, only when something must be
   signed, and never kept. A quick build without the timestamp rewrite, whose digest each signed
   build records paired with the fingerprint, spares the reproducible build when nothing changed
-  ([ADR 0064](/decisions/0064-a-cached-digest-spares-the-reproducible-rebuild.md); decided, being
-  built)
+  ([ADR 0064](/decisions/0064-a-cached-digest-spares-the-reproducible-rebuild.md))
   ([ADR 0061](/decisions/0061-up-builds-only-changed-images-by-reproducible-digest.md),
   [BuildKit reproducible builds](/references/buildkit-reproducible-builds.md)).
 - **Remote run page** (`ap up --listen`, passed on by `start`): a Compose override
