@@ -3,7 +3,7 @@
 #
 # Runs on the host and calls nothing but `docker` (Compose) and POSIX utilities, except `test`, which
 # also runs a test binary it built in the pinned Go container (ADR 0037). Its own commands
-# are up, down, build-workers, page, test and registry; build, resume and replay first make the slice's
+# are start, up, down, build-workers, page, test and registry; build, resume and replay first make the slice's
 # workers ready; every other command goes unchanged to the terminal client container, and its exit
 # code is returned. Exit codes are the terminal contract's: 3 is a usage error or a command that is
 # not available yet; 1 is a failed start or stop.
@@ -95,23 +95,31 @@ die() { code=$1; shift; say "$*"; exit "$code"; }
 
 usage() {
   cat >&2 <<'EOF'
-usage: ap start [--check] [--credentials <file>] [--projects <folder>] [<remote access>]
-       ap up --credentials <file> --projects <folder> [<remote access>]
+usage: ap start [--check] [--credentials <file>] [--projects <folder>]
+                [--listen <address> [--name <host>]... [--certificate <cert> --key <key>]]
        ap down
        ap page
+       ap <terminal client command> [arguments]   (see src/cli/contract.md)
+
+start starts the platform from the current source; with nothing changed it changes nothing.
+  --check                show what start would do, changing nothing
+  --credentials <file>   the file holding only the model provider key, readable only by you
+                         (default ${XDG_CONFIG_HOME:-~/.config}/agentic-platform/anthropic_api_key)
+  --projects <folder>    where new projects are built (default ~/projects, made when missing)
+  --listen <address>     let other machines reach the run page on <address> (0.0.0.0, ::, or an
+                         address of this machine), over TLS with a sign-in secret
+  --name <host>          a name the run page answers to there (repeatable; default: this
+                         machine's names and addresses)
+  --certificate <cert> --key <key>
+                         serve this certificate (default: one start makes for the names)
+AP_PAGE_PORT, if set, chooses the run page's port (default 7878).
+down stops the platform and keeps run records and projects; page prints the run page's address.
+
+For the platform's own development and CI (src/deploy/README.md):
+       ap up --credentials <file> --projects <folder> [--listen <address> ...]
        ap build-workers <slice> <project>
        ap build-workers --resume <run>
        ap test <suite>
-       ap registry
-       ap <terminal client command> [arguments]   (see src/cli/contract.md)
-
-The credentials file holds only the model provider key and is readable only by you.
-AP_PAGE_PORT, if set, chooses the run page's port (default 7878).
-Remote access, to let other machines reach the run page over TLS with a sign-in secret:
-  --listen <address> [--name <host>]... [--certificate <cert> --key <key>]
-AP_REGISTRY_PORT, if set, chooses the local image registry's port (default 5005).
-AP_REGISTRY_NAME, if set, runs a second, independent registry under that name (e.g. for tests).
-Build the images first with src/deploy/build.sh <name>.
 EOF
   exit "${1:-3}"
 }
