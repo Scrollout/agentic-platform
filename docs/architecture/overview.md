@@ -35,6 +35,9 @@ sources:
   - id: adr-0063
     resource: /decisions/0063-ap-start-is-the-start-command-ap-up-unchanged.md
     title: "ADR 0063: ap start is the start command; ap up stays unchanged"
+  - id: adr-0064
+    resource: /decisions/0064-a-cached-digest-spares-the-reproducible-rebuild.md
+    title: "ADR 0064: A cached digest spares the reproducible candidate build when nothing changed"
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-18T21:00:00Z }
 ---
 
@@ -147,7 +150,10 @@ Shipped by feature 003 ([spec](../../specs/003-one-command-start/spec.md)):
   candidate build gives its fingerprint; only an image whose fingerprint differs from the one
   recorded at its last signed build in `built.env`, or whose recorded digest no longer verifies,
   is built, signed and recorded. The signing password is asked once, only when something must be
-  signed, and never kept
+  signed, and never kept. A quick build without the timestamp rewrite, whose digest each signed
+  build records paired with the fingerprint, spares the reproducible build when nothing changed
+  ([ADR 0064](/decisions/0064-a-cached-digest-spares-the-reproducible-rebuild.md); decided, being
+  built)
   ([ADR 0061](/decisions/0061-up-builds-only-changed-images-by-reproducible-digest.md),
   [BuildKit reproducible builds](/references/buildkit-reproducible-builds.md)).
 - **Remote run page** (`ap up --listen`, passed on by `start`): a Compose override
@@ -162,7 +168,8 @@ Shipped by feature 003 ([spec](../../specs/003-one-command-start/spec.md)):
 Sources: [Feature 003 research](../../specs/003-one-command-start/research.md),
 [ADR 0061](/decisions/0061-up-builds-only-changed-images-by-reproducible-digest.md),
 [ADR 0062](/decisions/0062-run-page-reached-remotely-over-tls-behind-a-sign-in-secret.md),
-[ADR 0063](/decisions/0063-ap-start-is-the-start-command-ap-up-unchanged.md).
+[ADR 0063](/decisions/0063-ap-start-is-the-start-command-ap-up-unchanged.md),
+[ADR 0064](/decisions/0064-a-cached-digest-spares-the-reproducible-rebuild.md).
 
 Every container runs read-only with all capabilities dropped; the analyst, contract-lint, the check
 service and the workers run under [gVisor](/components/gvisor.md). Networks are internal and isolated: `clients`,
@@ -205,4 +212,5 @@ Each further building block gets its own concept:
 - [ADR 0061: ap up builds only the images that changed, judged by a reproducible digest](/decisions/0061-up-builds-only-changed-images-by-reproducible-digest.md) (superseded in part by ADR 0063)
 - [ADR 0062: The run page is reached from other machines only over TLS behind a sign-in secret](/decisions/0062-run-page-reached-remotely-over-tls-behind-a-sign-in-secret.md)
 - [ADR 0063: ap start is the start command; ap up stays unchanged](/decisions/0063-ap-start-is-the-start-command-ap-up-unchanged.md)
+- [ADR 0064: A cached digest spares the reproducible candidate build when nothing changed](/decisions/0064-a-cached-digest-spares-the-reproducible-rebuild.md)
 - ADRs 0005 to 0025: why each constitution principle exists, starting with [ADR 0005](/decisions/0005-principle-i-needs-before-solutions.md)

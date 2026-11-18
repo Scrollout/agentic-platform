@@ -26,7 +26,7 @@ these files already use; no Go change
 nginx (`nginx` pin), the Go toolchain image (`golang` pin, for `crypto/tls/generate_cert.go`),
 cosign (`cosign` pin)
 
-**Storage**: the launcher's local state folder: `built.env`, `page-remote/`, `access.log`, and the
+**Storage**: the launcher's local state folder: `built.env`, `cached.env` (after T023), `page-remote/`, `access.log`, and the
 extended `session.env` ([data model](data-model.md))
 
 **Testing**: Python `unittest` in `scripts/tests/` (the launcher's existing harness and docker
@@ -87,6 +87,7 @@ Each decision that outlives this feature has a record in `docs/decisions/`, link
 |----------|----------|--------|
 | `ap up` builds, signs and records only the images whose reproducible candidate build (`SOURCE_DATE_EPOCH=0`, `rewrite-timestamp=true`) differs from the fingerprint recorded at their last signed build, asking for the signing password once and only when it must sign | R1, R2 | [ADR 0061](../../docs/decisions/0061-up-builds-only-changed-images-by-reproducible-digest.md) (superseded in part by ADR 0063) |
 | The start command is a new `ap start` that checks, builds what changed and then runs `ap up` unchanged; `ap start --check` shows what it would do; `ap up` stays for CI and the tests (owner, option B, 2026-11-18) | R1, R4, R7 | [ADR 0063](../../docs/decisions/0063-ap-start-is-the-start-command-ap-up-unchanged.md) |
+| After T023: a signed build also records the digest of the candidate's build without `rewrite-timestamp`, paired with the fingerprint (`cached.env`); a start makes that quick build first and the reproducible candidate only when its digest differs (owner, 2026-11-18) | R1, S11, S12 | [ADR 0064](../../docs/decisions/0064-a-cached-digest-spares-the-reproducible-rebuild.md) |
 | The run page is reachable from other machines only with `ap up --listen`: the pinned nginx forwarder serves it over TLS (a certificate the platform makes with Go's `generate_cert.go`, or the developer's), behind HTTP Basic authentication with a secret new per session, rate-limited per address and limited to the given names; each change is recorded in `access.log` | R5 | [ADR 0062](../../docs/decisions/0062-run-page-reached-remotely-over-tls-behind-a-sign-in-secret.md) |
 
 ## Threat model
@@ -100,6 +101,7 @@ access record. No model, tool, memory or agent context changes, so no new prompt
 |---------|---|---|---|---|---|---|---------------|------------|
 | Password prompt (build.sh `--changed`, run by `ap start`) | | | | ✓ | | | LLM02 sensitive information disclosure | Read without echo, passed to cosign only through the environment, never written or logged; asked only when signing is needed (R2) |
 | Fingerprint record `built.env` | | ✓ | | | | ✓ | LLM03 supply chain | It only decides whether to rebuild; every started image is still verified against the public key by digest (ADR 0028), so a forged fingerprint can only skip a rebuild of a correctly signed image, never start an unsigned one; mode 600 in the private state folder |
+| Cached digest record `cached.env` (after T023) | | ✓ | | | | ✓ | LLM03 supply chain | It only decides whether to rebuild; every started image is still verified against the public key by digest (ADR 0028), so a forged pair, like a forged fingerprint, can only skip a rebuild of a correctly signed image, never start an unsigned one; mode 600 in the private state folder |
 | Remote page forwarder | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | LLM02 sensitive information disclosure, LLM10 unbounded consumption, ASI03 identity and privilege abuse | Off by default; TLS 1.2/1.3 only, plain HTTP gets no content; Basic authentication on every request; unknown Host 421; 10 r/s per address, burst 20; failed sign-ins logged with time and address, never the secret; fixed configuration with one data file whose names `ap` validates; non-root, read-only root, no capabilities; it reaches only the page on the internal network, the page is GET-only (S1, R5) |
 | Certificate and key | ✓ | ✓ | | ✓ | | | ASI03 | Made with no network in the pinned Go image, mode 600, served only by the forwarder; the fingerprint printed for the developer to compare; renewed before it expires; or the developer's own |
 | Sign-in secret | ✓ | | | ✓ | | | ASI03, LLM02 | 256 bits from `/dev/urandom`; shown only on the developer's terminal; kept in the session file (mode 600) and as a SHA-512 crypt hash; new after every `down`; a stated limit: whoever the developer gives it to can read the runs |

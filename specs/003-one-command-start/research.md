@@ -18,6 +18,8 @@ before action).
 | S8 | Feature 001: [research D22](../001-prose-to-accepted-slice/research.md) (nginx: BSD-2, Scorecard 7.9), [ADR 0028](../../docs/decisions/0028-sign-platform-images-locally.md) (local signing), `src/deploy/ap`, `src/deploy/build.sh`, `src/deploy/compose.yaml`, `src/deploy/page-proxy/nginx.conf`, `scripts/tests/test_launcher.py`, `scripts/tests/test_signing.py`, `scripts/tests/test_compose.py` |
 | S9 | [Go source: `cmd/go/internal/cache/cache.go`](https://go.dev/src/cmd/go/internal/cache/cache.go): each action entry records the time it was written, so a build cache made in a build stage differs from run to run |
 | S10 | CI run 44209970342 (2026-11-18, GitHub-hosted runner, containerd image store): `--output type=image,rewrite-timestamp=true` failed with `exporter option "rewrite-timestamp" conflicts with "unpack"`; on the owner's host (Docker 29.10.0) the same output, and the same with `unpack=false`, gave one digest. So a candidate is exported with `unpack=false`, and the pushed build keeps `--push` without `rewrite-timestamp` |
+| S11 | T023 on the owner's clean VM, 2026-11-18 (4 CPUs, 7 GB, Docker 29.10.0, the branch at 8689db6; the owner's run, then the agent's over SSH at the owner's request): first `ap start` 1 min 27 s (the earlier install's build cache kept, not pruned); second `ap start` 38.6 s, again 39.3 s and 40.3 s; `ap down && ap start` 1 min 41 s; `ap start --check` 54 to 77 s, exit 0, nothing to build; fingerprints unchanged. Split: `ap up` alone 10.3 s (seven signature checks and Compose), `scripts/generate.sh --check` 11 s, the seven candidate builds 45 to 60 s, every build step `CACHED`; BuildKit's `rewriting layers with source-date-epoch` took 24.3 s of the check image's 26 s, and about 14 s, 6 to 8 s and 1 to 3 s for the agent, lint and small Go images. Exporting with `compression=uncompressed` (57 to 63 s) or zstd level 1 (17.5 s) did not make the rewrite cheap |
+| S12 | Experiment on the same VM, 2026-11-18: each candidate's build exported without `rewrite-timestamp` (`type=image,unpack=false`), twice per image: 0.8 to 0.9 s each, the same digest both times for all seven. A scratch copy of `build.sh` that makes this build first and the reproducible candidate only when its digest differs from the one recorded: `ap start` with nothing changed 12.2 to 14.3 s in three runs (seven builds one after another; in parallel 13.6 to 15.4 s), against 39 to 40 s with the committed `build.sh` in the same session. The scratch copy was removed and `built.env` restored |
 
 ## Decisions
 
@@ -26,6 +28,11 @@ to a new `ap start` (owner, option B), so `ap up` and every existing test of it 
 The rationale the earlier text held (building inside `ap up`) is kept in R1's Rejected list.
 
 ### R1. `ap start` builds what changed, judged by a reproducible image digest
+
+Revised on 2026-11-18 after T023 (S11): the candidate's timestamp rewrite is not cached and made a
+second start miss SC-002; a cached digest now spares it when nothing changed (the *Cached digest*
+bullet below, owner, ADR 0064). The text before it is kept; "costs about a second when the build
+cache holds it" in **Why** held for the small cli image of S2 only.
 
 - **Decision**: `ap start` is the developer's one start command. After its prerequisite checks
   (R3) it runs `src/deploy/build.sh --changed engine cli page agent check project lint`, then
@@ -52,6 +59,16 @@ The rationale the earlier text held (building inside `ap up`) is kept in R1's Re
     move into their own stage that copies only `catalogue/api-feature-go/template/`; the stage
     that copies `src/` builds only the check program. The check image then changes only when the
     check program, the template or a pin changes.
+  - **Cached digest** (ADR 0064, S11, S12): each signed build also makes the candidate's build
+    without `rewrite-timestamp` (the *cached build*, into the local store, `unpack=false`) and
+    records its digest paired with the fingerprint in `cached.env` ([data model](data-model.md)).
+    `--changed` makes the cached build first for each image with a pair; the image is current,
+    with no candidate, when that digest equals the pair's, the pair's fingerprint equals
+    `AP_BUILT_<NAME>` and the recorded image is in the local store. Otherwise the candidate
+    decides, as above; an image it finds current gets a new pair from a cached build, except with
+    `--check`, which records nothing. Sound because equal digests mean equal layers and the
+    rewrite depends only on the layers. The builds run one after another: in parallel they were
+    not faster on the VM (S12).
 - **Why**: S2 shows the candidate digest stays the same for unchanged inputs and costs about a
   second when the build cache holds it, so asking BuildKit is both exact and cheap. The Go images
   all `COPY . .` from `src/`, so only the built result, not the file list, tells whether an image
@@ -69,8 +86,12 @@ The rationale the earlier text held (building inside `ap up`) is kept in R1's Re
   change test nor signing).
 - **Stated limits**: a change to a pin used only for the SBOM or signing (`sbom-scanner`,
   `cosign`) does not change a fingerprint, so it does not rebuild by itself. An image built
-  before this feature has no recorded fingerprint and is built again once. Each start makes every
-  candidate; the time with nothing changed is measured against SC-002 (T023). S2 ran on Docker
+  before this feature has no recorded fingerprint and is built again once. Each start made every
+  candidate; the time with nothing changed, measured against SC-002 (T023), was 38 to 40 s on the
+  VM (S11), hence the cached digest. A cached digest lasts only while the build cache holds the
+  image's layers: after `docker builder prune`, on the first start after this change, or after an
+  edit that runs one of the image's steps again (any `src/` change, for a Go image), that image's
+  candidate is made once more (24 s for the check image on the VM), then the pair is renewed. S2 ran on Docker
   29.10 with the containerd image store; reproducibility on Docker 28 or the classic image store
   is not measured (analyze I5); if a digest is not stable there, the cost is an extra rebuild,
   never an unverified image. On a GitHub-hosted runner the exporter refused `rewrite-timestamp`

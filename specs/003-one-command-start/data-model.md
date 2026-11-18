@@ -20,6 +20,22 @@ its `AP_IMAGE_*` lines, which `ap up` reads as today.
   missing line means not current. `ap up` then verifies every image it starts, as today.
 - **Kept**: across `ap down`; only a new build replaces a line.
 
+## Cached digest (`cached.env`, new)
+
+Added after T023 (research R1, S11, S12; ADR 0064). One line per image,
+`AP_CACHED_<NAME>=sha256:<64 hex> sha256:<64 hex>`: the digest of the image's *cached build* (the
+candidate's build without `rewrite-timestamp`, exported with `unpack=false`), then the
+fingerprint it was paired with. Mode 600, in the state folder, written by `build.sh` under the
+`images.env.lock` it takes for `built.env`.
+
+- **Written**: by every signed build, with `AP_BUILT_<NAME>`; and by `--changed` (never with
+  `--check`) for an image its candidate found current.
+- **Rule**: an image is current without a candidate when its cached build's digest equals the
+  first value, the second value equals its `AP_BUILT_<NAME>` and its `AP_IMAGE_<NAME>` image is in
+  the local store. Otherwise the fingerprint's rule above decides. A missing or malformed line
+  means: ask the candidate.
+- **Kept**: across `ap down`; a later pair replaces the line.
+
 ## Session (`session.env`, extended)
 
 Feature 001's session gains, only for a start with remote access:
