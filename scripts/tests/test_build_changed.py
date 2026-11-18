@@ -297,6 +297,7 @@ class BuildChangedTest(unittest.TestCase):
         cls.run_build("g", ["--changed", "cli"], password=False, timeout=600)
 
         # (h) a failing build (page does not compile), then the second run with it fixed
+        cls.marker("page", "t004-page-3")
         broken = cls.repo / "src/page/cmd/page/t004_broken.go"
         broken.write_text("package main\n\nfunc {\n")
         cls.run_build("h1", ["--changed", "cli", "page"])
