@@ -2,6 +2,7 @@
 
 ## 2026-11-18
 
+* **Review**: Feature 003, T009 done: US1 fresh review round 2 closed both fixed findings (CI run 44264572517 green); the kept-session finding is backlog T166 (owner: after the MVP), the suggestions and untested cases T167.
 * **Review**: Feature 003, US1 fresh review round 1 (CI run 44214595497 green): 3 blocking findings. Fixed with regression tests: a second `ap start` now waits as long as the first runs (`take_lock ... forever` in `lock.sh`), and an image missing from the local store is built again. The third (a kept session file after a reboot reads as started) waits for the owner.
 * **Fix**: Feature 003, US1's first CI run (44209970342) stopped every image build: the runner's Docker refuses `rewrite-timestamp` while it unpacks an image. Candidate builds now use `unpack=false`, and the pushed build keeps `--push` without `rewrite-timestamp`; its fingerprint is its candidate's (research S10, [BuildKit reproducible builds](/references/buildkit-reproducible-builds.md)).
 * **Implementation**: Feature 003, T006 to T008 (US1): `Dockerfile.check` makes its module and warm caches in a stage that copies only the template; `build.sh` records each image's reproducible fingerprint in `built.env` and gains `--changed [--check]`, one password prompt only when it must sign; `ap start [--check]` holds `start.lock`, checks the machine, builds what changed, then runs `up` unchanged. T004's and T005's helpers fixed with the owner's approval (a helper shadowing `TestCase.run`; a failure message that waited for the process).
