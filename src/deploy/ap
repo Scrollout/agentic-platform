@@ -90,7 +90,7 @@ die() { code=$1; shift; say "$*"; exit "$code"; }
 
 usage() {
   cat >&2 <<'EOF'
-usage: ap start [--check] --credentials <file> --projects <folder>
+usage: ap start [--check] [--credentials <file>] [--projects <folder>]
        ap up --credentials <file> --projects <folder>
        ap down
        ap page
@@ -572,8 +572,10 @@ cmd_start() {
       *) usage ;;
     esac
   done
-  [ -n "$cred" ] && [ -n "$proj" ] || usage
   [ "$(id -u)" != 0 ] || die 3 "do not run ap as root: the gateway runs as your user"
+  default_cred='' default_proj=''
+  [ -n "$cred" ] || { cred=${XDG_CONFIG_HOME:-$HOME/.config}/agentic-platform/anthropic_api_key; default_cred=1; }
+  [ -n "$proj" ] || { proj=$HOME/projects; default_proj=1; }
 
   # shellcheck source=lock.sh
   . "$here/lock.sh"
@@ -583,7 +585,24 @@ cmd_start() {
   mkdir -p -- "$state_dir" && chmod 700 -- "$state_dir" || die 1 "cannot create $state_dir or make it private (mode 700)"
   take_lock "$state_dir/start.lock" forever
 
+  # The machine's prerequisites, in the contract's order, before anything is built (research R3).
   need_docker
+  docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q '"runsc"' ||
+    die 3 "the gVisor runtime runsc is not registered with Docker; install it as docs/guides/install-gvisor.md says"
+  if [ -n "$default_cred" ] && [ ! -e "$cred" ] && [ ! -L "$cred" ]; then
+    die 3 "no key file at '$cred'; put the model provider's key there (chmod 600) or give one with --credentials <file>"
+  fi
+  check_credentials "$cred"
+  if [ -n "$default_proj" ] && [ ! -e "$proj" ] && [ ! -L "$proj" ]; then
+    mkdir -m 755 -- "$proj" || die 3 "cannot make the projects folder '$proj'; make it or give one with --projects <folder>"
+  fi
+  if [ -d "$proj" ]; then
+    mode=$(stat -L -c '%a' -- "$proj") || die 3 "cannot read the mode of the projects folder '$proj'"
+    case $(ls -ldL -- "$proj") in
+      d??????r?x* | d??????r?t*) ;;
+      *) die 3 "the platform's containers cannot open the projects folder '$proj' (mode $mode); run: chmod o+rx '$proj'" ;;
+    esac
+  fi
   check_paths
   resolve_override
   check_session
