@@ -15,7 +15,16 @@ sources:
   - id: nginx-docs
     resource: https://nginx.org/en/docs/
     title: nginx documentation
-generated: { by: claude-code/claude-sonnet-5-5, at: 2026-11-13T12:00:00Z }
+  - id: adr-0062
+    resource: /decisions/0062-run-page-reached-remotely-over-tls-behind-a-sign-in-secret.md
+    title: "ADR 0062: The run page is reached from other machines only over TLS behind a sign-in secret"
+  - id: nginx-ref
+    resource: /references/nginx-access-control.md
+    title: nginx access control reference
+  - id: deploy-readme
+    resource: ../../src/deploy/README.md
+    title: Deployment README, Compose and the launcher
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-18T21:00:00Z }
 ---
 
 # Responsibility
@@ -23,15 +32,23 @@ generated: { by: claude-code/claude-sonnet-5-5, at: 2026-11-13T12:00:00Z }
 Two roles, both the official `nginx` image with templates only. The **model gateway** gives agent
 containers access to the Anthropic Messages API without their holding the provider key, and refuses
 everything else. The **page forwarder** is a static nginx that alone publishes the run page's
-port on 127.0.0.1. Licence BSD-2, OpenSSF Scorecard 7.9 (research D22).
+port on 127.0.0.1. With `ap up --listen` (feature 003, [ADR 0062](/decisions/0062-run-page-reached-remotely-over-tls-behind-a-sign-in-secret.md)) the
+forwarder also serves the page to other machines over TLS behind a sign-in secret, rate-limited
+and limited to the given names ([access control reference](/references/nginx-access-control.md)).
+Licence BSD-2, OpenSSF Scorecard 7.9 (research D22).
 
-Sources: [Feature 001 research](../../specs/001-prose-to-accepted-slice/research.md), [Model gateway README](../../src/deploy/gateway/README.md).
+Sources: [Feature 001 research](../../specs/001-prose-to-accepted-slice/research.md), [Model gateway README](../../src/deploy/gateway/README.md), [ADR 0062](/decisions/0062-run-page-reached-remotely-over-tls-behind-a-sign-in-secret.md), [nginx access control reference](/references/nginx-access-control.md).
 
 # Interfaces
 
 The gateway listens on port 8080 on internal networks and passes `POST /v1/messages` and
 `POST /v1/messages/count_tokens` to `api.anthropic.com` over verified TLS. It sets `x-api-key`
 itself, overriding a caller's, and blanks `Authorization` and `Cookie`.
+
+The forwarder serves the run page on 127.0.0.1. With remote access it answers only over TLS 1.2
+or 1.3 on the `--listen` address: 400 for plain HTTP, 421 for a name not given, 401 without user
+`ap` and the session's secret, and 429 beyond 10 requests per second per client address with a
+burst of 20; it sets the Host to the page's own.
 
 # Dependencies
 
@@ -47,9 +64,14 @@ in tests.
   and `NGINX_ENVSUBST_FILTER` limiting substitution to the key and the server name.
 - User from the host (to read the mode-600 key file), read-only root, all capabilities dropped,
   `no-new-privileges`, tmpfs for writable paths, 128 MB memory.
+- The forwarder: `src/deploy/page-proxy/nginx.conf`; with remote access `compose.remote.yaml`
+  makes it run as the developer's user with `page-proxy/nginx-remote.conf` and the state folder's
+  `page-remote/` (certificate and key, the secret's SHA-512 crypt hash from the image's `mkpasswd`,
+  and `names.conf`) mounted read-only.
 
-Sources: [Model gateway README](../../src/deploy/gateway/README.md).
+Sources: [Model gateway README](../../src/deploy/gateway/README.md), [Deployment README, Compose and the launcher](../../src/deploy/README.md).
 
 # Operations
 
-`src/deploy/gateway/test_gateway.sh` tests it. The forwarder is configured in `src/deploy/page-proxy/`.
+`src/deploy/gateway/test_gateway.sh` tests the gateway. `scripts/tests/test_page_remote.py` tests
+the forwarder's remote mode on the pinned image.

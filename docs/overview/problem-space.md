@@ -8,7 +8,7 @@ sources:
   - id: owner
     resource: https://claude.ai/code/session_01P2TmGw3MdjVyoyhGeQK7np
     title: Project owner's answers, 2026-11-11
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-18T09:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-19T00:30:00Z }
 ---
 
 # How to use these tables
@@ -48,9 +48,13 @@ Sources: [Project owner's answers, 2026-11-11](https://claude.ai/code/session_01
 | N-002 | Serve individual developers, teams and organizations | yes | | | todo |
 | N-003 | Support software projects | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | in progress |
 | N-004 | Support agent work outside software projects | later | | | todo |
-| N-005 | Run on the user's own infrastructure, and as a hosted service | yes | | | todo |
+| N-005 | Run on the user's own infrastructure, and as a hosted service | yes | | [003](../../specs/003-one-command-start/spec.md) | in progress |
 
 N-001 is settled by the [platform overview](/overview/platform.md).
+
+Feature 003 serves N-005 for one developer's own machine, which may be a remote machine such as
+a VM: one start command, and the run page reachable from other machines. Running as a hosted
+service is still to do.
 
 # Agents
 

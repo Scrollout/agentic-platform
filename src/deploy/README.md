@@ -1,7 +1,11 @@
 # src/deploy
 
-Packaging: the ap launcher, Compose file, Dockerfiles, the nginx gateway template, the run page
-forwarder's nginx configuration (`page-proxy/nginx.conf`) and the image lock.
+Packaging: the ap launcher, Compose files, Dockerfiles, the nginx gateway template, the run page
+forwarder's nginx configurations (`page-proxy/nginx.conf`, and `page-proxy/nginx-remote.conf` for
+remote access), the lock helper `lock.sh` and the image lock.
+
+The developer starts the platform with `ap start` alone (below); `build.sh` and `ap up` are the
+lower commands it uses, which the platform's own development and CI call directly.
 
 ## Images
 
@@ -26,6 +30,22 @@ committed. It reads each base image from `images.lock` and passes it as a build 
    `${XDG_STATE_HOME:-~/.local/state}/agentic-platform/images.env` (mode 600, folder mode 700),
    replacing that name's line.
 
+Each signed build also records the image's fingerprint as `AP_BUILT_<NAME>` in `built.env`, next
+to `images.env`: the digest of a candidate build of the same sources (`SOURCE_DATE_EPOCH=0`,
+`rewrite-timestamp=true`, no SBOM, provenance or push), which stays the same while its inputs do.
+`build.sh --changed <name>...` builds, signs and records only the named images whose fingerprint
+changed or that are not recorded, asking for the signing key's password once and only when it must
+sign; `--changed --check` only says `would build <names>` (exit 1) or `nothing to build` (exit 0).
+`ap start` runs it before `up` (feature 003, ADR 0061, ADR 0063).
+
+BuildKit does not cache the candidate's timestamp rewrite (24 s for the check image on a 4-CPU
+machine), so each signed build also records `AP_CACHED_<NAME>=<digest> <fingerprint>` in
+`cached.env` (mode 600): the digest of the same build without `rewrite-timestamp`, which takes
+about a second while the build cache holds the image's layers. `--changed` makes these cached
+builds first and needs an image's candidate only when its cached digest, fingerprint or stored
+image no longer matches; a candidate that finds the image current renews the pair (not with
+`--check`). A failed cached build counts as no pair (feature 003, ADR 0064).
+
 Builds may run at the same time, of the same or of different images: recording takes the lock
 `images.env.lock` (a directory next to `images.env` holding the build's process ID), so no build
 loses another's line; a build waits for it up to two minutes, then exits 1 naming it. A lock whose
@@ -34,7 +54,8 @@ the one that records last wins, and an image whose tag another build has since m
 back into the local store by digest. Builds that start together on a machine with no registry
 running and no key pair yet are safe too: `ap registry` lets each of them find the one registry
 the first made (see below), and only one makes the key pair, under the lock `keys.lock` in the
-signing folder, while the others wait for it and then sign with it.
+signing folder, while the others wait for it and then sign with it. Both locks follow one rule,
+kept in `lock.sh`, which `build.sh` sources.
 
 The key's password comes from `COSIGN_PASSWORD`, or cosign asks on the terminal; with neither,
 `build.sh` stops before building. It exits 0 when the image is built, signed and recorded, 1 when a
@@ -73,7 +94,7 @@ server and its recorder in tests (`src/tests/recorded/`, research D26). It stand
 gateway on test networks only; no image is built from it and Compose does not start it.
 
 - `Dockerfile.agent`: the agent step image, with Docker Agent copied from its pinned image, the Go toolchain, and `TELEMETRY_ENABLED=false`.
-- `Dockerfile.check`: the check service (`/check`, research D29) with the Go toolchain, the pinned oapi-codegen (`images.lock`, passed by `build.sh` as `OAPI_CODEGEN`), the catalogue's module template at `/opt/template` and the module cache of its `go.mod` at `/opt/gomodcache` (owned by root, read-only, shared by every call), so checks and the generate procedure run with no network and a read-only root. It sets no `GOCACHE` or `GOPATH`: each call of the check program makes its own folder under the `/tmp` tmpfs for `GOCACHE`, `GOTMPDIR`, `TMPDIR`, `HOME` and `GOPATH` and removes it when the call ends (research D37, ADR 0041); `HOME=/tmp/home` is the service process's own. Its runtime stage is `FROM scratch` with the golang image's files copied in, since that image's `ENV` sets `GOPATH=/go`. The build stage also compiles a warm base Go cache from the pinned sources only (the standard library dependencies of the template's vendored tools and of a derived test, through `go test`, `-cover` and `go test -c` with the service's settings) into `/opt/gocache-base` (root-owned, read-only, about 117 MB; the image grew from 418 MB to 569 MB), and `CHECK_GOCACHE_BASE=/opt/gocache-base` makes each call start from a copy of it.
+- `Dockerfile.check`: the check service (`/check`, research D29) with the Go toolchain, the pinned oapi-codegen (`images.lock`, passed by `build.sh` as `OAPI_CODEGEN`), the catalogue's module template at `/opt/template` and the module cache of its `go.mod` at `/opt/gomodcache` (owned by root, read-only, shared by every call), so checks and the generate procedure run with no network and a read-only root. It sets no `GOCACHE` or `GOPATH`: each call of the check program makes its own folder under the `/tmp` tmpfs for `GOCACHE`, `GOTMPDIR`, `TMPDIR`, `HOME` and `GOPATH` and removes it when the call ends (research D37, ADR 0041); `HOME=/tmp/home` is the service process's own. Its runtime stage is `FROM scratch` with the golang image's files copied in, since that image's `ENV` sets `GOPATH=/go`. A template stage, which copies only the catalogue's module template, makes oapi-codegen and the module cache, so a change elsewhere in `src/` leaves the image's digest unchanged (feature 003, research R1); it also compiles a warm base Go cache from the pinned sources only (the standard library dependencies of the template's vendored tools and of a derived test, through `go test`, `-cover` and `go test -c` with the service's settings) into `/opt/gocache-base` (root-owned, read-only, about 117 MB; the image grew from 418 MB to 569 MB), and `CHECK_GOCACHE_BASE=/opt/gocache-base` makes each call start from a copy of it.
 - `Dockerfile.project`: the project worker (research D30, ADRs 0032 and 0033), built as `build.sh project` (`ap-project`, `AP_IMAGE_PROJECT`): the static check binary from the golang pin on the `alpine` pin, with `git=<alpine-git>` from apk and a folder `/var/lib/project-worker` of mode 1777, which a new `project-worker-state` volume takes its mode from; no Go toolchain (about 45 MB).
 - `Dockerfile.engine`: the workflow engine, a static Go binary on `scratch`; expects the main package `src/engine/cmd/engine`.
 - `Dockerfile.cli`: the terminal client, a static Go binary on `scratch`; expects `src/cli/cmd/cli`.
@@ -94,14 +115,38 @@ gateway on test networks only; no image is built from it and Compose does not st
 ## Compose and the launcher
 
 `ap` (POSIX sh, on the host) is the only way to start and stop the platform; its commands are in
-the [terminal contract](../cli/contract.md). It calls only `docker` and passes every value to
-`compose.yaml` through these environment variables, never on a command line:
+the [terminal contract](../cli/contract.md). `ap registry` (starts the local image registry) is
+called by `build.sh` and is left out of `ap`'s usage, which lists only what the developer runs.
+
+`ap start` (feature 003, ADR 0063) holds the lock `start.lock` in the state folder (`lock.sh`'s
+rule, the one `build.sh` uses for `images.env.lock` and `keys.lock`), checks the machine (Docker 28
+or later, `runsc` in `docker info`'s runtimes, the key file, by default
+`${XDG_CONFIG_HOME:-~/.config}/agentic-platform/anthropic_api_key`, and the projects folder, by
+default `~/projects`, made with mode 755 when missing), refuses a started session with another key
+file, projects folder or remote access, runs `build.sh --changed engine cli page agent check
+project lint`, then `up` with the resolved options. `ap start --check` makes no change.
+
+With `--listen` (on `up`, passed on by `start`), `ap` adds `compose.remote.yaml` after
+`compose.yaml` to every Compose call of the session: it changes `page-proxy` alone, which then runs
+as `AP_HOST_USER`, reads `page-proxy/nginx-remote.conf` (TLS 1.2/1.3, HTTP Basic authentication,
+10 r/s per address with a burst of 20, a 421 default server) and the folder `AP_PAGE_CERT_DIR`, and
+publishes its TLS port on `AP_PAGE_ADDRESS`. That folder, `page-remote/` in the state folder (mode
+700), holds `cert.pem` and `key.pem` (made with Go's `generate_cert.go` in the `golang` pin with no
+network, or the developer's own), `cert.names`, `htpasswd` (the secret's SHA-512 crypt line from
+the nginx pin's `mkpasswd`) and `names.conf`, all mode 600 (data model of feature 003). Each change
+of remote access is appended to `access.log` in the state folder, never with the secret; `down`
+keeps it.
+
+It calls only `docker` and passes every value to `compose.yaml` through these environment
+variables, never on a command line:
 
 | Variable | Holds |
 |----------|-------|
 | `AP_CREDENTIALS_FILE` | Absolute path of the file holding only the provider key; it reaches the gateway alone, as the Compose secret `anthropic_api_key` |
 | `AP_PROJECTS_DIR` | Absolute path of the projects folder |
-| `AP_PAGE_PORT` | Host port of the run page, published on `127.0.0.1` only (by `page-proxy`) |
+| `AP_PAGE_PORT` | Host port of the run page, published on `127.0.0.1` only (by `page-proxy`), or on `AP_PAGE_ADDRESS` with remote access |
+| `AP_PAGE_ADDRESS` | With remote access only: the `--listen` address the page's port is published on (`compose.remote.yaml`) |
+| `AP_PAGE_CERT_DIR` | With remote access only: the `page-remote/` folder, mounted read-only into `page-proxy` at `/etc/ap/remote` |
 | `AP_CLIENT_TOKEN`, `AP_PAGE_TOKEN`, `AP_WORKER_TOKEN`, `AP_LINT_TOKEN`, `AP_ANALYST_TOKEN`, `AP_CHECK_TOKEN`, `AP_PROJECT_TOKEN` | This session's tokens, 64 hex characters each and pairwise distinct; `ap up` on a started session keeps them, and only `ap up` after `ap down` makes new ones. The last four are what the engine calls `contract-lint`, `analyst`, `check` and `project-worker` with; each reaches only the engine and its own service (the engine holds `AP_PROJECT_TOKEN` too, since T053e). A session started before `AP_PROJECT_TOKEN` existed is refused as incomplete: run `ap down` |
 | `AP_GRANTS_DIR` | The step worker grants folder, `${XDG_STATE_HOME:-~/.local/state}/agentic-platform/grants` (research D31). `ap up` makes it and hands it to the engine's user (65532) with mode 700, from a one-off container with only the CHOWN capability; only the engine mounts it, read-only, at `ENGINE_GRANTS_DIR`. `build-workers` writes one file per grant into it (named the lowercase hex SHA-256 of the worker's token, holding `{"slice","step","call_token"}`, mode 600, from a one-off container running as the engine's user, the tokens on standard input), and `down` empties it. Unset, Compose names a folder that does not exist, so the engine does not start |
 | `AP_HOST_USER` | The developer's `uid:gid`: the gateway runs as it to read the key file (mode 600; Compose cannot change a file secret's owner outside Swarm), and step workers run as it to write projects |
@@ -132,7 +177,9 @@ The session is `${XDG_STATE_HOME:-~/.local/state}/agentic-platform/session.env`.
 folder mode 700 (also when it exists), writes the file mode 600, and reads it back with `.` only
 when it is a regular file owned by the developer with mode 600; any other file stops every command
 but `down` with exit 1 and `run: ap down`, and `down` stops the platform without reading it. The
-file records the credentials file and projects folder; a second `up` with others exits 3 and says to
+file records the credentials file and projects folder, and with remote access also
+`AP_PAGE_ADDRESS`, `AP_PAGE_NAMES`, `AP_PAGE_SECRET` (the sign-in secret, new after each `down`) and
+`AP_PAGE_CERT_DIR`; a second `up` with others, or with another remote access, exits 3 and says to
 run `ap down` first. A failed `up` (Compose failed) keeps its session until `ap down`. A session
 started before the `contract-lint` and `analyst` services were added lacks their tokens, so `up`
 says it is incomplete: run `ap down` once, then `ap up`. Client
@@ -161,7 +208,7 @@ limits, and writable `tmpfs` only where it needs one; no service mounts a contai
 | `contract-lint` | `ap up` | `lint` | `AP_IMAGE_LINT`; gVisor; its token as `LINT_TOKEN`; reachable by the engine only; finds `engine` through `extra_hosts` (the gVisor rule; it calls no one) |
 | `analyst` | `ap up` | `analyst` | The `docker-agent` pin by digest (an upstream image like the gateway's, so no `AP_IMAGE_` variable; written out in `compose.yaml`, and a test fails when it differs from `images.lock`); gVisor; `/docker-agent serve api /agents/analyst.yaml` on port 8080 with `--session-db /tmp/session.db` on a tmpfs owned by UID 65532; `src/agents` mounted read-only at `/agents`; the token from its environment through `sh -c`, so not on its command line; `MODEL_GATEWAY_URL=http://gateway:8080`, a placeholder `ANTHROPIC_API_KEY` and `TELEMETRY_ENABLED=false`; finds `engine` and `gateway` through `extra_hosts`; its only way out is the gateway |
 | `page` | `ap up`, when its image is recorded (T056) | `clients`, `page` | Reached only through `page-proxy`; checks the Host header |
-| `page-proxy` | `ap up`, with `page` | `page`, `page-host` | The `nginx` pin with the fixed `page-proxy/nginx.conf`; publishes the page's port on `127.0.0.1` only and passes each request, Host header unchanged, to the page |
+| `page-proxy` | `ap up`, with `page` | `page`, `page-host` | The `nginx` pin with the fixed `page-proxy/nginx.conf`; publishes the page's port on `127.0.0.1` only and passes each request, Host header unchanged, to the page; with remote access, `compose.remote.yaml` (above) |
 | `cli` | each client command (`run --rm`, profile `client`) | `clients` | Client token |
 | `tests` | nothing (profile `tests`) | `clients` | Unused since `ap test` runs on the host (ADR 0037); its removal waits for the owner's approval |
 | `step-agent` | `ap build-workers` (profile `workers`) | `agents` | The template of each agent step's container: Docker Agent `serve api /agents/$STEP_AGENT.yaml` with `--auth-token "$STEP_TOKEN"` through `sh -c` (it refuses to start without either; the token is then on docker-agent's command line inside the sandbox, a known limit); `ENGINE_TOKEN` empty, so the template holds no session token; gVisor, `/tmp` executable, `src/agents` read-only at `/agents`, a placeholder `ANTHROPIC_API_KEY`; finds `engine` and `gateway` through `extra_hosts` |
