@@ -20,6 +20,7 @@ before action).
 | S10 | CI run 44209970342 (2026-11-18, GitHub-hosted runner, containerd image store): `--output type=image,rewrite-timestamp=true` failed with `exporter option "rewrite-timestamp" conflicts with "unpack"`; on the owner's host (Docker 29.10.0) the same output, and the same with `unpack=false`, gave one digest. So a candidate is exported with `unpack=false`, and the pushed build keeps `--push` without `rewrite-timestamp` |
 | S11 | T023 on the owner's clean VM, 2026-11-18 (4 CPUs, 7 GB, Docker 29.10.0, the branch at 8689db6; the owner's run, then the agent's over SSH at the owner's request): first `ap start` 1 min 27 s (the earlier install's build cache kept, not pruned); second `ap start` 38.6 s, again 39.3 s and 40.3 s; `ap down && ap start` 1 min 41 s; `ap start --check` 54 to 77 s, exit 0, nothing to build; fingerprints unchanged. Split: `ap up` alone 10.3 s (seven signature checks and Compose), `scripts/generate.sh --check` 11 s, the seven candidate builds 45 to 60 s, every build step `CACHED`; BuildKit's `rewriting layers with source-date-epoch` took 24.3 s of the check image's 26 s, and about 14 s, 6 to 8 s and 1 to 3 s for the agent, lint and small Go images. Exporting with `compression=uncompressed` (57 to 63 s) or zstd level 1 (17.5 s) did not make the rewrite cheap |
 | S12 | Experiment on the same VM, 2026-11-18: each candidate's build exported without `rewrite-timestamp` (`type=image,unpack=false`), twice per image: 0.8 to 0.9 s each, the same digest both times for all seven. A scratch copy of `build.sh` that makes this build first and the reproducible candidate only when its digest differs from the one recorded: `ap start` with nothing changed 12.2 to 14.3 s in three runs (seven builds one after another; in parallel 13.6 to 15.4 s), against 39 to 40 s with the committed `build.sh` in the same session. The scratch copy was removed and `built.env` restored |
+| S13 | T030's `build.sh` (0a2ec8f, copied onto the VM's clone for the measurement, then restored), the same VM, 2026-11-18: the first `ap start` after the change (no pairs yet) 1 min 21 s, recording seven pairs; the next three 25.9 s, 26.9 s and 24.5 s; `ap start --check` 16.4 s, exit 0; fingerprints unchanged. Split of one start: `build.sh --changed` 15 to 17 s (`scripts/generate.sh --check` 8.3 to 9.0 s, seven cached builds 0.6 to 0.9 s each), then `up` about 10 s (seven signature checks of about 0.7 s each and Compose). S12's 12 to 14 s was not reproduced; the VM's load average was about 2 during S13 |
 
 ## Decisions
 
@@ -68,7 +69,8 @@ cache holds it" in **Why** held for the small cli image of S2 only.
     decides, as above; an image it finds current gets a new pair from a cached build, except with
     `--check`, which records nothing. Sound because equal digests mean equal layers and the
     rewrite depends only on the layers. The builds run one after another: in parallel they were
-    not faster on the VM (S12). Revised after `/speckit-analyze` round 9:
+    not faster on the VM (S12). Measured with the shipped code: 24.5 to 26.9 s (S13), under SC-002's
+    30 s; `scripts/generate.sh --check` is now the largest part (backlog T174). Revised after `/speckit-analyze` round 9:
     - **Order**: a run makes every cached build first, then the candidates it still needs, then
       the signed builds. The pair is the cached digest taken *before* that image's candidate,
       never one from a later build, so a source edited between them gives a pair whose digest
