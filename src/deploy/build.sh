@@ -296,7 +296,11 @@ for name in "${names[@]}"; do
     continue
   fi
   candidate "$name"
-  if [ -n "$(recorded "$images_env" "AP_IMAGE_$N")" ] && [ "$fingerprint" = "$(recorded "$built_env" "AP_BUILT_$N")" ]; then
+  # Current: the same fingerprint as at its last signed build, and that build's image still in the
+  # local image store (a pruned store rebuilds it, so `up` finds every image it verifies).
+  ref=$(recorded "$images_env" "AP_IMAGE_$N")
+  if [ -n "$ref" ] && [ "$fingerprint" = "$(recorded "$built_env" "AP_BUILT_$N")" ] &&
+    docker image inspect "$ref" >/dev/null 2>&1; then
     continue
   fi
   todo+=("$name") todo_fp+=("$fingerprint")

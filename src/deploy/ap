@@ -573,7 +573,7 @@ cmd_start() {
   trap 'exit 130' INT
   trap 'exit 143' TERM
   mkdir -p -- "$state_dir" && chmod 700 -- "$state_dir" || die 1 "cannot create $state_dir or make it private (mode 700)"
-  take_lock "$state_dir/start.lock"
+  take_lock "$state_dir/start.lock" forever
 
   need_docker
   check_paths
