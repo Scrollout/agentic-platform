@@ -22,6 +22,19 @@ Operation, Durable execution.
 **Builds on**: [feature 001](../001-prose-to-accepted-slice/spec.md), whose behaviour this
 feature keeps except where a requirement below changes it.
 
+## Clarifications
+
+### Session 2026-11-18
+
+- Q: After the platform is up again, does a run the stop interrupted continue by itself, or wait
+  for the developer to resume it? → A: It continues by itself once its step workers are available
+  (Principle X: a restart resumes the run) (owner).
+- Q: Do a step's attempts count across a stop, so that a step fails its checks at most 3 times
+  in all (backlog T138)? → A: Yes across a platform stop: only the interrupted attempt runs again.
+  A developer's resume after a hand-over is a person's choice and starts a fresh count (owner).
+- Q: Is need N-040 (never silently lose work the platform has accepted) a `yes`? → A: Yes,
+  confirmed (owner).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A run survives a platform stop (Priority: P1)
@@ -30,8 +43,7 @@ A developer starts a build. The platform stops in the middle of it: the engine c
 killed, or the machine restarts. When the platform is up again, the run continues from where it
 was. No accepted step runs again, no change to the project's version history is made twice, and
 the run ends with the same outcome and the same artifacts it would have had without the stop.
-[NEEDS CLARIFICATION: after the platform is up again, does the run continue by itself, or wait,
-as today, until the developer resumes it?]
+It continues by itself, without the developer resuming it, once its step workers are available.
 
 **Why this priority**: The constitution's Principle X requires that an accepted run is never
 lost and that a restart never repeats a completed side effect. Feature 001 meets this only with
@@ -45,17 +57,18 @@ run twice.
 **Acceptance Scenarios**:
 
 1. **Given** a run whose engine stops while an agent step is being attempted, **When** the
-   platform is up again and the run continues, **Then** the project is restored to its last
-   accepted step and the step is attempted again, and no accepted step runs again.
+   platform is up again, **Then** the run continues by itself, the project is restored to its
+   last accepted step, the interrupted attempt is made again with its own attempt number, and no
+   accepted step runs again.
 2. **Given** a run whose engine stops after a step was accepted but before the project's version
    history recorded it, **When** the run continues, **Then** the version history records the step
    exactly once.
 3. **Given** a run whose engine stops during a review round, **When** the run continues, **Then**
    the round's findings, open findings and scope are those it had before the stop, and the review
    still runs at most 3 rounds.
-4. **Given** a run that had used review rounds and part of its budget before the stop, **When**
-   it continues, **Then** those rounds and that spend still count against its limits (attempts:
-   FR-003).
+4. **Given** a run that had used review rounds, step attempts and part of its budget before the
+   stop, **When** it continues, **Then** those rounds, attempts and that spend still count against
+   its limits (FR-003).
 5. **Given** a run waiting for the developer after a hand-over, **When** the platform stops and
    starts again, **Then** the run is still waiting, and it expires 14 days after the hand-over,
    not after the restart.
@@ -122,14 +135,14 @@ feature 001 passes on this feature's code.
 ### Edge Cases
 
 - The platform stops during a step attempt: the attempt's partial writes are undone before the
-  step is attempted again; whether the attempt counts follows FR-003.
+  attempt is made again; the interrupted attempt does not count as failed (FR-003).
 - The platform stops while a check is running: the check runs again; a check that cannot run
   still counts as failed (FR-012 of feature 001).
 - The model is unavailable on every attempt of a step: the run is interrupted with that reason,
   as in feature 001, and the developer resumes it.
 - The machine restarts and the step containers are gone: the run waits until the developer
-  rebuilds them for the run (as `ap build-workers --resume` does today), and its time budget does
-  not run while it waits.
+  rebuilds them for the run (as `ap build-workers --resume` does today), then continues by itself
+  (FR-005); its time budget does not run while it waits.
 - The developer cancels a run while the platform is down: the request is refused as retryable;
   once the platform is up the cancel is accepted and the run ends cancelled.
 - A run recorded before the upgrade has no outcome yet: the upgraded platform refuses to start,
@@ -152,14 +165,16 @@ feature 001 passes on this feature's code.
   last accepted step, as before every attempt.
 - **FR-003**: Review rounds, and spent tokens, cost and time MUST count across a stop: a run MUST
   NOT get new rounds or budget because the platform stopped. The time budget counts only the time
-  the platform is running the run. A step's attempts [NEEDS CLARIFICATION: also count across a
-  stop and a resume, so a step fails its checks at most 3 times in all (feature 001 starts the
-  count again at 1 after a resume, backlog T138)?].
+  the platform is running the run. A step's attempts MUST count across a stop: only the
+  interrupted attempt is made again, with its own number, and a step fails its checks at most 3
+  times across stops. A developer's resume after a hand-over starts a fresh count for the step it
+  resumes (feature 001 starts the count again at 1 after every resume, backlog T138).
 - **FR-004**: A run waiting for the developer MUST keep waiting across a stop, and MUST expire 14
   days after its hand-over.
-- **FR-005**: After the platform is up again, a run interrupted by the stop MUST [NEEDS
-  CLARIFICATION: continue by itself once its step workers are available, or wait for the
-  developer to resume it, as in feature 001?].
+- **FR-005**: After the platform is up again, a run interrupted by the stop MUST continue by
+  itself once its step workers are available, without the developer resuming it (feature 001
+  waits for `ap resume`). A run interrupted for another reason (for example the model unavailable
+  on every attempt) still waits for the developer.
 - **FR-006**: Every run MUST still end in exactly one recorded outcome (done, handed over,
   expired, cancelled), and its record MUST keep feature 001's events and order, with every stop
   and continuation recorded.

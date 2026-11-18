@@ -29,7 +29,7 @@ constitution's Principle I makes this the one place needs are stated.
 
 Every `yes` and `later` on this page was set by the project owner on 2026-11-11, except N-040,
 set to `yes` by feature 002's spec on 2026-11-18 because constitution Principle X already requires
-it (pending the owner's confirmation).
+it, confirmed by the owner the same day.
 
 Feature 001's rows (2026-11-17): `done` where its acceptance tests and the planted suite pass in CI
 (check run 44157173351) and no open task records a gap; `in progress` where the MVP covers only

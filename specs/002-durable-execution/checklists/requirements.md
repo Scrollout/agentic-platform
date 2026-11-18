@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -34,6 +34,5 @@
 - Temporal is named only in the Input and Assumptions, because ADR 0056 already decided it under
   Principle VI; requirements and success criteria name no tool. `ap build-workers --resume` is
   named once in Edge Cases as feature 001's existing behaviour, not as a design.
-- Two markers remain, both the owner's decisions: FR-005 (does a run continue by itself after a
-  restart) and FR-003 (do a step's attempts count across a stop and a resume, backlog T138).
-  Resolve them before `/speckit-plan`.
+- The two markers (FR-005, FR-003) were resolved by the owner on 2026-11-18 (spec,
+  Clarifications).
