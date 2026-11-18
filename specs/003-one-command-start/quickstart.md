@@ -26,6 +26,11 @@ time src/deploy/ap start
 Expected: no build, no prompt, `start: already started; nothing changed`, in under 30 seconds
 (SC-002).
 
+Measured on the owner's clean VM (4 CPUs, 7 GB, Docker 29.10, 2026-11-18, research S11 and S13):
+the first start 1 min 27 s with the build cache of an earlier install; a second start 11.9 to
+12.3 s (24.5 to 26.9 s while the VM was busier); `ap down && ap start` 21.7 s; `ap start --check`
+8.4 s, exit 0; the fingerprints stayed the same.
+
 ```sh
 src/deploy/ap down && time src/deploy/ap start
 ```
