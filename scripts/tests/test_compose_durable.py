@@ -3,10 +3,11 @@ and the launcher's handling of PostgreSQL's password. Test author's file; the co
 makes it pass without changing it.
 
 Interface fixed here (nothing else names it), which T004 must meet:
-  * The password file is `durable-store-password` in the launcher's state folder
-    (${XDG_STATE_HOME:-$HOME/.local/state}/agentic-platform/durable-store-password). `ap up` creates
-    it with mode 600 and a non-empty random content when it is missing, and keeps the content of an
-    existing one on every later `ap up`. `ap` never prints it (standard output, standard error,
+  * The password file is `durable-store-password` in a folder `durable/` of the launcher's state
+    folder (${XDG_STATE_HOME:-$HOME/.local/state}/agentic-platform/durable/durable-store-password).
+    `ap up` makes the folder with mode 700 and the file with mode 644 (the containers must read it)
+    and a non-empty random content when it is missing, and keeps the content of an existing one on
+    every later `ap up`. `ap` never prints it (standard output, standard error,
     docker argv or environment).
   * `ap` hands the file to Compose as the variable AP_DURABLE_PASSWORD_FILE (like
     AP_CREDENTIALS_FILE), which compose.yaml reads for `durable-store` and `durable`/`durable-schema`.
@@ -183,7 +184,7 @@ class DurablePasswordTest(unittest.TestCase):
     def setUp(self):
         self.setUp0()  # throwaway launcher tree, state, credentials, recorded images
         shutil.copy2(START_STUB, self.bin / "docker")
-        self.pwfile = self.state / "agentic-platform" / PASSWORD_FILE
+        self.pwfile = self.state / "agentic-platform" / "durable" / PASSWORD_FILE
 
     def ap(self, *args):
         e = {k: v for k, v in os.environ.items() if not k.startswith(("AP_", "STUB_"))}
@@ -202,12 +203,14 @@ class DurablePasswordTest(unittest.TestCase):
     def test_up_makes_the_password_file_once_and_keeps_it(self):
         r1 = self.up()
         self.assertTrue(self.pwfile.is_file(), "ap up did not create %s" % self.pwfile)
-        self.assertEqual(stat.S_IMODE(self.pwfile.stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(self.pwfile.stat().st_mode), 0o644)
+        self.assertEqual(stat.S_IMODE(self.pwfile.parent.stat().st_mode), 0o700)
         first = self.pwfile.read_text()
         self.assertTrue(first.strip(), "the password file is empty")
         r2 = self.up()
         self.assertEqual(self.pwfile.read_text(), first, "a second ap up changed the password")
-        self.assertEqual(stat.S_IMODE(self.pwfile.stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(self.pwfile.stat().st_mode), 0o644)
+        self.assertEqual(stat.S_IMODE(self.pwfile.parent.stat().st_mode), 0o700)
         for r in (r1, r2):
             self.assertNotIn(first.strip(), r.stdout + r.stderr, "ap printed the password")
         self.assertNotIn(first.strip(), self.log.read_text(), "the password reached a docker call")

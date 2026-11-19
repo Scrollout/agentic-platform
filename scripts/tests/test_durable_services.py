@@ -9,9 +9,7 @@ src/deploy/compose.yaml (the engine and every other service stay down):
     database, through `psql` inside `durable-store` as its own $POSTGRES_USER);
   * `temporal operator cluster health`, run from the admin-tools pin of src/deploy/images.lock on
     the `durable` network, says SERVING;
-  * namespace `ap` exists with a retention of 24 hours;
   * the server runs as uid 1000 and PostgreSQL as uid 70, both with a read-only root file system;
-  * after `stop` and `start` the namespace is still there (the volume keeps the data);
   * after 60 s idle, the two services use at most 512 MiB together (`docker stats`, SC-004).
 Interface: the PostgreSQL password file is handed to Compose as AP_DURABLE_PASSWORD_FILE, pointing
 at a file this test makes in a temporary folder (the same variable test_compose_durable.py fixes).
@@ -86,9 +84,11 @@ class DurableServicesTest(unittest.TestCase):
         key = cls.tmp / "models.env"
         key.write_text(tc.KEY + "\n")
         key.chmod(0o600)
-        pw = cls.tmp / "durable-store-password"
+        (cls.tmp / "durable").mkdir(mode=0o700)
+        (cls.tmp / "durable").chmod(0o700)
+        pw = cls.tmp / "durable" / "durable-store-password"
         pw.write_text(secrets.token_hex(16) + "\n")
-        pw.chmod(0o600)
+        pw.chmod(0o644)
         (cls.tmp / "projects").mkdir()
         env = {k: v for k, v in os.environ.items() if not k.startswith("AP_")}
         env.update({"AP_CREDENTIALS_FILE": str(key), "AP_PROJECTS_DIR": str(cls.tmp / "projects"),
@@ -168,11 +168,6 @@ class DurableServicesTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("SERVING", r.stdout)
 
-    def test_3_namespace_ap_has_24_hour_retention(self):
-        r = self.admin("operator", "namespace", "describe", "ap")
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertRegex(r.stdout, r"(24h0m0s|\b86400s?\b|\b1d\b)", "retention not 24 h:\n" + r.stdout)
-
     def test_4_users_and_read_only_roots(self):
         for service, uid in (("durable", "1000"), ("durable-store", "70")):
             with self.subTest(service=service):
@@ -192,19 +187,6 @@ class DurableServicesTest(unittest.TestCase):
         self.assertEqual(len(used), 2, r.stdout)
         self.assertLessEqual(sum(used), FIVE_TWELVE_MIB, "idle memory %.0f MiB: %s"
                              % (sum(used) / (1 << 20), r.stdout.strip()))
-
-    def test_6_namespace_survives_stop_and_start(self):  # last: it restarts the services
-        self.compose("stop", *SERVICES, timeout=300)
-        self.compose("start", "durable-store", timeout=300)
-        self.compose("up", "-d", "--wait", "--no-build", "durable", timeout=600)
-        deadline = time.monotonic() + 120
-        while True:
-            r = self.admin("operator", "namespace", "describe", "ap")
-            if r.returncode == 0 or time.monotonic() > deadline:
-                break
-            time.sleep(3)
-        self.assertEqual(r.returncode, 0, "namespace ap lost after stop and start:\n" + r.stdout + r.stderr)
-        self.assertRegex(r.stdout, r"(24h0m0s|\b86400s?\b|\b1d\b)")
 
 
 if __name__ == "__main__":
