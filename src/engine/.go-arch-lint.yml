@@ -30,6 +30,12 @@ vendors:
     in: [github.com/agentic-platform/retry]
   slice-module:
     in: [github.com/agentic-platform/slice]
+  temporal:
+    in: [go.temporal.io/sdk/activity, go.temporal.io/sdk/client, go.temporal.io/sdk/temporal, go.temporal.io/sdk/worker,
+      go.temporal.io/sdk/workflow, go.temporal.io/api/enums/v1, go.temporal.io/api/serviceerror,
+      go.temporal.io/api/workflowservice/v1, google.golang.org/protobuf/types/known/durationpb]
+  temporal-testsuite:
+    in: [go.temporal.io/sdk/testsuite]
   yaml:
     in: [go.yaml.in/yaml/v3]
 components:
@@ -43,6 +49,7 @@ components:
   cmd-check: { in: cmd/check }
   cmd-engine: { in: cmd/engine }
   contracts: { in: contracts }
+  durable: { in: durable }
   machine: { in: machine }
   procedures: { in: procedures }
   slices: { in: slices }
@@ -72,9 +79,14 @@ deps:
   contracts:
     mayDependOn: [contracts, slices]
     canUse: [kin-openapi, oasdiff]
+  durable:
+    # api for the retry rule of the engine contract (api.RetryRule); api defines the ports durable implements.
+    mayDependOn: [api, machine, store]
+    canUse: [retry-module, temporal]
   machine:
-    mayDependOn: [machine]
-    canUse: [jsonschema]
+    # durable, retry-module, temporal, temporal-testsuite and yaml for the run workflow's tests (T012).
+    mayDependOn: [durable, machine]
+    canUse: [jsonschema, retry-module, temporal, temporal-testsuite, yaml]
   procedures:
     mayDependOn: [canonical, checks, procedures]
     canUse: [modfile]

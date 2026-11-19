@@ -64,7 +64,7 @@ workload class, Principle IV).
 
 ## The engine's durable interface (sketch for the test authors)
 
-Package `src/engine/durable`; names may change in the code only together with this sketch.
+Package `src/engine/durable` holds the workflows and activities; the two ports `Runs` and `Operations` are the API's, in `src/engine/api` (`durable` reads the retry rule from `api`, so `api` must not import `durable`; found in T016). Names may change in the code only together with this sketch.
 
 | Name | Kind | Input | Result |
 |------|------|-------|--------|

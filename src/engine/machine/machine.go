@@ -48,6 +48,11 @@ var (
 	ErrNotInterrupted = errors.New("machine: the run is not interrupted")
 	// ErrUnknownRun: no run has this ID.
 	ErrUnknownRun = errors.New("machine: no such run")
+	// ErrWorkersNotReady: a Worker returns it (wrapped) when the step workers of the run's slice
+	// are not running, so the attempt was not made (the run waits for them).
+	ErrWorkersNotReady = errors.New("the step workers are not running")
+	// ErrModelUnavailable: a Worker returns it (wrapped) when the step's model cannot be reached.
+	ErrModelUnavailable = errors.New("the model is unavailable")
 )
 
 // errHalt stops the driving loop: the run waits for the developer, has ended or cannot be recorded.
