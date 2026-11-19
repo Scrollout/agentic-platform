@@ -23,6 +23,8 @@ generated: { by: claude-code/claude-opus-5-5, at: 2026-11-19T09:00:00Z }
 
 # Origin
 
+> Superseded in part by [ADR 0070](/decisions/0070-engine-registers-the-namespace-password-folder-private.md): the engine, not the schema job, registers the namespace `ap`, and the password file is mode 644 in a mode-700 folder.
+
 Feature 002's [plan](../../specs/002-durable-execution/plan.md) adopts Temporal for the engine's durable execution, as [ADR 0056](/decisions/0056-durable-execution-custom-for-the-mvp-temporal-after.md) decided. The project owner chose PostgreSQL over the SQLite dev server on 2026-11-19 (research R1).
 
 Sources: [Project owner's answers, 2026-11-19](https://claude.ai/code/session_01P2TmGw3MdjVyoyhGeQK7np), [Feature 002 research](../../specs/002-durable-execution/research.md), [Feature 002 plan, Decisions](../../specs/002-durable-execution/plan.md).

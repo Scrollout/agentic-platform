@@ -47,7 +47,8 @@ questions on 2026-11-19.
   - The namespace `ap` is registered by the engine when it connects to the server, with the
     retention `x-limits.idempotency-key-retention-hours` gives (24 h), and kept when it exists
     (owner, 2026-11-19, ADR 0070): the schema job runs before the server, so it cannot register
-    it, and a fourth job on the `durable` network would widen that network.
+    it, and a fourth job on the `durable` network would widen that network. Limit: a later change
+    of that retention does not reach an existing namespace; it needs its own task.
   - The PostgreSQL password is a file `ap` makes once in its own folder `durable/` in the state
     folder: the folder mode 700, so only the developer reaches it on the host, and the file mode
     644, so the containers' users (70 and 1000) can read it through the Compose secret (owner,

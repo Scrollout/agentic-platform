@@ -35,7 +35,7 @@ Sources: [Feature 002 research](../../specs/002-durable-execution/research.md), 
 
 - The frontend's gRPC API, used only by the engine through the Go SDK (`go.temporal.io/sdk`),
   on the internal network `durable`.
-- Namespace `ap`, task queues `runs` and `operations`.
+- Namespace `ap`, registered by the engine at start ([ADR 0070](/decisions/0070-engine-registers-the-namespace-password-folder-private.md)); task queues `runs` and `operations`.
 
 Sources: [Feature 002 research](../../specs/002-durable-execution/research.md).
 

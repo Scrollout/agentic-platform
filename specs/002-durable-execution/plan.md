@@ -188,7 +188,7 @@ None.
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
-| Principle V (partial), extending feature 001's exception: Temporal's frontend accepts any caller on the internal `durable` network, and PostgreSQL authenticates the server with a password `ap` makes per install | One developer on one machine; the two services are reachable only from the engine and the server on internal networks, as feature 001's services are; owner, 2026-11-19 | mTLS with a local CA and per-session certificates for both, more parts and tests for a local tool; required with hosting, with feature 001's other V and XI exceptions |
+| Principle V (partial), extending feature 001's exception: Temporal's frontend accepts any caller on the internal `durable` network, and PostgreSQL authenticates the server with a password `ap` makes per install, readable by any user inside the three containers (ADR 0070) | One developer on one machine; the two services are reachable only from the engine and the server on internal networks, as feature 001's services are; owner, 2026-11-19 | mTLS with a local CA and per-session certificates for both, more parts and tests for a local tool; required with hosting, with feature 001's other V and XI exceptions |
 
 The project owner approved the Principle V extension on 2026-11-19, for this local,
 single-developer version only. This feature removes feature 001's Principle VI exception (the

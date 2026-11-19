@@ -49,7 +49,7 @@ file, fsync, rename, fsync the folder) before the engine answers 202:
 
 ## Execution state in Temporal (new, not a record)
 
-Namespace `ap`, retention 24 h. Task queues `runs` and `operations` (one worker pool per
+Namespace `ap`, retention 24 h (`x-limits.idempotency-key-retention-hours`), registered by the engine at start (ADR 0070). Task queues `runs` and `operations` (one worker pool per
 workload class, Principle IV).
 
 | Workflow | ID | Holds | Signals | Queries |
