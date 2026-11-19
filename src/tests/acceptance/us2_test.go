@@ -171,11 +171,11 @@ func TestUS2(t *testing.T) {
 		if first.ID == "" {
 			t.Fatal("US2.1 did not produce a finished run")
 		}
-		// A replay needs an ended run (RunNotEnded) and a new project (ProjectExists).
-		refused(t, l, "POST", "/runs/"+first.ID+"/replay", map[string]string{"project": "notes"}, 409, "ProjectExists")
 		// The replay's project has its own step workers, which the engine needs registered although
 		// no step is run again.
 		l.StepWorkers(t, slice, "notes-replay")
+		// A replay needs an ended run (RunNotEnded) and a new project (ProjectExists); US2.1 removed the step workers, so ProjectExists is only reached once the replay project's are registered.
+		refused(t, l, "POST", "/runs/"+first.ID+"/replay", map[string]string{"project": "notes"}, 409, "ProjectExists")
 		op := l.Accept(t, "POST", "/runs/"+first.ID+"/replay", map[string]string{"project": "notes-replay"})
 		o := l.Wait(t, op)
 		l.StopStepWorkers(t, slice, "notes-replay")
