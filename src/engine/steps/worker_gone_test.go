@@ -283,3 +283,74 @@ func TestWorkerGoneAgentStreamEndsWithoutStreamStopped(t *testing.T) {
 		wantOtherError(t, run(t, info, sse(map[string]any{"type": "stream_stopped", "reason": "normal"})))
 	})
 }
+
+// garbage answers with bytes that are no HTTP response, then closes.
+func garbage(w http.ResponseWriter, _ *http.Request) {
+	c, _, err := w.(http.Hijacker).Hijack()
+	if err != nil {
+		return
+	}
+	_, _ = fmt.Fprint(c, "garbage\r\n\r\n")
+	time.Sleep(20 * time.Millisecond) // let the client read it
+	_ = c.Close()
+}
+
+// T053: a worker that gave no complete HTTP answer (none within the header limit, or no HTTP at
+// all) is gone, unless the caller gave up first (research R10, "Found next 4").
+func TestWorkerGoneNoCompleteAnswer(t *testing.T) {
+	// onSession serves the agent's create session with h and everything else normally.
+	onSession := func(h http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, q *http.Request) {
+			if q.Method == http.MethodPost && q.URL.Path == "/api/sessions" {
+				h(w, q)
+				return
+			}
+			agentServer(garbage)(w, q)
+		}
+	}
+	withhold := func(w http.ResponseWriter, q *http.Request) {
+		_, _ = io.Copy(io.Discard, q.Body)
+		<-q.Context().Done() // never sends headers
+	}
+	t.Run("agent create session sends no headers within the client's limit", func(t *testing.T) {
+		r, req := goneRig(t, testsStep, onSession(withhold))
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer cancel()
+		start := time.Now()
+		_, err := steps.NewWorker(r.cfg).Run(ctx, req)
+		wantNotReady(t, err)
+		if time.Since(start) > 40*time.Second {
+			t.Fatalf("it took the caller's whole deadline: %v", time.Since(start))
+		}
+	})
+	t.Run("procedure answers with no HTTP", func(t *testing.T) {
+		r, req := goneRig(t, "contract-check", garbage)
+		_, err := steps.NewWorker(r.cfg).Run(ctx5(t), req)
+		wantNotReady(t, err)
+	})
+	t.Run("agent create session answers with no HTTP", func(t *testing.T) {
+		r, req := goneRig(t, testsStep, onSession(garbage))
+		_, err := steps.NewWorker(r.cfg).Run(ctx5(t), req)
+		wantNotReady(t, err)
+	})
+	t.Run("agent run answers with no HTTP", func(t *testing.T) {
+		r, req := goneRig(t, testsStep, agentServer(garbage))
+		_, err := steps.NewWorker(r.cfg).Run(ctx5(t), req)
+		wantNotReady(t, err)
+	})
+	// guard: the caller's deadline passing first while the worker withholds headers
+	t.Run("deadline first, agent create session withholds headers", func(t *testing.T) {
+		r, req := goneRig(t, testsStep, onSession(withhold))
+		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+		defer cancel()
+		_, err := steps.NewWorker(r.cfg).Run(ctx, req)
+		wantOtherError(t, err)
+	})
+	t.Run("deadline first, procedure withholds headers", func(t *testing.T) {
+		r, req := goneRig(t, "contract-check", withhold)
+		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+		defer cancel()
+		_, err := steps.NewWorker(r.cfg).Run(ctx, req)
+		wantOtherError(t, err)
+	})
+}
