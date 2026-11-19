@@ -23,6 +23,10 @@ import (
 // (errors.Is).
 var ErrAgentFailed = errors.New("the agent failed")
 
+// ErrStreamEnded: the stream ended without stream_stopped, so the agent did not finish its answer,
+// as when its worker stops during the call.
+var ErrStreamEnded = errors.New("the stream ended without stream_stopped")
+
 const (
 	// deleteTimeout bounds the session's deletion, which runs even after the call was cancelled.
 	deleteTimeout = 5 * time.Second
@@ -211,7 +215,7 @@ func readEvents(r io.Reader, seen func(event)) (content, model string, err error
 		return "", "", err
 	}
 	if !stopped {
-		return "", "", errors.New("the stream ended without stream_stopped")
+		return "", "", ErrStreamEnded
 	}
 	return result(content, model, seenChoice)
 }

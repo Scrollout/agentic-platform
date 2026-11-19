@@ -266,14 +266,16 @@ func (m marked) Error() string   { return m.err.Error() }
 func (m marked) Unwrap() []error { return []error{m.err, m.kind} }
 
 // unreachable reports whether err is a call whose connection failed before the worker's answer
-// was complete: the host unknown, the connection refused, or the connection reset or closed
-// before the answer's end, as when the step's container is not running or restarts during the
-// call (research R10). An answer the worker gave, whatever its status, is not.
+// was complete: the host unknown, the connection refused, the connection reset or closed before
+// the answer's end, or an agent's stream ended without stream_stopped, as when the step's
+// container is not running or restarts during the call (research R10). An answer the worker
+// gave, whatever its status, is not.
 func unreachable(err error) bool {
 	var dns *net.DNSError
 	var op *net.OpError
 	return errors.As(err, &dns) || errors.As(err, &op) && op.Op == "dial" ||
-		errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, syscall.ECONNRESET)
+		errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, agentcall.ErrStreamEnded)
 }
 
 // agentAnswer is the review step's answer: its findings, claims the checks verify. Another
