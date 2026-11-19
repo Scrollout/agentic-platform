@@ -2,6 +2,7 @@
 
 ## 2026-11-19
 
+* **Planning**: Feature 002, `/speckit-tasks` (T001 to T033) and `/speckit-analyze`: round 1 (fresh reviewer) found 6 HIGH, 6 MEDIUM and 3 LOW, fixed in the artifacts, FR-017 clarified by the owner (the erasing operation stays followable for 24 h); round 2 closed them, with 2 LOW fixed; no CRITICAL or HIGH left.
 * **Planning**: Feature 002, `/speckit-plan` (`specs/002-durable-execution/`): plan, research, data model, contract draft and quickstart. Temporal's server and PostgreSQL in Compose ([ADR 0065](/decisions/0065-temporal-and-postgresql-in-compose.md)); the run record stays the engine's ([ADR 0066](/decisions/0066-the-run-record-stays-the-engines.md)); a run is one workflow ([ADR 0067](/decisions/0067-a-run-is-one-temporal-workflow.md)); operations recorded then run as workflows ([ADR 0068](/decisions/0068-operations-recorded-then-run-as-workflows.md)); one retry rule in the engine contract ([ADR 0069](/decisions/0069-one-retry-rule-declared-in-the-engine-contract.md)); components [Temporal](/components/temporal.md) and [PostgreSQL](/components/postgresql.md); [the Temporal reference](/references/temporal.md) updated. Owner choices 2026-11-19: PostgreSQL, keep the run record, one declared retry rule, the measurement on the clean VM, and feature 001's Principle V exception extended to the two services.
 
 ## 2026-11-18
