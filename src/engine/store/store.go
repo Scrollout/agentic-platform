@@ -158,7 +158,22 @@ func (s *Store) Close() error { return nil }
 // It returns only after the event is durably recorded; on error nothing was acknowledged and the
 // call may be retried. The first Append for a run ties the run to slice; appending that run under
 // another slice is an error.
-func (s *Store) Append(sliceID string, e Event) (Event, error) {
+func (s *Store) Append(sliceID string, e Event) (Event, error) { return s.record(sliceID, e, false) }
+
+// ErrSeqTaken is returned (wrapped) by RecordEvent for a Seq that is held with other content, or
+// that lies beyond the next one.
+var ErrSeqTaken = errors.New("store: seq taken")
+
+// RecordEvent records e, whose Seq the caller sets, under slice, and returns the event as stored.
+// A Seq one beyond the run's last is appended; a Seq already held with an equal event succeeds and
+// writes nothing; a Seq held with other content, or beyond the next one, is ErrSeqTaken; a Seq
+// below 1 is refused. Otherwise it behaves like Append, durability and validation included.
+func (s *Store) RecordEvent(sliceID string, e Event) (Event, error) {
+	return s.record(sliceID, e, true)
+}
+
+// record is Append (callerSeq false: the store sets Seq) or RecordEvent (callerSeq true: the caller's Seq).
+func (s *Store) record(sliceID string, e Event, callerSeq bool) (Event, error) {
 	sl, err := s.ids.ParseID(sliceID)
 	if err != nil {
 		return Event{}, fmt.Errorf("store: %w", err)
@@ -175,7 +190,22 @@ func (s *Store) Append(sliceID string, e Event) (Event, error) {
 	if owner, ok := s.runSlice[run]; ok && owner != sl {
 		return Event{}, fmt.Errorf("store: run %s belongs to slice %s, not %s", run, owner, sl)
 	}
-	e.Seq = len(s.events[run]) + 1
+	held := s.events[run]
+	if callerSeq {
+		switch {
+		case e.Seq < 1:
+			return Event{}, fmt.Errorf("store: event of run %s has seq %d, below 1", run, e.Seq)
+		case e.Seq <= len(held):
+			if held[e.Seq-1] == e {
+				return e, nil
+			}
+			return Event{}, fmt.Errorf("run %s seq %d: %w", run, e.Seq, ErrSeqTaken)
+		case e.Seq > len(held)+1:
+			return Event{}, fmt.Errorf("run %s seq %d is beyond the next, %d: %w", run, e.Seq, len(held)+1, ErrSeqTaken)
+		}
+	} else {
+		e.Seq = len(held) + 1
+	}
 	line, err := json.Marshal(e)
 	if err != nil {
 		return Event{}, err
