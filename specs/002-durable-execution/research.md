@@ -243,6 +243,14 @@ questions on 2026-11-19.
   inside it, a wider credential); a clarified FR-005 that needs `ap build-workers --resume` after
   every engine restart (narrows the feature's purpose).
 - Record: [ADR 0071](../../docs/decisions/0071-step-worker-registrations-kept-in-the-engine-store.md).
+- **Found next** (CI run 44553348919, T014 procedure step, 3 of 3): with the registration kept,
+  the restarted engine's repeated call reached the step worker while it was itself restarting,
+  was refused (`WorkersNotReady`), and the run waited for a `workers-ready` that nobody sends.
+  **Decision** (owner, 2026-11-19): a `WorkersNotReady` call is retried by `src/retry` (3 retries,
+  about 1, 2 and 4 s plus jitter, durable sleeps), as restore and commit are (T012 (j)); only then
+  is the run interrupted and waits as before. **Rejected**: retrying for the whole wait (up to 14
+  days, about 5 history events per try, far over R9's 10,240), and a declared retry window (a new
+  contract value for one case).
 
 ### R9. Tests
 

@@ -101,7 +101,8 @@ Signals: `workers-ready`, `resume`, `accept-hand-over`, `cancel`. The API tests 
 ```text
 running ──platform stops──▶ running (RunInterrupted, RunResumed; same attempt again)
 running ──engine restarts, step workers still running──▶ running (RunInterrupted, RunResumed; registrations kept, ADR 0071)
-running ──step workers gone (a reboot)──▶ interrupted (RunInterrupted `the step workers are not running`)
+running ──a worker call fails WorkersNotReady──▶ the same call again by the retry rule (durable sleeps; nothing recorded)
+running ──every retry fails WorkersNotReady (the workers are gone, a reboot)──▶ interrupted (RunInterrupted `the step workers are not running`)
 interrupted (workers) ──ap build-workers --resume: workers-ready──▶ running (RunResumed; no `ap resume` needed)
 running ──every attempt: model unavailable──▶ interrupted ──resume──▶ running
 (the time budget runs only while running)

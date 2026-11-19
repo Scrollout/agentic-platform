@@ -46,6 +46,11 @@ feature keeps except where a requirement below changes it.
   workers' registrations across its restart, so the run reaches the still-running step workers
   and continues by itself; a worker that is really gone still makes the run wait for
   `ap build-workers --resume` (owner, 2026-11-19; ADR 0071).
+- Q: A step worker that is restarting when the run repeats its call refuses it, and nothing then
+  tells the waiting run that the kept worker is back (CI run 44553348919, T014 procedure step);
+  what should the run do? → A: retry the same call by the platform's one retry rule, as for the
+  project's restore and commit; only when every retry fails does the run wait for its workers as
+  before (owner, 2026-11-19).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -153,7 +158,8 @@ feature 001 passes on this feature's code.
 - The model is unavailable on every attempt of a step: the run is interrupted with that reason,
   as in feature 001, and the developer resumes it.
 - Only the engine restarts and the step containers keep running: the run continues by itself
-  with the same step workers; nobody registers them again (FR-005).
+  with the same step workers; nobody registers them again (FR-005). A worker that is briefly
+  unreachable (restarting) is called again by the retry rule before the run waits for it.
 - The machine restarts and the step containers are gone: the run waits until the developer
   rebuilds them for the run (as `ap build-workers --resume` does today), then continues by itself
   (FR-005); its time budget does not run while it waits.
