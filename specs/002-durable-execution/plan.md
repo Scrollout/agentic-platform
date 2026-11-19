@@ -33,8 +33,8 @@ launcher's Compose changes
 
 **Testing**: Go `testing` with Temporal's `testsuite` (workflow unit tests, time skipping) and
 `worker.NewWorkflowReplayer` (replay) in CI's `go` job; the engine against real Temporal and
-PostgreSQL in the `docker` job; the stop-point acceptance suite in the `e2e` job; feature 001's
-suites unchanged
+PostgreSQL in the `docker` job, where the stop-point acceptance suite also runs in the labs;
+feature 001's suites unchanged
 
 **Target Platform**: Linux with Docker 28+, Compose and gVisor, as feature 001
 
@@ -43,8 +43,9 @@ suites unchanged
 **Performance Goals**: a run stopped and continued ends as an uninterrupted one (SC-001); a lost
 engine is found within 30 s (activity heartbeat timeout)
 
-**Constraints**: the added services use at most 512 MiB idle (SC-004; measured about 200 MiB,
-research S14); no egress; non-root, read-only root, no capabilities; nothing protected in
+**Constraints**: the added services (`durable` and `durable-store`) use at most 512 MiB idle
+(SC-004; measured about 200 MiB, research S14); the engine's own memory with its Temporal worker
+is measured and reported alongside, within its feature 001 limit of 512 MiB; no egress; non-root, read-only root, no capabilities; nothing protected in
 Temporal's state (FR-016)
 
 **Scale/Scope**: one developer, one machine, one run at a time (feature 001's RunActive rule)
@@ -135,7 +136,7 @@ specs/002-durable-execution/
 
 ```text
 src/
-├── retry/                         # new module: the retry rule's Wait(n, random); go.work gains it
+├── retry/                         # new module: the retry rule's Wait(n, random); go.work and an archfile
 ├── engine/
 │   ├── api/preview/2026-11-12-preview/openapi.yaml   # x-limits retry values, 503 Unavailable, operation retention text
 │   ├── api/operations.go          # operation record and outbox; status from the workflow; backoff removed
@@ -144,14 +145,15 @@ src/
 │   ├── machine/                   # the step rules as workflow code; resume, load and historyBackoff removed
 │   ├── store/                     # RecordEvent once per seq; operation records and their sequence
 │   └── cmd/engine/                # start the Temporal worker; refuse runs left open by feature 001 (R7)
-├── cli/runs.go                    # the client's resend wait from src/retry
+├── cli/runs.go, cli/api/           # the client's resend wait from src/retry, the values from the embedded contract
 ├── cli/contract.md                # the resume paragraph, the retry values' home, interrupted's meaning
 └── deploy/
     ├── compose.yaml               # durable-store, durable-schema, durable; networks durable and durable-store
     ├── durable/                   # dynamic config, the schema job's script
     ├── images.lock                # temporal-server, temporal-admin-tools, postgres pins
-    └── ap                         # the PostgreSQL password file; `down` keeps the durable-store volume
-src/tests/acceptance/              # new: stop-point suite (SC-001)
+    └── ap                         # the PostgreSQL password file; `down` keeps the volume; resume's message
+src/tests/lab/                     # the labs start the durable services
+src/tests/acceptance/              # new: stop-point, operation-restart and erasure suites
 ```
 
 **Structure Decision**: the change lives in the engine (`src/engine`), a new shared module
@@ -164,15 +166,19 @@ the agents do not change.
 `open_round_resume_test.go`, `fix_round_test.go`'s `TestResumedRunContinuesAFixWithTheSameRound`,
 `reuse_test.go`'s resume cases, `history_test.go`'s retry and crash cases,
 `history_jitter_test.go`), the API's operation and retry tests (`skeleton_test.go`'s retry and
-backoff cases, `runs_ops_test.go`'s resume and restart cases, `operations_wait_test.go`), and
-`cmd/engine`'s `restart_test.go` and `close_waits_test.go`. The tasks first try to keep each
+backoff cases, `runs_ops_test.go`'s resume and restart cases, `operations_wait_test.go`),
+`cmd/engine`'s `restart_test.go` and `close_waits_test.go`, `scripts/tests/test_compose.py`'s
+real-file checks (the three new services have images that are none of the platform's own, which
+it classifies `other` and refuses on internal networks), `scripts/tests/test_build_workers_projects.py`
+(the launcher's `resume` exit-3 message), and the test labs in `src/tests/lab`. The tasks first try to keep each
 assertion and change only how the test drives the engine.
 
 ## Feature 001 items this feature replaces
 
 Backlog T086 (when `RunInterrupted` is appended: replaced by R3), T138 (attempts across a stop:
-FR-003), T158 (a failed `RunCompleted` append: replaced by the activity's retry, R5) and T055c's
-retry items (the client's wait: R5). T159 (which refused answers count as attempts) stays in the
+FR-003) and T158 (a failed `RunCompleted` append: replaced by the activity's retry, R5) close.
+T055c stays open: its client resend wait moves to `src/retry` (R5), and its other items (an
+HTTP-date `Retry-After`, `take-over`'s wait, the rest) are not this feature's. T159 (which refused answers count as attempts) stays in the
 backlog: it is not this feature's decision.
 
 ## Exceptions

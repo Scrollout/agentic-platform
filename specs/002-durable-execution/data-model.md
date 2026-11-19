@@ -62,6 +62,25 @@ workload class, Principle IV).
 - A run's workflow runs while the run is running, interrupted for another reason, or waiting for
   the developer; it ends with the run's outcome.
 
+## The engine's durable interface (sketch for the test authors)
+
+Package `src/engine/durable`; names may change in the code only together with this sketch.
+
+| Name | Kind | Input | Result |
+|------|------|-------|--------|
+| `Run` | workflow, queue `runs`, ID `RUN-<n>` | run ID, slice, project, pattern, inputs' hashes, `replay_of` | outcome |
+| `Operation` | workflow, queue `operations`, ID `OP-<n>` | operation ID, kind, target | succeeded, or the error's code and reason |
+| `CallWorker` | activity | run, step, attempt, round, the step's inputs by hash | artifacts by hash, usage, running time, or `WorkersNotReady`, `ModelUnavailable` |
+| `RunCheck` | activity | run, step, attempt, check name, artifacts by hash | passed, reason, findings by hash, running time |
+| `RestoreProject`, `CommitStep` | activity | project, run, step, round, attempt, the stamp's fields | done, running time |
+| `LookupReuse`, `PutResult` | activity | reuse key | the reused result by hash, or none |
+| `RecordEvent` | activity | slice, run, seq, event | done, or `SeqTaken` |
+| `Runs` (the API's port) | Go interface | `Start(run)`, `Signal(run, name)`, `Cancel(run)`, `Exists(run)`, `Delete(id)` | errors `Unavailable`, `NotFound` |
+| `Operations` (the API's port) | Go interface | `Start(op)`, `Describe(op)`, `Cancel(op)`, `Delete(op)` | status, progress, error; `Unavailable`, `NotFound` |
+
+Signals: `workers-ready`, `resume`, `accept-hand-over`, `cancel`. The API tests fake `Runs` and
+`Operations`; the workflow tests mock the activities.
+
 ## Run states (unchanged names)
 
 ```text

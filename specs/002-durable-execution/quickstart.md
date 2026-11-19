@@ -29,9 +29,9 @@ src/deploy/ap run <run>                      # follow it again
 Expected: the record shows `RunInterrupted` (`the platform stopped`) and `RunResumed`
 (`continued after the platform stopped`), the interrupted attempt again with the same number, no
 accepted step twice, and the run ends `done` with the artifacts an uninterrupted run of the same
-slice gives (`ap compare`). Nobody typed `ap resume`. Automated: the stop-point acceptance suite
-(engine killed during an agent step, a procedure step, a review round and a commit; 3 trials each)
-in the `e2e` job.
+slice gives (`ap compare`), and replaying it gives byte-identical artifacts. Nobody typed `ap
+resume`. Automated: the stop-point acceptance suite (engine killed during an agent step, a
+procedure step, a review round and a commit; 3 trials each) in the `docker` job's labs.
 
 ## 3. An accepted operation is not lost (US2, SC-002)
 

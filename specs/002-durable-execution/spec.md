@@ -35,6 +35,13 @@ feature keeps except where a requirement below changes it.
 - Q: Is need N-040 (never silently lose work the platform has accepted) a `yes`? → A: Yes,
   confirmed (owner).
 
+### Session 2026-11-19
+
+- Q: Erasing a slice is itself an operation that must stay followable (FR-009); does FR-017's
+  erasure include that operation? → A: No: the erasing operation stays followable until its
+  retention ends (24 h), holding only the slice's ID and no run content, and is then removed;
+  every other run and operation of the slice is erased at once (owner, from `/speckit-analyze`).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A run survives a platform stop (Priority: P1)
@@ -149,7 +156,8 @@ feature 001 passes on this feature's code.
   naming the run, until the developer has ended it (resumed to an end, or cancelled) with the
   version that recorded it.
 - The developer erases a slice: nothing of its runs is left in any store the platform keeps,
-  including the one that keeps runs and operations durable.
+  including the one that keeps runs and operations durable; only the erasing operation itself
+  stays followable until its retention ends (FR-017).
 - A run's record would exceed what the durable-execution engine holds for one run: artifacts are
   kept by hash outside it, so a run within feature 001's limits always fits.
 
@@ -214,7 +222,8 @@ feature 001 passes on this feature's code.
   content, and MUST hold no prompt, completion or other protected content beyond what feature
   001's run record holds.
 - **FR-017**: Erasing a slice MUST erase its runs and operations from every store the platform
-  keeps.
+  keeps, except the erasing operation itself, which MUST stay followable until its retention ends
+  (24 h after it ends) and MUST hold only the slice's ID.
 
 ### Key Entities
 
@@ -244,7 +253,7 @@ feature 001 passes on this feature's code.
 - **SC-005**: The retry rule is declared in exactly one place, and the plan of feature 001
   carries no exception for durable execution or for the retry wait.
 - **SC-006**: After a slice is erased, no store the platform keeps holds any of its runs or
-  operations.
+  operations other than the erasing operation, which is gone 24 h after it ends.
 
 ## Assumptions
 

@@ -157,8 +157,10 @@ questions on 2026-11-19.
   `min(longest, first × 2^n)` plus a random part of up to `fraction` of it: 1 to 1.5 s, 2 to 3 s,
   4 to 6 s, the form the terminal contract already publishes for the client's resends.
   - A small Go module, `src/retry`, applies it (`Wait(n, random)`); the engine's workflow and
-    the terminal client both use it, each reading the values from its generated contract code,
-    and a contract test proves the values equal `x-limits` (constitution III, single owner).
+    the terminal client both use it. Neither holds the values: the engine reads them from its
+    embedded contract's `x-limits`, as it reads its other limits (`src/engine/api/contract.go`),
+    and the client from the engine contract embedded by its generated code (oapi-codegen's
+    embedded spec, `src/cli/api`), so `x-limits` is the one place (SC-005; constitution III).
   - In the workflow the wait is a durable `workflow.Sleep` and the random part a
     `workflow.SideEffect` (S5), so a retry survives a stop. It covers the project worker's
     restore and commit, an operation's retryable failure (`EraseSlice`), and the client's
@@ -200,9 +202,10 @@ questions on 2026-11-19.
 ### R8. Erasing a slice erases its workflows
 
 - **Decision**: the `DeleteSlice` operation, after its refusal checks, deletes the workflow of
-  each run of the slice and of each operation that targets the slice
-  (`DeleteWorkflowExecution`, S9), then erases the store as today, the operation records
-  included. A test reads PostgreSQL's `executions`, `history_node`, `current_executions` and
+  each run of the slice and of each other operation that targets the slice
+  (`DeleteWorkflowExecution`, S9), then erases the store as today, those operation records
+  included. Its own record and workflow stay followable until the 24 h retention removes them;
+  they hold only the slice's ID (FR-017, clarified 2026-11-19). A test reads PostgreSQL's `executions`, `history_node`, `current_executions` and
   `executions_visibility` tables for the deleted IDs and fails if any row is left (S14 could not
   settle it; S9 says the history is removed).
 - **Why**: FR-017 and SC-006.
@@ -217,8 +220,13 @@ questions on 2026-11-19.
 - Integration: the engine against the real `durable` and `durable-store` services in the
   `docker` job (the recorded model), and the stop points of SC-001 (the engine container stopped
   during an agent step, a procedure step, a review round and a commit, then started) in a new
-  acceptance file run by the `e2e` job. Each compares the artifacts with an uninterrupted run of
-  the same slice, 3 trials.
+  acceptance file in `src/tests/acceptance`, run by the `docker` job in the labs as feature 001's
+  planted suite is. Each compares the artifacts with an uninterrupted run of the same slice and
+  replays the continued run, 3 trials.
+- History size: a run within feature 001's limits (the catalogue pattern's steps, 3 attempts, 3
+  review rounds) is computed and tested to stay under Temporal's warning of 10,240 history events
+  (S10); each event the run records is one activity of about three history events, and
+  heartbeats add none.
 - Feature 001's suites stay as they are (SC-003). Machine tests that drive the old driver are
   rewritten as workflow tests; each existing test file that changes needs the owner's approval
   first, named in the task that changes it.
