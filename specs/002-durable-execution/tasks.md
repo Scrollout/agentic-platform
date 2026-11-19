@@ -44,7 +44,9 @@ converge.
 - **Gate**: `/speckit-analyze` (fresh reviewer) must report no CRITICAL or HIGH before T001, and
   again after any change to spec, plan, tasks or a design artifact. Passed on 2026-11-19 in round 2
   (fresh Sonnet reviewer; round 1: 6 HIGH, 6 MEDIUM, 3 LOW, fixed, FR-017 clarified by the
-  owner; round 2: all closed but one LOW, plus one LOW regression, both fixed).
+  owner; round 2: all closed but one LOW, plus one LOW regression, both fixed). After T001: round 3 (fresh
+  Sonnet reviewer) found 1 HIGH, 2 MEDIUM and 3 LOW, fixed in e878678; round 4 closed all but
+  one, left LOW and recorded as T034.
 
 ---
 
@@ -148,6 +150,7 @@ feature 001 passes on this feature.
 - [ ] T031 Knowledge bundle and feature 001 artifacts: `docs/architecture/overview.md` (durable execution on Temporal; the run record; operations; the two services and networks; ADRs 0065 to 0069), `docs/operations/local.md` and `src/engine/README.md`, `docs/overview/problem-space.md` (N-040's state), feature 001's plan without its Principle VI and Single-owner exception rows, with a line saying feature 002 removed them (SC-005), backlog T086, T138 and T158 closed as `closed: done by feature 002 (T0xx)`, and T055c amended to say its resend wait moved to `src/retry` (it stays open for its other items), `docs/log.md`; `python3 scripts/okf.py index` and `check` report OK
 - [ ] T032 On the owner's clean VM (the owner's go-ahead; over SSH if the owner asks): the quickstart of feature 001 from a fresh clone of this branch reaches an accepted build in under 30 minutes, and the added services' idle memory is at most 512 MiB (SC-004), and the engine's own idle memory with its Temporal worker is recorded beside it (plan, Constraints); `quickstart.md` sections 1 to 3 run by hand; figures recorded in `quickstart.md` and research
 - [ ] T033 `/speckit-converge` for the whole feature, then a final fresh read-only review against every FR and SC, judging the CI run of the last pushed commit (Review converges); every finding fixed or recorded; the owner decides the merge to `main`
+- [ ] T034 Analyze round 4 finding (LOW): the `interrupted` end line in `src/cli/contract.md` ("End lines") says `Resume it with resume RUN-<n>` even for a run that waits for its step workers, where the launcher's `resume` exits 3 naming `ap build-workers --resume <run>`. Decide with the owner whether that case gets its own end line (a terminal-output change that may touch existing `src/cli` tests, which then need the owner's approval); until then the paragraph under "Run states and exit codes" explains it
 
 ## Dependencies & Execution Order
 
