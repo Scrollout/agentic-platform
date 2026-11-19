@@ -19,6 +19,10 @@ import (
 	"time"
 )
 
+// ErrAgentFailed: the agent's stream reported an error, such as its model failing to answer
+// (errors.Is).
+var ErrAgentFailed = errors.New("the agent failed")
+
 const (
 	// deleteTimeout bounds the session's deletion, which runs even after the call was cancelled.
 	deleteTimeout = 5 * time.Second
@@ -174,7 +178,7 @@ func readEvents(r io.Reader, seen func(event)) (content, model string, err error
 		case "agent_choice":
 			content, seenChoice = e.Content, true
 		case "error":
-			return false, fmt.Errorf("the agent failed: %s", Clip(e.Error))
+			return false, fmt.Errorf("%w: %s", ErrAgentFailed, Clip(e.Error))
 		case "stream_stopped":
 			if e.Reason != "normal" {
 				return true, fmt.Errorf("the stream stopped with reason %q", e.Reason)

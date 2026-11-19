@@ -249,3 +249,32 @@ func Compare(a, b []Event) []Difference {
 	}
 	return out
 }
+
+// StateOf is a run's state as its record shows it, the record being written by the run's
+// workflow (data model, "Run states"): ended with the outcome of an end event; waiting for the
+// developer after RunHandedOver; interrupted after RunInterrupted; otherwise running (a platform
+// stop records RunInterrupted then RunResumed, so a stopped run that continued is running). Reason
+// is the detail of the event that ended, handed over or interrupted the run; ExpiresAt is 14 days
+// (HandOverTTL) after a hand-over or interruption. Accepted lists the steps accepted or reused,
+// in order. It reads nothing else and needs no pattern; an empty record gives a zero Run.
+func StateOf(events []Event) Run {
+	if len(events) == 0 {
+		return Run{}
+	}
+	first, last := events[0], events[len(events)-1]
+	r := Run{ID: first.Run, Slice: first.Slice, Project: first.Project, Pattern: first.Pattern, Status: StatusRunning}
+	for _, e := range events {
+		if (e.Kind == "StepAccepted" || e.Kind == "ResultReused" && !e.OpenRound) && !slices.Contains(r.Accepted, e.Step) {
+			r.Accepted = append(r.Accepted, e.Step)
+		}
+	}
+	switch {
+	case terminalOutcome[last.Kind] != "":
+		r.Status, r.Outcome, r.Reason = StatusEnded, terminalOutcome[last.Kind], last.Detail
+	case last.Kind == "RunHandedOver":
+		r.Status, r.Reason, r.ExpiresAt = StatusWaiting, last.Detail, last.At.Add(HandOverTTL)
+	case last.Kind == "RunInterrupted":
+		r.Status, r.Reason, r.ExpiresAt = StatusInterrupted, last.Detail, last.At.Add(HandOverTTL)
+	}
+	return r
+}

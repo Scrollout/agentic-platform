@@ -10,14 +10,15 @@ package durable
 import (
 	"time"
 
+	"github.com/agentic-platform/engine/api"
 	"github.com/agentic-platform/engine/machine"
 )
 
 // Where the engine's workflows run (data model, "Execution state in Temporal"; ADR 0070).
 const (
 	Namespace       = "ap"
-	RunsQueue       = "runs"       // the Run workflow and its activities
-	OperationsQueue = "operations" // the Operation workflow (user story 2)
+	RunsQueue       = api.RunsQueue // the Run workflow and its activities
+	OperationsQueue = "operations"  // the Operation workflow (user story 2)
 )
 
 // The activities' names, as registered.
@@ -41,12 +42,12 @@ const (
 	SeqTaken = "SeqTaken"
 )
 
-// The Run workflow's signals; none carries a payload.
+// The Run workflow's signals, the API's (api.Runs.Signal); none carries a payload.
 const (
-	SignalWorkersReady   = "workers-ready"
-	SignalResume         = "resume"
-	SignalAcceptHandOver = "accept-hand-over"
-	SignalCancel         = "cancel"
+	SignalWorkersReady   = api.SignalWorkersReady
+	SignalResume         = api.SignalResume
+	SignalAcceptHandOver = api.SignalAcceptHandOver
+	SignalCancel         = api.SignalCancel
 )
 
 // RunInput starts a run.
@@ -57,6 +58,7 @@ type RunInput struct {
 	Inputs              map[string]string // the slice's part hashes by input name
 	Refs                []string          // the slice's refs, on every event without refs of its own
 	ReplayOf            string            // "" for a run that is not a replay
+	Operation           string            // the operation following the run, recorded on RunStarted
 }
 
 // RunResult is an ended run's outcome.
@@ -173,11 +175,14 @@ type ReusePut struct {
 // later ends it, are those findings: RecordEvent reads their text from the artifact store and
 // appends the list to Event.Detail (feature 001's detail).
 type EventRecord struct {
-	Slice     string
-	Event     machine.Event
-	Finding   *Finding
-	Open      []Finding
-	Project   string         // Event.Project, which machine.Event does not marshal
-	Files     []machine.File // Event.Files, likewise
-	TimeLimit time.Duration
+	Slice   string
+	Event   machine.Event
+	Finding *Finding
+	Open    []Finding
+	Project string // Event.Project, which machine.Event does not marshal
+	// Operation and ReplayOf, on RunStarted, are the run's operation and the run it replays,
+	// recorded beside the event.
+	Operation, ReplayOf string
+	Files               []machine.File // Event.Files, likewise
+	TimeLimit           time.Duration
 }

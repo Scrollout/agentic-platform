@@ -72,9 +72,10 @@ type operations struct {
 type operation struct {
 	view   gen.Operation
 	cancel context.CancelFunc
-	// onCancel, set before launch, runs when cancelOperation cancels the operation, whether or not
-	// its work has started: a run's operation ends its run with it.
-	onCancel func()
+	// onCancel, set before launch, runs when cancelOperation is asked to cancel the operation,
+	// whether or not its work has started, before anything is cancelled: a run's operation cancels
+	// its run's workflow with it. An error leaves the operation as it was.
+	onCancel func(ctx context.Context) error
 }
 
 func ended(s gen.OperationStatus) bool {
@@ -141,26 +142,31 @@ func (s *operations) get(id string) (gen.Operation, bool) {
 	return op.view, true
 }
 
-// cancel asks the operation's job to stop; the operation ends `cancelled` when it has. It
-// reports whether the operation exists and whether it had already ended.
-func (s *operations) cancelOp(id string) (view gen.Operation, found, hadEnded bool) {
+// cancelOp asks the operation's job to stop; the operation ends `cancelled` when it has. It
+// reports whether the operation exists and whether it had already ended; an error from its
+// onCancel cancelled nothing.
+func (s *operations) cancelOp(ctx context.Context, id string) (view gen.Operation, found, hadEnded bool, err error) {
 	s.mu.Lock()
 	op, ok := s.ops[id]
 	if !ok {
 		s.mu.Unlock()
-		return gen.Operation{}, false, false
+		return gen.Operation{}, false, false, nil
 	}
 	if ended(op.view.Status) {
 		s.mu.Unlock()
-		return op.view, true, true
+		return op.view, true, true, nil
 	}
-	op.cancel()
-	view = op.view
+	hook := op.onCancel
 	s.mu.Unlock()
-	if op.onCancel != nil {
-		op.onCancel() // outside the lock: it may record an event
+	if hook != nil {
+		if err := hook(ctx); err != nil { // outside the lock: it may call the durable service
+			return gen.Operation{}, true, false, err
+		}
 	}
-	return view, true, false
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	op.cancel()
+	return op.view, true, false, nil
 }
 
 func (s *operations) set(op *operation, change func(v *gen.Operation)) {

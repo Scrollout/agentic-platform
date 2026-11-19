@@ -481,3 +481,8 @@ func RetryRule() retry.Rule { return engineContract.retry }
 
 // retryRuleOf returns the rule an OpenAPI document gives.
 func retryRuleOf(openapi []byte) (retry.Rule, error) { return retry.Parse(openapi) }
+
+// Retention is how long the embedded contract's x-limits keep an idempotency key, and an ended
+// operation, after it ends (idempotency-key-retention-hours); the durable service keeps a closed
+// workflow as long (ADR 0070).
+func Retention() time.Duration { return engineContract.keepKeys }

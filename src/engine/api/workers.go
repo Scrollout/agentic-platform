@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -131,6 +132,24 @@ func (w *Workers) register(slice, step, url, token string) {
 	w.m[slice][step] = endpoint{url, token}
 }
 
+// restore puts back the worker the slice's step had before a register (had false: none).
+func (w *Workers) restore(slice, step string, before endpoint, had bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if had {
+		w.m[slice][step] = before
+		return
+	}
+	delete(w.m[slice], step)
+}
+
+func (w *Workers) endpoint(slice, step string) (endpoint, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	e, ok := w.m[slice][step]
+	return e, ok
+}
+
 // missing returns the first of steps with no registered worker for slice, or "" when every
 // step has one.
 func (w *Workers) missing(slice string, steps []string) string {
@@ -147,7 +166,9 @@ func (w *Workers) missing(slice string, steps []string) string {
 // RegisterWorker records the endpoint for the slice and step the worker token was issued for,
 // replacing any earlier one. The endpoint's shape is the contract's, checked before this runs. A
 // token without a grant, a slice that does not exist and a step the pattern does not declare are
-// NotFound.
+// NotFound. Once every step of the pattern has a worker for the slice, the run of the slice that
+// waits for its step workers is sent `workers-ready` and continues; while the durable service
+// cannot be reached the answer is 503 and the worker is not registered.
 func (s *sliceServer) RegisterWorker(ctx context.Context, req gen.RegisterWorkerRequestObject) (gen.RegisterWorkerResponseObject, error) {
 	g, ok := ctx.Value(grantKey{}).(WorkerGrant)
 	if !ok {
@@ -160,9 +181,33 @@ func (s *sliceServer) RegisterWorker(ctx context.Context, req gen.RegisterWorker
 		return s.refuse("registerWorker", &sl.Error{Code: string(gen.ErrorCodeNotFound),
 			Detail: fmt.Sprintf("the pattern of slice %s has no step %s", g.Slice, g.Step)})
 	}
+	before, had := s.workers.endpoint(g.Slice, g.Step)
 	s.workers.register(g.Slice, g.Step, req.Body.Endpoint, g.CallToken)
+	if err := s.workersReady(ctx, g.Slice); err != nil {
+		s.workers.restore(g.Slice, g.Step, before, had)
+		if errors.Is(err, ErrUnavailable) {
+			return unavailableFor(err), nil
+		}
+		return nil, err
+	}
 	return gen.RegisterWorker200JSONResponse{WorkerJSONResponse: gen.WorkerJSONResponse{
 		Body: gen.Worker{Slice: g.Slice, Step: g.Step, Endpoint: req.Body.Endpoint}}}, nil
+}
+
+// workersReady sends `workers-ready` to the run of the slice that waits for the slice's step
+// workers, once each step of the pattern has one; a run whose workflow has ended needs none.
+func (s *sliceServer) workersReady(ctx context.Context, slice string) error {
+	if s.runs == nil || s.runs.durable == nil || s.workers.missing(slice, s.svc.Steps()) != "" {
+		return nil
+	}
+	run, err := s.runs.waitingForWorkers(slice)
+	if err != nil || run == "" {
+		return err
+	}
+	if err := s.signal(ctx, run, SignalWorkersReady); err != nil && !errors.Is(err, ErrNotFound) {
+		return err
+	}
+	return nil
 }
 
 func (p problemResponse) VisitRegisterWorkerResponse(w http.ResponseWriter) error { return p.write(w) }

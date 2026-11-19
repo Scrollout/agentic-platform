@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -54,9 +56,13 @@ func (s *server) GetOperation(_ context.Context, req gen.GetOperationRequestObje
 	return gen.GetOperation200JSONResponse{OperationJSONResponse: gen.OperationJSONResponse{Body: op}}, nil
 }
 
-func (s *server) CancelOperation(_ context.Context, req gen.CancelOperationRequestObject) (gen.CancelOperationResponseObject, error) {
-	op, found, hadEnded := s.ops.cancelOp(req.OperationId)
+func (s *server) CancelOperation(ctx context.Context, req gen.CancelOperationRequestObject) (gen.CancelOperationResponseObject, error) {
+	op, found, hadEnded, err := s.ops.cancelOp(ctx, req.OperationId)
 	switch {
+	case errors.Is(err, ErrUnavailable):
+		return unavailableFor(err), nil
+	case err != nil:
+		return nil, fmt.Errorf("cancelling operation %s: %w", req.OperationId, err)
 	case !found:
 		return gen.CancelOperation404ApplicationProblemPlusJSONResponse{NotFoundApplicationProblemPlusJSONResponse: notFound("operation " + req.OperationId)}, nil
 	case hadEnded:

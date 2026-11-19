@@ -95,14 +95,22 @@ type Config struct {
 	// Workers is the registry registerWorker fills; the StepWorker finds each step's worker in
 	// it. nil means the handler keeps its own, which nothing else reads.
 	Workers *Workers
-	// StepWorker runs one attempt of a step and StepChecker one check (machine.Worker and
-	// machine.Checker). Without both, a start that passes every refusal is WorkersNotReady: the
-	// engine cannot drive a run.
+	// Runs is the durable service that runs each run as a workflow (feature 002): startRun,
+	// replayRun, resumeRun, acceptHandOver, cancelling a run's operation and registerWorker go
+	// through it, and the handler never drives a run itself. nil means no run can start: a start
+	// that passes every refusal is WorkersNotReady.
+	Runs Runs
+	// Record is the run record the runs' workflows write and the accepted results they reuse
+	// (NewRunRecord); the engine gives the same one to its durable worker, and a start is then
+	// answered once the run's RunStarted is recorded (at most 10 s). nil means the handler keeps
+	// its own over Store and answers a start as soon as the durable service has taken it.
+	Record *RunRecord
+	// StepWorker, StepChecker and History are not used by the handler: the runs' workflows call
+	// the step workers, the check service and the project worker through the engine's durable
+	// worker (package durable).
 	StepWorker  machine.Worker
 	StepChecker machine.Checker
-	// History is the project worker's version history (machine.Config.History): restoreStep
-	// before every attempt, commitStep after every accepted or reused step. nil makes no calls.
-	History machine.History
+	History     machine.History
 	// Model is the model the pattern's agent steps use, part of their reuse keys. Empty means no
 	// accepted result of an agent step is reused (a replay runs those steps again).
 	Model string
@@ -130,7 +138,7 @@ func NewHandler(cfg Config) http.Handler {
 		if cfg.Store == nil {
 			panic("api: Config.Slices needs Config.Store")
 		}
-		impl = &sliceServer{server: srv, svc: cfg.Slices, store: cfg.Store, workers: workersOf(cfg), projects: cfg.Projects, runs: newRuns(cfg, cfg.Slices, now, base)}
+		impl = &sliceServer{server: srv, svc: cfg.Slices, store: cfg.Store, workers: workersOf(cfg), projects: cfg.Projects, runs: newRuns(cfg, cfg.Slices)}
 	}
 	mux := http.NewServeMux()
 	gen.HandlerWithOptions(gen.NewStrictHandlerWithOptions(impl, nil, gen.StrictHTTPServerOptions{

@@ -10,8 +10,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	stdslices "slices"
 	"strings"
 	"sync"
+	"time"
 
 	"go.yaml.in/yaml/v3"
 
@@ -19,6 +21,7 @@ import (
 	"github.com/agentic-platform/engine/api"
 	"github.com/agentic-platform/engine/canonical"
 	"github.com/agentic-platform/engine/contracts"
+	"github.com/agentic-platform/engine/durable"
 	"github.com/agentic-platform/engine/machine"
 	"github.com/agentic-platform/engine/slices"
 	"github.com/agentic-platform/engine/steps"
@@ -58,42 +61,125 @@ var tokenVariables = []string{"ENGINE_CLIENT_TOKEN", "ENGINE_PAGE_TOKEN", "ENGIN
 // projectsMount is where a step container sees the projects folder (src/deploy/compose.yaml).
 const projectsMount = "/projects"
 
-// setup builds the engine's handler from the environment (getenv) and what the binary embeds:
-// the contract's schemas, the catalogue pattern and the analyst definition's digest. It opens
-// the run store in ENGINE_STORE_DIR, which must exist, and serves the slices stored there; a
-// slice record it cannot read or check stops it. The returned function cancels running
-// operations and closes the store; calling it again does nothing.
+// defaultDurableAddress is where the durable service listens in the deployment (compose.yaml's
+// `durable` service on the network `durable`); ENGINE_DURABLE_ADDRESS overrides it.
+const defaultDurableAddress = "durable:7233"
+
+// durableWait is how long the engine tries to reach the durable service at start before it
+// gives up: the service, or the network to it, may come up just after the engine.
+const durableWait = 30 * time.Second
+
+// durableLinks is what the engine needs from the durable service, given at start.
+type durableLinks struct {
+	Runs       api.Runs // api's port: the runs' workflows
+	Namespaces namespaceRegistry
+	// Serve starts the engine's durable worker, which runs the runs' workflows and their
+	// activities on a, and returns the function that stops it. nil starts none.
+	Serve func(a *durable.Activities) (stop func(), err error)
+}
+
+// namespaceRegistry registers the namespace the engine's workflows run in (ADR 0070).
+type namespaceRegistry interface {
+	// Describe says whether the namespace exists and, if so, its retention.
+	Describe(ctx context.Context, name string) (retention time.Duration, found bool, err error)
+	// Register creates the namespace with the retention.
+	Register(ctx context.Context, name string, retention time.Duration) error
+}
+
+// setup builds the engine's handler from the environment (getenv) and what the binary embeds,
+// over the durable service at ENGINE_DURABLE_ADDRESS (host:port; default durable:7233), which it
+// reaches at its first call, then runs setupWith on it with the engine's durable worker. The
+// returned function closes what setupWith opened, then the connection to the durable service.
 func setup(getenv func(string) string) (http.Handler, func() error, error) {
+	if _, err := environment(getenv); err != nil {
+		return nil, nil, err
+	}
+	addr := getenv("ENGINE_DURABLE_ADDRESS")
+	if addr == "" {
+		addr = defaultDurableAddress
+	}
+	c, err := durable.Connect(addr)
+	if err != nil {
+		return nil, nil, fmt.Errorf("the durable service at %s: %w", addr, err)
+	}
+	ns, err := durable.NewNamespaces(addr)
+	if err != nil {
+		c.Close()
+		return nil, nil, err
+	}
+	links := durableLinks{Runs: durable.NewRuns(c), Namespaces: ns, Serve: func(a *durable.Activities) (func(), error) {
+		w := durable.NewRunsWorker(c, a)
+		if err := w.Start(); err != nil {
+			return nil, fmt.Errorf("the engine's durable worker: %w", err)
+		}
+		// Closing the connection, not stopping the worker, ends it: an activity cut off this way
+		// is a platform stop (its heartbeat times out) and is made again, never failed.
+		return func() {}, nil
+	}}
+	h, closeFn, err := setupWith(getenv, links)
+	if err != nil {
+		ns.Close()
+		c.Close()
+		return nil, nil, err
+	}
+	return h, func() error {
+		err := closeFn()
+		ns.Close()
+		c.Close()
+		return err
+	}, nil
+}
+
+// environment reads the settings setup needs and checks them.
+func environment(getenv func(string) string) (map[string]string, error) {
 	env := map[string]string{}
 	for _, name := range variables {
 		if env[name] = getenv(name); env[name] == "" {
-			return nil, nil, fmt.Errorf("%s is not set", name)
+			return nil, fmt.Errorf("%s is not set", name)
 		}
 	}
 	for i, a := range tokenVariables {
 		for _, b := range tokenVariables[i+1:] {
 			if env[a] == env[b] {
-				return nil, nil, fmt.Errorf("%s and %s are the same; every token must differ", a, b)
+				return nil, fmt.Errorf("%s and %s are the same; every token must differ", a, b)
 			}
 		}
 	}
 	for _, name := range []string{"AP_LINT_URL", "AP_ANALYST_URL", "AP_CHECK_URL", "AP_PROJECT_URL"} {
 		if u, err := url.Parse(env[name]); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			return nil, nil, fmt.Errorf("%s is not an http(s) URL with a host", name)
+			return nil, fmt.Errorf("%s is not an http(s) URL with a host", name)
 		}
 	}
 	dir := env["ENGINE_STORE_DIR"]
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
-		return nil, nil, fmt.Errorf("ENGINE_STORE_DIR %q is not an existing directory", dir)
+		return nil, fmt.Errorf("ENGINE_STORE_DIR %q is not an existing directory", dir)
 	}
 	// The folder of step worker grants the launcher writes (api.Config.GrantsDir); optional:
 	// unset, no step worker can register.
-	grants := getenv("ENGINE_GRANTS_DIR")
-	if grants != "" {
+	if grants := getenv("ENGINE_GRANTS_DIR"); grants != "" {
 		if fi, err := os.Stat(grants); err != nil || !fi.IsDir() {
-			return nil, nil, fmt.Errorf("ENGINE_GRANTS_DIR %q is not an existing directory", grants)
+			return nil, fmt.Errorf("ENGINE_GRANTS_DIR %q is not an existing directory", grants)
 		}
 	}
+	env["ENGINE_GRANTS_DIR"] = getenv("ENGINE_GRANTS_DIR")
+	return env, nil
+}
+
+// setupWith builds the engine's handler from the environment (getenv) and what the binary
+// embeds: the contract's schemas, the catalogue pattern and the analyst definition's digest, with
+// the durable service d. It opens the run store in ENGINE_STORE_DIR, which must exist, and serves
+// the slices stored there; a slice record it cannot read or check stops it. Before the engine
+// serves anything it registers the namespace ap with the contract's retention when the durable
+// service has none (an existing one is kept unchanged, ADR 0070), refuses to start, naming each,
+// while a run's record has no end and the run has no workflow (a run feature 001 left open;
+// research R7), and starts the durable worker (d.Serve). The returned function cancels running
+// operations, stops the durable worker and closes the store; calling it again does nothing.
+func setupWith(getenv func(string) string, d durableLinks) (http.Handler, func() error, error) {
+	env, err := environment(getenv)
+	if err != nil {
+		return nil, nil, err
+	}
+	dir, grants := env["ENGINE_STORE_DIR"], env["ENGINE_GRANTS_DIR"]
 
 	schemas, err := slice.LoadSchemasFS(api.ContractFiles())
 	if err != nil {
@@ -133,24 +219,110 @@ func setup(getenv func(string) string) (http.Handler, func() error, error) {
 		st.Close()
 		return nil, nil, err
 	}
+	if err := durableStart(d, st); err != nil {
+		st.Close()
+		return nil, nil, err
+	}
+	var mp machine.Pattern
+	if p, err := svc.Pattern(); err == nil {
+		mp = api.MachinePattern(p)
+	}
+	rec := api.NewRunRecord(st, mp, cfg.Model)
+	cfg.Runs, cfg.Record = d.Runs, rec
 	ctx, cancel := context.WithCancel(context.Background())
 	cfg.Context = ctx
 	var running sync.WaitGroup
 	cfg.Running = &running
 	h := api.NewHandler(cfg)
+	stopWorker := func() {}
+	if d.Serve != nil {
+		stop, err := d.Serve(&durable.Activities{Worker: cfg.StepWorker, Checker: cfg.StepChecker, History: cfg.History,
+			Results: rec.Results(), Artifacts: st, Events: rec})
+		if err != nil {
+			cancel()
+			st.Close()
+			return nil, nil, err
+		}
+		stopWorker = stop
+	}
 	var once sync.Once
 	var closeErr error
 	closeFn := func() error {
 		once.Do(func() {
-			// Cancel every operation and wait until each has ended, so nothing writes the store
-			// once it is closed; a run cut off this way is interrupted and resumes (FR-020).
+			// Cancel every operation and wait until each has ended; the runs go on in the durable
+			// service and continue on the next start (FR-001).
 			cancel()
 			running.Wait()
+			stopWorker()
 			closeErr = st.Close()
 		})
 		return closeErr
 	}
 	return h, closeFn, nil
+}
+
+// endKinds are the events that end a run (data model, "Run states").
+var endKinds = []string{"RunCompleted", "HandOverAccepted", "RunExpired", "RunCancelled"}
+
+// durableStart registers the namespace ap with the contract's retention when the durable service
+// has none, keeping an existing one unchanged (ADR 0070), and refuses, naming each, the runs whose
+// record has no end event and that have no workflow (research R7).
+func durableStart(d durableLinks, st *store.Store) error {
+	ctx, cancel := context.WithTimeout(context.Background(), durableWait)
+	defer cancel()
+	// The service, or the network to it, may come up just after the engine: try until durableWait.
+	var found bool
+	for {
+		var err error
+		if _, found, err = d.Namespaces.Describe(ctx, durable.Namespace); err == nil {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("the durable service: %w", err)
+		case <-time.After(time.Second):
+		}
+	}
+	if !found {
+		if err := d.Namespaces.Register(ctx, durable.Namespace, api.Retention()); err != nil {
+			return fmt.Errorf("the durable service: %w", err)
+		}
+		// A new namespace is served once the service's namespace cache has it (some seconds):
+		// wait until a workflow can be looked up in it.
+		for {
+			_, err := d.Runs.Exists(ctx, "RUN-0")
+			if err == nil {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("the durable service does not serve the namespace %s yet: %w", durable.Namespace, err)
+			case <-time.After(time.Second):
+			}
+		}
+	}
+	var open []string
+	for _, e := range st.Runs() {
+		events, err := st.Events(e.Run)
+		if err != nil {
+			return fmt.Errorf("the run record of %s: %w", e.Run, err)
+		}
+		if stdslices.ContainsFunc(events, func(ev store.Event) bool { return stdslices.Contains(endKinds, ev.Kind) }) {
+			continue
+		}
+		has, err := d.Runs.Exists(ctx, e.Run)
+		if err != nil {
+			return fmt.Errorf("the durable service: %w", err)
+		}
+		if !has {
+			open = append(open, e.Run)
+		}
+	}
+	if len(open) > 0 {
+		return fmt.Errorf("the run record holds runs that have not ended and that this engine cannot continue: %s; "+
+			"end each with feature 001's version of the platform (resume it to its end, or cancel it), then upgrade", strings.Join(open, ", "))
+	}
+	return nil
 }
 
 // wireSteps gives the engine its step worker and checker (package steps): agent and procedure

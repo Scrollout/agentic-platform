@@ -27,11 +27,12 @@ type Artifacts interface {
 	Artifact(hash string) ([]byte, error)
 }
 
-// Events writes a run's record. Record writes e, whose Seq the workflow set, under the slice: a
-// seq already held with the same event succeeds without writing, one held with other content is
-// an error wrapping store.ErrSeqTaken.
+// Events writes a run's record. Record writes e, whose Seq the workflow set, under the slice,
+// with, on RunStarted, the run's operation and the run it replays: a seq already held with the
+// same event succeeds without writing, one held with other content is an error wrapping
+// store.ErrSeqTaken. api.RunRecord has it.
 type Events interface {
-	Record(slice string, e machine.Event) error
+	Record(slice string, e machine.Event, operation, replayOf string) error
 }
 
 // Activities are the calls the Run workflow makes, on the engine's ports: the step workers, the
@@ -42,7 +43,7 @@ type Activities struct {
 	Worker    machine.Worker
 	Checker   machine.Checker
 	History   machine.History
-	Results   *machine.Results
+	Results   *machine.Results // nil: no result is reused or kept
 	Artifacts Artifacts
 	Events    Events
 }
@@ -171,6 +172,9 @@ func (a *Activities) LookupReuse(_ context.Context, l ReuseLookup) (Reused, erro
 	} else if len(l.Changed) > 0 {
 		inputs, _ = machine.KeyOf(l.Parts, nil, l.Changed)
 	}
+	if a.Results == nil {
+		return Reused{Key: key, Inputs: inputs}, nil
+	}
 	k, ok := a.Results.Get(key)
 	if !ok {
 		return Reused{Key: key, Inputs: inputs}, nil
@@ -185,6 +189,9 @@ func (a *Activities) LookupReuse(_ context.Context, l ReuseLookup) (Reused, erro
 
 // PutResult keeps a result under its reuse key, its findings read from the artifact store.
 func (a *Activities) PutResult(_ context.Context, p ReusePut) error {
+	if a.Results == nil {
+		return nil
+	}
 	fs, err := a.findings(p.Findings)
 	if err != nil {
 		return failed("ReuseFailed", err)
@@ -214,7 +221,7 @@ func (a *Activities) RecordEvent(_ context.Context, r EventRecord) error {
 		}
 		e.Detail += ": " + openList(open)
 	}
-	if err := a.Events.Record(r.Slice, e); err != nil {
+	if err := a.Events.Record(r.Slice, e, r.Operation, r.ReplayOf); err != nil {
 		if errors.Is(err, store.ErrSeqTaken) {
 			return failed(SeqTaken, err)
 		}

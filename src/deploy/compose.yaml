@@ -152,6 +152,7 @@ services:
       AP_PROJECT_TOKEN: ${AP_PROJECT_TOKEN:?set AP_PROJECT_TOKEN (ap up does this)}
       ENGINE_STORE_DIR: /var/lib/engine
       ENGINE_GRANTS_DIR: /var/lib/engine-grants
+      ENGINE_DURABLE_ADDRESS: durable:7233
     tmpfs:
       - /tmp:mode=1777,size=16m
     # The engine's store (runs, slices, acceptances; T038g) on a named volume only it mounts, so

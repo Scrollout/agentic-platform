@@ -9,7 +9,9 @@
 // project's version history (restoreStep before every attempt, commitStep after every accepted
 // step). ENGINE_GRANTS_DIR, optional, is the existing folder of step worker grants the
 // launcher writes (one file per grant, read at each worker-token authentication; research D31);
-// unset, no step worker can register. See setup.
+// unset, no step worker can register. ENGINE_DURABLE_ADDRESS, optional, is the durable service's
+// host:port (default durable:7233), where every run runs as a workflow; the engine registers its
+// namespace and starts its worker there before it serves anything. See setup.
 package main
 
 import (

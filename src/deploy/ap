@@ -1512,7 +1512,7 @@ cmd_resume() {
   is_project "$run_project" || die 1 "resume: the engine's answer for the run $run has no project name"
   if [ "$run_status" = interrupted ]; then
     steps=$(read_pattern) || exit $?
-    gone="resume: the step workers of $run_slice for the project $run_project are not running; run ap build-workers --resume $run, then ap resume $run"
+    gone="resume: the step workers of $run_slice for the project $run_project are not running; run ap build-workers --resume $run"
     read_tokens "$run_slice"
     [ "$complete" = yes ] && [ -n "$tokens_id" ] || die 3 "$gone"
     phash=$(project_hash "$run_project")

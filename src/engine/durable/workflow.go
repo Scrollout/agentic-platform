@@ -124,7 +124,7 @@ func Run(ctx workflow.Context, in RunInput) (RunResult, error) {
 		r.artifacts[n] = hashes[i]
 	}
 	err := r.record(&EventRecord{Event: machine.Event{Kind: "RunStarted", Slice: in.Slice, Pattern: r.ref, Inputs: hashes,
-		Refs: in.Refs}, Project: in.Project})
+		Refs: in.Refs}, Project: in.Project, Operation: in.Operation, ReplayOf: in.ReplayOf})
 	for err == nil || errors.Is(err, errAgain) {
 		err = r.steps()
 	}

@@ -229,7 +229,7 @@ func sum(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:
 func (w *worker) Run(ctx context.Context, r machine.Request) (machine.Result, error) {
 	url, token, ok := w.c.Endpoints.Endpoint(r.Slice, r.Step.Name)
 	if !ok {
-		return machine.Result{}, fmt.Errorf("step %s of slice %s has no registered worker", r.Step.Name, r.Slice)
+		return machine.Result{}, marked{fmt.Errorf("step %s of slice %s has no registered worker", r.Step.Name, r.Slice), machine.ErrWorkersNotReady}
 	}
 	if r.Project == "" {
 		return machine.Result{}, errors.New("the run names no project")
@@ -245,11 +245,30 @@ func (w *worker) Run(ctx context.Context, r machine.Request) (machine.Result, er
 	default:
 		return machine.Result{}, fmt.Errorf("step %s has worker %q, neither agent:<name> nor procedure:<name>", r.Step.Name, r.Step.Worker)
 	}
-	if err != nil {
+	switch {
+	case err != nil && unreachable(err):
+		return res, marked{err, machine.ErrWorkersNotReady} // the step's worker is not running
+	case errors.Is(err, agentcall.ErrAgentFailed):
+		return res, marked{err, machine.ErrModelUnavailable}
+	case err != nil:
 		return res, err // res holds what a failed attempt used, for the budgets
 	}
 	w.st.remember(r.Run, r.Step.Name, res.ProjectFiles)
 	return res, nil
+}
+
+// marked is err that also matches kind (errors.Is), with err's own message.
+type marked struct{ err, kind error }
+
+func (m marked) Error() string   { return m.err.Error() }
+func (m marked) Unwrap() []error { return []error{m.err, m.kind} }
+
+// unreachable reports whether err is a call that found nothing listening: the host unknown or
+// the connection refused, as when the step's container is not running.
+func unreachable(err error) bool {
+	var dns *net.DNSError
+	var op *net.OpError
+	return errors.As(err, &dns) || errors.As(err, &op) && op.Op == "dial"
 }
 
 // agentAnswer is the review step's answer: its findings, claims the checks verify. Another
