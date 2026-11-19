@@ -3,7 +3,7 @@ package machine_test
 // T083 (owner, 2026-11-14): a review fix carries the round whose findings it fixes (round 1 for
 // the fix after round 1). The machine runs the fix with that round, so its events, its check calls,
 // its commitStep (and restoreStep) calls and the worker's request name it; its attempts count from
-// 1 in each round; a resumed run continues a fix with the same round (data-model, "Review rounds").
+// 1 in each round (data-model, "Review rounds"). A stop during a round: workflow_stop_test.go.
 // Written before the code by a separate author.
 
 import (
@@ -197,80 +197,4 @@ func TestFixAttemptsCountFromOneInEachRound(t *testing.T) {
 		t.Errorf("StepStarted of fixes = %v, want one in round 1 and one in round 2", started)
 	}
 	validate(t, f.ev.events)
-}
-
-// A run interrupted after the fix of round 1 was accepted and before review round 2 started resumes
-// with review round 2: its StepStarted, check calls and worker request carry round 2, and it gets
-// round 1's open findings and the lines the fix changed.
-func TestResumeAfterAcceptedFixBeforeNextReviewRoundRunsRoundTwo(t *testing.T) {
-	fixed := []machine.Line{{File: "internal/a.go", Line: 10}}
-	reviewFn := func(r machine.Request) (machine.Result, error) {
-		res := ok(r)
-		if r.Round == 1 {
-			res.Findings = []machine.Finding{blocking("R-1", "internal/a.go", 10)}
-		}
-		return res, nil
-	}
-	codeFn := func(r machine.Request) (machine.Result, error) {
-		res := ok(r)
-		if len(r.Open) > 0 {
-			res.ChangedLines = fixed
-		}
-		return res, nil
-	}
-	// the first engine runs the whole run; its record is then cut after the fix's StepAccepted
-	results, full, clk := machine.NewResults(), listSink{recSink{&sink{}}}, &clock{now: t0}
-	w1 := &worker{fn: map[string]func(machine.Request) (machine.Result, error){"review": reviewFn, "code": codeFn}}
-	r, err := machine.New(machine.Config{Pattern: pattern(), Worker: w1, Checker: &checker{fn: noBlocking}, Clock: clk,
-		Events: full, Results: results, Model: "claude-haiku-5-5"}).Start(context.Background(), (&fixture{t: t}).params("RUN-1"))
-	if err != nil || r.Status != machine.StatusEnded {
-		t.Fatalf("setup: %v, %s", err, r.Status)
-	}
-	cut := -1
-	for i, e := range full.events {
-		if e.Step == "code" && e.Round == 1 && e.Kind == "StepAccepted" {
-			cut = i + 1
-		}
-	}
-	if cut < 0 || full.events[cut].Kind != "StepStarted" || full.events[cut].Step != "review" || full.events[cut].Round != 2 {
-		t.Fatalf("setup: the event after the fix's StepAccepted is not review round 2's StepStarted: %v", full.kinds())
-	}
-	ev := listSink{recSink{&sink{events: append([]machine.Event(nil), full.events[:cut]...)}}}
-
-	w2 := &worker{fn: map[string]func(machine.Request) (machine.Result, error){"review": reviewFn, "code": codeFn}}
-	c2 := &checker{fn: noBlocking}
-	r, err = machine.New(machine.Config{Pattern: pattern(), Worker: w2, Checker: c2, Clock: clk, Events: ev,
-		Results: machine.NewResults(), Model: "claude-haiku-5-5"}).Resume(context.Background(), "RUN-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if r.Status != machine.StatusEnded || r.Outcome != machine.OutcomeDone {
-		t.Fatalf("resumed run = %s/%s %s", r.Status, r.Outcome, r.Reason)
-	}
-	if n := len(w2.callsTo("code")); n != 0 {
-		t.Errorf("the accepted fix ran again: %d code runs", n)
-	}
-	rev := w2.callsTo("review")
-	if len(rev) != 1 || rev[0].Round != 2 || len(rev[0].Open) != 1 || rev[0].Open[0].Rule != "R-1" ||
-		len(rev[0].ChangedLines) != 1 || rev[0].ChangedLines[0] != fixed[0] {
-		t.Fatalf("resumed review requests = %+v, want one at round 2 with R-1 open and the fix's changed lines", rev)
-	}
-	for _, c := range c2.calls {
-		if c.Step.Name == "review" && c.Round != 2 {
-			t.Errorf("check %s of the resumed review has round %d, want 2", c.Name, c.Round)
-		}
-	}
-	started := 0
-	for _, e := range ev.events[cut:] {
-		if e.Step == "review" && e.Kind == "StepStarted" {
-			started++
-			if e.Round != 2 {
-				t.Errorf("review StepStarted after the resume has round %d, want 2", e.Round)
-			}
-		}
-	}
-	if started != 1 {
-		t.Errorf("review StepStarted after the resume: %d, want 1", started)
-	}
-	validate(t, ev.events)
 }

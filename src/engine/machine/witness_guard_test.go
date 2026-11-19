@@ -1,9 +1,8 @@
 package machine_test
 
 // T076, review round 1: guards of the witnesses' commits (data-model, "A review round"; FR-017),
-// by the test author. A restart after an open review round rebuilds its files and its pending
-// commit from the StepRejected event, so the fix starts from the round's witnesses; a reused
-// review commits its witnesses output.
+// by the test author. A reused review commits its witnesses output. (A stop during an open
+// round's commit: workflow_moved_test.go.)
 
 import (
 	"context"
@@ -82,48 +81,6 @@ func (x *wfix) startIn(id, project string) machine.Run {
 		x.t.Fatalf("Start(%s): %v", id, err)
 	}
 	return r
-}
-
-// M4: a restart right after an open review round's StepRejected rebuilds the round's files and its
-// pending commit from that event: the first call on resume commits the round with its witness,
-// and the fix's restore starts from it.
-func TestResumeAfterAnOpenReviewRoundKeepsItsWitnesses(t *testing.T) {
-	orig := witnessFixture(t, nil, true)
-	assertEnded(t, orig.startIn("RUN-1", "proj-a"), orig.ev, "done")
-	var cut []machine.Event
-	for _, e := range orig.ev.events {
-		cut = append(cut, e)
-		if e.Kind == "StepRejected" && e.Step == "review" && e.Round == 1 {
-			break
-		}
-	}
-	if last := cut[len(cut)-1]; last.Kind != "StepRejected" || !hasFile(last.Files, witnessPath) {
-		t.Fatalf("the open round's StepRejected does not carry the witness: %+v", last)
-	}
-
-	x := witnessFixture(t, nil, true)
-	x.ev.events = slices.Clone(cut)
-	x.clk.now = cut[len(cut)-1].At.Add(time.Minute)
-	m := x.build() // a restarted engine reading the record
-	r, err := m.Resume(context.Background(), "RUN-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertEnded(t, r, x.ev, "done")
-	if len(x.h.commits) == 0 || x.h.commits[0].Step.Name != "review" || x.h.commits[0].Round != 1 ||
-		!hasFile(x.h.commits[0].ProjectFiles, witnessPath) {
-		t.Fatalf("the first call on resume is not review round 1's commit with its witness: %+v", x.h.commits)
-	}
-	if !x.h.commits[0].OpenRound {
-		t.Fatalf("the open round's commit rebuilt on resume does not send open_round: %+v", x.h.commits[0])
-	}
-	fixes := x.h.restoresOf("code")
-	if len(fixes) != 1 || !hasFile(fixes[0].Before, witnessPath) {
-		t.Fatalf("the fix's restore after resume does not start from the witness: %+v", fixes)
-	}
-	if x.log.index("commit review") > x.log.index("restore code 1 1") {
-		t.Errorf("the fix was restored before the round's commit: %v", x.log.all())
-	}
 }
 
 // M8b: a reused review whose outputs are [findings, witnesses] commits its witnesses output (a set

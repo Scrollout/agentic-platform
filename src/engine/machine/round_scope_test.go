@@ -3,12 +3,12 @@ package machine_test
 // T135 (owner, 2026-11-17; spec FR-017, US2/AC6; data-model "A later round's scope"; research D55,
 // ADR 0055): in a review round after the first, NoBlockingFindingOpen judges within the round's
 // scope, which the engine takes from the run: the open findings the round was given and the lines
-// the fix before it changed, also for a resumed round. The machine records as blocking exactly
-// the findings in the check's `confirmed` (recordedFindings), so a finding the check left out as
-// outside the scope is recorded `blocking: false`, and a round whose NoBlockingFindingOpen passed
-// is accepted. Written before the code by a separate test author. Seams (read only):
-// open_round_reuse_test.go (newOR, everyRoundOpen, roundFindings, findingsEqual),
-// open_round_resume_test.go (cutAfter, resumeOn, blockingOf), confirmed_findings_test.go
+// the fix before it changed (a round after a stop: workflow_stop_test.go, T012 (d)). The machine
+// records as blocking exactly the findings in the check's `confirmed` (recordedFindings), so a
+// finding the check left out as outside the scope is recorded `blocking: false`, and a round whose
+// NoBlockingFindingOpen passed is accepted. Written before the code by a separate test author.
+// Seams (read only): open_round_reuse_test.go (newOR, everyRoundOpen, roundFindings, findingsEqual),
+// open_round_resume_test.go (blockingOf), confirmed_findings_test.go
 // (asSuggestion, fixCalls), witness_test.go (witnessPatternOf), machine_test.go.
 //
 // ASSUMED SHAPE: machine.CheckRequest gains `Open []machine.Finding` and
@@ -102,23 +102,6 @@ func TestLaterRoundsCheckGetsTheRoundsScope(t *testing.T) {
 	for _, round := range []int{2, 3} {
 		rsWantScope(t, x, round, blockingOf(everyRoundOpen(round-1)), fixLines(round-1))
 	}
-}
-
-// A run resumed after the fix of round 1 was accepted: round 2's check gets the open findings and
-// the fix's lines from the record.
-func TestResumedRoundsCheckGetsTheRoundsScope(t *testing.T) {
-	p := witnessPatternOf()
-	one := newOR(t, p, nil, everyRoundOpen)
-	one.startIn("RUN-1", "proj-a")
-	cut := cutAfter(t, one.ev.events, func(e machine.Event) bool {
-		return e.Kind == "StepAccepted" && e.Step == "code" && e.Round == 1
-	})
-	x := newOR(t, p, nil, everyRoundOpen)
-	resumeOn(t, x, cut)
-	if len(rsOpenChecks(x)[1]) != 0 {
-		t.Fatalf("setup: review round 1 was checked again after the resume")
-	}
-	rsWantScope(t, x, 2, blockingOf(everyRoundOpen(1)), fixLines(1))
 }
 
 // rsRound2 is a review whose round 1 confirms R-1 and whose round 2 makes the claims claims2.

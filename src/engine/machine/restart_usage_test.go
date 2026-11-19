@@ -17,7 +17,6 @@ package machine_test
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"testing"
 
@@ -126,80 +125,5 @@ func TestAgentStepWithoutAModelIsRefused(t *testing.T) {
 		if e.Kind == "StepAccepted" && (e.Step == "tests" || e.Step == "code" || e.Step == "review") {
 			t.Fatalf("agent step %s accepted without a model", e.Step)
 		}
-	}
-}
-
-// A fix served from Results (ResultReused) must carry changed_lines in the record too, so a restart
-// on an empty Results store still gives the next review round the fix's lines.
-func TestRestartKeepsChangedLinesOfAReusedFix(t *testing.T) {
-	lines := []machine.Line{{File: "internal/thing.go", Line: 12}}
-	finding := blocking("R-1", "internal/thing.go", 12)
-	ev, clk, shared := listSink{recSink{&sink{}}}, &clock{now: t0}, machine.NewResults()
-	codeCalls := 0
-	newWorker := func(round2 func(machine.Request) (machine.Result, error)) *worker {
-		return &worker{fn: map[string]func(machine.Request) (machine.Result, error){
-			"code": func(r machine.Request) (machine.Result, error) {
-				codeCalls++
-				res := ok(r)
-				if codeCalls == 2 {
-					res.ChangedLines = lines
-				}
-				return res, nil
-			},
-			"review": func(r machine.Request) (machine.Result, error) {
-				if r.Round <= 1 {
-					res := ok(r)
-					res.Findings = []machine.Finding{finding}
-					return res, nil
-				}
-				return round2(r)
-			},
-		}}
-	}
-	down := func(machine.Request) (machine.Result, error) {
-		return machine.Result{}, errors.New("model unavailable")
-	}
-	build := func(w *worker, results *machine.Results) *machine.Machine {
-		return machine.New(machine.Config{Pattern: pattern(), Worker: w, Checker: &checker{fn: noBlocking}, Clock: clk,
-			Events: ev, Results: results, Model: "claude-haiku-5-5"})
-	}
-	f := &fixture{t: t}
-	// run 1 accepts the fix, then its review round 2 fails; its accepted results are stored
-	m := build(newWorker(down), shared)
-	if r, err := m.Start(context.Background(), f.params("RUN-1")); err != nil || r.Status != machine.StatusInterrupted {
-		t.Fatalf("setup 1: %v, %s", err, r.Status)
-	}
-	if _, err := m.Cancel("RUN-1"); err != nil {
-		t.Fatal(err)
-	}
-	// run 2 is served the code steps, fix included, from Results, and is interrupted at round 2 again
-	calls := codeCalls
-	if r, err := m.Start(context.Background(), f.params("RUN-2")); err != nil || r.Status != machine.StatusInterrupted {
-		t.Fatalf("setup 2: %v, %s", err, r.Status)
-	}
-	if codeCalls != calls {
-		t.Fatalf("the code step ran %d times in run 2, want it reused", codeCalls-calls)
-	}
-	reused := 0
-	for _, e := range ev.events {
-		if e.Run == "RUN-2" && e.Kind == "ResultReused" && len(e.ChangedLines) > 0 {
-			reused++
-			if !slices.Equal(e.ChangedLines, lines) {
-				t.Fatalf("ResultReused changed_lines = %v", e.ChangedLines)
-			}
-		}
-	}
-	if reused != 1 {
-		t.Fatalf("ResultReused events with changed_lines = %d, want 1", reused)
-	}
-
-	var seen machine.Request
-	w3 := newWorker(func(r machine.Request) (machine.Result, error) { seen = r; return ok(r), nil })
-	r, err := build(w3, machine.NewResults()).Resume(context.Background(), "RUN-2")
-	if err != nil || r.Status != machine.StatusEnded {
-		t.Fatalf("resume: %v, %s", err, r.Status)
-	}
-	if !slices.Equal(seen.ChangedLines, lines) {
-		t.Fatalf("round %d got changed lines %v, want %v", seen.Round, seen.ChangedLines, lines)
 	}
 }
