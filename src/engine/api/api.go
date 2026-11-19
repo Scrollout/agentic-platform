@@ -27,6 +27,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"mime"
 	"net"
@@ -159,11 +160,22 @@ func NewHandler(cfg Config) http.Handler {
 	}
 }
 
+// workersOf is the handler's worker registry: Config.Workers (or a new one), reading the grants
+// folder and, when Config.Store keeps registrations, holding them there (ADR 0071) and starting
+// from those it kept.
 func workersOf(cfg Config) *Workers {
-	if cfg.Workers != nil {
-		return cfg.Workers
+	w := cfg.Workers
+	if w == nil {
+		w = NewWorkers()
 	}
-	return NewWorkers()
+	w.mu.Lock()
+	w.dir = cfg.GrantsDir
+	w.kept, _ = cfg.Store.(registrationStore)
+	w.mu.Unlock()
+	if err := w.load(); err != nil {
+		log.Printf("engine: reading the kept step worker registrations: %v; the workers must register again", err)
+	}
+	return w
 }
 
 // mustRouteEveryOperation checks that the generated routes and the contract read by
@@ -251,6 +263,9 @@ func (f *front) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := context.WithValue(r.Context(), rawBodyKey{}, body)
 	if tok.grant != nil {
 		ctx = context.WithValue(ctx, grantKey{}, *tok.grant)
+	}
+	if tok.file != "" {
+		ctx = context.WithValue(ctx, grantFileKey{}, tok.file)
 	}
 	r = r.WithContext(ctx)
 	r.Body = io.NopCloser(bytes.NewReader(body))

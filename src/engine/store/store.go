@@ -308,8 +308,8 @@ func (s *Store) ArtifactCount(sliceID string) (int, error) {
 	return len(s.owned[sl]), nil
 }
 
-// EraseSlice removes every event of the slice's runs and every artifact stored for the slice,
-// from disk. An artifact another slice also stored stays readable for it. Erasing an unknown
+// EraseSlice removes every event of the slice's runs, every artifact stored for the slice and its
+// step workers' registrations, from disk. An artifact another slice also stored stays readable for it. Erasing an unknown
 // slice does nothing; an interrupted erasure is completed by calling it again.
 func (s *Store) EraseSlice(sliceID string) error {
 	sl, err := s.ids.ParseID(sliceID)
@@ -334,6 +334,9 @@ func (s *Store) EraseSlice(sliceID string) error {
 		return err
 	}
 	if err := syncDir(s.slices); err != nil {
+		return err
+	}
+	if err := s.eraseWorkers(sl.String()); err != nil {
 		return err
 	}
 	delete(s.owned, sl)

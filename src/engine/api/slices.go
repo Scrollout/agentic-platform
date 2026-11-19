@@ -131,6 +131,7 @@ func (s *sliceServer) DeleteSlice(_ context.Context, req gen.DeleteSliceRequestO
 		if err := s.store.EraseSlice(id); err != nil {
 			return Retryable(err)
 		}
+		s.workers.forget(id)
 		if s.runs != nil {
 			s.runs.forget(id)
 		}
