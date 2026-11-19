@@ -1,0 +1,6 @@
+# Temporal's dynamic config for the `durable` service (research R1, S11). The version check asks
+# the vendor's server about new releases, which the platform's isolated network cannot do and
+# the platform's privacy rule does not want.
+frontend.enableServerVersionCheck:
+  - value: false
+    constraints: {}
