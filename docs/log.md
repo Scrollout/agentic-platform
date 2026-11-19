@@ -1,5 +1,10 @@
 # Directory Update Log
 
+## 2026-11-20
+
+* **Tooling**: Feature 002, T041 (owner, 2026-11-19): the pre-commit hook lints the lines a commit adds or changes, each stack with its pinned linter, declared in `scripts/lint-staged.yaml` and run by `scripts/lint-staged.py`; components [golangci-lint](/components/golangci-lint.md), [Ruff](/components/ruff.md), [ShellCheck](/components/shellcheck.md), [Hadolint](/components/hadolint.md), [actionlint](/components/actionlint.md) and [zizmor](/components/zizmor.md); the [playbook](/playbooks/protect-changes-locally.md) says so.
+* **Fix**: Feature 002, CI run 44585526936 and the owner's clean VM: a step worker call that gets no complete answer (the worker restarting during the call) is `WorkersNotReady` and is retried with the same attempt number (research R10 "Found next 2" to "Found next 4"; T048 to T054; owner decisions 2026-11-19).
+
 ## 2026-11-19
 
 * **Decision**: Feature 002, found by T014's procedure step in CI run 44553348919: a step worker call that fails `WorkersNotReady` is retried by the one retry rule (3 retries) before the run waits for its workers (owner, 2026-11-19; research R10, spec clarification and edge case, data model, tasks T046 and T047).

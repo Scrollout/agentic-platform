@@ -16,7 +16,10 @@ A fresh clone of the repository, or a change to the hooks.
 1. Point git at the repository's hooks: `git config core.hooksPath scripts/hooks`.
 2. Before every commit, `scripts/hooks/pre-commit` runs only the quick static checks the staged
    files can affect: root layout, secret scan, knowledge bundle, markdown, contract lint,
-   committed generated blocks, and `gofmt` and `go vet` of each changed Go module. No test suite
+   committed generated blocks, `gofmt` and `go vet` of each changed Go module, and each stack's
+   pinned linter on the lines the commit adds or changes (golangci-lint with gosec, Ruff, ShellCheck,
+   Hadolint, actionlint and zizmor, declared in `scripts/lint-staged.yaml`; a finding on an
+   untouched line is not reported, and a linter that cannot run refuses the commit; T041). No test suite
    runs there, so a commit takes at most about 2 minutes; it prints `pre-commit: done in <n> s`. It checks the staged snapshot, not the working tree: it exports the
    index into a temporary directory, runs every check there with the check scripts as staged,
    and removes the directory on exit. Untracked files and unstaged changes, such as another
