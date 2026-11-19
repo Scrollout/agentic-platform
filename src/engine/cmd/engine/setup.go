@@ -216,12 +216,10 @@ func setupWith(getenv func(string) string, d durableLinks) (http.Handler, func()
 		GrantsDir: grants,
 	}
 	if err := wireSteps(&cfg, svc, st, env); err != nil {
-		st.Close()
-		return nil, nil, err
+		return nil, nil, errors.Join(err, st.Close())
 	}
 	if err := durableStart(d, st); err != nil {
-		st.Close()
-		return nil, nil, err
+		return nil, nil, errors.Join(err, st.Close())
 	}
 	var mp machine.Pattern
 	if p, err := svc.Pattern(); err == nil {
@@ -240,8 +238,7 @@ func setupWith(getenv func(string) string, d durableLinks) (http.Handler, func()
 			Results: rec.Results(), Artifacts: st, Events: rec})
 		if err != nil {
 			cancel()
-			st.Close()
-			return nil, nil, err
+			return nil, nil, errors.Join(err, st.Close())
 		}
 		stopWorker = stop
 	}

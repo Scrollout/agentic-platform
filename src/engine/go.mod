@@ -42,7 +42,7 @@ require (
 	github.com/wI2L/jsondiff v0.7.1 // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect
 	go.yaml.in/yaml/v4 v4.0.0 // indirect
-	golang.org/x/net v0.58.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect

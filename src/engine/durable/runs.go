@@ -64,7 +64,7 @@ func (r *Runs) Cancel(ctx context.Context, run string) error {
 func (r *Runs) Exists(ctx context.Context, run string) (bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, callTimeout)
 	defer cancel()
-	_, err := r.c.DescribeWorkflowExecution(ctx, run, "")
+	_, err := r.c.DescribeWorkflow(ctx, run, "")
 	switch err = classify("reading run "+run, err); {
 	case err == nil:
 		return true, nil
