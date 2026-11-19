@@ -261,6 +261,10 @@ func Start(t *testing.T, opts ...Option) *Lab {
 		checkURL, projectURL = "http://"+l.checkIP+":8080", "http://"+l.projectIP+":8080"
 	}
 
+	// The lab's own durable store, schema job and server, healthy before the engine starts; the
+	// engine joins their `durable` network (T011).
+	durableNet := l.startDurable(t)
+
 	// The engine runs as the developer (the later --user wins over hardened's), so it writes its
 	// store, a host folder that outlives a restart, and reads the grant files the lab writes.
 	l.Engine = uniq("aptest-lab-engine")
@@ -274,6 +278,7 @@ func Start(t *testing.T, opts ...Option) *Lab {
 		"-e", "AP_PROJECT_URL="+projectURL, "-e", "AP_PROJECT_TOKEN="+ProjectToken,
 		"-e", "ENGINE_STORE_DIR=/store", "-e", "ENGINE_GRANTS_DIR=/grants",
 		alpine, "/e/engine")
+	Docker(t, "network", "connect", durableNet, l.Engine)
 	l.EngineIP = ip(t, l.Engine, l.Net)
 
 	deadline := time.Now().Add(120 * time.Second)
