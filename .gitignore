@@ -18,4 +18,5 @@ node_modules/
 
 # Copies scripts/generate.sh makes for //go:embed (gen/<path> from src/<path>)
 src/*/cmd/*/gen/
+src/cli/gen/
 src/engine/checksvc/gen/

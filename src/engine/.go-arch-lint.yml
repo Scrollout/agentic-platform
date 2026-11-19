@@ -26,6 +26,8 @@ vendors:
     in: [github.com/oapi-codegen/runtime]
   oasdiff:
     in: [github.com/oasdiff/oasdiff/checker, github.com/oasdiff/oasdiff/diff, github.com/oasdiff/oasdiff/load]
+  retry-module:
+    in: [github.com/agentic-platform/retry]
   slice-module:
     in: [github.com/agentic-platform/slice]
   yaml:
@@ -51,7 +53,7 @@ deps:
     mayDependOn: [agentcall, analyst, slices]
   api:
     mayDependOn: [api-gen, machine, slices, store]
-    canUse: [jsonschema, slice-module, yaml]
+    canUse: [jsonschema, retry-module, slice-module, yaml]
   api-gen:
     canUse: [oapi-runtime]
   checks:

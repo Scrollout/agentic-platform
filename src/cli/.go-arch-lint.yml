@@ -10,6 +10,8 @@ allow:
 excludeFiles:
   - "^.*/testdata/.*$"
 vendors:
+  retry-module:
+    in: [github.com/agentic-platform/retry]
   oapi-runtime:
     in: [github.com/oapi-codegen/runtime]
 components:
@@ -19,6 +21,7 @@ components:
 deps:
   root:
     mayDependOn: [api-gen, root]
+    canUse: [retry-module]
   api-gen:
     canUse: [oapi-runtime]
   cmd-cli:

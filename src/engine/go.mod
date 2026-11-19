@@ -4,6 +4,7 @@ go 1.26.0
 
 require (
 	github.com/agentic-platform/check v0.0.0
+	github.com/agentic-platform/retry v0.0.0
 	github.com/agentic-platform/slice v0.0.0
 	github.com/cucumber/gherkin/go/v42 v42.0.1
 	github.com/cucumber/messages/go/v34 v34.2.0
@@ -34,3 +35,5 @@ require (
 replace github.com/agentic-platform/check => ../check
 
 replace github.com/agentic-platform/slice => ../slice
+
+replace github.com/agentic-platform/retry => ../retry

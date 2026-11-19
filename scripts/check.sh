@@ -23,7 +23,7 @@ go_run() {  # go_run <network: bridge|none> <script> [image]: a shell in a pinne
     --user "$(id -u):$(id -g)" -e GOPATH=/gopath -e GOCACHE=/gopath/cache -e GOTOOLCHAIN=local \
     "${3:-$GO_IMAGE}" sh -ec "$2"
 }
-GO_MODULES="check engine slice cli page tests"
+GO_MODULES="check engine slice cli page retry tests"
 
 # --prepare: what the offline Go builds need and the repository does not hold: the generated code
 # and a filled module cache. The go step does it first; CI jobs that build offline without the go
