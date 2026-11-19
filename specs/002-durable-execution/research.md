@@ -255,6 +255,18 @@ questions on 2026-11-19.
   for `ap build-workers --resume` (T014's procedure step judges the window in CI). Each stop or
   wait adds at most 3 retries (about 18 events), which T012 (n)'s bound at feature 001's limits
   still covers.
+- **Found next 2** (CI run 44585526936, T014 procedure step 3 of 3 and review round 2 of 2;
+  reproduced on the owner's clean VM 2026-11-19): the repeated call reached the step worker, and
+  the worker's restart then closed the connection before it answered (`runProcedure generate:
+  Post ...: EOF`). Only a refused dial counted as `WorkersNotReady`, so the call counted as a
+  failed attempt: the procedure step made attempt 2 (FR-003 broken), and the review step's
+  attempts 2 and 3 asked the model a message no recording holds, so the run was interrupted.
+  **Fix** (defect against the spec's edge case "a worker that is briefly unreachable
+  (restarting) is called again by the retry rule"): a worker call whose connection fails before
+  the worker's answer is complete (refused, reset, or closed: `EOF`, unexpected `EOF`) is
+  `WorkersNotReady`, retried as above with the same attempt number. An answer the worker gave
+  (any HTTP status, a stream that ended in good order) is not. Accepted limit: what an agent step
+  used before its worker died is not counted in the budgets (its stream never reported it).
 
 ### R9. Tests
 
