@@ -275,6 +275,13 @@ questions on 2026-11-19.
   `stream_stopped`, so a stream without it was not finished. **Rejected**: changing T014 to
   restart the paused worker before the engine calls it (a real restart that cuts a stream would
   still count as a failed attempt).
+- **Found next 4** (the owner's clean VM, 2026-11-19, with T052): the repeated `create session`
+  reached the review worker while the test still held it paused and failed `timeout awaiting
+  response headers`. **Decision** (owner, 2026-11-19): one rule: a worker call that got no
+  complete answer from the worker (any failure of the HTTP exchange itself, a header timeout
+  included, or a stream ended without `stream_stopped`) is the worker gone, unless the caller
+  gave up (the step's time limit or a cancel). **Rejected**: changing T014 to restart the paused
+  worker before the engine starts (it removes the race in the test, not on a real platform).
 
 ### R9. Tests
 
