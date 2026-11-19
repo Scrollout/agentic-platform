@@ -64,7 +64,7 @@ func closeWithARunRetrying(t *testing.T) string {
 	e := goodEnv(lint.URL, analyst.URL, dir)
 	e["AP_PROJECT_URL"], e["AP_PROJECT_TOKEN"] = pw.URL, "the-project-token"
 	e["ENGINE_GRANTS_DIR"] = grants
-	h, closeFn, err := setup(e.get)
+	h, closeFn, err := setupWith(e.get, testDurable(t))
 	if err != nil {
 		t.Fatal(err)
 	}

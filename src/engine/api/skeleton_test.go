@@ -101,10 +101,12 @@ const (
 	contractPath = "preview/2026-11-12-preview/openapi.yaml"
 )
 
-// fakeClock is a clock the tests move by hand.
+// fakeClock is a clock the tests move by hand. Each Advance then calls the functions given to
+// onAdvance (the rig's durable service lets its runs' due timers fire).
 type fakeClock struct {
-	mu sync.Mutex
-	t  time.Time
+	mu      sync.Mutex
+	t       time.Time
+	advance []func()
 }
 
 func newFakeClock() *fakeClock {
@@ -113,8 +115,18 @@ func newFakeClock() *fakeClock {
 func (c *fakeClock) Now() time.Time { c.mu.Lock(); defer c.mu.Unlock(); return c.t }
 func (c *fakeClock) Advance(d time.Duration) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	c.t = c.t.Add(d)
+	then := append([]func(){}, c.advance...)
+	c.mu.Unlock()
+	for _, f := range then {
+		f()
+	}
+}
+
+func (c *fakeClock) onAdvance(f func()) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.advance = append(c.advance, f)
 }
 
 // recorder counts calls to Work and lets a test choose what Work does.
@@ -154,6 +166,7 @@ func newRig(t *testing.T, mutate func(*Config)) *rig {
 	if mutate != nil {
 		mutate(&cfg)
 	}
+	attachDurable(t, r, &cfg)
 	r.h = NewHandler(cfg)
 	return r
 }

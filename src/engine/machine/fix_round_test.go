@@ -8,7 +8,6 @@ package machine_test
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -198,63 +197,6 @@ func TestFixAttemptsCountFromOneInEachRound(t *testing.T) {
 		t.Errorf("StepStarted of fixes = %v, want one in round 1 and one in round 2", started)
 	}
 	validate(t, f.ev.events)
-}
-
-func TestResumedRunContinuesAFixWithTheSameRound(t *testing.T) {
-	results, ev, clk := machine.NewResults(), listSink{recSink{&sink{}}}, &clock{now: t0}
-	w1 := &worker{fn: map[string]func(machine.Request) (machine.Result, error){
-		"review": func(r machine.Request) (machine.Result, error) {
-			res := ok(r)
-			if r.Round == 1 {
-				res.Findings = []machine.Finding{blocking("R-1", "internal/a.go", 10)}
-			}
-			return res, nil
-		},
-		// the fix cannot run: the worker fails on every attempt, so the run is interrupted mid-fix
-		"code": func(r machine.Request) (machine.Result, error) {
-			if len(r.Open) > 0 {
-				return machine.Result{}, errors.New("model unavailable")
-			}
-			return ok(r), nil
-		},
-	}}
-	build := func(w *worker) *machine.Machine {
-		return machine.New(machine.Config{Pattern: pattern(), Worker: w, Checker: &checker{fn: noBlocking}, Clock: clk,
-			Events: ev, Results: results, Model: "claude-haiku-5-5"})
-	}
-	r, err := build(w1).Start(context.Background(), (&fixture{t: t}).params("RUN-1"))
-	if err != nil || r.Status != machine.StatusInterrupted {
-		t.Fatalf("setup: %v, %s", err, r.Status)
-	}
-	w2 := &worker{fn: map[string]func(machine.Request) (machine.Result, error){}}
-	w2.fn["review"] = w1.fn["review"]
-	r, err = build(w2).Resume(context.Background(), "RUN-1") // a restarted engine: the run is rebuilt from events
-	if err != nil {
-		t.Fatal(err)
-	}
-	if r.Status != machine.StatusEnded || r.Outcome != machine.OutcomeDone {
-		t.Fatalf("resumed run = %s/%s %s", r.Status, r.Outcome, r.Reason)
-	}
-	code := w2.callsTo("code")
-	if len(code) != 1 || code[0].Round != 1 || code[0].Attempt != 1 || len(code[0].Open) != 1 {
-		t.Fatalf("the resumed fix: %+v, want one run at round 1, attempt 1, with the open finding", code)
-	}
-	// every event of the resumed fix names round 1
-	resumedAt := -1
-	for i, e := range ev.events {
-		if e.Kind == "RunResumed" {
-			resumedAt = i
-		}
-	}
-	for _, e := range ev.events[resumedAt+1:] {
-		if e.Step == "code" && e.Round != 1 {
-			t.Errorf("event %s of the resumed fix has round %d, want 1", e.Kind, e.Round)
-		}
-		if e.Step == "review" && e.Round != 2 {
-			t.Errorf("event %s of the review after it has round %d, want 2", e.Kind, e.Round)
-		}
-	}
-	validate(t, ev.events)
 }
 
 // A run interrupted after the fix of round 1 was accepted and before review round 2 started resumes

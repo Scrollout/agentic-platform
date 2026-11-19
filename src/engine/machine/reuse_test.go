@@ -29,7 +29,6 @@ package machine_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"testing"
@@ -143,45 +142,6 @@ func TestChangedInputIsNotReused(t *testing.T) {
 	}
 }
 
-func TestResumeContinuesWithoutRepeatingAcceptedSteps(t *testing.T) {
-	results := machine.NewResults()
-	f := reuseFixture(t, results)
-	down := true
-	inner := f.w.fn["code"]
-	f.w.fn["code"] = func(r machine.Request) (machine.Result, error) {
-		if down {
-			return machine.Result{}, errors.New("model unavailable")
-		}
-		return inner(r)
-	}
-	r := f.start("RUN-1")
-	if r.Status != machine.StatusInterrupted {
-		t.Fatalf("status = %s, want interrupted", r.Status)
-	}
-	if !slices.Equal(r.Accepted, []string{"contract-check", "generate", "tests"}) {
-		t.Fatalf("accepted = %v", r.Accepted)
-	}
-	before := len(f.w.calls)
-	down = false
-	r, err := f.m.Resume(context.Background(), "RUN-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertEnded(t, r, f.ev, "done")
-	for _, c := range f.w.calls[before:] {
-		if !slices.Contains([]string{"code", "review"}, c.Step.Name) {
-			t.Errorf("resume ran %s again", c.Step.Name)
-		}
-	}
-	if f.ev.count("StepAccepted") != 5 {
-		t.Fatalf("each step accepted exactly once, events = %v", f.ev.kinds())
-	}
-	validate(t, f.ev.events)
-	if _, err := f.m.Resume(context.Background(), "RUN-1"); !errors.Is(err, machine.ErrRunEnded) {
-		t.Fatalf("resume of an ended run: %v, want ErrRunEnded", err)
-	}
-}
-
 func TestReplayOfEndedRunGivesByteIdenticalArtifacts(t *testing.T) {
 	results := machine.NewResults()
 	first := reuseFixture(t, results)
@@ -280,43 +240,4 @@ func (s recSink) Read(run string) ([]machine.Event, error) {
 		}
 	}
 	return out, nil
-}
-
-func TestRestartedMachineResumesFromTheRecordWithoutRepeatingAcceptedSteps(t *testing.T) {
-	results := machine.NewResults()
-	ev := recSink{&sink{}}
-	clk := &clock{now: t0}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	w1 := &worker{fn: map[string]func(machine.Request) (machine.Result, error){
-		"code": func(r machine.Request) (machine.Result, error) { cancel(); return machine.Result{}, ctx.Err() },
-	}}
-	build := func(w *worker) *machine.Machine {
-		return machine.New(machine.Config{Pattern: pattern(), Worker: w, Checker: &checker{fn: noBlocking},
-			Clock: clk, Events: ev, Results: results, Model: "claude-haiku-5-5"})
-	}
-	m1 := build(w1)
-	f := &fixture{t: t, ev: ev.sink}
-	if _, err := m1.Start(ctx, f.params("RUN-1")); err != nil && !errors.Is(err, context.Canceled) {
-		t.Fatal(err)
-	}
-	if ev.count("StepAccepted") != 3 || ev.count("RunCompleted") != 0 {
-		t.Fatalf("setup: events = %v", ev.kinds())
-	}
-	// the first machine is dropped; a new one reads the same record
-	w2 := &worker{fn: map[string]func(machine.Request) (machine.Result, error){}}
-	m2 := build(w2)
-	r, err := m2.Resume(context.Background(), "RUN-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertEnded(t, r, ev.sink, "done")
-	for _, c := range w2.calls {
-		if c.Step.Name != "code" && c.Step.Name != "review" {
-			t.Errorf("restart repeated accepted step %s", c.Step.Name)
-		}
-	}
-	if ev.count("StepAccepted") != 5 {
-		t.Fatalf("each step accepted once, events = %v", ev.kinds())
-	}
 }

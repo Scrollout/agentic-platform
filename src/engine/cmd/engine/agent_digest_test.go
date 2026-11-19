@@ -18,7 +18,7 @@ func TestSetupRefusesAPatternWithAWrongAgentDigestNamingTheStep(t *testing.T) {
 
 	// Control: the embedded pattern itself starts (else the planted failure proves nothing).
 	pattern = orig
-	if _, closeFn, err := setup(goodEnv(lint.URL, analyst.URL, t.TempDir()).get); err != nil {
+	if _, closeFn, err := setupWith(goodEnv(lint.URL, analyst.URL, t.TempDir()).get, testDurable(t)); err != nil {
 		t.Fatalf("the unmodified pattern does not start: %v", err)
 	} else {
 		closeFn()
