@@ -48,7 +48,7 @@ func TestWorkflowHandOverWaitsForTheDeveloper(t *testing.T) {
 		h := newWF(t, wfPattern())
 		*failing = true
 		h.check = wfFailCode(failing)
-		h.work = wfWorkersGoneFor("tests")
+		h.work = wfWorkersGoneForCalls("tests", 4) // the first call and the retry rule's 3 retries
 		h.signalAt(3*wfDay, durable.SignalWorkersReady, nil)
 		return h
 	}
@@ -124,19 +124,21 @@ func TestWorkflowHandOverWaitsForTheDeveloper(t *testing.T) {
 	})
 }
 
-// (g) A worker call failing WorkersNotReady records RunInterrupted `the step workers are not
-// running`, waits for workers-ready without calling again, then records RunResumed and continues.
+// (g) A worker call failing WorkersNotReady is first made again by the retry rule (T046); when
+// the first call and its 3 retries all fail, the run records RunInterrupted `the step workers are
+// not running`, waits for workers-ready without calling again, then records RunResumed and
+// continues.
 func TestWorkflowWaitsForWorkersReady(t *testing.T) {
 	h := newWF(t, wfPattern())
-	h.work = wfWorkersGoneFor("tests")
+	h.work = wfWorkersGoneForCalls("tests", 4)
 	var calls int
 	var waiting []string
 	h.signalAt(2*time.Hour, durable.SignalWorkersReady, func() { calls, waiting = len(h.workerCalls("tests")), h.kinds() })
 	h.run()
 	h.wantOutcome(machine.OutcomeDone)
 
-	if calls != 1 {
-		t.Fatalf("tests called %d times while waiting for its workers, want 1", calls)
+	if calls != 4 {
+		t.Fatalf("tests called %d times while waiting for its workers, want 4", calls)
 	}
 	if len(waiting) == 0 || waiting[len(waiting)-1] != "RunInterrupted" {
 		t.Fatalf("while waiting the record ends %v, want RunInterrupted", waiting)
@@ -149,8 +151,8 @@ func TestWorkflowWaitsForWorkersReady(t *testing.T) {
 	if h.index("RunResumed", i) != i+1 {
 		t.Fatalf("RunResumed does not follow the interruption: %v", h.kinds())
 	}
-	if got := attemptsOf(h.workerCalls("tests")); !slices.Equal(got, []int{1, 1}) {
-		t.Fatalf("tests attempts = %v, want [1 1]", got)
+	if got := attemptsOf(h.workerCalls("tests")); !slices.Equal(got, []int{1, 1, 1, 1, 1}) {
+		t.Fatalf("tests attempts = %v, want [1 1 1 1 1]", got)
 	}
 }
 
@@ -196,7 +198,7 @@ func TestWorkflowCancelEndsTheRun(t *testing.T) {
 			failing := true
 			h.check = wfFailCode(&failing)
 		}},
-		{"waiting for its workers", func(h *wfHarness) { h.work = wfWorkersGoneFor("tests") }},
+		{"waiting for its workers", func(h *wfHarness) { h.work = wfWorkersGoneForCalls("tests", 4) }},
 		{"interrupted", func(h *wfHarness) {
 			h.work = func(c durable.WorkerCall) (machine.Result, error) {
 				if c.Step.Name == "tests" {
