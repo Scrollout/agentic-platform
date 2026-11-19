@@ -42,7 +42,7 @@ import test_workflows as wfx  # noqa: E402
 REPO = HERE.parent.parent
 CHECK = REPO / "scripts" / "check.sh"
 LOCK = REPO / "src" / "deploy" / "images.lock"
-GO_MODULES = ["check", "engine", "slice", "cli", "page", "tests"]
+GO_MODULES = ["check", "engine", "slice", "cli", "page", "retry", "tests"]
 DOCKER_PACKAGES = ["recorded", "lint", "acceptance", "contract"]
 GO_VERSION = "go1.26.11"
 

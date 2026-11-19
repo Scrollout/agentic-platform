@@ -52,7 +52,7 @@ optional_images="page agent check project tests lint"
 # shellcheck disable=SC2086
 image_vars=$(printf 'AP_IMAGE_%s ' $needed_images $optional_images | tr '[:lower:]' '[:upper:]')
 token_vars="AP_CLIENT_TOKEN AP_PAGE_TOKEN AP_WORKER_TOKEN AP_LINT_TOKEN AP_ANALYST_TOKEN AP_CHECK_TOKEN AP_PROJECT_TOKEN"
-vars="AP_CREDENTIALS_FILE AP_DURABLE_PASSWORD_FILE AP_PROJECTS_DIR AP_PAGE_PORT $token_vars AP_HOST_USER AP_GATEWAY_IMAGE AP_GRANTS_DIR $image_vars"
+vars="AP_CREDENTIALS_FILE AP_PROJECTS_DIR AP_PAGE_PORT $token_vars AP_HOST_USER AP_GATEWAY_IMAGE AP_GRANTS_DIR $image_vars"
 # A session with remote access to the run page (feature 003, research R5, data model) also has
 # these; one without has none of them.
 remote_vars="AP_PAGE_ADDRESS AP_PAGE_NAMES AP_PAGE_SECRET AP_PAGE_CERT_DIR"
@@ -69,6 +69,9 @@ grants_dir=$state_dir/grants
 # the store's volume, which holds the data it protects.
 durable_dir=$state_dir/durable
 durable_password_file=$durable_dir/durable-store-password
+# Not a session variable: it follows from the state folder, so every Compose call gets it.
+AP_DURABLE_PASSWORD_FILE=$durable_password_file
+export AP_DURABLE_PASSWORD_FILE
 engine_user=65532:65532
 # Each slice's worker tokens: one line per step, `<step> <worker token> <call token>`, and a line
 # `id <hex>` that changes with them.
@@ -760,7 +763,7 @@ cmd_up() {
   AP_CLIENT_TOKEN=$1 AP_PAGE_TOKEN=$2 AP_WORKER_TOKEN=$3 AP_LINT_TOKEN=$4 AP_ANALYST_TOKEN=$5 AP_CHECK_TOKEN=$6
   AP_PROJECT_TOKEN=$7
 
-  AP_CREDENTIALS_FILE=$cred AP_PROJECTS_DIR=$proj AP_PAGE_PORT=$port AP_DURABLE_PASSWORD_FILE=$durable_password_file
+  AP_CREDENTIALS_FILE=$cred AP_PROJECTS_DIR=$proj AP_PAGE_PORT=$port
   AP_HOST_USER=$(id -u):$(id -g) AP_GATEWAY_IMAGE=$gateway_image AP_GRANTS_DIR=$grants_dir
   # shellcheck disable=SC2086
   export $vars
@@ -982,7 +985,7 @@ cmd_down() {
   unset AP_COMPOSE_OVERRIDE $remote_vars   # only the session's, read by load below
   # Compose needs every variable to read the file, though none is used to stop. A missing,
   # unreadable or broken session falls back to placeholders, so `down` always recovers.
-  AP_CREDENTIALS_FILE=/nonexistent AP_PROJECTS_DIR=/nonexistent AP_PAGE_PORT=$default_page_port AP_DURABLE_PASSWORD_FILE=/nonexistent
+  AP_CREDENTIALS_FILE=/nonexistent AP_PROJECTS_DIR=/nonexistent AP_PAGE_PORT=$default_page_port
   AP_CLIENT_TOKEN=none AP_PAGE_TOKEN=none AP_WORKER_TOKEN=none AP_LINT_TOKEN=none AP_ANALYST_TOKEN=none AP_CHECK_TOKEN=none AP_PROJECT_TOKEN=none
   AP_HOST_USER=65534:65534
   AP_GATEWAY_IMAGE=none AP_GRANTS_DIR=/nonexistent

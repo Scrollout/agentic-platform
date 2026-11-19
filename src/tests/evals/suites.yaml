@@ -13,12 +13,14 @@ suites:
       - src/cli/go.mod
       - src/engine/go.mod
       - src/page/go.mod
+      - src/retry/go.mod
       - src/slice/go.mod
       - src/tests/go.mod
       - src/check/go.sum
       - src/cli/go.sum
       - src/engine/go.sum
       - src/page/go.sum
+      - src/retry/go.sum
       - src/slice/go.sum
       - src/tests/go.sum
       - src/tests/evals/runevents/**
@@ -43,12 +45,14 @@ suites:
       - src/cli/go.mod
       - src/engine/go.mod
       - src/page/go.mod
+      - src/retry/go.mod
       - src/slice/go.mod
       - src/tests/go.mod
       - src/check/go.sum
       - src/cli/go.sum
       - src/engine/go.sum
       - src/page/go.sum
+      - src/retry/go.sum
       - src/slice/go.sum
       - src/tests/go.sum
       - src/tests/evals/runevents/**
@@ -73,12 +77,14 @@ suites:
       - src/cli/go.mod
       - src/engine/go.mod
       - src/page/go.mod
+      - src/retry/go.mod
       - src/slice/go.mod
       - src/tests/go.mod
       - src/check/go.sum
       - src/cli/go.sum
       - src/engine/go.sum
       - src/page/go.sum
+      - src/retry/go.sum
       - src/slice/go.sum
       - src/tests/go.sum
       - src/tests/evals/runevents/**
@@ -103,12 +109,14 @@ suites:
       - src/cli/go.mod
       - src/engine/go.mod
       - src/page/go.mod
+      - src/retry/go.mod
       - src/slice/go.mod
       - src/tests/go.mod
       - src/check/go.sum
       - src/cli/go.sum
       - src/engine/go.sum
       - src/page/go.sum
+      - src/retry/go.sum
       - src/slice/go.sum
       - src/tests/go.sum
       - src/tests/evals/runevents/**

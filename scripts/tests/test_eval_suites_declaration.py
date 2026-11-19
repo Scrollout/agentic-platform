@@ -435,7 +435,7 @@ class WorkspaceTest(unittest.TestCase):
                   "src/slice/go.mod"):
             self.assertIn(p, got)
         self.assertEqual({p for p in got if p.endswith("/go.mod")},
-                         {f"src/{m}/go.mod" for m in ("check", "cli", "engine", "page", "slice", "tests")})
+                         {f"src/{m}/go.mod" for m in ("check", "cli", "engine", "page", "retry", "slice", "tests")})
 
     def test_planted_missing_workspace_file_fails(self):
         decl = real_decl(self)
