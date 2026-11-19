@@ -10,11 +10,11 @@ stays: inputs from the environment only, the matrix on stdout, reasons on stderr
 - RUNS is the successful evals runs the workflow listed from the GitHub API, newest first, as a
   JSON list of objects with at least `head_sha`, `head_branch` and `conclusion` (the fields of
   `.workflow_runs[]`; others are ignored). The selector, the one owner of the base-run rule,
-  chooses the base: the first (newest) run whose conclusion is `success`, whose head_branch is
-  `main` or `001-prose-to-accepted-slice`, and whose head_sha is a commit here that is an ancestor
+  chooses the base: the first (newest) run whose conclusion is `success`, on any branch (head_branch
+  does not matter, and may be missing), and whose head_sha is a commit here that is an ancestor
   of SHA (SHA itself included). When RUNS is set, BEFORE is not read.
 - Every suite when there is no such run: RUNS empty (the API did not answer), not JSON, `[]`, or
-  holding no run that qualifies (failed, on another branch, not an ancestor, not a commit here).
+  holding no run that qualifies (failed, not an ancestor, not a commit here).
 - ALL is the dispatch input `all` as the workflow's `env:` gives it: `true` chooses every suite;
   `false` or unset chooses as for a push. EVENT no longer matters: workflow_dispatch selects as a
   push does.
@@ -158,11 +158,11 @@ class NoBaseTest(unittest.TestCase):
                 self.assertEqual(pick(self, self.r, self.sha, [run_of(self.r.base, conclusion=c)]),
                                  ALL)
 
-    def test_run_on_another_branch_does_not_count(self):
+    def test_run_on_any_branch_counts_as_the_base(self):
         for b in ("feature-x", "main-old", "001-prose-to-accepted-slice-2", None):
             with self.subTest(b):
                 self.assertEqual(pick(self, self.r, self.sha, [run_of(self.r.base, branch=b)]),
-                                 ALL)
+                                 [])
         self.assertEqual(pick(self, self.r, self.sha, [run_of(self.r.base, branch="main")]), [])
 
 
@@ -184,7 +184,7 @@ class UnresolvableBaseTest(unittest.TestCase):
 
 
 class AncestorTest(unittest.TestCase):
-    """The base is the newest successful run on main or the feature branch whose head is an
+    """The base is the newest successful run on any branch whose head is an
     ancestor of the commit."""
 
     def test_main_run_counts_on_the_feature_branch(self):
