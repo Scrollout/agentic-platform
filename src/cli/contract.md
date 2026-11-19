@@ -23,8 +23,9 @@ Two names, two jobs:
     below and this session's tokens); the launcher then registers each with the engine again and
     passes the command on. When one is missing or stopped, or the slice's tokens are gone (after
     `ap down` or a host reboot), it changes nothing and exits 3 with `resume: the step workers of
-    <slice> for the project <project> are not running; run ap build-workers --resume <run>, then ap
-    resume <run>`.
+    <slice> for the project <project> are not running; run ap build-workers --resume <run>`.
+    A run that a platform stop interrupted continues by itself once its step workers are
+    registered, so `ap build-workers --resume <run>` alone lets it continue, with no `ap resume`.
 
   `build-workers <slice> <project>` makes the
   project folder with an empty `.git` and the folders the steps write, starts one step container per
@@ -48,7 +49,8 @@ Two names, two jobs:
   down` or a host reboot. It reads the run (`getRun`) for its slice and project and accepts that
   run's existing project folder only, creating nothing in it; it makes the slice's tokens if they
   are gone, writes the grants, starts the project's step containers (same names, labels and mounts)
-  and registers them; running it again changes nothing. It exits 4 for an unknown run (`NotFound`)
+  and registers them, and the engine then continues the run by itself; running it again changes
+  nothing. It exits 4 for an unknown run (`NotFound`)
   or one that is not `interrupted` (`RunNotInterrupted`), 3 when the project folder, its `.git` or
   a step's folder is missing or not a folder (naming it), and 1 as `build-workers` does.
 
@@ -307,12 +309,15 @@ lowercase hex digits from the operating system's random source. It sends that ke
 mutating call (`startRun`, `resumeRun`, `replayRun` or `acceptHandOver`).
 
 When that call gets no answer (a connection error or the client's 2-minute timeout), or answers
-502, 503 or 504, the client sends the same request with the same key and body again, up to 3
-more times, after 1, 2 and 4 seconds, each with up to half again of random jitter (research
-D7); a 429 waits its `Retry-After` first. The engine returns the first result for a key it has
+502, 503 or 504, the client sends the same request with the same key and body again, as the
+engine contract's retry rule says (`x-limits`: `retry-attempts` more times, each after the wait
+that `retry-first-wait-ms`, `retry-longest-wait-ms` and `retry-jitter-fraction` give; the client
+reads them from the engine contract it was generated from); a 429 waits its `Retry-After`
+first. The engine returns the first result for a key it has
 kept (24 hours, `x-limits.idempotency-key-retention-hours`), so a retry never starts a second
-run. When every try is lost the client exits 1 with `engine: no answer to <operation> after 4
-tries (Idempotency-Key <key>); it may have been recorded: see runs`. Any other answer is final:
+run. When every try is lost the client exits 1 with `engine: no answer to <operation> after <n>
+tries (Idempotency-Key <key>); it may have been recorded: see runs`, `<n>` being `retry-attempts`
+plus the first try. Any other answer is final:
 a problem is a refusal (exit 4).
 
 The first line on standard output after the 202, before any event is read, names the run and its
@@ -405,6 +410,11 @@ return; an error before that has its own code.
 | Ctrl-C (detached; the run continues) | 130 |
 | SIGTERM (detached; the run continues) | 143 |
 | a usage error (a malformed run ID, a missing argument) | 3 |
+
+A run is `interrupted` only while it waits for the developer (the model was unavailable on every
+attempt) or for its step workers (`ap build-workers --resume <run>` registers them); a platform
+stop alone does not leave a run `interrupted`, because the run continues by itself once the
+platform is up again.
 
 `interrupted` is 2 because, like `waiting-for-developer`, the run is kept, not lost, and goes on
 only when the developer acts; the end line names the command (`resume` or `take-over`), and `run`

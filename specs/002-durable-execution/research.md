@@ -128,7 +128,7 @@ questions on 2026-11-19.
     atomic write (as `run-sequence.json` is): `OP-<n>` from a durable `operation-sequence.json`,
     the kind, the target, the Idempotency-Key's hash with the request body's hash, and the time.
     Only then does the engine answer 202 (FR-008). A failure before that answers 503 `Unavailable`
-    with `Retry-After`, a retryable error the contract gains (contracts/engine-api-changes.md).
+    with `Retry-After`, a retryable error the [engine contract](../../src/engine/api/preview/2026-11-12-preview/openapi.yaml) gains.
   - The engine then starts the operation's workflow, ID = the operation ID, on the task queue
     `operations`, with `RejectDuplicate`. At start the engine starts the workflow of every
     recorded operation that has none (an outbox; constitution, Reliable events and side
@@ -186,6 +186,12 @@ questions on 2026-11-19.
   before anything is recorded (US2 AC4), and the reads of slices, runs, events, artifacts and
   comparisons are served from the engine store as before. `ap up` waits for the engine's
   readiness as today; the engine is ready once its Temporal worker is connected.
+  - The 503's body is its own problem schema, `UnavailableProblem`, whose `code` is always
+    `Unavailable`; the shared `ErrorCode` enum does not gain the value. Adding it there is a
+    breaking change: the pinned `oasdiff` (v1.37.0) reports `response-property-enum-value-added`
+    as an error on every response that carries a problem (137 errors), while a new 503 response
+    with its own schema is `response-non-success-status-added`, info only (reproduced 2026-11-19,
+    T001).
 - **Why**: Principle X (acknowledge only what is durably recorded) and the published API's
   queries, which never needed Temporal.
 

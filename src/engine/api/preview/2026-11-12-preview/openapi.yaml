@@ -24,7 +24,16 @@ info:
     with `x-sunset`, and its responses carry `Deprecation`, `Sunset` and `Link: rel="deprecation"`.
     `x-operation-name` gives each operation's permission name, and `x-error-codes` lists the
     problem codes each status code (and the operation's `error`) may carry. `x-limits` holds the
-    limits every client sees, once.
+    limits every client sees, once. A state change is accepted (202) only after its operation is
+    recorded durably; when it cannot be, the answer is 503 Unavailable with `Retry-After`, nothing
+    was accepted, and the same request may be sent again with the same Idempotency-Key. An
+    operation is followed by its ID until `x-limits.idempotency-key-retention-hours` after it
+    ends; after that `getOperation` answers 404 NotFound. An operation ID is never given to two
+    operations, across restarts of the engine too, and an Idempotency-Key and its first result
+    survive a restart within their retention. The `retry-*` limits are the one retry rule the
+    engine and its clients apply to a call that failed retryably: retry `n` (from 0) waits
+    `min(retry-longest-wait-ms, retry-first-wait-ms × 2^n)` plus a uniform random part of up to
+    `retry-jitter-fraction` of that wait, at most `retry-attempts` times.
   contact:
     name: Agentic Platform maintainers
   license:
@@ -40,6 +49,14 @@ x-limits:
   idempotency-key-retention-hours: 24
   # Largest request body accepted, in bytes; a larger one gets 400 InvalidRequest.
   request-body-max-bytes: 1048576
+  # Retries after the first try of a call that failed retryably, by the engine and its clients.
+  retry-attempts: 3
+  # The first retry's wait, in milliseconds; each further retry doubles it, up to the longest wait.
+  retry-first-wait-ms: 1000
+  # The longest wait before a retry, in milliseconds, before the random part is added.
+  retry-longest-wait-ms: 30000
+  # Each wait adds a uniform random part of up to this fraction of itself.
+  retry-jitter-fraction: 0.5
 servers:
 - url: /
   description: The engine's address on the platform's internal network; not reachable from outside it.
@@ -73,6 +90,7 @@ paths:
         '403': [Forbidden]
         '409': [IdempotencyKeyReused]
         '429': [RateLimited]
+        '503': [Unavailable]
         operation: [NarrowDescription, TooManyQuestions, BudgetExhausted]
       parameters:
       - $ref: '#/components/parameters/ApiVersion'
@@ -96,6 +114,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
     get:
       tags:
       - slices
@@ -177,6 +197,7 @@ paths:
         '404': [NotFound]
         '409': [RunActive, IdempotencyKeyReused]
         '429': [RateLimited]
+        '503': [Unavailable]
       parameters:
       - $ref: '#/components/parameters/ApiVersion'
       - $ref: '#/components/parameters/SliceId'
@@ -196,6 +217,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /slices/{sliceId}/goals:
     put:
       tags:
@@ -214,6 +237,7 @@ paths:
         '404': [NotFound]
         '409': [RunActive, IdempotencyKeyReused]
         '429': [RateLimited]
+        '503': [Unavailable]
       parameters:
       - $ref: '#/components/parameters/ApiVersion'
       - $ref: '#/components/parameters/SliceId'
@@ -239,6 +263,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /slices/{sliceId}/rules:
     put:
       tags:
@@ -257,6 +283,7 @@ paths:
         '404': [NotFound]
         '409': [RunActive, IdempotencyKeyReused]
         '429': [RateLimited]
+        '503': [Unavailable]
       parameters:
       - $ref: '#/components/parameters/ApiVersion'
       - $ref: '#/components/parameters/SliceId'
@@ -282,6 +309,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /slices/{sliceId}/contract:
     put:
       tags:
@@ -300,6 +329,7 @@ paths:
         '404': [NotFound]
         '409': [RunActive, IdempotencyKeyReused]
         '429': [RateLimited]
+        '503': [Unavailable]
       parameters:
       - $ref: '#/components/parameters/ApiVersion'
       - $ref: '#/components/parameters/SliceId'
@@ -325,6 +355,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /slices/{sliceId}/answers:
     post:
       tags:
@@ -346,6 +378,7 @@ paths:
         '404': [NotFound]
         '409': [QuestionNotOpen, RunActive, IdempotencyKeyReused]
         '429': [RateLimited]
+        '503': [Unavailable]
         operation: [TooManyQuestions, BudgetExhausted]
       parameters:
       - $ref: '#/components/parameters/ApiVersion'
@@ -372,6 +405,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /slices/{sliceId}/approvals:
     post:
       tags:
@@ -391,6 +426,7 @@ paths:
         '404': [NotFound]
         '409': [PartFailsChecks, ContradictionOpen, StaleContentHash, PatternDoesNotFit, RunActive, IdempotencyKeyReused]
         '429': [RateLimited]
+        '503': [Unavailable]
       parameters:
       - $ref: '#/components/parameters/ApiVersion'
       - $ref: '#/components/parameters/SliceId'
@@ -416,6 +452,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /slices/{sliceId}/runs:
     post:
       tags:
@@ -441,6 +479,7 @@ paths:
         '404': [NotFound]
         '409': [NotApproved, PatternDoesNotFit, WorkersNotReady, RunActive, ProjectExists, IdempotencyKeyReused]
         '429': [RateLimited]
+        '503': [Unavailable]
       parameters:
       - $ref: '#/components/parameters/ApiVersion'
       - $ref: '#/components/parameters/SliceId'
@@ -466,6 +505,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /runs:
     get:
       tags:
@@ -660,6 +701,7 @@ paths:
         '404': [NotFound]
         '409': [RunNotInterrupted, WorkersNotReady, RunActive, IdempotencyKeyReused]
         '429': [RateLimited]
+        '503': [Unavailable]
       parameters:
       - $ref: '#/components/parameters/ApiVersion'
       - $ref: '#/components/parameters/RunId'
@@ -679,6 +721,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /runs/{runId}/replay:
     post:
       tags:
@@ -698,6 +742,7 @@ paths:
         '404': [NotFound]
         '409': [RunNotEnded, WorkersNotReady, RunActive, ProjectExists, IdempotencyKeyReused]
         '429': [RateLimited]
+        '503': [Unavailable]
       parameters:
       - $ref: '#/components/parameters/ApiVersion'
       - $ref: '#/components/parameters/RunId'
@@ -723,6 +768,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /runs/{runId}/hand-over:
     post:
       tags:
@@ -742,6 +789,7 @@ paths:
         '404': [NotFound]
         '409': [RunNotWaiting, IdempotencyKeyReused]
         '429': [RateLimited]
+        '503': [Unavailable]
       parameters:
       - $ref: '#/components/parameters/ApiVersion'
       - $ref: '#/components/parameters/RunId'
@@ -761,6 +809,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /operations/{operationId}:
     get:
       tags:
@@ -813,6 +863,7 @@ paths:
         '404': [NotFound]
         '409': [OperationEnded, IdempotencyKeyReused]
         '429': [RateLimited]
+        '503': [Unavailable]
       parameters:
       - $ref: '#/components/parameters/ApiVersion'
       - $ref: '#/components/parameters/OperationId'
@@ -832,6 +883,8 @@ paths:
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /workers:
     post:
       tags:
@@ -1183,6 +1236,16 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+    Unavailable:
+      description: The engine could not record the operation durably, so nothing was accepted; send
+        the same request again, with the same Idempotency-Key, after `Retry-After`.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/UnavailableProblem'
   schemas:
     ErrorCode:
       type: string
@@ -1203,7 +1266,8 @@ components:
         RunNotInterrupted: the run is not interrupted. RunNotWaiting: the run is not waiting for the
         developer. RunNotEnded: the run has not ended. OperationEnded: the operation has finished.
         BudgetExhausted: the work used its token, cost or time budget. OperationFailed: the work
-        failed for a reason no other code names, after any retries; `detail` says why.
+        failed for a reason no other code names, after any retries; `detail` says why. A 503
+        answer has its own problem, UnavailableProblem, whose code is always Unavailable.
       enum:
       - InvalidRequest
       - MissingApiVersionParameter
@@ -1259,6 +1323,26 @@ components:
           description: With UnsupportedApiVersionValue, the api-versions this service serves.
           items:
             type: string
+    UnavailableProblem:
+      type: object
+      description: An RFC 9457 problem for a 503 answer; its `code` is always Unavailable. It is kept
+        apart from Problem so that the codes every other answer may carry stay as they were.
+      required:
+      - type
+      - title
+      - code
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        code:
+          type: string
+          const: Unavailable
     CheckResult:
       $ref: slice-defs.schema.json#/$defs/check_result
     Slice:

@@ -61,7 +61,7 @@ and extends its Principle V exception to the two added services.*
 |-----------|--------|------------------------|
 | I. Needs before solutions | Pass | Serves N-040 (owner confirmed 2026-11-18); no design taken from another project |
 | II. Two planes | Pass (feature 001's exception unchanged) | Temporal and PostgreSQL join the one local deployment |
-| III. API-first | Pass | No management path bypasses the API; the contract changes additively first (contracts/) |
+| III. API-first | Pass | No management path bypasses the API; the contract changes additively first (the engine contract and the terminal contract, T001) |
 | IV. Asynchronous operations | Pass | Every state-changing request is recorded, queued (task queue `operations`) and answered with an operation reference; retries with backoff and jitter (R5); failed operations stay visible; one task queue per workload class (`runs`, `operations`) |
 | V. Zero-trust identity | Exception (Complexity Tracking) | Temporal's frontend and PostgreSQL trust their internal networks and a per-install password |
 | VI. Adopt mature OSS | Pass | Temporal and PostgreSQL adopted after the evaluation (research, Principle VI evaluation); the custom code kept is justified there; feature 001's exception is removed |
@@ -73,13 +73,13 @@ and extends its Principle V exception to the two added services.*
 | XII. Tenant isolation | Not applicable | One developer |
 | XIII. Secure supply chain | Pass | Images and the SDK pinned by version and digest; the schema job and server share one version line |
 | XIV. Safe defaults | Pass | No new agent capability; a failed durable record blocks the request (503) |
-| XV. Compatible public APIs | Pass | Additive only: `x-limits` retry values, a 503 response, the operation-retention text (contracts/); `oasdiff` gates it |
+| XV. Compatible public APIs | Pass | Additive only: `x-limits` retry values, a 503 response, the operation-retention text, in the engine contract; `oasdiff` gates it |
 | XVI. Human control | Pass (feature 001's exception unchanged) | Protected paths and changed existing tests carry the owner's trailers |
 | XVII. Declare, derive, converge | Pass | The schema job converges the database; the retry rule is declared once and its use checked against it |
 | XVIII. Abstractions say what | Pass | `src/retry` has three callers; activities are named for what they do |
 | XIX. Evals | Pass | No prompt, model or tool changes; the regression eval suites run before merge as for any agent-logic change |
 | XX. Deterministic acceptance | Not affected | No check of agent work changes |
-| Contract-first | Pass | contracts/ drafts the changes; the engine contract and terminal contract change before code |
+| Contract-first | Pass | The engine contract and the terminal contract change before code (T001, committed alone) |
 | Existing tests change only with approval | Pass, by task | The plan names the existing tests expected to change (Project Structure); each task that changes one names it and waits for the owner's approval |
 | Fresh review | Pass | A fresh read-only reviewer per story and before done, judging the CI run |
 | Layout, Clean tree, Built artifacts | Pass | New code under `src/`; tests excluded by `src/.dockerignore` as before |
@@ -125,8 +125,6 @@ specs/002-durable-execution/
 ├── research.md          # Phase 0
 ├── data-model.md        # Phase 1
 ├── quickstart.md        # Phase 1
-├── contracts/
-│   └── engine-api-changes.md   # draft; authoritative copies stay with the engine and the client
 ├── checklists/
 │   └── requirements.md
 └── tasks.md             # /speckit-tasks
@@ -138,7 +136,7 @@ specs/002-durable-execution/
 src/
 ├── retry/                         # new module: the retry rule's Wait(n, random); go.work and an archfile
 ├── engine/
-│   ├── api/preview/2026-11-12-preview/openapi.yaml   # x-limits retry values, 503 Unavailable, operation retention text
+│   ├── api/preview/2026-11-12-preview/openapi.yaml   # x-limits retry values, 503 UnavailableProblem, operation retention text
 │   ├── api/operations.go          # operation record and outbox; status from the workflow; backoff removed
 │   ├── api/runs.go                # start, resume, cancel and hand-over through workflows and signals
 │   ├── durable/                   # new: Temporal client and worker setup, task queues, the activities
