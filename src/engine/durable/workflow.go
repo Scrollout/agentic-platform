@@ -414,9 +414,19 @@ type attemptOf struct {
 func (r *run) attempt(s machine.Step, at attemptOf) (WorkerResult, verdict, string, error) {
 	limit := r.callLimit()
 	var res WorkerResult
-	err := r.exec(r.ctx, CallWorker, limit, WorkerCall{Run: r.in.Run, Slice: r.in.Slice, Project: r.in.Project, Step: s,
+	call := WorkerCall{Run: r.in.Run, Slice: r.in.Slice, Project: r.in.Project, Step: s,
 		Attempt: at.n, Round: at.round, Inputs: slices.Clone(at.inputs), Open: slices.Clone(at.open),
-		ChangedLines: slices.Clone(at.changed), Before: slices.Clone(r.before), Artifacts: r.artifactsCopy(), TimeLimit: limit}, &res)
+		ChangedLines: slices.Clone(at.changed), Before: slices.Clone(r.before), Artifacts: r.artifactsCopy(), TimeLimit: limit}
+	err := r.exec(r.ctx, CallWorker, limit, call, &res)
+	// A worker that cannot be reached (WorkersNotReady, such as one restarting) is called again by
+	// the declared retry rule, recording nothing, before the run waits for its workers (R10).
+	for try := 0; err != nil && errType(err) == WorkersNotReady && r.ctx.Err() == nil && try < r.rule.Retries; try++ {
+		if serr := r.sleep(r.rule.Wait(try, r.random)); serr != nil {
+			return res, rejected, "", serr
+		}
+		res = WorkerResult{}
+		err = r.exec(r.ctx, CallWorker, limit, call, &res)
+	}
 	switch {
 	case err == nil:
 	case r.ctx.Err() != nil:
