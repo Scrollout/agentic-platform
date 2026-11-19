@@ -5,7 +5,7 @@ run (T117; research D50, ADR 0053).
 Run from the repository root, with its inputs in the environment:
   RUNS    the check runs, newest first, as the GitHub API lists them unfiltered (a JSON list of
           objects with head_sha, head_branch and conclusion; research D52). The base is the
-          newest run that succeeded, on main or 001-prose-to-accepted-slice, whose head is a
+          newest run that succeeded, on any branch, whose head is a
           commit here and an ancestor of SHA (SHA itself included).
   SHA     the commit judged (default HEAD)
   EVENT   github.event_name; workflow_dispatch runs every job
