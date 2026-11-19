@@ -202,18 +202,6 @@ func TestWorkerAnsweredIsNotWorkersNotReady(t *testing.T) {
 		_, err := steps.NewWorker(r.cfg).Run(ctx5(t), req)
 		wantOtherError(t, err)
 	})
-	t.Run("agent stream complete but without stream_stopped", func(t *testing.T) {
-		r, req := goneRig(t, testsStep, agentServer(func(w http.ResponseWriter, _ *http.Request) {
-			_, _ = fmt.Fprint(w, sse(map[string]any{"type": "agent_info", "model": pinned}), sse(map[string]any{"type": "agent_choice", "content": "x"}))
-		}))
-		_, err := steps.NewWorker(r.cfg).Run(ctx5(t), req)
-		wantOtherError(t, err)
-	})
-	t.Run("agent stream with an empty body", func(t *testing.T) {
-		r, req := goneRig(t, testsStep, agentServer(func(w http.ResponseWriter, _ *http.Request) {}))
-		_, err := steps.NewWorker(r.cfg).Run(ctx5(t), req)
-		wantOtherError(t, err)
-	})
 	t.Run("agent run HTTP 500", func(t *testing.T) {
 		r, req := goneRig(t, testsStep, agentServer(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(500)
@@ -265,4 +253,33 @@ func TestWorkerCallerGivingUpIsNotWorkersNotReady(t *testing.T) {
 			wantOtherError(t, run(t, step, h, ctx))
 		})
 	}
+}
+
+// T051: a 200 stream that ends without stream_stopped means the worker ended it, so it is gone.
+func TestWorkerGoneAgentStreamEndsWithoutStreamStopped(t *testing.T) {
+	info := sse(map[string]any{"type": "agent_info", "model": pinned})
+	usage := sse(map[string]any{"type": "token_usage", "session_id": "s", "usage": map[string]any{"input_tokens": 3, "output_tokens": 4, "cost": 0.001}})
+	run := func(t *testing.T, body ...string) error {
+		r, req := goneRig(t, testsStep, agentServer(func(w http.ResponseWriter, _ *http.Request) {
+			for _, b := range body {
+				_, _ = fmt.Fprint(w, b)
+			}
+		}))
+		_, err := steps.NewWorker(r.cfg).Run(ctx5(t), req)
+		return err
+	}
+	t.Run("complete events but without stream_stopped", func(t *testing.T) {
+		wantNotReady(t, run(t, info, sse(map[string]any{"type": "agent_choice", "content": "x"})))
+	})
+	t.Run("empty body", func(t *testing.T) { wantNotReady(t, run(t)) })
+	t.Run("only agent_info and token_usage, clean end", func(t *testing.T) { wantNotReady(t, run(t, info, usage)) })
+	t.Run("a last event without its blank line", func(t *testing.T) {
+		wantNotReady(t, run(t, info, strings.TrimSuffix(sse(map[string]any{"type": "agent_choice", "content": "x"}), "\n\n")))
+	})
+	t.Run("stream_stopped with reason error was answered", func(t *testing.T) {
+		wantOtherError(t, run(t, info, sse(map[string]any{"type": "agent_choice", "content": "x"}), sse(map[string]any{"type": "stream_stopped", "reason": "error"})))
+	})
+	t.Run("stream_stopped normal but no agent_choice was answered", func(t *testing.T) {
+		wantOtherError(t, run(t, info, sse(map[string]any{"type": "stream_stopped", "reason": "normal"})))
+	})
 }
