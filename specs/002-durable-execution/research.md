@@ -24,6 +24,7 @@ questions on 2026-11-19.
 | S13 | [PostgreSQL versioning policy](https://www.postgresql.org/support/versioning/) (each major version supported for 5 years; 16 until November 2028); [PostgreSQL licence](https://www.postgresql.org/about/licence/) (OSI-approved PostgreSQL Licence); [Docker Hub `postgres:16-alpine`](https://hub.docker.com/_/postgres) digest `sha256:1d5b02d3a9941fbd52437db4107f8c52d6297dac553ca1e5c299ebb3756b4857` (2026-11-19) |
 | S14 | Experiment on the owner's clean VM (4 CPUs, 7 GB, Docker 29.10.0), 2026-11-19, the owner's choice of machine: `postgres@sha256:1d5b02d3…`, `temporalio/admin-tools@sha256:4a95866e…`, `temporalio/server@sha256:7bf69188…` (1.32.2) in Compose on an internal network, each `read_only: true`, `cap_drop: [ALL]`, `no-new-privileges`, tmpfs `/tmp` (and `/var/run/postgresql`); PostgreSQL as `user: "70:70"` with no capability; the server image's own user `temporal` (uid 1000). The admin-tools job made both databases and schemas (exit 0); the server became healthy (`operator cluster health` SERVING) and registered a namespace with 24 h retention. Idle after 1 to 2 minutes: PostgreSQL 120 to 124 MiB, server 72 to 76 MiB (about 200 MiB together, `docker stats`). After `compose stop` and `up` the server was healthy again in 4 s with the namespace kept. Startup logs show transient `shard status unknown` errors before the shards are owned. Whether `DeleteWorkflowExecution` removes every row could not be read from that run (system workflows share the tables); it is left to a test (R8). Images: server 167 MB, admin-tools 425 MB, PostgreSQL 420 MB. All containers, volumes and images were removed afterwards |
 | S15 | [AWS Architecture Blog: Exponential Backoff And Jitter](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/) and [AWS Builders' Library: Timeouts, retries and backoff with jitter](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/): capped exponential backoff with jitter spreads retries |
+| S17 | Experiment on the owner's host, 2026-11-19 (T004), Docker Compose v5.8.0: a file secret with `uid: "70"`, `gid: "70"`, `mode: 0400` was mounted unchanged (`1000 1000 600`, the host file's owner and mode), and a container user 70 could not read it |
 | S16 | Feature 001: [ADR 0056](../../docs/decisions/0056-durable-execution-custom-for-the-mvp-temporal-after.md), [research D56](../001-prose-to-accepted-slice/research.md), the [plan's Complexity Tracking and Exceptions](../001-prose-to-accepted-slice/plan.md#complexity-tracking), [ADR 0059](../../docs/decisions/0059-run-store-is-json-lines-and-a-content-addressed-store.md) (run store), the engine code (`src/engine/machine`, `store`, `api/operations.go`, `api/runs.go`), the terminal client (`src/cli/runs.go`) and the terminal contract's "Idempotency and the run ID" (`src/cli/contract.md`) |
 
 ## Decisions
@@ -34,8 +35,7 @@ questions on 2026-11-19.
   - `durable-store`: `postgres:16-alpine`.
   - `durable-schema`: a one-off job from `temporalio/admin-tools:1.32.2`. It runs
     `temporal-sql-tool` `create`, `setup-schema -v 0.0` and `update-schema` for the `temporal`
-    and `temporal_visibility` databases, then makes the namespace `ap` (retention 24 h) when it is
-    missing. Every step is safe to repeat, so the job converges the schema (Principle XVII:
+    and `temporal_visibility` databases. Every step is safe to repeat, so the job converges the schema (Principle XVII:
     migrations stay an ordered history that the runner converges).
   - `durable`: `temporalio/server:1.32.2`, every service in one process, `numHistoryShards` 4,
     the version check off.
@@ -44,6 +44,15 @@ questions on 2026-11-19.
   - Networks: `durable` (internal; the engine and the server only) and `durable-store`
     (internal; the server, the schema job and PostgreSQL only). No egress.
   - Volume `durable-store` holds the data; `ap down` keeps it (FR-010 of feature 003).
+  - The namespace `ap` is registered by the engine when it connects to the server, with the
+    retention `x-limits.idempotency-key-retention-hours` gives (24 h), and kept when it exists
+    (owner, 2026-11-19, ADR 0070): the schema job runs before the server, so it cannot register
+    it, and a fourth job on the `durable` network would widen that network.
+  - The PostgreSQL password is a file `ap` makes once in its own folder `durable/` in the state
+    folder: the folder mode 700, so only the developer reaches it on the host, and the file mode
+    644, so the containers' users (70 and 1000) can read it through the Compose secret (owner,
+    2026-11-19, ADR 0070). Compose ignores a file secret's `uid`, `gid` and `mode` (S17), so a
+    mode-600 file stays unreadable to them.
   - Memory limits 256 MiB each for the server and PostgreSQL; measured idle about 200 MiB
     together (S14), under SC-004's 512 MiB.
 - **Owner**, 2026-11-19: PostgreSQL rather than the SQLite dev server.

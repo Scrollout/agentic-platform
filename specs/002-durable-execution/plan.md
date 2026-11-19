@@ -90,7 +90,8 @@ Each decision that outlives this feature has a record in `docs/decisions/`, link
 
 | Decision | Research | Record |
 |----------|----------|--------|
-| Temporal's server (all services in one process) and PostgreSQL 16 run in Compose, pinned by digest, with a schema job that converges both databases and the namespace before the server starts (owner: PostgreSQL, 2026-11-19) | R1 | [ADR 0065](../../docs/decisions/0065-temporal-and-postgresql-in-compose.md) |
+| Temporal's server (all services in one process) and PostgreSQL 16 run in Compose, pinned by digest, with a schema job that converges both databases before the server starts (owner: PostgreSQL, 2026-11-19) | R1 | [ADR 0065](../../docs/decisions/0065-temporal-and-postgresql-in-compose.md) |
+| The engine registers the namespace `ap` when it connects; the PostgreSQL password file is mode 644 in a mode-700 folder, because Compose ignores a file secret's owner and mode (owner, 2026-11-19, found in T004) | R1 | [ADR 0070](../../docs/decisions/0070-engine-registers-the-namespace-password-folder-private.md) |
 | The run record stays the engine's, with its schema; Temporal keeps only execution state, and every event is written by an idempotent activity (owner, 2026-11-19) | R2 | [ADR 0066](../../docs/decisions/0066-the-run-record-stays-the-engines.md) |
 | A run is one workflow running the engine's step rules; every call is an activity with a heartbeat; a stop repeats only the interrupted attempt and the run continues by itself | R3 | [ADR 0067](../../docs/decisions/0067-a-run-is-one-temporal-workflow.md) |
 | An operation is recorded in the engine store before it is acknowledged, then runs as a workflow with the operation's ID; the record keeps its ID and Idempotency-Key for 24 h | R4 | [ADR 0068](../../docs/decisions/0068-operations-recorded-then-run-as-workflows.md) |
@@ -107,7 +108,7 @@ tool or agent context; no untrusted content enters a model's context through thi
 | Element | S | T | R | I | D | E | OWASP mapping | Mitigation |
 |---------|---|---|---|---|---|---|---------------|------------|
 | Temporal frontend | ✓ | ✓ | | ✓ | ✓ | ✓ | ASI03 identity and privilege abuse, LLM10 unbounded consumption | Reachable only on the internal `durable` network, which only the engine joins; no published port; agent and step containers are on other networks (feature 001's isolation); the default authorizer's open access is the Principle V exception below |
-| PostgreSQL | ✓ | ✓ | | ✓ | ✓ | | ASI03 | Only on `durable-store`, joined by the server and the schema job; password made by `ap` per install (mode 600, in the state folder), passed by Compose from that file; runs as 70:70, no capabilities |
+| PostgreSQL | ✓ | ✓ | | ✓ | ✓ | | ASI03 | Only on `durable-store`, joined by the server and the schema job; password made by `ap` per install (file mode 644 in its own mode-700 folder in the state folder, R1), passed by Compose from that file; runs as 70:70, no capabilities |
 | Workflow histories | | ✓ | | ✓ | | | LLM02 sensitive information disclosure | Hold IDs, hashes, numbers and short reasons only (R2); retention 24 h; deleted with the slice (R8); no payload codec needed because nothing protected is in them |
 | Engine's Temporal worker | | ✓ | ✓ | | ✓ | | ASI08 cascading failures | Activities are the engine's own calls with their feature 001 limits; heartbeat timeouts bound a lost call; one run at a time |
 | Operation records | | ✓ | ✓ | ✓ | | | — | In the engine store (mode 700 volume), atomic writes; keys stored as SHA-256 only |
