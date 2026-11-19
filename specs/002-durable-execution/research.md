@@ -267,6 +267,14 @@ questions on 2026-11-19.
   `WorkersNotReady`, retried as above with the same attempt number. An answer the worker gave
   (any HTTP status, a stream that ended in good order) is not. Accepted limit: what an agent step
   used before its worker died is not counted in the budgets (its stream never reported it).
+- **Found next 3** (the owner's clean VM, 2026-11-19, T014 review round with T049): the review
+  worker, stopped by its restart, ended its stream in good order but without `stream_stopped`
+  (`the stream ended without stream_stopped`), which still counted as a failed attempt.
+  **Decision** (owner, 2026-11-19): an agent stream that ends without `stream_stopped` is the
+  worker gone too (`WorkersNotReady`); the agent's runtime ends every stream it finishes with
+  `stream_stopped`, so a stream without it was not finished. **Rejected**: changing T014 to
+  restart the paused worker before the engine calls it (a real restart that cuts a stream would
+  still count as a failed attempt).
 
 ### R9. Tests
 
