@@ -814,14 +814,16 @@ func errText(err error) string {
 
 // record appends one event to the run's record with the next seq, stamped now. A stop during the
 // write writes it again (the store accepts the same event once per seq), then records the stop. A
-// failed write is retried by the declared rule; a seq held with other content, or a write that
-// keeps failing, is a defect and ends the workflow with an error.
+// cancellation during the write finishes it on the run's uncancellable context, since the write
+// may already have landed and the next event needs the next seq, then ends the run. A failed write
+// is retried by the declared rule; a seq held with other content, or a write that keeps failing, is
+// a defect and ends the workflow with an error.
 func (r *run) record(e *EventRecord) error { return r.recordOn(r.ctx, e) }
 
 func (r *run) recordOn(ctx workflow.Context, e *EventRecord) error {
 	e.Slice = r.in.Slice
 	e.Event.Seq, e.Event.At, e.Event.Run = r.seq+1, workflow.Now(ctx), r.in.Run
-	stopped := false
+	stopped, cancelled := false, false
 	for try := 0; ; {
 		err := r.exec(ctx, RecordEvent, 0, e, nil)
 		if err == nil {
@@ -829,7 +831,8 @@ func (r *run) recordOn(ctx workflow.Context, e *EventRecord) error {
 		}
 		switch {
 		case ctx.Err() != nil:
-			return errEnded
+			ctx, cancelled = r.root, true
+			continue
 		case isStop(err):
 			stopped = true
 			continue
@@ -841,11 +844,14 @@ func (r *run) recordOn(ctx workflow.Context, e *EventRecord) error {
 				r.in.Run, errText(err)), "RecordFailed", err)
 		}
 		if err := workflow.Sleep(ctx, r.rule.Wait(try, r.random)); err != nil {
-			return errEnded
+			ctx, cancelled = r.root, true
 		}
 		try++
 	}
 	r.seq++
+	if cancelled {
+		return errEnded
+	}
 	if stopped {
 		return r.stopPair(nil)
 	}
