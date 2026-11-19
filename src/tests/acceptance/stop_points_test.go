@@ -201,6 +201,7 @@ func stopTrial(t *testing.T, sp stopPoint, base baseline) {
 	}
 	l.RestartEngine(t) // kills the engine's container and starts it again; nobody calls resumeRun
 	if paused != "" {
+		lab.Docker(t, "unpause", paused) // runsc cannot signal a paused container
 		lab.Docker(t, "restart", "-t", "0", paused)
 	}
 	if sp.pausedProjectWorker {
