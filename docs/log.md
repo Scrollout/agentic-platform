@@ -1,5 +1,9 @@
 # Directory Update Log
 
+## 2026-11-19
+
+* **Planning**: Feature 002, `/speckit-plan` (`specs/002-durable-execution/`): plan, research, data model, contract draft and quickstart. Temporal's server and PostgreSQL in Compose ([ADR 0065](/decisions/0065-temporal-and-postgresql-in-compose.md)); the run record stays the engine's ([ADR 0066](/decisions/0066-the-run-record-stays-the-engines.md)); a run is one workflow ([ADR 0067](/decisions/0067-a-run-is-one-temporal-workflow.md)); operations recorded then run as workflows ([ADR 0068](/decisions/0068-operations-recorded-then-run-as-workflows.md)); one retry rule in the engine contract ([ADR 0069](/decisions/0069-one-retry-rule-declared-in-the-engine-contract.md)); components [Temporal](/components/temporal.md) and [PostgreSQL](/components/postgresql.md); [the Temporal reference](/references/temporal.md) updated. Owner choices 2026-11-19: PostgreSQL, keep the run record, one declared retry rule, the measurement on the clean VM, and feature 001's Principle V exception extended to the two services.
+
 ## 2026-11-18
 
 * **Specification**: Feature 002, `/speckit-clarify`: the owner decided that a run a platform stop interrupted continues by itself once its step workers are available (FR-005), that a step's attempts count across a stop while a developer's resume after a hand-over starts a fresh count (FR-003, backlog T138), and confirmed N-040 as `yes`.

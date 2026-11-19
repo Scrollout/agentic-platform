@@ -23,10 +23,12 @@
 * [nginx](nginx.md) - The web server image the model gateway and the run page's forwarder are made of: official image plus config templates, no custom code.
 * [oapi-codegen](oapi-codegen.md) - Generates Go server interfaces, types and clients from the platform's OpenAPI contracts, with its runtime library imported by the generated code.
 * [oasdiff](oasdiff.md) - The OpenAPI breaking-change checker, run as a pinned container by scripts/contract-diff.sh for the platform's own contracts and as a Go library in the engine for each slice's contract.
+* [PostgreSQL](postgresql.md) - The database that holds Temporal's state (persistence and visibility) for the engine's durable execution (feature 002); not used by the engine directly.
 * [Redocly CLI](redocly-cli.md) - Bundles the multi-file engine contract into one OpenAPI document and dereferences schemas for code and agent output generation.
 * [santhosh-tekuri/jsonschema](jsonschema.md) - The Go JSON Schema validator the slice model and the engine use to check parts, proposals and request bodies against the contract's schemas.
 * [Schemathesis](schemathesis.md) - The property-based API tester that checks the running engine against its OpenAPI contract.
 * [Spectral](spectral.md) - The OpenAPI linter: run from the pinned Node image on the platform's own contracts, and as a small contract-lint service on each slice's contract.
+* [Temporal](temporal.md) - The durable-execution engine that runs the engine's runs and operations as workflows (feature 002): the server in one process, its Go SDK in the engine, state in PostgreSQL.
 * [WireMock](wiremock.md) - The HTTP stub server used as the recorded model in tests, answering the model gateway's paths only from recordings, and as the owner's recorder in front of the real gateway.
 
 # Convention
