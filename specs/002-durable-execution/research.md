@@ -174,8 +174,8 @@ questions on 2026-11-19.
     embedded spec, `src/cli/api`), so `x-limits` is the one place (SC-005; constitution III).
   - In the workflow the wait is a durable `workflow.Sleep` and the random part a
     `workflow.SideEffect` (S5), so a retry survives a stop. It covers the project worker's
-    restore and commit, an operation's retryable failure (`EraseSlice`), and the client's
-    resends; step attempts are not retries (they are the pattern's attempts).
+    restore and commit, a step worker call that fails `WorkersNotReady` (R10), an operation's
+    retryable failure (`EraseSlice`), and the client's resends; step attempts are not retries (they are the pattern's attempts).
   - The three hand-written forms (`backoff` in `api/operations.go`, `historyBackoff` in
     `machine/drive.go`, the client's wait in `cli/runs.go`) are removed, which closes feature
     001's Single-owner exception (SC-005).
@@ -249,8 +249,12 @@ questions on 2026-11-19.
   **Decision** (owner, 2026-11-19): a `WorkersNotReady` call is retried by `src/retry` (3 retries,
   about 1, 2 and 4 s plus jitter, durable sleeps), as restore and commit are (T012 (j)); only then
   is the run interrupted and waits as before. **Rejected**: retrying for the whole wait (up to 14
-  days, about 5 history events per try, far over R9's 10,240), and a declared retry window (a new
-  contract value for one case).
+  days, about 6 history events per try (a failed activity, a timer and the side effect), far over
+  R9's 10,240), and a declared retry window (a new contract value for one case). Accepted limit:
+  the retries span about 7 to 10.5 s; a worker unreachable for longer still makes the run wait
+  for `ap build-workers --resume` (T014's procedure step judges the window in CI). Each stop or
+  wait adds at most 3 retries (about 18 events), which T012 (n)'s bound at feature 001's limits
+  still covers.
 
 ### R9. Tests
 
