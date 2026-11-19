@@ -165,6 +165,14 @@ services:
       - { type: bind, source: "${AP_GRANTS_DIR:-/nonexistent/ap-grants-dir-is-set-by-ap-up}", target: /var/lib/engine-grants, read_only: true }
     depends_on:
       durable: { condition: service_healthy }
+    # Healthy once the engine listens, which it does only after it has reached the durable service
+    # (T042): `ap up`'s `compose up --wait` returns then. The image has no shell, so the CMD form.
+    healthcheck:
+      test: ["CMD", "/engine", "health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 60s
     networks:
       clients: {}
       durable: {}
