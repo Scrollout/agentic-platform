@@ -92,8 +92,9 @@ questions on 2026-11-19.
     `RejectDuplicate` (S8), so a run never runs twice.
   - The workflow is the step machine's rules: the pattern's steps in order, reuse, attempts,
     review rounds, budgets, hand-over and outcome. These rules stay the platform's own (ADR 0056)
-    and move from `src/engine/machine`'s driver into workflow code, keeping their names and their
-    tests' expectations where they still hold.
+    and are written as workflow code in `src/engine/durable`, keeping the names and the tests'
+    expectations of `src/engine/machine`'s driver where they still hold (the driver stays, unused by
+    the engine, until T040).
   - Every call is an activity: the step worker's call, each check, the project worker's restore
     and commit, the reuse lookup, `PutArtifact` and `RecordEvent`. Each activity has a
     StartToClose of the call's own time limit plus 30 s and a heartbeat timeout of 30 s, with a

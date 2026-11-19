@@ -140,8 +140,9 @@ src/
 │   ├── api/preview/2026-11-12-preview/openapi.yaml   # x-limits retry values, 503 UnavailableProblem, operation retention text
 │   ├── api/operations.go          # operation record and outbox; status from the workflow; backoff removed
 │   ├── api/runs.go                # start, resume, cancel and hand-over through workflows and signals
-│   ├── durable/                   # new: Temporal client and worker setup, task queues, the activities
-│   ├── machine/                   # the step rules as workflow code; resume, load and historyBackoff removed
+│   ├── api/durable.go             # the ports the durable service implements (Runs; Operations with US2)
+│   ├── durable/                   # new: the run workflow (the step rules), Temporal client and worker, task queues, the activities
+│   ├── machine/                   # domain types, StateOf, Compare; resume, load and historyBackoff removed; the in-process driver until T040
 │   ├── store/                     # RecordEvent once per seq; operation records and their sequence
 │   └── cmd/engine/                # start the Temporal worker; refuse runs left open by feature 001 (R7)
 ├── cli/runs.go, cli/api/           # the client's resend wait from src/retry, the values from the embedded contract
@@ -182,7 +183,9 @@ backlog: it is not this feature's decision.
 
 ## Exceptions
 
-None.
+| Rule | Location | Reason |
+|------|----------|--------|
+| Single owner for rules | `src/engine/machine/drive.go` (`Machine.Start`) beside `src/engine/durable/workflow.go` | The run rules live in the workflow; the old in-process driver has no production caller since T018, but feature 001's machine tests still drive it, and moving them changes existing tests (owner approval per test). Interim, until the owner decides T040: move the tests and remove the driver, or keep this row (2026-11-19, analyze round 6) |
 
 ## Complexity Tracking
 
