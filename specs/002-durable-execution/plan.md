@@ -28,7 +28,7 @@ launcher's Compose changes
 (`postgres:16-alpine`); everything else as feature 001
 
 **Storage**: the engine store as feature 001 (run record, artifacts, slices) plus
-`operations/OP-<n>.json` and `operation-sequence.json`; Temporal's state in PostgreSQL (volume
+`operations/OP-<n>.json`, `operation-sequence.json` and `workers.json` (step worker registrations, ADR 0071); Temporal's state in PostgreSQL (volume
 `durable-store`) ([data model](data-model.md))
 
 **Testing**: Go `testing` with Temporal's `testsuite` (workflow unit tests, time skipping) and
@@ -113,6 +113,7 @@ tool or agent context; no untrusted content enters a model's context through thi
 | Workflow histories | | ✓ | | ✓ | | | LLM02 sensitive information disclosure | Hold IDs, hashes, numbers and short reasons only (R2); retention 24 h; deleted with the slice (R8); no payload codec needed because nothing protected is in them |
 | Engine's Temporal worker | | ✓ | ✓ | | ✓ | | ASI08 cascading failures | Activities are the engine's own calls with their feature 001 limits; heartbeat timeouts bound a lost call; one run at a time |
 | Operation records | | ✓ | ✓ | ✓ | | | — | In the engine store (mode 700 volume), atomic writes; keys stored as SHA-256 only |
+| Step worker registrations (`workers.json`) | ✓ | ✓ | | ✓ | | | LLM02, ASI03 | In the engine store (mode 700 volume, only the engine mounts it), atomic writes; holds the endpoint and the SHA-256 naming the grant file, never a token; the call token is read from the grant file the launcher owns, so a removed grant means not registered; `registerWorker` needs that worker's token and the contract checks the endpoint's shape (ADR 0071) |
 | Retry rule | | | | | ✓ | | LLM10 | Capped exponential backoff with jitter, at most 3 retries (S15) |
 | Images | ✓ | ✓ | | | | | LLM03 supply chain | Pinned by digest in `images.lock`; no signature available upstream (Scorecard Signed-Releases 0), so the digest is the check, as for nginx and cosign |
 | Server version check | | | | ✓ | | | — | Off (`frontend.enableServerVersionCheck: false`); the networks have no egress anyway |
@@ -144,7 +145,7 @@ src/
 │   ├── api/durable.go             # the ports the durable service implements (Runs; Operations with US2)
 │   ├── durable/                   # new: the run workflow (the step rules), Temporal client and worker, task queues, the activities
 │   ├── machine/                   # domain types, StateOf, Compare; resume, load and historyBackoff removed; the in-process driver until T040
-│   ├── store/                     # RecordEvent once per seq; operation records and their sequence
+│   ├── store/                     # RecordEvent once per seq; operation records and their sequence; step worker registrations (ADR 0071)
 │   └── cmd/engine/                # start the Temporal worker; refuse runs left open by feature 001 (R7)
 ├── cli/runs.go, cli/api/           # the client's resend wait from src/retry, the values from the embedded contract
 ├── cli/contract.md                # the resume paragraph, the retry values' home, interrupted's meaning

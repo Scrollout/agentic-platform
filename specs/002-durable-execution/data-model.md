@@ -52,8 +52,13 @@ file, fsync, rename, fsync the folder) before the engine answers 202:
 One file in the engine store, `workers.json`, written atomically (temp file and rename, mode as
 the store's others): for each slice and step, the `endpoint` the worker registered and `grant`,
 the lowercase hex SHA-256 naming its grant file (ADR 0034). No token. `registerWorker` writes it
-before it answers (a failed write answers 503 `UnavailableProblem` and keeps nothing); registering
-again replaces the entry; erasing the slice removes its entries. At start the engine reads it; a
+before it answers (a failed write answers 503 `UnavailableProblem` and keeps nothing; when the
+write succeeds but the `workers-ready` signal fails, the file is put back to the earlier entry, or
+none, before the 503, so "nothing changed" holds); registering again replaces the entry; erasing
+the slice removes its entries in the same step as the rest of the slice, and an entry of a slice
+that no longer exists is never used (the call path answers 404 for it). A registration made with
+a token given at engine start (`Config.WorkerGrants`, no grant file; tests only) is not kept: a
+stated limit. At start the engine reads it; a
 call reads the call token from the grant file, and an entry whose grant file is gone counts as
 not registered (`WorkersNotReady`).
 
