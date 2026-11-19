@@ -321,30 +321,10 @@ func TestUS2_10_AnInterruptedRunResumesWithoutRepeatingAcceptedSteps(t *testing.
 		}
 		time.Sleep(time.Second)
 	}
-	if r.Status != "interrupted" || r.ExpiresAt == "" {
-		t.Fatalf("after the restart the run is %+v, want interrupted with expires_at", r)
-	}
 	if evs := events(t, l, op.Target); count(evs, "RunInterrupted", "") == 0 {
 		t.Errorf("the record after the restart has no RunInterrupted: %v", kindsOf(evs))
 	}
-	var ro lab.Operation
-	deadline = time.Now().Add(2 * time.Minute)
-	for time.Now().Before(deadline) {
-		st, _, b := l.Do("POST", "/runs/"+op.Target+"/resume", lab.ClientToken, nil, nil)
-		if st == 202 {
-			json.Unmarshal(b, &ro)
-			break
-		}
-		var p lab.Problem
-		json.Unmarshal(b, &p)
-		if st != 409 || p.Code != "WorkersNotReady" {
-			t.Fatalf("resumeRun = %d %s, want 202 (or WorkersNotReady until the workers register again)", st, b)
-		}
-		time.Sleep(time.Second)
-	}
-	if ro.ID == "" {
-		t.Fatalf("resumeRun never answered 202")
-	}
+	// After the restart the run continues by itself (feature 002, FR-005), so nobody resumes it.
 	r = waitRun(t, l, op.Target, 30*time.Minute, ended)
 	l.StopStepWorkers(t, slice, "notes-resume")
 	evs := events(t, l, op.Target)
