@@ -171,8 +171,14 @@ func (l *Lab) startDurable(t *testing.T) (durableNet string) {
 		}
 		flags, cmd := s.runArgs()
 		name := uniq("aptest-lab-" + service)
-		a := []string{"run", "--name", name, "--network", networks[0]}
-		if detach {
+		// With a second network the container is created, connected, then started, so both networks
+		// are attached before it starts, as Compose does.
+		verb := "run"
+		if len(networks) > 1 {
+			verb = "create"
+		}
+		a := []string{verb, "--name", name, "--network", networks[0]}
+		if detach && verb == "run" {
 			a = append(a, "-d")
 		}
 		if alias != "" {
@@ -183,6 +189,9 @@ func (l *Lab) startDurable(t *testing.T) (durableNet string) {
 		Docker(t, append(a, cmd...)...)
 		for _, n := range networks[1:] {
 			Docker(t, "network", "connect", n, name)
+		}
+		if verb == "create" {
+			Docker(t, "start", name)
 		}
 		return name
 	}
