@@ -24,9 +24,10 @@ info:
     with `x-sunset`, and its responses carry `Deprecation`, `Sunset` and `Link: rel="deprecation"`.
     `x-operation-name` gives each operation's permission name, and `x-error-codes` lists the
     problem codes each status code (and the operation's `error`) may carry. `x-limits` holds the
-    limits every client sees, once. A state change is accepted (202) only after its operation is
-    recorded durably; when it cannot be, the answer is 503 Unavailable with `Retry-After`, nothing
-    was accepted, and the same request may be sent again with the same Idempotency-Key. An
+    limits every client sees, once. A state change is accepted (202, or 200 for registerWorker)
+    only after it is recorded durably; when it cannot be, the answer is 503 Unavailable with
+    `Retry-After`, nothing was accepted, and the same request may be sent again (with the same
+    Idempotency-Key where the operation takes one). An
     operation is followed by its ID until `x-limits.idempotency-key-retention-hours` after it
     ends; after that `getOperation` answers 404 NotFound. An operation ID is never given to two
     operations, across restarts of the engine too, and an Idempotency-Key and its first result
@@ -690,8 +691,9 @@ paths:
       operationId: resumeRun
       x-operation-name: Agentic.Engine/runs/resume/action
       summary: Resume an interrupted run
-      description: Continues an `interrupted` run without repeating its accepted steps. Returns the run's
-        operation; its target is the run. RunActive while any other run, of any slice, has not ended.
+      description: Continues an `interrupted` run without repeating its accepted steps; a run that waits
+        for its step workers is refused with WorkersNotReady until they register, and then continues
+        by itself. Returns the run's operation; its target is the run. RunActive while any other run, of any slice, has not ended.
       security:
       - clientToken: []
       x-error-codes:
@@ -896,7 +898,10 @@ paths:
         slice and step are those its worker token was issued for. Registering again replaces the
         endpoint. It returns 404 when that slice no longer exists or the slice's pattern has no such
         step. Unlike other state changes it takes effect at once and returns the registration, not an
-        operation, because a worker token cannot follow operations.
+        operation, because a worker token cannot follow operations. A run waiting for this slice's
+        step workers continues once each of its steps has a registered worker. When the engine cannot
+        record the registration durably it answers 503 Unavailable and nothing changed; register
+        again after `Retry-After`.
       security:
       - workerToken: []
       x-error-codes:
@@ -905,6 +910,7 @@ paths:
         '403': [Forbidden]
         '404': [NotFound]
         '429': [RateLimited]
+        '503': [Unavailable]
       parameters:
       - $ref: '#/components/parameters/ApiVersion'
       requestBody:
@@ -926,6 +932,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /providers/Agentic.Engine/operations:
     get:
       tags:
@@ -1237,8 +1245,9 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     Unavailable:
-      description: The engine could not record the operation durably, so nothing was accepted; send
-        the same request again, with the same Idempotency-Key, after `Retry-After`.
+      description: The engine could not record the change durably, so nothing was accepted; send the
+        same request again (with the same Idempotency-Key where the operation takes one) after
+        `Retry-After`.
       headers:
         Retry-After:
           $ref: '#/components/headers/RetryAfter'
@@ -1547,7 +1556,11 @@ components:
     RunStatus:
       type: string
       description: >-
-        `running`; `interrupted` when the platform stopped during the run (resume it with resumeRun);
+        `running`; `interrupted` while the run waits for the developer because the model was
+        unavailable on every attempt of a step (resume it with resumeRun), or for its step workers
+        (it continues by itself once they register; resumeRun answers WorkersNotReady until then); a
+        platform stop alone leaves a run `running`, and it continues by itself once the platform is
+        up again;
         `waiting-for-developer` when a step or review ran out of attempts or the budget ran out, with
         the reason; `ended`, with an outcome.
       enum:

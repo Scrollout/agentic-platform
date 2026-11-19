@@ -184,7 +184,8 @@ questions on 2026-11-19.
 - **Decision**: the engine starts after `durable` is healthy (Compose `depends_on`). While Temporal
   is unreachable, every state-changing request answers 503 `Unavailable` with `Retry-After`
   before anything is recorded (US2 AC4), and the reads of slices, runs, events, artifacts and
-  comparisons are served from the engine store as before. `ap up` waits for the engine's
+  comparisons are served from the engine store as before. `registerWorker`, which signals the
+  run waiting for its workers, is one of those state-changing requests (analyze round 3). `ap up` waits for the engine's
   readiness as today; the engine is ready once its Temporal worker is connected.
   - The 503's body is its own problem schema, `UnavailableProblem`, whose `code` is always
     `Unavailable`; the shared `ErrorCode` enum does not gain the value. Adding it there is a

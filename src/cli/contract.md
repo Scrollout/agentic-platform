@@ -414,7 +414,8 @@ return; an error before that has its own code.
 A run is `interrupted` only while it waits for the developer (the model was unavailable on every
 attempt) or for its step workers (`ap build-workers --resume <run>` registers them); a platform
 stop alone does not leave a run `interrupted`, because the run continues by itself once the
-platform is up again.
+platform is up again. For a run that waits for its step workers, the launcher's `resume` exits 3
+naming `ap build-workers --resume <run>` (see the launcher's `resume` paragraph).
 
 `interrupted` is 2 because, like `waiting-for-developer`, the run is kept, not lost, and goes on
 only when the developer acts; the end line names the command (`resume` or `take-over`), and `run`
