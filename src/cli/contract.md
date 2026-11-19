@@ -26,6 +26,8 @@ Two names, two jobs:
     <slice> for the project <project> are not running; run ap build-workers --resume <run>`.
     A run that a platform stop interrupted continues by itself once its step workers are
     registered, so `ap build-workers --resume <run>` alone lets it continue, with no `ap resume`.
+    The engine keeps the registrations across its own restart, so when only the engine restarted
+    and the step containers still run, the run continues with no command at all.
 
   `build-workers <slice> <project>` makes the
   project folder with an empty `.git` and the folders the steps write, starts one step container per

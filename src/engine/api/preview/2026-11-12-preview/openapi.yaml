@@ -896,7 +896,9 @@ paths:
       summary: Register a step worker
       description: Tells the engine that the worker for one step of one slice is ready at `endpoint`. The
         slice and step are those its worker token was issued for. Registering again replaces the
-        endpoint. It returns 404 when that slice no longer exists or the slice's pattern has no such
+        endpoint. A registration is kept across an engine restart until it is replaced, its worker
+        token's grant is removed, or its slice is erased, so the worker need not register again
+        after the engine restarts. It returns 404 when that slice no longer exists or the slice's pattern has no such
         step. Unlike other state changes it takes effect at once and returns the registration, not an
         operation, because a worker token cannot follow operations. A run waiting for this slice's
         step workers continues once each of its steps has a registered worker. When the engine cannot
