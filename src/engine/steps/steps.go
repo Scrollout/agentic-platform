@@ -27,6 +27,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -265,15 +266,15 @@ type marked struct{ err, kind error }
 func (m marked) Error() string   { return m.err.Error() }
 func (m marked) Unwrap() []error { return []error{m.err, m.kind} }
 
-// unreachable reports whether err is a call whose connection failed before the worker's answer
-// was complete: the host unknown, the connection refused, the connection reset or closed before
-// the answer's end, or an agent's stream ended without stream_stopped, as when the step's
-// container is not running or restarts during the call (research R10). An answer the worker
-// gave, whatever its status, is not.
+// unreachable reports whether err is a call that got no complete answer from the worker: the
+// HTTP exchange itself failed (the host unknown, the connection refused, no response headers in
+// time, bytes that are no HTTP response, the connection reset or closed), the answer's body was
+// cut, or an agent's stream ended without stream_stopped, as when the step's container is not
+// running or restarts during the call (research R10). An answer the worker gave, whatever its
+// status, is not. The caller giving up is told apart by Run, from its own context.
 func unreachable(err error) bool {
-	var dns *net.DNSError
-	var op *net.OpError
-	return errors.As(err, &dns) || errors.As(err, &op) && op.Op == "dial" ||
+	var ue *url.Error
+	return errors.As(err, &ue) ||
 		errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, syscall.ECONNRESET) ||
 		errors.Is(err, agentcall.ErrStreamEnded)
 }
