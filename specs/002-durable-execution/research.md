@@ -228,6 +228,22 @@ questions on 2026-11-19.
   settle it; S9 says the history is removed).
 - **Why**: FR-017 and SC-006.
 
+### R10. Step worker registrations outlive an engine restart
+
+- **Found**: T014's agent-step stop point (CI run 44537905339): the stop pair was recorded, then
+  the repeated `CallWorker` found the engine's in-memory registry empty (`api/workers.go`, ADR
+  0036's Context) and the run waited with `the step workers are not running`; only the lab's
+  re-registration let it end. On a real platform only a developer command registers again.
+- **Decision** (owner, 2026-11-19): `registerWorker` writes each registration (slice, step,
+  endpoint, the hash naming its grant file) to the engine store before it answers; the engine
+  reads them at start; the call token is read from the grant file at each call, so the store
+  holds no token and removing a grant still revokes it; erasing the slice removes its
+  registrations (FR-017).
+- **Rejected**: step containers registering themselves again (each would need a worker token
+  inside it, a wider credential); a clarified FR-005 that needs `ap build-workers --resume` after
+  every engine restart (narrows the feature's purpose).
+- Record: [ADR 0071](../../docs/decisions/0071-step-worker-registrations-kept-in-the-engine-store.md).
+
 ### R9. Tests
 
 - Workflow unit tests: `testsuite.WorkflowTestSuite` with activity mocks and time skipping

@@ -41,6 +41,11 @@ feature keeps except where a requirement below changes it.
   erasure include that operation? → A: No: the erasing operation stays followable until its
   retention ends (24 h), holding only the slice's ID and no run content, and is then removed;
   every other run and operation of the slice is erased at once (owner, from `/speckit-analyze`).
+- Q: After an engine-only restart nothing registers the step workers again, so a stopped run
+  waits for them (CI run 44537905339, T014); how does FR-005 hold? → A: the engine keeps the step
+  workers' registrations across its restart, so the run reaches the still-running step workers
+  and continues by itself; a worker that is really gone still makes the run wait for
+  `ap build-workers --resume` (owner, 2026-11-19; ADR 0071).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -147,6 +152,8 @@ feature 001 passes on this feature's code.
   still counts as failed (FR-012 of feature 001).
 - The model is unavailable on every attempt of a step: the run is interrupted with that reason,
   as in feature 001, and the developer resumes it.
+- Only the engine restarts and the step containers keep running: the run continues by itself
+  with the same step workers; nobody registers them again (FR-005).
 - The machine restarts and the step containers are gone: the run waits until the developer
   rebuilds them for the run (as `ap build-workers --resume` does today), then continues by itself
   (FR-005); its time budget does not run while it waits.

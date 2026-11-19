@@ -47,6 +47,16 @@ file, fsync, rename, fsync the folder) before the engine answers 202:
 - **Outbox**: at start the engine starts the workflow of every record that has none
   (`RejectDuplicate`), so an operation recorded just before a stop still runs (FR-009).
 
+## Step worker registrations (new, ADR 0071)
+
+One file in the engine store, `workers.json`, written atomically (temp file and rename, mode as
+the store's others): for each slice and step, the `endpoint` the worker registered and `grant`,
+the lowercase hex SHA-256 naming its grant file (ADR 0034). No token. `registerWorker` writes it
+before it answers (a failed write answers 503 `UnavailableProblem` and keeps nothing); registering
+again replaces the entry; erasing the slice removes its entries. At start the engine reads it; a
+call reads the call token from the grant file, and an entry whose grant file is gone counts as
+not registered (`WorkersNotReady`).
+
 ## Execution state in Temporal (new, not a record)
 
 Namespace `ap`, retention 24 h (`x-limits.idempotency-key-retention-hours`), registered by the engine at start (ADR 0070). Task queues `runs` and `operations` (one worker pool per
@@ -85,6 +95,7 @@ Signals: `workers-ready`, `resume`, `accept-hand-over`, `cancel`. The API tests 
 
 ```text
 running ──platform stops──▶ running (RunInterrupted, RunResumed; same attempt again)
+running ──engine restarts, step workers still running──▶ running (RunInterrupted, RunResumed; registrations kept, ADR 0071)
 running ──step workers gone (a reboot)──▶ interrupted (RunInterrupted `the step workers are not running`)
 interrupted (workers) ──ap build-workers --resume: workers-ready──▶ running (RunResumed; no `ap resume` needed)
 running ──every attempt: model unavailable──▶ interrupted ──resume──▶ running

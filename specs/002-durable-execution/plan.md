@@ -95,6 +95,7 @@ Each decision that outlives this feature has a record in `docs/decisions/`, link
 | The run record stays the engine's, with its schema; Temporal keeps only execution state, and every event is written by an idempotent activity (owner, 2026-11-19) | R2 | [ADR 0066](../../docs/decisions/0066-the-run-record-stays-the-engines.md) |
 | A run is one workflow running the engine's step rules; every call is an activity with a heartbeat; a stop repeats only the interrupted attempt and the run continues by itself | R3 | [ADR 0067](../../docs/decisions/0067-a-run-is-one-temporal-workflow.md) |
 | An operation is recorded in the engine store before it is acknowledged, then runs as a workflow with the operation's ID; the record keeps its ID and Idempotency-Key for 24 h | R4 | [ADR 0068](../../docs/decisions/0068-operations-recorded-then-run-as-workflows.md) |
+| Step worker registrations are kept in the engine store (endpoint and grant hash, no token), so a run continues by itself after an engine restart (owner, 2026-11-19, found by T014 in CI) | R10 | [ADR 0071](../../docs/decisions/0071-step-worker-registrations-kept-in-the-engine-store.md) |
 | One retry rule, declared in the engine contract's `x-limits` and applied by `src/retry` with durable timers, replaces Temporal's unjittered activity retries and the three hand-written forms (owner, 2026-11-19) | R5 | [ADR 0069](../../docs/decisions/0069-one-retry-rule-declared-in-the-engine-contract.md) |
 
 ## Threat model
