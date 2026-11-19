@@ -332,13 +332,7 @@ func TestWorkflowTimeBudgetSumsRunningTimes(t *testing.T) {
 		}
 		return 9 * time.Minute
 	}
-	workersGone := wfFirst(durable.CallWorker, 1, wfWorkerOf("tests"))
-	h.work = func(c durable.WorkerCall) (machine.Result, error) {
-		if workersGone(durable.CallWorker, c) {
-			return machine.Result{}, temporal.NewNonRetryableApplicationError(wfNoWorkers, durable.WorkersNotReady, nil)
-		}
-		return wfOK(c), nil
-	}
+	h.work = wfWorkersGoneForCalls("tests", 4) // the first call and the retry rule's 3 retries: the run waits
 	failed := 0
 	h.restore = func(r machine.RestoreRequest) error {
 		if r.Step.Name == "generate" && failed < 2 { // two retries: at least 3 s of durable sleep
