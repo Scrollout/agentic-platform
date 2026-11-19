@@ -103,8 +103,7 @@ func (x *driver) steps(ctx context.Context) error {
 
 // review runs the review step in rounds; after a round with open blocking findings the fix step
 // (the step before the review) runs again with them, and the next round gets only those findings
-// and the lines the fix changed (research D11). Where it stands is kept in the run, so Resume
-// continues the round it stopped in.
+// and the lines the fix changed (research D11). Where it stands is kept in the run.
 func (x *driver) review(ctx context.Context, fix, review Step) error {
 	rounds := max(x.pattern().ReviewRounds, 1)
 	if x.r.round == 0 {
@@ -561,17 +560,6 @@ func (x *driver) runOverBudget() string {
 	return ""
 }
 
-// historyRetries is how often a failed restoreStep or commitStep is retried (D7).
-const historyRetries = 3
-
-// historyBackoff is the wait before retry n (0-based): exponential backoff with jitter over the
-// window 1s<<n, as api/operations.go's backoff, but never 0: half the window plus a random part
-// of the other half, in (window/2, window].
-func historyBackoff(n int) time.Duration {
-	window := time.Second << n
-	return window/2 + rand.N(window/2) + 1
-}
-
 // historyMinLeft is the least of the run's time budget a History call is made with.
 const historyMinLeft = time.Second
 
@@ -618,7 +606,7 @@ func (x *driver) sleep(ctx context.Context, d time.Duration) error {
 }
 
 // callHistory makes one History call, given what is left of the run's budget, retried after a
-// wait with jitter (historyBackoff) up to historyRetries times. When it still fails, or less
+// wait by Config.Retry, up to its Retries times. When it still fails, or less
 // than historyMinLeft is left, the run is interrupted (never handed over) with the reason; the
 // error halts the run.
 func (x *driver) callHistory(ctx context.Context, step, what string, call func(ctx context.Context, left time.Duration) error) error {
@@ -637,14 +625,14 @@ func (x *driver) callHistory(ctx context.Context, step, what string, call func(c
 		if ctx.Err() != nil {
 			return x.interrupt(fmt.Sprintf("the run stopped during step %s", step))
 		}
-		if try == historyRetries {
+		if try == x.m.cfg.Retry.Retries {
 			break
 		}
-		if serr := x.sleep(ctx, historyBackoff(try)); serr != nil {
+		if serr := x.sleep(ctx, x.m.cfg.Retry.Wait(try, rand.Float64)); serr != nil {
 			return x.interrupt(fmt.Sprintf("the run stopped during step %s", step))
 		}
 	}
-	return x.interrupt(fmt.Sprintf("%s failed %d times; the last: %v", what, historyRetries+1, err))
+	return x.interrupt(fmt.Sprintf("%s failed %d times; the last: %v", what, x.m.cfg.Retry.Retries+1, err))
 }
 
 // restore calls restoreStep before an attempt: the project folder is made to hold the files the
@@ -663,8 +651,7 @@ func (x *driver) restore(ctx context.Context, s Step, attempt, round int) error 
 		})
 }
 
-// flush makes the last accepted step's commit unless it was made since the run started driving;
-// Resume always makes it again (a repeat is safe).
+// flush makes the last accepted step's commit unless it was made already.
 func (x *driver) flush(ctx context.Context) error {
 	h, c := x.m.cfg.History, x.r.commit
 	if h == nil || c == nil || x.r.committed {

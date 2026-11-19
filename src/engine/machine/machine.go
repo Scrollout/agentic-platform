@@ -6,15 +6,15 @@
 //
 // An attempt the worker fails (an error, such as an unavailable model) is a rejected attempt; when
 // every attempt of a step fails so, or the run's context is cancelled (the platform stops), the run
-// is interrupted and Resume continues it without running an accepted step again. A step whose
+// is interrupted. A run is continued, after a stop or a developer's resume, only by the run
+// workflow (package durable), which holds these rules for the platform. A step whose
 // reuse key is in Config.Results is not run: its accepted result is reused, in any project.
 //
 // With Config.History, the project worker's version history is the run's compensation and its
 // commits (data-model.md, run rules): Restore before every attempt, Commit after every accepted
 // or reused step and before anything for the next step or the run's outcome. A failing call is
-// retried with backoff up to 3 times (D7), then the run is interrupted, never handed over, and
-// Resume makes the call again first; with less than 1 s of the run's time budget left the call is
-// not made and the run is interrupted.
+// retried by Config.Retry, then the run is interrupted, never handed over; with less than 1 s of
+// the run's time budget left the call is not made and the run is interrupted.
 //
 // The machine holds its lock only while it reads or changes a run and appends an event, never
 // while a worker or a check runs, so a worker may call Start, Get or Cancel.
@@ -28,6 +28,8 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	"github.com/agentic-platform/retry"
 )
 
 // HandOverTTL is how long a run waits for the developer before it ends `expired` (research D14).
@@ -44,8 +46,6 @@ var (
 	ErrNotWaiting = errors.New("machine: the run is not waiting for the developer")
 	// ErrRunEnded: the run has already ended.
 	ErrRunEnded = errors.New("machine: the run has ended")
-	// ErrNotInterrupted: the run is not interrupted, so it cannot be resumed.
-	ErrNotInterrupted = errors.New("machine: the run is not interrupted")
 	// ErrUnknownRun: no run has this ID.
 	ErrUnknownRun = errors.New("machine: no such run")
 	// ErrWorkersNotReady: a Worker returns it (wrapped) when the step workers of the run's slice
@@ -367,8 +367,8 @@ type Artifact struct{ Name, SHA256 string }
 // Config wires a Machine. Results (optional) is the accepted-result store; Model is the model the
 // pattern's agents use, part of every agent step's reuse key. History (optional) is the project's
 // version history: with it the machine calls Restore before every attempt and Commit after every
-// accepted or reused step. Sleep is the wait before a retried History call; nil waits in real
-// time.
+// accepted or reused step. Retry is the rule by which a failed History call is retried (the zero
+// rule: not retried); Sleep is the wait before a retry; nil waits in real time.
 type Config struct {
 	Pattern Pattern
 	Worker  Worker
@@ -378,49 +378,15 @@ type Config struct {
 	Results *Results
 	Model   string
 	History History
+	Retry   retry.Rule
 	Sleep   func(ctx context.Context, d time.Duration) error
-}
-
-// Reader is implemented by an Events sink that can read a run's record back, so a machine made
-// after a restart can resume a run it did not start.
-type Reader interface {
-	Read(run string) ([]Event, error)
-}
-
-// Lister is implemented by an Events sink that can list the runs in its record. The machine then
-// reads every listed run before its first call, so a run that exists only in the record and has
-// not ended is active.
-type Lister interface {
-	Runs() ([]string, error)
 }
 
 // Machine runs one run at a time.
 type Machine struct {
-	cfg    Config
-	mu     sync.Mutex
-	runs   map[string]*run
-	loaded bool // the listed runs were read
-}
-
-// loadListed reads every run the record lists, once; the lock is held. Until it succeeds every
-// call fails, so a run in the record is never overlooked.
-func (m *Machine) loadListed() error {
-	if m.loaded {
-		return nil
-	}
-	if l, ok := m.cfg.Events.(Lister); ok {
-		ids, err := l.Runs()
-		if err != nil {
-			return fmt.Errorf("machine: listing the run record: %w", err)
-		}
-		for _, id := range ids {
-			if _, err := m.lookup(id); err != nil {
-				return err
-			}
-		}
-	}
-	m.loaded = true
-	return nil
+	cfg  Config
+	mu   sync.Mutex
+	runs map[string]*run
 }
 
 // run is a run's state and where its driving stands. Fields below Run are the driver's; they
@@ -469,47 +435,10 @@ func (r *run) copy() Run {
 }
 
 func (m *Machine) find(id string) (*run, error) {
-	if err := m.loadListed(); err != nil {
-		return nil, err
-	}
-	return m.lookup(id)
-}
-
-// lookup finds a run, reading it from the record when Events is a Reader; the lock is held.
-func (m *Machine) lookup(id string) (*run, error) {
 	if r, ok := m.runs[id]; ok {
 		return r, nil
 	}
-	rd, ok := m.cfg.Events.(Reader)
-	if !ok {
-		return nil, ErrUnknownRun
-	}
-	events, err := rd.Read(id)
-	if err != nil {
-		return nil, fmt.Errorf("machine: run %s: reading the run record: %w", id, err)
-	}
-	if len(events) == 0 {
-		return nil, ErrUnknownRun
-	}
-	r, err := m.load(events)
-	if err != nil {
-		return nil, err
-	}
-	if last := events[len(events)-1]; stoppedDuring(last.Kind) {
-		// The platform stopped during the run (T085; data-model, Run): the record says so once,
-		// stamped with the last event's time, so the downtime counts toward neither the time
-		// budget nor the expiry. A failed append leaves the run interrupted in memory only; the
-		// next start appends it.
-		_ = m.emitAt(r, &Event{Kind: "RunInterrupted", Refs: r.refs, Detail: r.Reason}, last.At)
-	}
-	m.runs[id] = r
-	return r, nil
-}
-
-// stoppedDuring reports whether a run whose last event is of kind was stopped by the platform: the
-// kind is no end, no hand-over and no RunInterrupted.
-func stoppedDuring(kind string) bool {
-	return terminalOutcome[kind] == "" && kind != "RunHandedOver" && kind != "RunInterrupted"
+	return nil, ErrUnknownRun
 }
 
 // SliceInputs are the inputs no step produces (the slice's parts, such as `slice/contract`),
@@ -558,10 +487,6 @@ func (m *Machine) Start(ctx context.Context, p StartParams) (Run, error) {
 		hashes[i] = p.Inputs[n]
 	}
 	m.mu.Lock()
-	if err := m.loadListed(); err != nil {
-		m.mu.Unlock()
-		return Run{}, err
-	}
 	for _, o := range m.runs {
 		if o.Status != StatusEnded || o.ID == p.Run {
 			m.mu.Unlock()
@@ -579,52 +504,6 @@ func (m *Machine) Start(ctx context.Context, p StartParams) (Run, error) {
 	}
 	m.runs[r.ID] = r
 	r.driving, r.stopped = true, make(chan struct{})
-	m.mu.Unlock()
-	return m.drive(ctx, r)
-}
-
-// Resume continues an interrupted run from the step it stopped in; accepted steps do not run again.
-// A run seen interrupted whose driver has not yet stopped is resumed once that driver has stopped
-// (T102); the wait ends early, with ctx's error, when ctx is done.
-func (m *Machine) Resume(ctx context.Context, id string) (Run, error) {
-	m.mu.Lock()
-	r, err := m.find(id)
-	for err == nil && r.Status == StatusInterrupted && r.driving {
-		stopped := r.stopped
-		m.mu.Unlock()
-		select {
-		case <-stopped:
-		case <-ctx.Done():
-			return Run{}, ctx.Err()
-		}
-		m.mu.Lock()
-		r, err = m.find(id)
-	}
-	switch {
-	case err != nil:
-	case r.Status == StatusEnded:
-		err = ErrRunEnded
-	case r.Status != StatusInterrupted:
-		err = ErrNotInterrupted
-	}
-	if err == nil {
-		for _, o := range m.runs {
-			if o != r && o.Status != StatusEnded {
-				err = ErrRunActive
-			}
-		}
-	}
-	if err != nil {
-		m.mu.Unlock()
-		return Run{}, err
-	}
-	if err := m.emit(r, Event{Kind: "RunResumed", Refs: r.refs}); err != nil {
-		m.mu.Unlock()
-		return r.copy(), err
-	}
-	r.Status, r.Reason, r.ExpiresAt = StatusRunning, "", time.Time{}
-	r.since, r.driving, r.stopped = m.cfg.Clock.Now(), true, make(chan struct{})
-	r.committed = false // resume commits the last accepted step again first; a repeat is safe
 	m.mu.Unlock()
 	return m.drive(ctx, r)
 }
@@ -690,9 +569,6 @@ func (m *Machine) Cancel(id string) (Run, error) {
 func (m *Machine) ExpireDue() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if err := m.loadListed(); err != nil {
-		return err
-	}
 	now := m.cfg.Clock.Now()
 	ids := make([]string, 0, len(m.runs))
 	for id := range m.runs {
