@@ -24,11 +24,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/agentic-platform/check/api/gen"
@@ -246,7 +248,7 @@ func (w *worker) Run(ctx context.Context, r machine.Request) (machine.Result, er
 		return machine.Result{}, fmt.Errorf("step %s has worker %q, neither agent:<name> nor procedure:<name>", r.Step.Name, r.Step.Worker)
 	}
 	switch {
-	case err != nil && unreachable(err):
+	case err != nil && ctx.Err() == nil && unreachable(err):
 		return res, marked{err, machine.ErrWorkersNotReady} // the step's worker is not running
 	case errors.Is(err, agentcall.ErrAgentFailed):
 		return res, marked{err, machine.ErrModelUnavailable}
@@ -263,12 +265,15 @@ type marked struct{ err, kind error }
 func (m marked) Error() string   { return m.err.Error() }
 func (m marked) Unwrap() []error { return []error{m.err, m.kind} }
 
-// unreachable reports whether err is a call that found nothing listening: the host unknown or
-// the connection refused, as when the step's container is not running.
+// unreachable reports whether err is a call whose connection failed before the worker's answer
+// was complete: the host unknown, the connection refused, or the connection reset or closed
+// before the answer's end, as when the step's container is not running or restarts during the
+// call (research R10). An answer the worker gave, whatever its status, is not.
 func unreachable(err error) bool {
 	var dns *net.DNSError
 	var op *net.OpError
-	return errors.As(err, &dns) || errors.As(err, &op) && op.Op == "dial"
+	return errors.As(err, &dns) || errors.As(err, &op) && op.Op == "dial" ||
+		errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, syscall.ECONNRESET)
 }
 
 // agentAnswer is the review step's answer: its findings, claims the checks verify. Another
