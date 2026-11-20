@@ -217,7 +217,7 @@ func edDeleteWorkflow(t *testing.T, network, id string) {
 	out, code := lab.Run("docker", "run", "--rm", "--network", network, "--read-only", "--cap-drop", "ALL",
 		"--security-opt", "no-new-privileges", "--user", "1000:1000", "--tmpfs", "/tmp:mode=1777,size=16m", "-e", "HOME=/tmp",
 		"--memory", "128m", "--pids-limit", "64", "--entrypoint", "temporal", lab.Pin(t, "temporal-admin-tools"),
-		"workflow", "delete", "--address", "durable:7233", "--namespace", "ap", "--workflow-id", id)
+		"workflow", "delete", "--address", "durable:7233", "--namespace", "ap", "--workflow-id", id, "--yes")
 	if code != 0 {
 		t.Fatalf("temporal workflow delete %s: exit %d: %s", id, code, out)
 	}
