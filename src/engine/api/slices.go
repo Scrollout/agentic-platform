@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"math/big"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/agentic-platform/engine/api/gen"
 	"github.com/agentic-platform/engine/slices"
+	"github.com/agentic-platform/engine/store"
 	"github.com/agentic-platform/slice"
 )
 
@@ -41,24 +43,128 @@ type sliceServer struct {
 
 var _ gen.StrictServerInterface = (*sliceServer)(nil)
 
-func (s *sliceServer) CreateSlice(_ context.Context, req gen.CreateSliceRequestObject) (gen.CreateSliceResponseObject, error) {
-	description := req.Body.Description
-	id := s.svc.Reserve() // the operation names the slice before it exists
-	acc := s.start("createSlice", gen.OperationKindProposeSlice, id, func(ctx context.Context) (WorkResult, error) {
-		var res slices.Result
-		err := s.withAnalyst(ctx, func() (err error) {
-			res, err = s.svc.CreateAs(ctx, id, description)
-			return err
-		})
-		switch {
-		case err != nil:
-			return WorkResult{}, err
-		case res.Reused:
-			return WorkResult{ReusedSlice: res.Slice.ID}, nil
+func (s *sliceServer) CreateSlice(ctx context.Context, _ gen.CreateSliceRequestObject) (gen.CreateSliceResponseObject, error) {
+	op, err := s.ops.accept(ctx, "createSlice", s.svc.Reserve()) // the operation names the slice before it exists
+	if err != nil {
+		return unavailableFor(err), nil
+	}
+	return gen.CreateSlice202JSONResponse{AcceptedJSONResponse: gen.AcceptedJSONResponse{Body: op}}, nil
+}
+
+// useOperations makes the operations' work the slices' and the runs', reserves again the slice
+// of every createSlice that has not ended (no other slice gets it, and its work creates it), and
+// lets cancelling a run operation cancel its run.
+func (s *sliceServer) useOperations() {
+	s.ops.work = s.work
+	if open, err := s.ops.records.OpenOperations(); err == nil {
+		for _, rec := range open {
+			if rec.Kind == "createSlice" {
+				if err := s.svc.ReserveAgain(rec.Target); err != nil {
+					log.Printf("engine: reserving slice %s for operation %s again: %v", rec.Target, rec.ID, err)
+				}
+			}
 		}
+	} else {
+		log.Printf("engine: reading the open operations: %v", err)
+	}
+	if s.runs != nil {
+		total := len(s.runs.pattern.Steps)
+		s.ops.progress = func(run string) *operationProgress {
+			r, _, _, ok, err := s.runs.find(run)
+			if err != nil || !ok {
+				return nil
+			}
+			return &operationProgress{Done: min(len(r.Accepted), total), Total: total}
+		}
+		if s.runs.durable != nil {
+			s.ops.cancelRun = s.runs.durable.Cancel
+		}
+	}
+}
+
+// work does what an accepted operation's request asked, from its record and body: a run
+// operation follows its run; a slice operation calls the Service, and a repeat finds the work it
+// did before (data model, the repeat table).
+func (s *sliceServer) work(ctx context.Context, rec store.OperationRecord, body []byte) (WorkResult, error) {
+	if isRunKind(rec.Kind) {
+		return s.follow(ctx, rec.Target)
+	}
+	if rec.Kind != "deleteSlice" && len(body) == 0 {
+		return WorkResult{}, fmt.Errorf("operation %s has no request body", rec.ID)
+	}
+	id := rec.Target
+	res := WorkResult{Slice: id}
+	var err error
+	switch rec.Kind {
+	case "createSlice":
+		res, err = s.createSlice(ctx, id, body)
+	case "deleteSlice":
+		err = s.deleteSlice(ctx, id)
+	case "replaceGoals":
+		var req gen.ReplaceGoalsJSONRequestBody
+		if err = json.Unmarshal(body, &req); err == nil {
+			_, err = s.svc.ReplaceGoals(ctx, id, goalsOf(req))
+		}
+	case "replaceRules":
+		var req gen.ReplaceRulesJSONRequestBody
+		if err = json.Unmarshal(body, &req); err == nil {
+			_, err = s.svc.ReplaceRules(ctx, id, rulesOf(req))
+		}
+	case "replaceContract":
+		var req gen.ReplaceContractJSONRequestBody
+		if err = json.Unmarshal(body, &req); err == nil {
+			_, err = s.svc.ReplaceContract(ctx, id, req.Contract)
+		}
+	case "answerQuestions":
+		err = s.answerQuestions(ctx, id, body)
+	case "approvePart":
+		err = s.approvePart(ctx, id, body)
+	default:
+		return WorkResult{}, fmt.Errorf("operation %s: no work for the kind %s", rec.ID, rec.Kind)
+	}
+	if err != nil {
+		return WorkResult{}, s.workError(rec.Kind, err)
+	}
+	return res, nil
+}
+
+// createSlice creates the slice under its reserved ID; a slice that exists already is the work
+// done before a stop.
+func (s *sliceServer) createSlice(ctx context.Context, id string, body []byte) (WorkResult, error) {
+	var req gen.CreateSliceJSONRequestBody
+	if err := json.Unmarshal(body, &req); err != nil {
+		return WorkResult{}, err
+	}
+	if _, err := s.svc.Get(id); err == nil {
 		return WorkResult{Slice: id}, nil
+	}
+	var res slices.Result
+	err := s.withAnalyst(ctx, func() (err error) {
+		res, err = s.svc.CreateAs(ctx, id, req.Description)
+		return err
 	})
-	return gen.CreateSlice202JSONResponse{AcceptedJSONResponse: acc}, nil
+	switch {
+	case err != nil:
+		return WorkResult{}, err
+	case res.Reused:
+		return WorkResult{ReusedSlice: res.Slice.ID}, nil
+	}
+	return WorkResult{Slice: id}, nil
+}
+
+// workError is a refusal of the Service as the operation's error: its code when the contract
+// lists that code for opID's operation; any other refusal, such as one from a change that came
+// between the check made at acceptance and the work, OperationFailed with the refusal in its
+// detail. Either way the failing checks the refusal names stay in the error's `failures`.
+func (s *sliceServer) workError(opID string, err error) error {
+	var e *slices.Error
+	switch {
+	case !errors.As(err, &e):
+		return err
+	case s.contract.op(opID).lists("operation", e.Code):
+		return &WorkError{Code: gen.ErrorCode(e.Code), Detail: e.Detail, Failures: e.Failures}
+	}
+	return &WorkError{Code: gen.ErrorCodeOperationFailed, Detail: e.Error(), Failures: e.Failures}
 }
 
 func (s *sliceServer) ListSlices(_ context.Context, req gen.ListSlicesRequestObject) (gen.ListSlicesResponseObject, error) {
@@ -108,7 +214,7 @@ func (s *sliceServer) latestRun(slice string) *gen.RunId {
 	return latest
 }
 
-func (s *sliceServer) DeleteSlice(_ context.Context, req gen.DeleteSliceRequestObject) (gen.DeleteSliceResponseObject, error) {
+func (s *sliceServer) DeleteSlice(ctx context.Context, req gen.DeleteSliceRequestObject) (gen.DeleteSliceResponseObject, error) {
 	id := req.SliceIdParameter
 	if _, err := s.svc.Get(id); err != nil {
 		return s.refuse("deleteSlice", err)
@@ -116,27 +222,38 @@ func (s *sliceServer) DeleteSlice(_ context.Context, req gen.DeleteSliceRequestO
 	if err := s.noActiveRun(id); err != nil {
 		return s.refuse("deleteSlice", err)
 	}
-	// The stored records go first: erasing them again is harmless, so a retry after a failed
-	// erasure completes it, and the slice disappears only once its records are gone. The work
-	// holds the runs' lock and checks again, so no run starts, resumes or records between the
-	// check and the erasure.
-	return gen.DeleteSlice202JSONResponse{AcceptedJSONResponse: s.change("deleteSlice", gen.OperationKindDeleteSlice, id, func(ctx context.Context) error {
-		if s.runs != nil {
-			s.runs.mu.Lock()
-			defer s.runs.mu.Unlock()
-		}
-		if err := s.activeRun(id); err != nil {
-			return err
-		}
-		if err := s.store.EraseSlice(id); err != nil {
-			return Retryable(err)
-		}
-		s.workers.forget(id)
-		if s.runs != nil {
-			s.runs.forget(id)
-		}
-		return s.svc.Delete(ctx, id)
-	})}, nil
+	op, err := s.ops.accept(ctx, "deleteSlice", id)
+	if err != nil {
+		return unavailableFor(err), nil
+	}
+	return gen.DeleteSlice202JSONResponse{AcceptedJSONResponse: gen.AcceptedJSONResponse{Body: op}}, nil
+}
+
+// deleteSlice erases the slice; a slice that no longer exists is the work done before a stop.
+// The stored records go first: erasing them again is harmless, so a retry after a failed
+// erasure completes it, and the slice disappears only once its records are gone. The work holds
+// the runs' lock and checks again, so no run starts, resumes or records between the check and
+// the erasure.
+func (s *sliceServer) deleteSlice(ctx context.Context, id string) error {
+	var e *slices.Error
+	if _, err := s.svc.Get(id); errors.As(err, &e) && e.Code == string(gen.ErrorCodeNotFound) {
+		return nil
+	}
+	if s.runs != nil {
+		s.runs.mu.Lock()
+		defer s.runs.mu.Unlock()
+	}
+	if err := s.activeRun(id); err != nil {
+		return err
+	}
+	if err := s.store.EraseSlice(id); err != nil {
+		return Retryable(err)
+	}
+	s.workers.forget(id)
+	if s.runs != nil {
+		s.runs.forget(id)
+	}
+	return s.svc.Delete(ctx, id)
 }
 
 // noActiveRun refuses RunActive while a run of the slice has not ended (running, interrupted or
@@ -165,56 +282,80 @@ func (s *sliceServer) activeRun(slice string) error {
 	return nil
 }
 
-func (s *sliceServer) ReplaceGoals(_ context.Context, req gen.ReplaceGoalsRequestObject) (gen.ReplaceGoalsResponseObject, error) {
-	id := req.SliceIdParameter
-	if _, err := s.svc.Get(id); err != nil {
+func (s *sliceServer) ReplaceGoals(ctx context.Context, req gen.ReplaceGoalsRequestObject) (gen.ReplaceGoalsResponseObject, error) {
+	if _, err := s.svc.Get(req.SliceIdParameter); err != nil {
 		return s.refuse("replaceGoals", err)
 	}
-	goals := make([]slices.Goal, len(req.Body.Goals))
-	for i, g := range req.Body.Goals {
-		goals[i] = slices.Goal{ID: g.Id, Text: g.Text}
+	op, err := s.ops.accept(ctx, "replaceGoals", req.SliceIdParameter)
+	if err != nil {
+		return unavailableFor(err), nil
 	}
-	return gen.ReplaceGoals202JSONResponse{AcceptedJSONResponse: s.change("replaceGoals", gen.OperationKindReplaceGoals, id, func(ctx context.Context) error {
-		_, err := s.svc.ReplaceGoals(ctx, id, goals)
-		return err
-	})}, nil
+	return gen.ReplaceGoals202JSONResponse{AcceptedJSONResponse: gen.AcceptedJSONResponse{Body: op}}, nil
 }
 
-func (s *sliceServer) ReplaceRules(_ context.Context, req gen.ReplaceRulesRequestObject) (gen.ReplaceRulesResponseObject, error) {
-	id := req.SliceIdParameter
-	if _, err := s.svc.Get(id); err != nil {
+func goalsOf(req gen.GoalsPart) []slices.Goal {
+	goals := make([]slices.Goal, len(req.Goals))
+	for i, g := range req.Goals {
+		goals[i] = slices.Goal{ID: g.Id, Text: g.Text}
+	}
+	return goals
+}
+
+func (s *sliceServer) ReplaceRules(ctx context.Context, req gen.ReplaceRulesRequestObject) (gen.ReplaceRulesResponseObject, error) {
+	if _, err := s.svc.Get(req.SliceIdParameter); err != nil {
 		return s.refuse("replaceRules", err)
 	}
-	part := slices.RulesPart{Examples: req.Body.Examples, Rules: make([]slices.Rule, len(req.Body.Rules)), Terms: make([]slices.Term, len(req.Body.Terms))}
-	for i, r := range req.Body.Rules {
+	op, err := s.ops.accept(ctx, "replaceRules", req.SliceIdParameter)
+	if err != nil {
+		return unavailableFor(err), nil
+	}
+	return gen.ReplaceRules202JSONResponse{AcceptedJSONResponse: gen.AcceptedJSONResponse{Body: op}}, nil
+}
+
+func rulesOf(req gen.RulesPart) slices.RulesPart {
+	part := slices.RulesPart{Examples: req.Examples, Rules: make([]slices.Rule, len(req.Rules)), Terms: make([]slices.Term, len(req.Terms))}
+	for i, r := range req.Rules {
 		part.Rules[i] = slices.Rule{ID: r.Id, Goal: r.Goal, Pattern: string(r.Pattern), Precondition: deref(r.Precondition),
 			Trigger: deref(r.Trigger), Feature: deref(r.Feature), System: r.System, Response: r.Response, Terms: r.Terms}
 	}
-	for i, t := range req.Body.Terms {
+	for i, t := range req.Terms {
 		part.Terms[i] = slices.Term{ID: t.Id, Name: t.Name, Definition: t.Definition}
 	}
-	return gen.ReplaceRules202JSONResponse{AcceptedJSONResponse: s.change("replaceRules", gen.OperationKindReplaceRules, id, func(ctx context.Context) error {
-		_, err := s.svc.ReplaceRules(ctx, id, part)
-		return err
-	})}, nil
+	return part
 }
 
-func (s *sliceServer) ReplaceContract(_ context.Context, req gen.ReplaceContractRequestObject) (gen.ReplaceContractResponseObject, error) {
-	id := req.SliceIdParameter
-	if _, err := s.svc.Get(id); err != nil {
+func (s *sliceServer) ReplaceContract(ctx context.Context, req gen.ReplaceContractRequestObject) (gen.ReplaceContractResponseObject, error) {
+	if _, err := s.svc.Get(req.SliceIdParameter); err != nil {
 		return s.refuse("replaceContract", err)
 	}
-	contract := req.Body.Contract
-	return gen.ReplaceContract202JSONResponse{AcceptedJSONResponse: s.change("replaceContract", gen.OperationKindReplaceContract, id, func(ctx context.Context) error {
-		_, err := s.svc.ReplaceContract(ctx, id, contract)
-		return err
-	})}, nil
+	op, err := s.ops.accept(ctx, "replaceContract", req.SliceIdParameter)
+	if err != nil {
+		return unavailableFor(err), nil
+	}
+	return gen.ReplaceContract202JSONResponse{AcceptedJSONResponse: gen.AcceptedJSONResponse{Body: op}}, nil
 }
 
-func (s *sliceServer) AnswerQuestions(_ context.Context, req gen.AnswerQuestionsRequestObject) (gen.AnswerQuestionsResponseObject, error) {
+func (s *sliceServer) AnswerQuestions(ctx context.Context, req gen.AnswerQuestionsRequestObject) (gen.AnswerQuestionsResponseObject, error) {
 	id := req.SliceIdParameter
-	answers := make([]slices.Answer, len(req.Body.Answers))
-	for i, a := range req.Body.Answers {
+	answers, err := answersOf(*req.Body)
+	if err != nil {
+		return s.refuse("answerQuestions", err)
+	}
+	if err := s.svc.CheckAnswers(id, answers); err != nil {
+		return s.refuse("answerQuestions", err)
+	}
+	op, err := s.ops.accept(ctx, "answerQuestions", id)
+	if err != nil {
+		return unavailableFor(err), nil
+	}
+	return gen.AnswerQuestions202JSONResponse{AcceptedJSONResponse: gen.AcceptedJSONResponse{Body: op}}, nil
+}
+
+// answersOf reads the answers of an answerQuestions body; an option that is no whole number is
+// an InvalidRequest refusal.
+func answersOf(req gen.AnswerRequest) ([]slices.Answer, error) {
+	answers := make([]slices.Answer, len(req.Answers))
+	for i, a := range req.Answers {
 		raw, err := a.AnswerValue.MarshalJSON()
 		var v struct {
 			Option *json.Number `json:"option"`
@@ -230,22 +371,52 @@ func (s *sliceServer) AnswerQuestions(_ context.Context, req gen.AnswerQuestions
 		if v.Option != nil {
 			n, ok := wholeNumber(*v.Option)
 			if !ok {
-				return s.refuse("answerQuestions", &slices.Error{Code: "InvalidRequest",
-					Detail: fmt.Sprintf("the answer to %s gives option %s, which is not a whole number", a.Question, *v.Option)})
+				return nil, &slices.Error{Code: "InvalidRequest",
+					Detail: fmt.Sprintf("the answer to %s gives option %s, which is not a whole number", a.Question, *v.Option)}
 			}
 			option = &n
 		}
 		answers[i] = slices.Answer{Question: a.Question, Option: option, Text: v.Text}
 	}
-	if err := s.svc.CheckAnswers(id, answers); err != nil {
-		return s.refuse("answerQuestions", err)
+	return answers, nil
+}
+
+// answerQuestions records the body's answers; questions that hold them all already are the work
+// done before a stop.
+func (s *sliceServer) answerQuestions(ctx context.Context, id string, body []byte) error {
+	var req gen.AnswerQuestionsJSONRequestBody
+	if err := json.Unmarshal(body, &req); err != nil {
+		return err
 	}
-	return gen.AnswerQuestions202JSONResponse{AcceptedJSONResponse: s.change("answerQuestions", gen.OperationKindAnswerQuestions, id, func(ctx context.Context) error {
-		return s.withAnalyst(ctx, func() error {
-			_, err := s.svc.Answer(ctx, id, answers)
-			return err
-		})
-	})}, nil
+	answers, err := answersOf(req)
+	if err != nil {
+		return err
+	}
+	if sl, err := s.svc.Get(id); err == nil && answered(sl, answers) {
+		return nil
+	}
+	return s.withAnalyst(ctx, func() error {
+		_, err := s.svc.Answer(ctx, id, answers)
+		return err
+	})
+}
+
+// answered reports whether every question the answers name holds that answer.
+func answered(sl slices.Slice, answers []slices.Answer) bool {
+	holds := func(a slices.Answer) bool {
+		for _, q := range sl.Questions {
+			if got := q.Answer; q.ID == a.Question && got != nil {
+				return got.Text == a.Text && (got.Option == nil) == (a.Option == nil) && (got.Option == nil || *got.Option == *a.Option)
+			}
+		}
+		return false
+	}
+	for _, a := range answers {
+		if !holds(a) {
+			return false
+		}
+	}
+	return true
 }
 
 // wholeNumber reads a JSON number that is an integer as JSON Schema counts one, so 1.0 and 1e0 are
@@ -265,45 +436,35 @@ func wholeNumber(n json.Number) (int, bool) {
 	}
 }
 
-func (s *sliceServer) ApprovePart(_ context.Context, req gen.ApprovePartRequestObject) (gen.ApprovePartResponseObject, error) {
+func (s *sliceServer) ApprovePart(ctx context.Context, req gen.ApprovePartRequestObject) (gen.ApprovePartResponseObject, error) {
 	id, part, hash := req.SliceIdParameter, slices.Part(req.Body.Part), req.Body.ContentHash
 	if err := s.svc.CheckApprove(id, part, hash); err != nil {
 		return s.refuse("approvePart", err)
 	}
-	return gen.ApprovePart202JSONResponse{AcceptedJSONResponse: s.change("approvePart", gen.OperationKindApprovePart, id, func(ctx context.Context) error {
-		_, err := s.svc.Approve(ctx, id, part, hash)
+	op, err := s.ops.accept(ctx, "approvePart", id)
+	if err != nil {
+		return unavailableFor(err), nil
+	}
+	return gen.ApprovePart202JSONResponse{AcceptedJSONResponse: gen.AcceptedJSONResponse{Body: op}}, nil
+}
+
+// approvePart approves the part at the body's hash; a part approved at it already is the work
+// done before a stop.
+func (s *sliceServer) approvePart(ctx context.Context, id string, body []byte) error {
+	var req gen.ApprovePartJSONRequestBody
+	if err := json.Unmarshal(body, &req); err != nil {
 		return err
-	})}, nil
-}
-
-// change starts the operation of a change to slice id; its result is the slice.
-func (s *sliceServer) change(opID string, kind gen.OperationKind, id string, apply func(ctx context.Context) error) gen.AcceptedJSONResponse {
-	return s.start(opID, kind, id, func(ctx context.Context) (WorkResult, error) {
-		if err := apply(ctx); err != nil {
-			return WorkResult{}, err
+	}
+	part := slices.Part(req.Part)
+	if sl, err := s.svc.Get(id); err == nil {
+		for _, a := range sl.Approvals {
+			if a.Part == part && a.ContentHash == req.ContentHash {
+				return nil
+			}
 		}
-		return WorkResult{Slice: id}, nil
-	})
-}
-
-// start starts an operation of the contract operation opID whose work calls the Service. A
-// refusal of the Service keeps its code when the contract lists that code for opID's
-// operation; any other refusal, such as one from a change that came between the check made at
-// acceptance and the work, ends the operation OperationFailed with the refusal in its detail.
-// Either way the failing checks the refusal names stay in the error's `failures`.
-func (s *sliceServer) start(opID string, kind gen.OperationKind, target string, work func(ctx context.Context) (WorkResult, error)) gen.AcceptedJSONResponse {
-	op := s.contract.op(opID)
-	return gen.AcceptedJSONResponse{Body: s.ops.startWith(kind, target, func(ctx context.Context) (WorkResult, error) {
-		res, err := work(ctx)
-		var e *slices.Error
-		switch {
-		case err == nil || !errors.As(err, &e):
-			return res, err
-		case op.lists("operation", e.Code):
-			return WorkResult{}, &WorkError{Code: gen.ErrorCode(e.Code), Detail: e.Detail, Failures: e.Failures}
-		}
-		return WorkResult{}, &WorkError{Code: gen.ErrorCodeOperationFailed, Detail: e.Error(), Failures: e.Failures}
-	})}
+	}
+	_, err := s.svc.Approve(ctx, id, part, req.ContentHash)
+	return err
 }
 
 // withAnalyst runs f, which may call the analyst, once one of the engine's analystCallsAtOnce

@@ -76,6 +76,12 @@ type durableLinks struct {
 	// Serve starts the engine's durable worker, which runs the runs' workflows and their
 	// activities on a, and returns the function that stops it. nil starts none.
 	Serve func(a *durable.Activities) (stop func(), err error)
+	// Operations is api's port to the operations' workflows; nil runs each operation's work in
+	// the engine's process (api.Config.Operations).
+	Operations api.Operations
+	// ServeOperations starts the worker of the operations' workflows, whose activities call op,
+	// and returns the function that stops it. nil starts none.
+	ServeOperations func(op api.Operator) (stop func(), err error)
 }
 
 // namespaceRegistry registers the namespace the engine's workflows run in (ADR 0070).
@@ -107,13 +113,17 @@ func setup(getenv func(string) string) (http.Handler, func() error, error) {
 		c.Close()
 		return nil, nil, err
 	}
+	// Closing the connection, not stopping a worker, ends it: an activity cut off this way is a
+	// platform stop (its heartbeat times out) and is made again, never failed.
 	links := durableLinks{Runs: durable.NewRuns(c), Namespaces: ns, Serve: func(a *durable.Activities) (func(), error) {
-		w := durable.NewRunsWorker(c, a)
-		if err := w.Start(); err != nil {
+		if err := durable.NewRunsWorker(c, a).Start(); err != nil {
 			return nil, fmt.Errorf("the engine's durable worker: %w", err)
 		}
-		// Closing the connection, not stopping the worker, ends it: an activity cut off this way
-		// is a platform stop (its heartbeat times out) and is made again, never failed.
+		return func() {}, nil
+	}, Operations: durable.NewOperations(c), ServeOperations: func(op api.Operator) (func(), error) {
+		if err := durable.NewOperationsWorker(c, op).Start(); err != nil {
+			return nil, fmt.Errorf("the engine's operations worker: %w", err)
+		}
 		return func() {}, nil
 	}}
 	h, closeFn, err := setupWith(getenv, links)
@@ -172,8 +182,9 @@ func environment(getenv func(string) string) (map[string]string, error) {
 // serves anything it registers the namespace ap with the contract's retention when the durable
 // service has none (an existing one is kept unchanged, ADR 0070), refuses to start, naming each,
 // while a run's record has no end and the run has no workflow (a run feature 001 left open;
-// research R7), and starts the durable worker (d.Serve). The returned function cancels running
-// operations, stops the durable worker and closes the store; calling it again does nothing.
+// research R7), and starts the durable workers of both task queues (d.Serve, d.ServeOperations).
+// The returned function cancels running operations, stops the durable workers and closes the
+// store; calling it again does nothing.
 func setupWith(getenv func(string) string, d durableLinks) (http.Handler, func() error, error) {
 	env, err := environment(getenv)
 	if err != nil {
@@ -226,13 +237,18 @@ func setupWith(getenv func(string) string, d durableLinks) (http.Handler, func()
 		mp = api.MachinePattern(p)
 	}
 	rec := api.NewRunRecord(st, mp, cfg.Model)
-	cfg.Runs, cfg.Record = d.Runs, rec
+	cfg.Runs, cfg.Record, cfg.Operations = d.Runs, rec, d.Operations
 	ctx, cancel := context.WithCancel(context.Background())
 	cfg.Context = ctx
 	var running sync.WaitGroup
 	cfg.Running = &running
-	h := api.NewHandler(cfg)
-	stopWorker := func() {}
+	h, op := api.NewEngine(cfg)
+	var stops []func()
+	stopWorker := func() {
+		for _, stop := range stops {
+			stop()
+		}
+	}
 	if d.Serve != nil {
 		stop, err := d.Serve(&durable.Activities{Worker: cfg.StepWorker, Checker: cfg.StepChecker, History: cfg.History,
 			Results: rec.Results(), Artifacts: st, Events: rec})
@@ -240,7 +256,16 @@ func setupWith(getenv func(string) string, d durableLinks) (http.Handler, func()
 			cancel()
 			return nil, nil, errors.Join(err, st.Close())
 		}
-		stopWorker = stop
+		stops = append(stops, stop)
+	}
+	if d.ServeOperations != nil {
+		stop, err := d.ServeOperations(op)
+		if err != nil {
+			cancel()
+			stopWorker()
+			return nil, nil, errors.Join(err, st.Close())
+		}
+		stops = append(stops, stop)
 	}
 	var once sync.Once
 	var closeErr error

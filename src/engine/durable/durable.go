@@ -17,8 +17,8 @@ import (
 // Where the engine's workflows run (data model, "Execution state in Temporal"; ADR 0070).
 const (
 	Namespace       = "ap"
-	RunsQueue       = api.RunsQueue // the Run workflow and its activities
-	OperationsQueue = "operations"  // the Operation workflow (user story 2)
+	RunsQueue       = api.RunsQueue       // the Run workflow and its activities
+	OperationsQueue = api.OperationsQueue // the Operation workflow and its activities
 )
 
 // The activities' names, as registered.

@@ -12,6 +12,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -187,32 +188,61 @@ func TestACancelledWaitingOperationNeverCallsTheAnalyst(t *testing.T) {
 // ---- T038h: an asynchronous refusal keeps its failures ----
 
 // An approvePart whose refusal comes after acceptance (a change came between the check made at
-// acceptance and the work) ends failed; the failing checks must stay in error.failures.
+// acceptance and the work) ends failed; the failing checks must stay in error.failures. The rig
+// holds the operation's work until the change is made, so the refusal is the work's, not the
+// acceptance's.
 func TestAnAsyncRefusalKeepsItsFailuresInTheOperationsError(t *testing.T) {
-	srv := &server{contract: engineContract, ops: &operations{base: context.Background(), now: time.Now,
-		sleep: func(context.Context, time.Duration) {}, ops: map[string]*operation{}}}
-	ss := &sliceServer{server: srv}
-	fails := []slices.Check{{Part: "contract", Check: "ContractLint", Passed: false, Reason: "oas3-schema: invalid"}}
-	acc := ss.start("approvePart", gen.OperationKindApprovePart, "S-1", func(context.Context) (WorkResult, error) {
-		return WorkResult{}, &slices.Error{Code: "PartFailsChecks", Detail: "the contract part fails its checks", Failures: fails}
-	})
-	var got gen.Operation
-	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
-		got, _ = srv.ops.get(acc.Body.Id)
-		if got.Status == gen.OperationStatusFailed {
+	x := newDopRig(t)
+	x.seed(1, false)
+	sl, err := x.svc.Get("S-1")
+	if err != nil || len(sl.Goals) < 2 {
+		t.Fatalf("setup: slice %+v, err %v; want a slice with at least two goals", sl, err)
+	}
+	x.ops.set(func(f *dopOps) { f.hold = true })
+	acc := x.accepted(x.do("POST", spURL("S-1", "/approvals"), "", approvalBody("rules", sl.Parts.Rules)), "approve-part", "S-1")
+	// A change between acceptance and the work: the rules now refer to a goal that is gone.
+	got, err := x.svc.ReplaceGoals(context.Background(), "S-1", sl.Goals[:1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Parts.Rules != sl.Parts.Rules {
+		t.Fatalf("setup: the rules hash changed (%s to %s); the approval must stay at the shown hash", sl.Parts.Rules, got.Parts.Rules)
+	}
+	_, refusal := x.svc.Approve(context.Background(), "S-1", slices.PartRules, sl.Parts.Rules)
+	var want *slices.Error
+	if !errors.As(refusal, &want) || want.Code != "PartFailsChecks" || len(want.Failures) == 0 {
+		t.Fatalf("setup: the service's refusal is %v, want PartFailsChecks with failing checks", refusal)
+	}
+	if v := x.opView(x.getOp(acc.ID), 200); v.Status == "failed" || v.Status == "succeeded" {
+		t.Fatalf("setup: the operation is %q before its work ran, want accepted or running", v.Status)
+	}
+	x.ops.release(acc.ID)
+	var final gen.Operation
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
+		x.clock.Advance(1100 * time.Millisecond)
+		p := x.do("GET", "/operations/"+acc.ID+"?api-version="+apiVersion, "", "")
+		final = p.operation(t, 200)
+		if final.Status == gen.OperationStatusFailed {
 			break
 		}
 	}
-	if got.Status != gen.OperationStatusFailed || got.Error == nil {
-		t.Fatalf("operation %+v, want failed with an error", got)
+	if final.Status != gen.OperationStatusFailed || final.Error == nil {
+		t.Fatalf("operation %+v, want failed with an error", final)
 	}
-	if got.Error.Failures == nil || len(*got.Error.Failures) != 1 {
-		t.Fatalf("error %+v lost its failures; want the one failing check", got.Error)
+	// The contract does not list PartFailsChecks as an outcome of the approvePart operation (it is
+	// a synchronous refusal), so the work's refusal is OperationFailed, with the checks kept.
+	if final.Error.Code != gen.ErrorCodeOperationFailed {
+		t.Errorf("error code %q, want %q", final.Error.Code, gen.ErrorCodeOperationFailed)
 	}
-	if f := (*got.Error.Failures)[0]; f.Part != "contract" || f.Check != "ContractLint" || f.Passed || f.Reason != "oas3-schema: invalid" {
-		t.Errorf("failure %+v is not the failing check the service gave", f)
+	if final.Error.Failures == nil || len(*final.Error.Failures) != len(want.Failures) {
+		t.Fatalf("error %+v lost its failures; want the %d failing checks the service gave", final.Error, len(want.Failures))
 	}
-	if got.Error.Detail == nil || *got.Error.Detail == "" {
+	for i, f := range *final.Error.Failures {
+		if w := want.Failures[i]; f.Part != w.Part || f.Check != w.Check || f.Passed || f.Reason != w.Reason {
+			t.Errorf("failure %+v is not the failing check the service gave: %+v", f, w)
+		}
+	}
+	if final.Error.Detail == nil || *final.Error.Detail == "" {
 		t.Errorf("error lacks detail")
 	}
 }

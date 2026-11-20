@@ -30,6 +30,8 @@ package api
 import (
 	"context"
 	"errors"
+	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -216,7 +218,13 @@ func TestResumeAndReplayAreRefusedWhileARunOfAnotherSliceIsActive(t *testing.T) 
 			t.Fatalf("setup: %s is %q after the restart, want waiting-for-developer", one.Target, v.Status)
 		}
 		wantRunActiveNaming(t, x.do("POST", apiPath("/runs/"+two.Target+"/resume"), ""), one.Target, "S-1")
-		x.noMoreOperations("OP-1")
+		// Operation IDs never repeat (FR-011): the refused resume created none, so the ID after the
+		// highest this test has seen is still unused, and the highest seen is still answered.
+		next := "OP-" + strconv.Itoa(max(opNumber(two.ID), opNumber(one.ID))+1)
+		x.noMoreOperations(next)
+		if r := x.do("GET", apiPath("/operations/"+one.ID), ""); r.Code != http.StatusOK {
+			t.Errorf("operation %s answers %d after the restart, want 200", one.ID, r.Code)
+		}
 		if v := x.getRun(two.Target); v.Status != "interrupted" {
 			t.Errorf("a refused resume changed %s: %+v", two.Target, v)
 		}

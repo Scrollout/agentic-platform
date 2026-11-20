@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -239,7 +240,7 @@ type runs struct {
 	// awaitStart: the durable worker writes through rec (Config.Record), so a start is answered
 	// once the run's RunStarted is recorded, and the run is found at once.
 	awaitStart bool
-	current    map[string]string // run -> the operation following it in this engine
+	current    map[string]string // run -> the operation that last started following it in this engine
 }
 
 // newRuns returns the runs of the store, or nil when the store keeps no runs.
@@ -286,6 +287,14 @@ func MachinePattern(p sl.Pattern) machine.Pattern {
 }
 
 func (r *runs) read(run string) ([]machine.Event, *runInfo, error) { return readRun(r.st, run) }
+
+// started reports whether this engine started the run and has not read its RunStarted back yet.
+func (r *runs) started(run string) bool {
+	r.vmu.Lock()
+	defer r.vmu.Unlock()
+	_, ok := r.starting[run]
+	return ok
+}
 
 // forget drops what the engine holds of a slice's runs, once its record is erased.
 func (r *runs) forget(slice string) {
@@ -455,97 +464,132 @@ func (s *sliceServer) canRun() error {
 }
 
 // follow is the work of a run's operation: it lasts until the run's record shows its end and
-// succeeds then, whatever the outcome. Cancelling the operation cancels the run's workflow first,
-// which ends the run `cancelled`; when the engine stops, the operation ends and the run goes on.
-func (s *sliceServer) follow(id string, op *operation) func(ctx context.Context) (WorkResult, error) {
-	total := len(s.runs.pattern.Steps)
-	op.onCancel = func(ctx context.Context) error {
-		if err := s.runs.durable.Cancel(ctx, id); err != nil && !errors.Is(err, ErrNotFound) { // not found: it has ended
-			return err
-		}
-		return nil
+// succeeds then, whatever the outcome; a run cancelled other than by cancelling its operation, or
+// whose workflow failed, fails it. A run that has neither a workflow nor a record, and that this
+// engine did not start, was never started: the operation fails, and the request may be sent
+// again. When ctx ends first (the engine stops, or the operation is cancelled), it returns ctx's
+// error and the run goes on.
+func (s *sliceServer) follow(ctx context.Context, id string) (WorkResult, error) {
+	notStarted := &WorkError{Code: gen.ErrorCodeOperationFailed, Detail: detailRunNotStarted}
+	if s.runs == nil || s.runs.durable == nil {
+		return WorkResult{}, notStarted
 	}
-	return func(ctx context.Context) (WorkResult, error) {
-		for {
-			changed := s.runs.rec.next(id)
-			run, events, _, ok, err := s.runs.find(id)
-			if err != nil {
-				return WorkResult{}, err
-			}
-			if ok {
-				s.ops.set(op, func(v *gen.Operation) {
-					v.Progress = &struct {
-						Done  int     `json:"done"`
-						Step  *string `json:"step,omitempty"`
-						Total int     `json:"total"`
-					}{Done: min(len(run.Accepted), total), Total: total}
-				})
-				if run.Status == machine.StatusEnded {
-					if run.Outcome == machine.OutcomeCancelled {
-						detail := "the run was cancelled"
-						if d := events[len(events)-1].Detail; strings.HasPrefix(d, workflowFailed) {
-							detail = d
-						}
-						return WorkResult{}, &WorkError{Code: gen.ErrorCodeOperationFailed, Detail: detail}
+	exists, err := s.runs.durable.Exists(ctx, id)
+	if err != nil {
+		return WorkResult{}, Retryable(err)
+	}
+	if !exists && !s.runs.started(id) {
+		if _, _, _, ok, err := s.runs.find(id); err == nil && !ok {
+			return WorkResult{}, notStarted
+		}
+	}
+	for {
+		changed := s.runs.rec.next(id)
+		run, events, _, ok, err := s.runs.find(id)
+		if err != nil {
+			return WorkResult{}, err
+		}
+		if ok {
+			if run.Status == machine.StatusEnded {
+				if run.Outcome == machine.OutcomeCancelled {
+					detail := "the run was cancelled"
+					if d := events[len(events)-1].Detail; strings.HasPrefix(d, workflowFailed) {
+						detail = d
 					}
-					return WorkResult{Run: id}, nil
-				}
-				// a workflow that closed with no end on the record: the run is ended here (T058)
-				if ended, detail, err := s.runs.closeIfFailed(ctx, id); err == nil && ended && detail != "" {
 					return WorkResult{}, &WorkError{Code: gen.ErrorCodeOperationFailed, Detail: detail}
 				}
+				return WorkResult{Run: id}, nil
 			}
-			select {
-			case <-changed:
-			case <-time.After(followPoll):
-			case <-ctx.Done():
-				return WorkResult{}, ctx.Err()
+			// a workflow that closed with no end on the record: the run is ended here (T058)
+			if ended, detail, err := s.runs.closeIfFailed(ctx, id); err == nil && ended && detail != "" {
+				return WorkResult{}, &WorkError{Code: gen.ErrorCodeOperationFailed, Detail: detail}
 			}
+		}
+		select {
+		case <-changed:
+		case <-time.After(followPoll):
+		case <-ctx.Done():
+			return WorkResult{}, ctx.Err()
 		}
 	}
 }
 
-// operationOf returns the operation following the run in this engine, starting one when none does
-// (after a restart, or once it has ended).
-func (s *sliceServer) operationOf(id string) gen.Operation {
-	s.runs.vmu.Lock()
-	cur := s.runs.current[id]
-	s.runs.vmu.Unlock()
-	if v, ok := s.ops.get(cur); ok && !ended(v.Status) {
-		return v
+// signalFollowed sends the signal to the run's workflow and answers with the run's open
+// operation (of any run kind); only when none is open is a new one of the contract operation opID
+// recorded, before the signal, and removed again when the signal fails. An error wrapping
+// ErrUnavailable or errNotRecorded accepted nothing.
+func (s *sliceServer) signalFollowed(ctx context.Context, opID, run, signal string) (gen.Operation, error) {
+	rec, open, err := s.ops.openRun(run)
+	if err != nil {
+		log.Printf("engine: the open operation of run %s: %v", run, err)
+		return gen.Operation{}, errNotRecorded
 	}
-	op := s.ops.reserve(gen.OperationKindRun, id)
+	if !open {
+		if rec, err = s.ops.record(ctx, opID, run); err != nil {
+			return gen.Operation{}, err
+		}
+	}
+	if err := s.signal(ctx, run, signal); err != nil {
+		if !open {
+			s.removeRecord(rec.ID)
+		}
+		return gen.Operation{}, err
+	}
+	if open {
+		return s.ops.view(ctx, rec), nil
+	}
 	s.runs.vmu.Lock()
-	s.runs.current[id] = op.view.Id
+	s.runs.current[run] = rec.ID
 	s.runs.vmu.Unlock()
-	return s.ops.launch(op, s.follow(id, op))
+	s.ops.launch(ctx, rec)
+	return acceptedView(rec), nil
+}
+
+// removeRecord removes the record of an operation that was not accepted. When it cannot be
+// removed, the operation's work finds its run not started and ends it failed.
+func (s *sliceServer) removeRecord(id string) {
+	if err := s.ops.records.DeleteOperation(id); err != nil {
+		log.Printf("engine: removing the record of operation %s, which was not accepted: %v", id, err)
+	}
 }
 
 // newRun starts a new run of the slice as a workflow of the durable service: the run ID is given
-// out by the record, the operation reserved, and the workflow started with both; it records
-// RunStarted (with the project, the operation and replay_of) as its first event. The caller holds
-// s.runs.mu and has checked every refusal. An error wrapping ErrUnavailable started nothing.
-func (s *sliceServer) newRun(ctx context.Context, slice, project, replayOf string, inputs map[string]string, refs []string) (gen.Operation, error) {
+// out by the record, the operation of the contract operation opID recorded, the run's workflow
+// started with both (it records RunStarted, with the project, the operation and replay_of, as its
+// first event), then the operation's workflow. The caller holds s.runs.mu and has checked every
+// refusal. An error wrapping ErrUnavailable or errNotRecorded accepted nothing.
+func (s *sliceServer) newRun(ctx context.Context, opID, slice, project, replayOf string, inputs map[string]string, refs []string) (gen.Operation, error) {
 	id, err := s.runs.st.NextRunID()
 	if err != nil {
-		return gen.Operation{}, fmt.Errorf("a run ID: %w", err)
+		log.Printf("engine: a run ID: %v", err)
+		return gen.Operation{}, errNotRecorded
 	}
-	op := s.ops.reserve(gen.OperationKindRun, id)
+	rec, err := s.ops.record(ctx, opID, id)
+	if err != nil {
+		return gen.Operation{}, err
+	}
 	p := s.runs.pattern
-	err = s.runs.durable.Start(ctx, RunStart{Run: id, Slice: slice, Project: project, ReplayOf: replayOf, Operation: op.view.Id,
+	err = s.runs.durable.Start(ctx, RunStart{Run: id, Slice: slice, Project: project, ReplayOf: replayOf, Operation: rec.ID,
 		Pattern: p.ID + "@" + p.Version, Definition: p, Model: s.runs.model, Inputs: inputs, Refs: refs,
 		TaskQueue: RunsQueue, RejectDuplicate: true})
 	if err != nil {
+		s.removeRecord(rec.ID)
 		return gen.Operation{}, err
 	}
 	s.runs.vmu.Lock()
 	s.runs.starting[id] = slice
-	s.runs.current[id] = op.view.Id
+	s.runs.current[id] = rec.ID
 	s.runs.vmu.Unlock()
 	if s.runs.awaitStart {
 		s.runs.recorded(ctx, id, recordWait)
 	}
-	return s.ops.launch(op, s.follow(id, op)), nil
+	s.ops.launch(ctx, rec)
+	return acceptedView(rec), nil
+}
+
+// notAccepted reports whether err accepted nothing, so the answer is 503.
+func notAccepted(err error) bool {
+	return errors.Is(err, ErrUnavailable) || errors.Is(err, errNotRecorded)
 }
 
 // recorded waits until the run's record holds an event, at most limit or until ctx is done.
@@ -681,9 +725,9 @@ func (s *sliceServer) StartRun(ctx context.Context, req gen.StartRunRequestObjec
 	for _, r := range slc.Rules {
 		refs = append(refs, r.ID)
 	}
-	op, err := s.newRun(ctx, id, req.Body.Project, "", inputs, refs)
+	op, err := s.newRun(ctx, "startRun", id, req.Body.Project, "", inputs, refs)
 	switch {
-	case errors.Is(err, ErrUnavailable):
+	case notAccepted(err):
 		return unavailableFor(err), nil
 	case err != nil:
 		return s.refuse("startRun", err)
@@ -724,13 +768,14 @@ func (s *sliceServer) ResumeRun(ctx context.Context, req gen.ResumeRunRequestObj
 	if err := s.noOtherActiveRun(id); err != nil {
 		return s.refuse("resumeRun", err)
 	}
-	switch err := s.signal(ctx, id, SignalResume); {
-	case errors.Is(err, ErrUnavailable):
+	op, err := s.signalFollowed(ctx, "resumeRun", id, SignalResume)
+	switch {
+	case notAccepted(err):
 		return unavailableFor(err), nil
 	case err != nil:
 		return nil, fmt.Errorf("resuming run %s: %w", id, err)
 	}
-	return gen.ResumeRun202JSONResponse{AcceptedJSONResponse: gen.AcceptedJSONResponse{Body: s.operationOf(id)}}, nil
+	return gen.ResumeRun202JSONResponse{AcceptedJSONResponse: gen.AcceptedJSONResponse{Body: op}}, nil
 }
 
 // ReplayRun refuses an unknown run (NotFound), then one that has not ended (RunNotEnded), then
@@ -777,9 +822,9 @@ func (s *sliceServer) ReplayRun(ctx context.Context, req gen.ReplayRunRequestObj
 	for i, n := range names {
 		inputs[n] = first.Inputs[i]
 	}
-	op, err := s.newRun(ctx, run.Slice, req.Body.Project, id, inputs, first.Refs)
+	op, err := s.newRun(ctx, "replayRun", run.Slice, req.Body.Project, id, inputs, first.Refs)
 	switch {
-	case errors.Is(err, ErrUnavailable):
+	case notAccepted(err):
 		return unavailableFor(err), nil
 	case err != nil:
 		return s.refuse("replayRun", err)
@@ -813,13 +858,14 @@ func (s *sliceServer) AcceptHandOver(ctx context.Context, req gen.AcceptHandOver
 	if err := s.canRun(); err != nil {
 		return nil, err
 	}
-	switch err := s.signal(ctx, id, SignalAcceptHandOver); {
-	case errors.Is(err, ErrUnavailable):
+	op, err := s.signalFollowed(ctx, "acceptHandOver", id, SignalAcceptHandOver)
+	switch {
+	case notAccepted(err):
 		return unavailableFor(err), nil
 	case err != nil:
 		return nil, fmt.Errorf("accepting the hand-over of run %s: %w", id, err)
 	}
-	return gen.AcceptHandOver202JSONResponse{AcceptedJSONResponse: gen.AcceptedJSONResponse{Body: s.operationOf(id)}}, nil
+	return gen.AcceptHandOver202JSONResponse{AcceptedJSONResponse: gen.AcceptedJSONResponse{Body: op}}, nil
 }
 
 func (s *sliceServer) GetRun(_ context.Context, req gen.GetRunRequestObject) (gen.GetRunResponseObject, error) {
@@ -881,6 +927,9 @@ func (s *sliceServer) runView(id string) (gen.Run, bool, error) {
 		v.Operation = cur
 	}
 	s.runs.vmu.Unlock()
+	if rec, open, err := s.ops.openRun(id); err == nil && open {
+		v.Operation = rec.ID
+	}
 	if info.ReplayOf != "" {
 		r := info.ReplayOf
 		v.ReplayOf = &r

@@ -66,8 +66,9 @@ var (
 	// ErrUnavailable: the durable service cannot be reached; nothing was changed. Every Runs
 	// method may return it (wrapped).
 	ErrUnavailable = errors.New("the durable service cannot be reached")
-	// ErrNotFound: the run has no workflow. Signal, Cancel and Delete may return it (wrapped).
-	ErrNotFound = errors.New("the run has no workflow")
+	// ErrNotFound: the run, or the operation, has no workflow. Signal, Cancel and Delete may
+	// return it (wrapped), and the Operations port's Open and Cancel.
+	ErrNotFound = errors.New("no workflow")
 )
 
 // retryAfter is the Retry-After of a 503 answer, in whole seconds: the retry rule's first wait,
@@ -91,9 +92,24 @@ func (u unavailableAnswer) write(w http.ResponseWriter) error {
 	return writeJSONProblem(w, status, strconv.Itoa(retryAfter()), p)
 }
 
-func (u unavailableAnswer) VisitStartRunResponse(w http.ResponseWriter) error  { return u.write(w) }
-func (u unavailableAnswer) VisitResumeRunResponse(w http.ResponseWriter) error { return u.write(w) }
-func (u unavailableAnswer) VisitReplayRunResponse(w http.ResponseWriter) error { return u.write(w) }
+func (u unavailableAnswer) VisitCreateSliceResponse(w http.ResponseWriter) error { return u.write(w) }
+func (u unavailableAnswer) VisitDeleteSliceResponse(w http.ResponseWriter) error { return u.write(w) }
+func (u unavailableAnswer) VisitReplaceGoalsResponse(w http.ResponseWriter) error {
+	return u.write(w)
+}
+func (u unavailableAnswer) VisitReplaceRulesResponse(w http.ResponseWriter) error {
+	return u.write(w)
+}
+func (u unavailableAnswer) VisitReplaceContractResponse(w http.ResponseWriter) error {
+	return u.write(w)
+}
+func (u unavailableAnswer) VisitAnswerQuestionsResponse(w http.ResponseWriter) error {
+	return u.write(w)
+}
+func (u unavailableAnswer) VisitApprovePartResponse(w http.ResponseWriter) error { return u.write(w) }
+func (u unavailableAnswer) VisitStartRunResponse(w http.ResponseWriter) error    { return u.write(w) }
+func (u unavailableAnswer) VisitResumeRunResponse(w http.ResponseWriter) error   { return u.write(w) }
+func (u unavailableAnswer) VisitReplayRunResponse(w http.ResponseWriter) error   { return u.write(w) }
 func (u unavailableAnswer) VisitAcceptHandOverResponse(w http.ResponseWriter) error {
 	return u.write(w)
 }

@@ -92,7 +92,9 @@ func Open(dir string, ids *slice.Schemas) (*Store, error) {
 		runSlice:  map[slice.RunID]slice.ID{},
 		owned:     map[slice.ID]map[slice.Hash]bool{},
 	}
-	for _, d := range []string{s.artifacts, s.slices} {
+	// The store holds request bodies and run content: a folder it creates, its own included, is
+	// its owner's only. An existing folder keeps its mode.
+	for _, d := range []string{dir, s.artifacts, s.slices} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return nil, err
 		}
@@ -109,6 +111,9 @@ func Open(dir string, ids *slice.Schemas) (*Store, error) {
 		if err := os.Remove(t); err != nil {
 			return nil, err
 		}
+	}
+	if err := s.openOperations(); err != nil {
+		return nil, err
 	}
 	entries, err := os.ReadDir(s.slices)
 	if err != nil {
