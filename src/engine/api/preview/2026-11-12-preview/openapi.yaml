@@ -31,7 +31,9 @@ info:
     operation is followed by its ID until `x-limits.idempotency-key-retention-hours` after it
     ends; after that `getOperation` answers 404 NotFound. An operation ID is never given to two
     operations, across restarts of the engine too, and an Idempotency-Key and its first result
-    survive a restart within their retention. The `retry-*` limits are the one retry rule the
+    survive a restart within their retention when the request was accepted as an operation; any
+    other answer under a key (a refusal, registerWorker's 200, cancelOperation's 202) is kept
+    until the engine restarts, and a 503 is never kept. The `retry-*` limits are the one retry rule the
     engine and its clients apply to a call that failed retryably: retry `n` (from 0) waits
     `min(retry-longest-wait-ms, retry-first-wait-ms × 2^n)` plus a uniform random part of up to
     `retry-jitter-fraction` of that wait, at most `retry-attempts` times.
