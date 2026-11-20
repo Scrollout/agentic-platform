@@ -38,7 +38,25 @@ sources:
   - id: adr-0064
     resource: /decisions/0064-a-cached-digest-spares-the-reproducible-rebuild.md
     title: "ADR 0064: A cached digest spares the reproducible candidate build when nothing changed"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-18T21:00:00Z }
+  - id: research-002
+    resource: ../../specs/002-durable-execution/research.md
+    title: Feature 002 research, R1 to R5, R8 and R10
+  - id: adr-0065
+    resource: /decisions/0065-temporal-and-postgresql-in-compose.md
+    title: "ADR 0065: Temporal's server and PostgreSQL run in Compose, with a schema job that converges them"
+  - id: adr-0066
+    resource: /decisions/0066-the-run-record-stays-the-engines.md
+    title: "ADR 0066: The run record stays the engine's; Temporal keeps only execution state"
+  - id: adr-0067
+    resource: /decisions/0067-a-run-is-one-temporal-workflow.md
+    title: "ADR 0067: A run is one Temporal workflow running the engine's step rules"
+  - id: adr-0068
+    resource: /decisions/0068-operations-recorded-then-run-as-workflows.md
+    title: "ADR 0068: An operation is recorded before it is acknowledged, then runs as a workflow"
+  - id: adr-0069
+    resource: /decisions/0069-one-retry-rule-declared-in-the-engine-contract.md
+    title: "ADR 0069: One retry rule, declared in the engine contract"
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-20T23:30:00Z }
 ---
 
 # Context
@@ -54,8 +72,10 @@ Agents run on [Docker Agent](/references/docker-agent.md)
 through the [Agent Host Protocol](/references/agent-host-protocol.md)
 ([ADR 0003](/decisions/0003-ahp-client-session-protocol.md)). Feature 001 builds one slice of the
 platform on one machine ([ADR 0026](/decisions/0026-deterministic-workflow-engine.md)). Its durable
-execution (resume, checkpoints, retries, run history, the job queue) is the engine's own for the
-MVP; after the MVP it moves to Temporal ([ADR 0056](/decisions/0056-durable-execution-custom-for-the-mvp-temporal-after.md)).
+execution (resume, checkpoints, retries, the job queue) was the engine's own for the MVP; feature
+002 moved it to [Temporal](/components/temporal.md), as
+[ADR 0056](/decisions/0056-durable-execution-custom-for-the-mvp-temporal-after.md) planned (see
+"Shipped by feature 002" below).
 
 Shipped by Story 1:
 
@@ -170,9 +190,54 @@ Sources: [Feature 003 research](../../specs/003-one-command-start/research.md),
 [ADR 0063](/decisions/0063-ap-start-is-the-start-command-ap-up-unchanged.md),
 [ADR 0064](/decisions/0064-a-cached-digest-spares-the-reproducible-rebuild.md).
 
+Shipped by feature 002 ([spec](../../specs/002-durable-execution/spec.md)):
+
+- **Durable services**: [Temporal](/components/temporal.md)'s server (`durable`, all its services
+  in one process) and [PostgreSQL](/components/postgresql.md) (`durable-store`, its data on the
+  volume `durable-store`, which `ap down` keeps), pinned by digest; the schema job
+  (`durable-schema`) converges both databases before the server starts, and the engine registers
+  the namespace `ap` when it connects. `ap up` makes PostgreSQL's password once per install
+  ([ADR 0065](/decisions/0065-temporal-and-postgresql-in-compose.md),
+  [ADR 0070](/decisions/0070-engine-registers-the-namespace-password-folder-private.md)).
+- **A run is one workflow** (`src/engine/durable`): the engine's step rules as workflow code on
+  task queue `runs`; every call it makes (step workers, checks, the project worker, the record, the
+  reuse store) is an activity with a heartbeat. When the engine stops, the run continues by itself
+  once it is back, making only the interrupted attempt again with the same number and never an
+  accepted step twice; nobody types `resume`. Step worker registrations are kept in the engine
+  store, without tokens, so a run continues after an engine restart
+  ([ADR 0067](/decisions/0067-a-run-is-one-temporal-workflow.md),
+  [ADR 0071](/decisions/0071-step-worker-registrations-kept-in-the-engine-store.md)).
+- **The run record stays the engine's**, with its published schema unchanged: each event is
+  written once per sequence number by an idempotent activity, and Temporal holds IDs, hashes,
+  numbers and short reasons only, kept 24 h
+  ([ADR 0066](/decisions/0066-the-run-record-stays-the-engines.md)).
+- **Operations**: every state-changing request is recorded in the engine store with its request
+  body before its 202, then runs as a workflow named by the operation's ID on task queue
+  `operations`; after a stop its work is rebuilt from the record and the body, and its end is
+  written to the record. An ended operation stays followable 24 h; its Idempotency-Key is held 24 h
+  from acceptance. While Temporal cannot be reached, a state-changing request answers 503 with
+  `Retry-After` and writes nothing
+  ([ADR 0068](/decisions/0068-operations-recorded-then-run-as-workflows.md),
+  [ADR 0072](/decisions/0072-operation-request-bodies-kept-in-the-engine-store.md),
+  [ADR 0073](/decisions/0073-idempotency-key-held-24-h-from-acceptance.md)).
+- **One retry rule** (`src/retry`): capped exponential backoff with jitter, declared once in the
+  engine contract's `x-limits`, used by the workflows (with durable timers), the in-process
+  operations and the terminal client's resend wait; Temporal's own activity retries are off
+  ([ADR 0069](/decisions/0069-one-retry-rule-declared-in-the-engine-contract.md)).
+- **Erasing a slice** deletes its runs' and operations' workflows from Temporal, then their
+  operation records, then the slice from the engine store.
+
+Sources: [Feature 002 research](../../specs/002-durable-execution/research.md),
+[ADR 0065](/decisions/0065-temporal-and-postgresql-in-compose.md),
+[ADR 0066](/decisions/0066-the-run-record-stays-the-engines.md),
+[ADR 0067](/decisions/0067-a-run-is-one-temporal-workflow.md),
+[ADR 0068](/decisions/0068-operations-recorded-then-run-as-workflows.md),
+[ADR 0069](/decisions/0069-one-retry-rule-declared-in-the-engine-contract.md).
+
 Every container runs read-only with all capabilities dropped; the analyst, contract-lint, the check
 service and the workers run under [gVisor](/components/gvisor.md). Networks are internal and isolated: `clients`,
-`agents` (engine, gateway, step workers), `checks`, `lint` and `analyst` (engine, gateway). Only the
+`agents` (engine, gateway, step workers), `checks`, `lint` and `analyst` (engine, gateway), `durable` (engine, Temporal's server) and
+`durable-store` (the server, the schema job, PostgreSQL; feature 002). Only the
 gateway joins `egress`, and only the page's forwarder joins `page-host` to publish 127.0.0.1, or,
 with `ap up --listen`, the given address (feature 003).
 See [Compose](../../src/deploy/compose.yaml) and the [component list](/components/index.md).
@@ -212,4 +277,14 @@ Each further building block gets its own concept:
 - [ADR 0062: The run page is reached from other machines only over TLS behind a sign-in secret](/decisions/0062-run-page-reached-remotely-over-tls-behind-a-sign-in-secret.md)
 - [ADR 0063: ap start is the start command; ap up stays unchanged](/decisions/0063-ap-start-is-the-start-command-ap-up-unchanged.md)
 - [ADR 0064: A cached digest spares the reproducible candidate build when nothing changed](/decisions/0064-a-cached-digest-spares-the-reproducible-rebuild.md)
+- [ADR 0065: Temporal's server and PostgreSQL run in Compose, with a schema job that converges them](/decisions/0065-temporal-and-postgresql-in-compose.md)
+- [ADR 0066: The run record stays the engine's; Temporal keeps only execution state](/decisions/0066-the-run-record-stays-the-engines.md)
+- [ADR 0067: A run is one Temporal workflow running the engine's step rules](/decisions/0067-a-run-is-one-temporal-workflow.md)
+- [ADR 0068: An operation is recorded before it is acknowledged, then runs as a workflow](/decisions/0068-operations-recorded-then-run-as-workflows.md)
+- [ADR 0069: One retry rule, declared in the engine contract](/decisions/0069-one-retry-rule-declared-in-the-engine-contract.md)
+- [ADR 0070: The engine registers Temporal's namespace; the store's password file is private by its folder](/decisions/0070-engine-registers-the-namespace-password-folder-private.md)
+- [ADR 0071: Step worker registrations are kept in the engine store](/decisions/0071-step-worker-registrations-kept-in-the-engine-store.md)
+- [ADR 0072: An operation's request body is kept in the engine store, and its work is rebuilt from its record](/decisions/0072-operation-request-bodies-kept-in-the-engine-store.md)
+- [ADR 0073: An Idempotency-Key is held 24 h from acceptance; an ended operation stays followable 24 h after its end](/decisions/0073-idempotency-key-held-24-h-from-acceptance.md)
+- [ADR 0074: Long acceptance suites run once, split across parallel CI jobs](/decisions/0074-long-ci-suites-split-across-parallel-jobs.md)
 - ADRs 0005 to 0025: why each constitution principle exists, starting with [ADR 0005](/decisions/0005-principle-i-needs-before-solutions.md)
