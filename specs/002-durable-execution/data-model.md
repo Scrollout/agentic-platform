@@ -16,15 +16,15 @@ who writes the events and when:
   writing; other content under a taken `seq` is refused (`SeqTaken`), which the workflow treats as
   a defect and fails the run's operation.
 - A write of any event that fails for another reason (the engine store unavailable) is
-  back-pressure, never a defect: the workflow retries it by the declared retry rule, and then at
-  the rule's longest wait (`retry-longest-wait-ms`, with its jitter) until it is written (T058,
-  owner 2026-11-20). Each try adds about 6 history events, so an outage of about 3 days reaches
+  back-pressure, never a defect: the workflow retries it by the declared retry rule, and then
+  once a minute (`recordRetryEvery`, an internal value no client sees) until it is written (T058,
+  owner 2026-11-20). Each try adds about 6 history events, so an outage of about 6 days reaches
   Temporal's history limit (51,200 events, S10), which ends the workflow; the next rule then ends
   the run.
 - A run whose workflow closes with no end on the record (a defect: `SeqTaken`, `InvalidRun`, or
   Temporal ending the workflow) is ended by the engine's API, the record's only other writer, in
-  one place (`runs.closeIfFailed`), called by the run's operation on each poll and by `startRun`
-  before it answers `RunActive` (so a restart needs no sweep). It asks the durable service first
+  one place (`runs.closeIfFailed`), called by the run's operation on each poll and by `startRun`,
+  `resumeRun` and `replayRun` before they answer `RunActive` (so a restart needs no sweep). It asks the durable service first
   and only then reads the record again: when the workflow has closed and the record still has no
   end, it appends `RunCancelled` as the next `seq` with `detail` `the run's workflow failed:
   <reason>` (the failure's message, or `it closed with no end`), and the run's operation fails
