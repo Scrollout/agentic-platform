@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/agentic-platform/engine/api"
-	"github.com/agentic-platform/engine/api/gen"
 	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/api/workflowservice/v1"
@@ -67,17 +66,17 @@ func Operation(ctx workflow.Context, in OperationInput) error {
 		case err == nil:
 			return nil
 		case ctx.Err() != nil:
-			return endOperation(ctx, EndOperationInput{ID: in.ID, Status: string(gen.OperationStatusCancelled)})
+			return endOperation(ctx, EndOperationInput{ID: in.ID, Status: string(api.OperationCancelled)})
 		case isStop(err):
 			continue
 		case errType(err) != Retryable:
-			return endOperation(ctx, EndOperationInput{ID: in.ID, Status: string(gen.OperationStatusFailed), Detail: errText(err)})
+			return endOperation(ctx, EndOperationInput{ID: in.ID, Status: string(api.OperationFailed), Detail: errText(err)})
 		case try == rule.Retries:
-			return endOperation(ctx, EndOperationInput{ID: in.ID, Status: string(gen.OperationStatusFailed),
+			return endOperation(ctx, EndOperationInput{ID: in.ID, Status: string(api.OperationFailed),
 				Detail: fmt.Sprintf("failed after %d attempts: %s", try+1, errText(err))})
 		}
 		if err := workflow.Sleep(ctx, rule.Wait(try, random)); err != nil {
-			return endOperation(ctx, EndOperationInput{ID: in.ID, Status: string(gen.OperationStatusCancelled)})
+			return endOperation(ctx, EndOperationInput{ID: in.ID, Status: string(api.OperationCancelled)})
 		}
 		try++
 	}
@@ -102,7 +101,7 @@ func endOperation(ctx workflow.Context, in EndOperationInput) error {
 	if err := workflow.ExecuteActivity(dctx, EndOperation, in).Get(dctx, nil); err != nil {
 		return err
 	}
-	if in.Status == string(gen.OperationStatusCancelled) {
+	if in.Status == string(api.OperationCancelled) {
 		return temporal.NewCanceledError()
 	}
 	return nil
@@ -131,7 +130,7 @@ func (a *OperationActivities) DoOperation(ctx context.Context, id string) error 
 
 // EndOperation writes the end the workflow decided (Operator.End).
 func (a *OperationActivities) EndOperation(ctx context.Context, in EndOperationInput) error {
-	return a.Operator.End(ctx, in.ID, gen.OperationStatus(in.Status), in.Detail)
+	return a.Operator.End(ctx, in.ID, api.OperationStatus(in.Status), in.Detail)
 }
 
 // NewOperationsWorker is the worker of the task queue operations: the Operation workflow and its

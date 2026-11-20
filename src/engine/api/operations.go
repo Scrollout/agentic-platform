@@ -95,6 +95,15 @@ type OperationStart struct {
 	RejectDuplicate  bool
 }
 
+// OperationStatus is an operation's status as the engine contract names it; OperationFailed and
+// OperationCancelled are the ends an Operator's End writes.
+type OperationStatus = gen.OperationStatus
+
+const (
+	OperationFailed    = gen.OperationStatusFailed
+	OperationCancelled = gen.OperationStatusCancelled
+)
+
 // Operator does the work of an accepted operation, for the durable service's worker: Do does
 // what the request asked, from the operation's record and body, and writes its end; End writes
 // an end the workflow decided (its retries used up, or its cancellation). A repeat of Do finds
@@ -104,7 +113,7 @@ type Operator interface {
 	// be tried again by the retry rule, or ctx's error when ctx ended first.
 	Do(ctx context.Context, id string) error
 	// End writes the end: `failed` with detail, or `cancelled`.
-	End(ctx context.Context, id string, status gen.OperationStatus, detail string) error
+	End(ctx context.Context, id string, status OperationStatus, detail string) error
 }
 
 // OperationRecords keeps the operation records and their request bodies (ADR 0072);
