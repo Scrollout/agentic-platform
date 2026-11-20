@@ -15,6 +15,16 @@ who writes the events and when:
   seq, event)`. The store accepts each `seq` once: the same content again succeeds without
   writing; other content under a taken `seq` is refused (`SeqTaken`), which the workflow treats as
   a defect and fails the run's operation.
+- A write that fails for another reason (the engine store unavailable) is back-pressure, never a
+  defect: the workflow retries it by the declared retry rule and then once a minute until it is
+  written (T058, owner 2026-11-20).
+- A run whose workflow closes with no end on the record (a defect: `SeqTaken`, `InvalidRun`, or
+  Temporal ending the workflow) is ended by the run's operation: once the durable service says the
+  workflow has closed and the record still has no end, the engine appends `RunCancelled` with
+  `detail` `the run's workflow failed: <reason>` and the operation fails with that reason (T058,
+  owner 2026-11-20: no new outcome, so the contract does not change). Limit: an engine that is
+  down from that moment until the workflow's retention (24 h) has passed finds a run with no end
+  and no workflow, and its start check refuses it as it refuses feature 001's leftovers (R7).
 - A stop in the middle of a run adds two events, in this order, at the point where the run
   was: `RunInterrupted` with `detail` `the platform stopped`, then `RunResumed` with `detail`
   `continued after the platform stopped`. A developer's resume keeps feature 001's `RunResumed`
@@ -85,12 +95,12 @@ Package `src/engine/durable` holds the workflows and activities; the two ports `
 |------|------|-------|--------|
 | `Run` | workflow, queue `runs`, ID `RUN-<n>` | run ID, slice, project, pattern, inputs' hashes, `replay_of` | outcome |
 | `Operation` | workflow, queue `operations`, ID `OP-<n>` | operation ID, kind, target | succeeded, or the error's code and reason |
-| `CallWorker` | activity | run, step, attempt, round, the step's inputs by hash | artifacts by hash, usage, running time, or `WorkersNotReady`, `ModelUnavailable` |
-| `RunCheck` | activity | run, step, attempt, check name, artifacts by hash | passed, reason, findings by hash, running time |
+| `CallWorker` | activity | run, step, attempt, round, the step's inputs by hash | artifacts by hash, usage, running time; a failed attempt is a result too: its reason (`Failure`) with what it used and how long it ran (T057); or `WorkersNotReady`, `ModelUnavailable` |
+| `RunCheck` | activity | run, step, attempt, check name, artifacts by hash | passed, reason, findings by hash, running time; a check that could not run is a result too: its reason (`Failure`) with its running time (T057) |
 | `RestoreProject`, `CommitStep` | activity | project, run, step, round, attempt, the stamp's fields | done, running time |
 | `LookupReuse`, `PutResult` | activity | reuse key | the reused result by hash, or none |
 | `RecordEvent` | activity | slice, run, seq, event | done, or `SeqTaken` |
-| `Runs` (the API's port) | Go interface | `Start(run)`, `Signal(run, name)`, `Cancel(run)`, `Exists(run)`, `Delete(id)` | errors `Unavailable`, `NotFound` |
+| `Runs` (the API's port) | Go interface | `Start(run)`, `Signal(run, name)`, `Cancel(run)`, `Exists(run)`, `Closed(run)` (whether the workflow has closed, and its failure's reason; T058), `Delete(id)` | errors `Unavailable`, `NotFound` |
 | `Operations` (the API's port) | Go interface | `Start(op)`, `Describe(op)`, `Cancel(op)`, `Delete(op)` | status, progress, error; `Unavailable`, `NotFound` |
 
 Signals: `workers-ready`, `resume`, `accept-hand-over`, `cancel`. The API tests fake `Runs` and
