@@ -154,7 +154,8 @@ questions on 2026-11-19.
     effects).
   - The operation's status, progress and outcome are read from Temporal (`DescribeWorkflowExecution`
     and a query). An ended operation can be followed while its record is kept: 24 h, the
-    namespace's retention and `x-limits.idempotency-key-retention-hours` (one value).
+    namespace's retention and `x-limits.idempotency-key-retention-hours` (one value), counted
+    from the end for the record and from acceptance for the key (data model).
   - Idempotency keys survive a stop: the record holds the key's hash, so a resent request finds
     the same operation (FR-009); a different body under a kept key is still 409.
   - IDs never repeat across stops (FR-011): the sequence is durable before an ID is given.

@@ -185,7 +185,7 @@ feature 001 passes on this feature.
 - T001 → everything. T002 → T003 to T005, T011. Foundational (T003 to T011) → every story.
   T003 → T004 → T005's judgement and T006; T007 → T008; T009 → T010; T011 needs T004's service
   definitions.
-- US1 (T012 to T021) first. US2 (T022 to T027) after T018, since both change `src/engine/api`
+- US1 (T012 to T021) first. US2 (T022 to T027, T060, T061) after T018, since both change `src/engine/api`
   and the engine's start; T022 may be written alongside US1. US3 (T028 to T030) after T025, since
   erasure deletes operation records. Polish (T031 to T033) last.
 - Within a story: tests (seen failing) → code → existing-test changes approved by the owner →
@@ -195,6 +195,12 @@ feature 001 passes on this feature.
   likewise before T020 and T021's push. T040 is decided by the owner (done, or the plan's
   Exceptions row kept) before T021's converge.
 - T055 and T060 after T025 (one unit at a time on the host); T060 before T027's push.
+- T061 is decided with T027's review, not a gate for its push: each case becomes a task for a
+  new test file, or T061 is checked `closed: <reason>` or copied to `specs/backlog.md`.
+- Reconciliation (analyze round 19, 2026-11-20): T023's brief says a key is no longer held 24 h
+  after the operation ended; the rule is 24 h from `accepted_at` (data model, 7458093; the
+  contract's "from the first request"), judged by `TestIdempotencyKeyIsKeptFor24Hours`. The record
+  stays followable until 24 h after its end.
 - One unit at a time on the host; Docker work in CI or on the VM.
 
 ## Parallel Opportunities
