@@ -477,7 +477,7 @@ The planted-failure scenarios are test harness code in `src/tests/`, run with th
 Another name exits 3 with `test: unknown suite <name>; the suites are planted, us2`. `test planted <scenario>` runs only that scenario's 3 trials, so CI can run the scenarios
 on parallel runners (ADR 0074); its output is the same lines for that one scenario, and the total
 counts it alone (`planted: 1 of 1 scenarios stopped in 3 out of 3 trials`). A scenario name that
-is not made of lowercase letters, digits and hyphens, a second argument, or a scenario given to
+is not words of lowercase letters and digits joined by single hyphens (`^[a-z0-9]+(-[a-z0-9]+)*$`), a second argument, or a scenario given to
 `us2` exits 3; a well-formed name that is no scenario of the suite runs no test and exits 1 with
 `test: no test of the planted suite ran`. For `planted`,
 standard output has one line per trial and one per scenario, then a total, for example:
