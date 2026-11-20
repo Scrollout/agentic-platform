@@ -28,7 +28,7 @@ launcher's Compose changes
 (`postgres:16-alpine`); everything else as feature 001
 
 **Storage**: the engine store as feature 001 (run record, artifacts, slices) plus
-`operations/OP-<n>.json`, `operation-sequence.json` and `workers.json` (step worker registrations, ADR 0071); Temporal's state in PostgreSQL (volume
+`operations/OP-<n>.json` with its request body `operations/OP-<n>.body` (ADR 0072), `operation-sequence.json` and `workers.json` (step worker registrations, ADR 0071); Temporal's state in PostgreSQL (volume
 `durable-store`) ([data model](data-model.md))
 
 **Testing**: Go `testing` with Temporal's `testsuite` (workflow unit tests, time skipping) and
@@ -95,6 +95,7 @@ Each decision that outlives this feature has a record in `docs/decisions/`, link
 | The run record stays the engine's, with its schema; Temporal keeps only execution state, and every event is written by an idempotent activity (owner, 2026-11-19) | R2 | [ADR 0066](../../docs/decisions/0066-the-run-record-stays-the-engines.md) |
 | A run is one workflow running the engine's step rules; every call is an activity with a heartbeat; a stop repeats only the interrupted attempt and the run continues by itself | R3 | [ADR 0067](../../docs/decisions/0067-a-run-is-one-temporal-workflow.md) |
 | An operation is recorded in the engine store before it is acknowledged, then runs as a workflow with the operation's ID; the record keeps its ID and Idempotency-Key for 24 h | R4 | [ADR 0068](../../docs/decisions/0068-operations-recorded-then-run-as-workflows.md) |
+| An operation's request body is kept beside its record in the engine store, its work is rebuilt from both after a stop, and its end is written to the record (owner, 2026-11-20, found before T022) | R4 | [ADR 0072](../../docs/decisions/0072-operation-request-bodies-kept-in-the-engine-store.md) |
 | Step worker registrations are kept in the engine store (endpoint and grant hash, no token), so a run continues by itself after an engine restart (owner, 2026-11-19, found by T014 in CI) | R10 | [ADR 0071](../../docs/decisions/0071-step-worker-registrations-kept-in-the-engine-store.md) |
 | One retry rule, declared in the engine contract's `x-limits` and applied by `src/retry` with durable timers, replaces Temporal's unjittered activity retries and the three hand-written forms (owner, 2026-11-19) | R5 | [ADR 0069](../../docs/decisions/0069-one-retry-rule-declared-in-the-engine-contract.md) |
 
@@ -112,7 +113,7 @@ tool or agent context; no untrusted content enters a model's context through thi
 | PostgreSQL | ✓ | ✓ | | ✓ | ✓ | | ASI03 | Only on `durable-store`, joined by the server and the schema job; password made by `ap` per install (file mode 644 in its own mode-700 folder in the state folder, R1), passed by Compose from that file; runs as 70:70, no capabilities |
 | Workflow histories | | ✓ | | ✓ | | | LLM02 sensitive information disclosure | Hold IDs, hashes, numbers and short reasons only (R2); retention 24 h; deleted with the slice (R8); no payload codec needed because nothing protected is in them |
 | Engine's Temporal worker | | ✓ | ✓ | | ✓ | | ASI08 cascading failures | Activities are the engine's own calls with their feature 001 limits; heartbeat timeouts bound a lost call; one run at a time |
-| Operation records | | ✓ | ✓ | ✓ | | | — | In the engine store (mode 700 volume), atomic writes; keys stored as SHA-256 only |
+| Operation records and request bodies | | ✓ | ✓ | ✓ | | | LLM02 | In the engine store (mode 700 volume, only the engine mounts it), atomic writes; keys stored as SHA-256 only; the request body (protected content, as the slice it changes) stays in the runtime plane, never in Temporal, and is removed with its record 24 h after the operation ends or when its slice is erased (ADR 0072, FR-016, FR-017) |
 | Step worker registrations (`workers.json`) | ✓ | ✓ | | ✓ | | | LLM02, ASI03 | In the engine store (mode 700 volume, only the engine mounts it), atomic writes; holds the endpoint and the SHA-256 naming the grant file, never a token; the call token is read from the grant file the launcher owns, so a removed grant means not registered; `registerWorker` needs that worker's token and the contract checks the endpoint's shape (ADR 0071) |
 | Retry rule | | | | | ✓ | | LLM10 | Capped exponential backoff with jitter, at most 3 retries (S15) |
 | Images | ✓ | ✓ | | | | | LLM03 supply chain | Pinned by digest in `images.lock`; no signature available upstream (Scorecard Signed-Releases 0), so the digest is the check, as for nginx and cosign |
@@ -140,7 +141,7 @@ src/
 ├── retry/                         # new module: the retry rule's Wait(n, random); go.work and an archfile
 ├── engine/
 │   ├── api/preview/2026-11-12-preview/openapi.yaml   # x-limits retry values, 503 UnavailableProblem, operation retention text
-│   ├── api/operations.go          # operation record and outbox; status from the workflow; backoff removed
+│   ├── api/operations.go          # operation record, body and outbox; DoOperation's work; status from the record; backoff removed
 │   ├── api/runs.go                # start, resume, cancel and hand-over through workflows and signals
 │   ├── api/durable.go             # the ports the durable service implements (Runs; Operations with US2)
 │   ├── durable/                   # new: the run workflow (the step rules), Temporal client and worker, task queues, the activities

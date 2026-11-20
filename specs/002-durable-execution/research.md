@@ -145,7 +145,8 @@ questions on 2026-11-19.
   - A state-changing request first writes its operation record to the engine store, in one
     atomic write (as `run-sequence.json` is): `OP-<n>` from a durable `operation-sequence.json`,
     the kind, the target, the Idempotency-Key's hash with the request body's hash, and the time.
-    Only then does the engine answer 202 (FR-008). A failure before that answers 503 `Unavailable`
+    The engine answers 202 only after that record (FR-008) and the workflow's start below (amended
+    2026-11-20). A failure before that answers 503 `Unavailable`
     with `Retry-After`, a retryable error the [engine contract](../../src/engine/api/preview/2026-11-12-preview/openapi.yaml) gains.
   - The engine then starts the operation's workflow, ID = the operation ID, on the task queue
     `operations`, with `RejectDuplicate`. At start the engine starts the workflow of every
@@ -159,6 +160,19 @@ questions on 2026-11-19.
   - IDs never repeat across stops (FR-011): the sequence is durable before an ID is given.
   - A run's operation is the workflow that starts or resumes it; it ends when the run ends, as
     in feature 001.
+  - **Amended 2026-11-20 (owner, found before T022; ADR 0072)**: the record alone cannot redo
+    the work after a stop (`createSlice` needs its description, `replaceRules` its rules), and
+    FR-016 keeps request bodies out of Temporal. So the request body is kept beside the record in
+    the engine store (`operations/OP-<n>.body`), with the record's retention and erasure; the
+    workflow's one activity, `DoOperation`, rebuilds the work from the record and the body, and
+    every step of the work is safe to repeat. The end (status, result, error) is written to the
+    record once, so Temporal holds no outcome text and ended operations are read without it. A
+    workflow that cannot be started removes the record and answers 503, so nothing is accepted.
+    Answers under a key that created no operation stay in memory, as in feature 001, and a 503 is
+    never kept. The [data model](data-model.md) holds the whole design.
+    Rejected: an unfinished operation ends `failed` after a stop (no body kept): simpler, but
+    US2's acceptance scenario 2 (retries continue after a stop) and the outbox would not hold for
+    slice operations; the body inside Temporal's input: FR-016.
 - **Why**: Temporal's ID policies protect a workflow ID only for the retention period (S8), and
   the contract's `OP-<n>` and its 24 h key window are client-visible facts (Principle XV), so the
   ID and the key live in the engine's store; the queue, retries, progress and cancellation are
@@ -201,7 +215,7 @@ questions on 2026-11-19.
 
 - **Decision**: the engine starts after `durable` is healthy (Compose `depends_on`). While Temporal
   is unreachable, every state-changing request answers 503 `Unavailable` with `Retry-After`
-  before anything is recorded (US2 AC4), and the reads of slices, runs, events, artifacts and
+  and nothing is accepted (US2 AC4; an operation record written for it is removed, R4), and the reads of slices, runs, events, artifacts and
   comparisons are served from the engine store as before. `registerWorker`, which signals the
   run waiting for its workers, is one of those state-changing requests (analyze round 3). `ap up` waits for the engine's
   readiness as today; the engine is ready once its Temporal worker is connected.
