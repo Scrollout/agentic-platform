@@ -22,7 +22,8 @@ import test_workflows as wfx  # noqa: E402
 REPO = HERE.parent.parent
 ACTION = "mikepenz/action-junit-report@"
 KEYS = ("skip_success_summary", "require_tests")
-EXPECTED_JOBS = {"go", "docker", "py-tests"}
+EXPECTED_JOBS = {"go", "docker", "py-tests", "stop-points-agent-step", "stop-points-procedure-step",
+                 "stop-points-review-round", "stop-points-version-history-commit"}
 
 
 def report_jobs(wf):

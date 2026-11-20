@@ -355,9 +355,14 @@ def named(inst, func):
         return None, None
     if len(sel.run) == 1:
         return None, None
-    if len(sel.run) > 2 or not re.fullmatch(r"\^([a-z0-9-]+)\$", sel.run[1]):
+    # `^<name>$`, or `^(uninterrupted|<name>)$`: each stop-point trial needs the `uninterrupted`
+    # baseline subtest, a setup that may run in every stop-point job and is no unit (ADR 0074).
+    m = re.fullmatch(r"\^([a-z0-9-]+)\$", sel.run[1]) if len(sel.run) == 2 else None
+    if m is None and func == "TestStopPoints" and len(sel.run) == 2:
+        m = re.fullmatch(r"\^\(uninterrupted\|([a-z0-9-]+)\)\$", sel.run[1])
+    if m is None:
         return None, "%s: cannot read a name from -test.run %r" % (inst.label, sel.run_text)
-    return sel.run[1][1:-1], None
+    return m.group(1), None
 
 
 def judge(model, insts, errors):
@@ -573,8 +578,10 @@ class RealResolver:
             if pkg in out:
                 raise Unreadable("`%s %s` ran the %s binary twice" % (kind, " ".join(args), pkg))
             out[pkg] = selection_from_argv(x["argv"])
-        if kind == "check" and set(out) != set(PKGS):
-            raise Unreadable("`check.sh %s` ran the binaries of %s, not all of %s" % (" ".join(args), sorted(out), list(PKGS)))
+        # With AP_ACCEPTANCE_RUN set, check.sh runs only the acceptance binary (ADR 0074).
+        want = {"acceptance"} if kind == "check" and env.get("AP_ACCEPTANCE_RUN") else set(PKGS)
+        if kind == "check" and set(out) != want:
+            raise Unreadable("`check.sh %s` ran the binaries of %s, not %s" % (" ".join(args), sorted(out), sorted(want)))
         RealResolver.memo[key] = out
         return out
 
@@ -1000,8 +1007,8 @@ class RealSplitTest(unittest.TestCase):
 
     def test_planted_check_sh_that_skips_a_package_fails_the_no_arguments_check(self):
         text = CHECK_SH.read_text()
-        self.assertIn("for p in recorded lint acceptance contract; do", text)
-        v = no_args_violations(text.replace("for p in recorded lint acceptance contract; do", "for p in recorded lint acceptance; do"), False)
+        self.assertIn('suites="recorded lint acceptance contract"', text)
+        v = no_args_violations(text.replace('suites="recorded lint acceptance contract"', 'suites="recorded lint acceptance"'), False)
         self.assertTrue(messages(v, "contract"), v)
 
     # planted changes of the real workflow and sources (new violation required)
