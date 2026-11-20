@@ -299,6 +299,10 @@ func (f *front) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	request := sha256.Sum256([]byte(r.Method + " " + r.URL.Path + "\x00" + string(body)))
 	if op.lists("503", "Unavailable") { // a state change: nothing is accepted while the durable service does not answer
+		// A state change the engine has read is answered on its merits: a client that closes its
+		// sending side after the body (as `nc` does) must not cancel it half-way. Each call it
+		// makes is bounded by its own timeout (T062).
+		r = r.WithContext(context.WithoutCancel(r.Context()))
 		if err := f.ops.durable.Ready(r.Context()); err != nil {
 			_ = unavailableFor(err).write(w)
 			return

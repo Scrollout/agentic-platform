@@ -2,6 +2,7 @@
 
 ## 2026-11-20
 
+* **Fix**: Feature 002, T062 (CI run 44751692832, e2e): a state-changing request the engine has read is answered on its merits even when its client closes its sending side after the body, as `ap`'s `nc` does for `registerWorker`; before, the durable service's check ran on the cancelled request context and answered 503. Test by a separate author (`half_closed_client_test.go`).
 * **Fix**: Feature 002, T060 (T021 review R2-1, owner 2026-11-20): a run whose workflow closes before it records `RunStarted` (for example `InvalidRun`) is ended as never started: nothing is recorded, it blocks no other start, and its operation ends `failed` with the workflow's reason. Test by a separate author (`run_failed_before_start_test.go`); no contract change.
 * **Fix**: Feature 002, T055 (owner, 2026-11-20): `WorkersNotReady` now means only that the step worker's own call (an agent's `Ask`, a procedure's `RunProcedure`) got no complete answer; the same failure of another call inside an attempt (`readStepFiles`, the store, approved parts, a stored input) is an ordinary failed attempt with its usage. Test by a separate author (`worker_own_calls_test.go`).
 * **Decision**: Feature 002, analyze round 19: an Idempotency-Key is held 24 h from its operation's acceptance (the contract's window), while the operation stays followable until 24 h after its end ([ADR 0073](/decisions/0073-idempotency-key-held-24-h-from-acceptance.md), correcting ADR 0068's key clause). Plan, research R4 and tasks follow.
