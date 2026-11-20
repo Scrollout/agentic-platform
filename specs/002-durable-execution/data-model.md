@@ -15,16 +15,25 @@ who writes the events and when:
   seq, event)`. The store accepts each `seq` once: the same content again succeeds without
   writing; other content under a taken `seq` is refused (`SeqTaken`), which the workflow treats as
   a defect and fails the run's operation.
-- A write that fails for another reason (the engine store unavailable) is back-pressure, never a
-  defect: the workflow retries it by the declared retry rule and then once a minute until it is
-  written (T058, owner 2026-11-20).
+- A write of any event that fails for another reason (the engine store unavailable) is
+  back-pressure, never a defect: the workflow retries it by the declared retry rule, and then at
+  the rule's longest wait (`retry-longest-wait-ms`, with its jitter) until it is written (T058,
+  owner 2026-11-20). Each try adds about 6 history events, so an outage of about 3 days reaches
+  Temporal's history limit (51,200 events, S10), which ends the workflow; the next rule then ends
+  the run.
 - A run whose workflow closes with no end on the record (a defect: `SeqTaken`, `InvalidRun`, or
-  Temporal ending the workflow) is ended by the run's operation: once the durable service says the
-  workflow has closed and the record still has no end, the engine appends `RunCancelled` with
-  `detail` `the run's workflow failed: <reason>` and the operation fails with that reason (T058,
-  owner 2026-11-20: no new outcome, so the contract does not change). Limit: an engine that is
-  down from that moment until the workflow's retention (24 h) has passed finds a run with no end
-  and no workflow, and its start check refuses it as it refuses feature 001's leftovers (R7).
+  Temporal ending the workflow) is ended by the engine's API, the record's only other writer, in
+  one place (`runs.closeIfFailed`), called by the run's operation on each poll and by `startRun`
+  before it answers `RunActive` (so a restart needs no sweep). It asks the durable service first
+  and only then reads the record again: when the workflow has closed and the record still has no
+  end, it appends `RunCancelled` as the next `seq` with `detail` `the run's workflow failed:
+  <reason>` (the failure's message, or `it closed with no end`), and the run's operation fails
+  with code `OperationFailed` and that detail. A write that finds the `seq` taken reads the record
+  again and stops if it has an end. The contract keeps its four outcomes; its `RunOutcome` and
+  `Operation` text say that `cancelled` also means this (T058, owner 2026-11-20). Limit: an
+  engine that is down from that moment until the workflow's retention (24 h) has passed finds a
+  run with no end and no workflow, and its start check refuses it as it refuses feature 001's
+  leftovers (R7).
 - A stop in the middle of a run adds two events, in this order, at the point where the run
   was: `RunInterrupted` with `detail` `the platform stopped`, then `RunResumed` with `detail`
   `continued after the platform stopped`. A developer's resume keeps feature 001's `RunResumed`
@@ -95,8 +104,8 @@ Package `src/engine/durable` holds the workflows and activities; the two ports `
 |------|------|-------|--------|
 | `Run` | workflow, queue `runs`, ID `RUN-<n>` | run ID, slice, project, pattern, inputs' hashes, `replay_of` | outcome |
 | `Operation` | workflow, queue `operations`, ID `OP-<n>` | operation ID, kind, target | succeeded, or the error's code and reason |
-| `CallWorker` | activity | run, step, attempt, round, the step's inputs by hash | artifacts by hash, usage, running time; a failed attempt is a result too: its reason (`Failure`) with what it used and how long it ran (T057); or `WorkersNotReady`, `ModelUnavailable` |
-| `RunCheck` | activity | run, step, attempt, check name, artifacts by hash | passed, reason, findings by hash, running time; a check that could not run is a result too: its reason (`Failure`) with its running time (T057) |
+| `CallWorker` | activity | run, step, attempt, round, the step's inputs by hash | artifacts by hash, usage, running time; a call that fails is a result too: the field `Failure` holds the reason, with the model, usage and running time it reports, and the attempt fails as before (T057); `WorkersNotReady` and `ModelUnavailable` stay errors that add nothing (T050) |
+| `RunCheck` | activity | run, step, attempt, check name, artifacts by hash | passed, reason, findings by hash, running time; a check that could not run is a result too: `Failure` holds the reason, with its running time; it is a failed check, as before (T057) |
 | `RestoreProject`, `CommitStep` | activity | project, run, step, round, attempt, the stamp's fields | done, running time |
 | `LookupReuse`, `PutResult` | activity | reuse key | the reused result by hash, or none |
 | `RecordEvent` | activity | slice, run, seq, event | done, or `SeqTaken` |

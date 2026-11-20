@@ -128,10 +128,11 @@ questions on 2026-11-19.
   together with a durable 14-day timer from the hand-over (S7; FR-004). A `resume` after a
   hand-over starts the resumed step's attempts from 1 (owner).
 - **Defects and a store that does not answer** (T058, owner 2026-11-20): a record write that fails
-  is retried by the declared rule and then once a minute until written (back-pressure, Principle
-  X); a workflow that closes with no end on the record is ended by its operation with
-  `RunCancelled`, detail `the run's workflow failed: <reason>`, and the operation fails; the
-  contract keeps its four outcomes ([data model](data-model.md), Run record).
+  is retried by the declared rule and then at its longest wait until written (back-pressure,
+  Principle X; bounded by Temporal's history limit after about 3 days); a workflow that closes
+  with no end on the record is ended by the API with `RunCancelled`, detail `the run's workflow
+  failed: <reason>`, and the operation fails; the contract keeps its four outcomes and says so in
+  its text ([data model](data-model.md), Run record).
 - **Cancel**: `cancelRun` and cancelling the run's operation request the workflow's cancellation;
   the workflow records `RunCancelled` and ends.
 - **Rejected**: one workflow per step (more histories, no gain); Temporal's activity retry

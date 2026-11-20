@@ -52,6 +52,17 @@ feature keeps except where a requirement below changes it.
   project's restore and commit; only when every retry fails does the run wait for its workers as
   before (owner, 2026-11-19).
 
+### Session 2026-11-20
+
+- Q: A failed step worker call or a check that could not run spent tokens, cost or time; do the
+  budgets count it (feature 001's did)? → A: Yes, as in feature 001 (FR-014; owner, from the
+  US1 review, T057).
+- Q: The engine store does not take a run's event, or the platform cannot carry a run on (a
+  defect); how does the run end, with no new outcome in the contract? → A: a write that fails is
+  retried until it is written; a run the platform cannot carry on ends `cancelled`, its detail
+  beginning `the run's workflow failed:` with the reason, and its operation fails (owner, from
+  the US1 review, T058).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A run survives a platform stop (Priority: P1)
@@ -151,6 +162,9 @@ feature 001 passes on this feature's code.
 
 ### Edge Cases
 
+- The engine store does not take a run's event for a while: the run waits and the write is made
+  again until it is taken; nothing is lost. A run the platform cannot carry on (a defect) ends
+  `cancelled` with the reason in its detail, and its operation fails (FR-006; T058).
 - The platform stops during a step attempt: the attempt's partial writes are undone before the
   attempt is made again; the interrupted attempt does not count as failed (FR-003).
 - The platform stops while a check is running: the check runs again; a check that cannot run

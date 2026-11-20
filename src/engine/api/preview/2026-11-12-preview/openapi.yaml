@@ -1473,6 +1473,7 @@ components:
       type: object
       description: Long-running work. A `run` operation lasts from the start of its run until the run
         ends, and succeeds whatever the run's outcome, except `cancelled`; the outcome is on the run.
+        When the platform could not carry the run on, the operation fails with the run's reason.
       required:
       - id
       - kind
@@ -1575,7 +1576,8 @@ components:
       description: >-
         `done` when every step is accepted; `handed-over` when the developer accepted the hand-over;
         `expired` when the run waited 14 days for the developer; `cancelled` when its operation was
-        cancelled.
+        cancelled, or when the platform could not carry the run on (its `RunCancelled` detail
+        begins `the run's workflow failed:` and says why; its operation then fails).
       enum:
       - done
       - handed-over
