@@ -249,8 +249,8 @@ func (w *worker) Run(ctx context.Context, r machine.Request) (machine.Result, er
 		return machine.Result{}, fmt.Errorf("step %s has worker %q, neither agent:<name> nor procedure:<name>", r.Step.Name, r.Step.Worker)
 	}
 	switch {
-	case err != nil && ctx.Err() == nil && unreachable(err):
-		return res, marked{err, machine.ErrWorkersNotReady} // the step's worker is not running
+	case errors.Is(err, machine.ErrWorkersNotReady):
+		return res, err // the step worker's own call got no complete answer (ownCall)
 	case errors.Is(err, agentcall.ErrAgentFailed):
 		return res, marked{err, machine.ErrModelUnavailable}
 	case err != nil:
@@ -266,12 +266,25 @@ type marked struct{ err, kind error }
 func (m marked) Error() string   { return m.err.Error() }
 func (m marked) Unwrap() []error { return []error{m.err, m.kind} }
 
+// ownCall classifies the error of the step worker's own call (an agent's Ask, a procedure's
+// RunProcedure), right where that call returns: when the call got no complete answer
+// (unreachable) and the caller has not given up (ctx), it also matches
+// machine.ErrWorkersNotReady. A call to any other service inside an attempt (readStepFiles at the
+// check service, Config.Approved, Load, Store) is never classified, so its failure stays an
+// ordinary rejected attempt.
+func ownCall(ctx context.Context, err error) error {
+	if ctx.Err() == nil && unreachable(err) {
+		return marked{err, machine.ErrWorkersNotReady} // the step's worker is not running
+	}
+	return err
+}
+
 // unreachable reports whether err is a call that got no complete answer from the worker: the
 // HTTP exchange itself failed (the host unknown, the connection refused, no response headers in
 // time, bytes that are no HTTP response, the connection reset or closed), the answer's body was
 // cut, or an agent's stream ended without stream_stopped, as when the step's container is not
 // running or restarts during the call (research R10). An answer the worker gave, whatever its
-// status, is not. The caller giving up is told apart by Run, from its own context.
+// status, is not. The caller giving up is told apart by ownCall, from its own context.
 func unreachable(err error) bool {
 	var ue *url.Error
 	return errors.As(err, &ue) ||
@@ -299,7 +312,7 @@ func (w *worker) agent(ctx context.Context, r machine.Request, agent, url, token
 	// from here on, every failure returns what the session used, so the budgets count it
 	spent := machine.Result{Model: ans.Model, Usage: machine.Usage{Tokens: ans.Tokens, CostUSD: ans.CostUSD}}
 	if err != nil {
-		return spent, fmt.Errorf("agent %s: %w", agent, err)
+		return spent, fmt.Errorf("agent %s: %w", agent, ownCall(ctx, err))
 	}
 	if ans.Model != want {
 		return spent, fmt.Errorf("agent %s used model %s, not the pinned %s", agent, ans.Model, want)
@@ -484,7 +497,7 @@ func (w *worker) procedure(ctx context.Context, r machine.Request, name, url, to
 		Run: cc.Run, Project: cc.Project, Step: cc.Step, Attempt: cc.Attempt, Round: cc.Round, Before: cc.Before,
 		TimeLimitSeconds: cc.TimeLimitSeconds, Inputs: inputs})
 	if err != nil {
-		return machine.Result{}, fmt.Errorf("runProcedure %s: %w", name, err)
+		return machine.Result{}, fmt.Errorf("runProcedure %s: %w", name, ownCall(ctx, err))
 	}
 	if resp.StatusCode() != http.StatusOK || resp.JSON200 == nil {
 		return machine.Result{}, fmt.Errorf("runProcedure %s: %s", name, refusal(resp.StatusCode(), resp.Body))
