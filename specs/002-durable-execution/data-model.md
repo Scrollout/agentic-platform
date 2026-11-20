@@ -29,7 +29,10 @@ who writes the events and when:
   end, it appends `RunCancelled` as the next `seq` with `detail` `the run's workflow failed:
   <reason>` (the failure's message, or `it closed with no end`), and the run's operation fails
   with code `OperationFailed` and that detail. A write that finds the `seq` taken reads the record
-  again and stops if it has an end. The contract keeps its four outcomes; its `RunOutcome` and
+  again and stops if it has an end. A workflow that closed before it recorded `RunStarted` (for
+  example `InvalidRun`) leaves no record: the run is ended as never started, nothing is written,
+  it no longer counts as active, `getRun` answers `NotFound` as for any run with no record, and
+  its operation fails with that detail (T060; owner, 2026-11-20, no contract change). The contract keeps its four outcomes; its `RunOutcome` and
   `Operation` text say that `cancelled` also means this (T058, owner 2026-11-20). Limit: an
   engine that is down from that moment until the workflow's retention (24 h) has passed finds a
   run with no end and no workflow, and its start check refuses it as it refuses feature 001's
