@@ -169,7 +169,8 @@ feature 001 passes on this feature's code.
   again until it is taken; nothing is lost. A run the platform cannot carry on (a defect) ends
   `cancelled` with the reason in its detail, and its operation fails (FR-006; T058).
 - The platform stops during a step attempt: the attempt's partial writes are undone before the
-  attempt is made again; the interrupted attempt does not count as failed (FR-003).
+  attempt is made again; the interrupted attempt does not count as failed (FR-003). An agent call
+  cut off by its step worker dying reports no usage, so its spend is not counted (FR-003's limit).
 - The platform stops while a check is running: the check runs again; a check that cannot run
   still counts as failed (FR-012 of feature 001).
 - The model is unavailable on every attempt of a step: the run is interrupted with that reason,
@@ -210,7 +211,7 @@ feature 001 passes on this feature's code.
   (owner, 2026-11-20): an agent call cut off because its step worker died, or that got no
   complete answer, reports no usage, so what it spent is not counted, and such a call is not a
   failed attempt: it is bounded by the retry rule's 3 retries and then the wait for the step
-  workers, again after each rebuild of them.
+  workers, again after each rebuild of them. The token and cost budgets bound counted spend only.
 - **FR-004**: A run waiting for the developer MUST keep waiting across a stop, and MUST expire 14
   days after its hand-over.
 - **FR-005**: After the platform is up again, a run interrupted by the stop MUST continue by

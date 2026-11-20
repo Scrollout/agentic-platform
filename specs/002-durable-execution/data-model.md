@@ -181,7 +181,7 @@ Package `src/engine/durable` holds the workflows and activities; the two ports `
 | Name | Kind | Input | Result |
 |------|------|-------|--------|
 | `Run` | workflow, queue `runs`, ID `RUN-<n>` | run ID, slice, project, pattern, inputs' hashes, `replay_of` | outcome |
-| `CallWorker` | activity | run, step, attempt, round, the step's inputs by hash | artifacts by hash, usage, running time; a call that fails is a result too: the field `Failure` holds the reason, with the model, usage and running time it reports, and the attempt fails as before (T057); `WorkersNotReady` and `ModelUnavailable` stay errors that add nothing (T050) |
+| `CallWorker` | activity | run, step, attempt, round, the step's inputs by hash | artifacts by hash, usage, running time; a call that fails is a result too: the field `Failure` holds the reason, with the model, usage and running time it reports, and the attempt fails as before (T057); `WorkersNotReady` and `ModelUnavailable` stay errors that add nothing, so a call cut off by its worker dying counts no usage (FR-003's limit, T050) |
 | `RunCheck` | activity | run, step, attempt, check name, artifacts by hash | passed, reason, findings by hash, running time; a check that could not run is a result too: `Failure` holds the reason, with its running time; it is a failed check, as before (T057) |
 | `RestoreProject`, `CommitStep` | activity | project, run, step, round, attempt, the stamp's fields | done, running time |
 | `LookupReuse`, `PutResult` | activity | reuse key | the reused result by hash, or none |

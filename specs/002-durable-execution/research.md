@@ -122,7 +122,7 @@ questions on 2026-11-19.
 - **Budgets**: each activity returns how long it ran, and a step worker call or check that fails
   returns it too, with what the call used (feature 001's driver counted both; T057); the time budget sums these durations, so
   downtime and waits for workers or the developer never count (spec Assumptions). Rounds, tokens,
-  cost and attempts are workflow state, so a stop grants nothing new (FR-003).
+  cost and attempts are workflow state, so a stop grants nothing new (FR-003). Exception: an agent call cut off by its worker dying reports no usage (FR-003's limit, R10).
 - **Waiting for the developer**: a hand-over or an interruption for another reason (the model
   unavailable on every attempt) waits for the signal `resume`, `accept-hand-over` or `cancel`,
   together with a durable 14-day timer from the hand-over (S7; FR-004). A `resume` after a

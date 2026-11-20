@@ -54,7 +54,7 @@ Temporal's state (FR-016)
 
 *Evaluated before research and again after design: PASS with the Complexity Tracking rows below.
 Feature 001's approved exceptions (II, V, XI partial, XII, XIII partial, XVI partial) still apply
-to the platform; this feature closes its Principle VI exception and its Single-owner exception,
+to the platform; this feature closes its Principle VI exception and the retry-wait part of its Single-owner exception,
 and extends its Principle V exception to the two added services.*
 
 | Principle | Status | How this plan complies |
@@ -188,7 +188,7 @@ backlog: it is not this feature's decision.
 
 | Rule | Location | Reason |
 |------|----------|--------|
-| Single owner for rules | `src/engine/machine/drive.go` (`Machine.Start`) beside `src/engine/durable/workflow.go` | The run rules live in the workflow; the old in-process driver has no production caller since T018, but feature 001's machine tests still drive it, and moving them changes existing tests (owner approval per test). Interim, until the owner decides T040: move the tests and remove the driver, or keep this row (2026-11-19, analyze round 6) |
+| Single owner for rules | `src/engine/machine/drive.go` (`Machine.Start`) beside `src/engine/durable/workflow.go` | The run rules live in the workflow; the old in-process driver has no production caller since T018, but feature 001's machine tests still drive it, and moving them changes existing tests (owner approval per test). Kept for this feature by the owner, 2026-11-20 (T040; first recorded 2026-11-19, analyze round 6) |
 
 ## Complexity Tracking
 
