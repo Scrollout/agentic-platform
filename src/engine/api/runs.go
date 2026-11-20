@@ -371,11 +371,18 @@ func (r *runs) waitingForWorkers(slice string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		if ok && v.Status == machine.StatusInterrupted && v.Reason == machine.ErrWorkersNotReady.Error() {
+		if ok && waitsForWorkers(v) {
 			return e.Run, nil
 		}
 	}
 	return "", nil
+}
+
+// waitsForWorkers tells whether the run waits for its slice's step workers: it is interrupted and
+// its record's last event is RunInterrupted `the step workers are not running`. It is the one
+// owner of that rule (registerWorker's workers-ready signal and a run's waits_for).
+func waitsForWorkers(v machine.Run) bool {
+	return v.Status == machine.StatusInterrupted && v.Reason == machine.ErrWorkersNotReady.Error()
 }
 
 // projectTaken refuses a project whose folder exists under the projects folder, or that a recorded
@@ -980,6 +987,13 @@ func (s *sliceServer) runView(id string) (gen.Run, bool, error) {
 	} else if !run.ExpiresAt.IsZero() {
 		at := run.ExpiresAt
 		v.ExpiresAt = &at
+	}
+	if run.Status == machine.StatusInterrupted {
+		w := gen.RunWaitsForResume
+		if waitsForWorkers(run) {
+			w = gen.RunWaitsForStepWorkers
+		}
+		v.WaitsFor = &w
 	}
 	return v, true, nil
 }

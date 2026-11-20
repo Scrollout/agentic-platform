@@ -370,6 +370,10 @@ func endLine(r *gen.Run) (string, int) {
 		return fmt.Sprintf("%s waits for the developer%s%s. Take it over with take-over %s, or cancel it with cancel %s.",
 			r.Id, reason(": "), expires, r.Id, r.Id), exitWaits
 	case gen.RunStatusInterrupted:
+		if r.WaitsFor != nil && *r.WaitsFor == gen.RunWaitsForStepWorkers {
+			return fmt.Sprintf("%s is interrupted%s%s. It continues by itself once its step workers run: start them with ap build-workers --resume %s, or cancel it with cancel %s.",
+				r.Id, reason(": "), expires, r.Id, r.Id), exitWaits
+		}
 		return fmt.Sprintf("%s is interrupted%s%s. Resume it with resume %s, or cancel it with cancel %s.",
 			r.Id, reason(": "), expires, r.Id, r.Id), exitWaits
 	case gen.RunStatusEnded:
