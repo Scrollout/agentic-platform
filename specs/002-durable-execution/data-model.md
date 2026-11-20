@@ -108,8 +108,10 @@ file, fsync, rename, fsync the folder), with the request body beside it in
   started ends `failed` with the detail `the run was not started; send the request again`.
 - **Cancelling** (`cancelOperation`): an operation whose record has ended answers 409
   `OperationEnded`. A run operation cancels its run first (`Runs.Cancel`; `NotFound` means the
-  run has ended, and is no error), then the operation's workflow; an unreachable durable service
-  answers 503 and nothing is cancelled. A cancelled workflow writes `cancelled`. Limit: a cancel
+  run has ended, and is no error), then writes the end `cancelled` to the record, then cancels
+  the operation's workflow; an unreachable durable service answers 503 and nothing is cancelled.
+  So a cancelled run operation ends `cancelled`, never `failed: the run was cancelled`. A
+  cancelled workflow of any kind writes `cancelled` (first end wins). Limit: a cancel
   that races the work's end may answer 202 while the operation ends `succeeded` or `failed`:
   the first end written wins, as in feature 001.
 - **Ending**: the activity writes the end when the work ends (succeeded, a `WorkError`, or
@@ -124,7 +126,8 @@ file, fsync, rename, fsync the folder), with the request body beside it in
 - **Outbox and sweep**, at start and then every minute (an internal value no client sees): a
   record that has not ended and has no workflow gets one (`RejectDuplicate`), so an operation
   recorded just before a stop still runs (FR-009); a record that has not ended whose workflow has
-  closed (its end never written) ends `failed` with `the operation's workflow closed with no
+  closed (its end never written; the sweep asks Temporal first and reads the record after, as
+  `runs.closeIfFailed` does, so an end written meanwhile is kept) ends `failed` with `the operation's workflow closed with no
   end`; a record ended more than 24 h ago is removed.
 - **Kept**: 24 h after `ended_at` (`x-limits.idempotency-key-retention-hours`, also the
   namespace's retention). Every read and key lookup checks `ended_at` itself: after that,
