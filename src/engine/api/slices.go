@@ -99,7 +99,7 @@ func (s *sliceServer) work(ctx context.Context, rec store.OperationRecord, body 
 	case "createSlice":
 		res, err = s.createSlice(ctx, id, body)
 	case "deleteSlice":
-		err = s.deleteSlice(ctx, id)
+		err = s.deleteSlice(ctx, id, rec.ID)
 	case "replaceGoals":
 		var req gen.ReplaceGoalsJSONRequestBody
 		if err = json.Unmarshal(body, &req); err == nil {
@@ -233,8 +233,10 @@ func (s *sliceServer) DeleteSlice(ctx context.Context, req gen.DeleteSliceReques
 // The stored records go first: erasing them again is harmless, so a retry after a failed
 // erasure completes it, and the slice disappears only once its records are gone. The work holds
 // the runs' lock and checks again, so no run starts, resumes or records between the check and
-// the erasure.
-func (s *sliceServer) deleteSlice(ctx context.Context, id string) error {
+// the erasure. Before the store, the durable service forgets the slice: each run's workflow,
+// and each other operation's workflow and then its record (data model, "Erasing a slice"); own,
+// the erasing operation, is left to the retention.
+func (s *sliceServer) deleteSlice(ctx context.Context, id, own string) error {
 	var e *slices.Error
 	if _, err := s.svc.Get(id); errors.As(err, &e) && e.Code == string(gen.ErrorCodeNotFound) {
 		return nil
@@ -246,6 +248,9 @@ func (s *sliceServer) deleteSlice(ctx context.Context, id string) error {
 	if err := s.activeRun(id); err != nil {
 		return err
 	}
+	if err := s.eraseDurable(ctx, id, own); err != nil {
+		return err
+	}
 	if err := s.store.EraseSlice(id); err != nil {
 		return Retryable(err)
 	}
@@ -254,6 +259,56 @@ func (s *sliceServer) deleteSlice(ctx context.Context, id string) error {
 		s.runs.forget(id)
 	}
 	return s.svc.Delete(ctx, id)
+}
+
+// eraseDurable deletes the workflows of the slice's runs, then the workflow and the record of
+// each operation other than own whose target is the slice or one of its runs; a record goes only
+// once its workflow is gone, so a repeat finds it again. NotFound is no error; an unavailable
+// durable service is Retryable. The caller holds the runs' lock (or no runs are kept).
+func (s *sliceServer) eraseDurable(ctx context.Context, id, own string) error {
+	targets := map[string]bool{id: true}
+	if s.runs != nil {
+		for _, e := range s.runs.st.Runs() {
+			if e.Slice != id {
+				continue
+			}
+			targets[e.Run] = true
+			if s.runs.durable == nil {
+				continue
+			}
+			if err := durableError(s.runs.durable.Delete(ctx, e.Run)); err != nil {
+				return err
+			}
+		}
+	}
+	recs, err := s.ops.records.Operations()
+	if err != nil {
+		return Retryable(err)
+	}
+	for _, rec := range recs {
+		if rec.ID == own || !targets[rec.Target] {
+			continue
+		}
+		if err := durableError(s.ops.durable.Delete(ctx, rec.ID)); err != nil {
+			return err
+		}
+		if err := s.ops.records.DeleteOperation(rec.ID); err != nil {
+			return Retryable(err)
+		}
+	}
+	return nil
+}
+
+// durableError is a deletion's error as the work's: none for NotFound, Retryable when the
+// durable service is unavailable.
+func durableError(err error) error {
+	switch {
+	case err == nil, errors.Is(err, ErrNotFound):
+		return nil
+	case errors.Is(err, ErrUnavailable):
+		return Retryable(err)
+	}
+	return err
 }
 
 // noActiveRun refuses RunActive while a run of the slice has not ended (running, interrupted or

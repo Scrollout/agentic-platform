@@ -125,6 +125,8 @@ type OperationRecords interface {
 	// store.ErrNotFound when none is kept.
 	Operation(id string) (store.OperationRecord, []byte, error)
 	OperationByKey(key string) (store.OperationRecord, bool, error)
+	// Operations returns every record, ended or not, by number, lowest first.
+	Operations() ([]store.OperationRecord, error)
 	OpenOperations() ([]store.OperationRecord, error)
 	EndOperation(id string, at time.Time, status string, result, problem json.RawMessage) (bool, error)
 	RemoveOperationsEndedBefore(t time.Time) ([]string, error)
@@ -710,6 +712,17 @@ func (m *memoryRecords) OperationByKey(key string) (store.OperationRecord, bool,
 		}
 	}
 	return found, ok, nil
+}
+
+func (m *memoryRecords) Operations() ([]store.OperationRecord, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	all := make([]store.OperationRecord, 0, len(m.recs))
+	for _, r := range m.recs {
+		all = append(all, r.rec)
+	}
+	sortByNumber(all)
+	return all, nil
 }
 
 func (m *memoryRecords) OpenOperations() ([]store.OperationRecord, error) {

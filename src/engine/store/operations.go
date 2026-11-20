@@ -169,6 +169,13 @@ func (s *Store) OperationByKey(key string) (OperationRecord, bool, error) {
 	return OperationRecord{}, false, nil
 }
 
+// Operations returns every record, ended or not, by number, lowest first.
+func (s *Store) Operations() ([]OperationRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.readOperations()
+}
+
 // OpenOperations returns the records of the operations that have not ended, by number, lowest
 // first.
 func (s *Store) OpenOperations() ([]OperationRecord, error) {
