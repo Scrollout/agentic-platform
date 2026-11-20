@@ -61,48 +61,81 @@ file, fsync, rename, fsync the folder), with the request body beside it in
 | `ended_at` | RFC 3339 time the operation ended | Absent while it has not ended; written once |
 | `status`, `result`, `error` | The end: `succeeded` with its result, `failed` with its problem (code, detail, failures), or `cancelled` | Written with `ended_at`, once; the first end wins |
 
+- **Kinds**: `createSlice` → `propose-slice`, `deleteSlice` → `delete-slice`, `replaceGoals` →
+  `replace-goals`, `replaceRules` → `replace-rules`, `replaceContract` → `replace-contract`,
+  `answerQuestions` → `answer-questions`, `approvePart` → `approve-part`; `startRun`,
+  `replayRun`, `resumeRun`, `acceptHandOver` → `run`. A slice operation's `target` is its slice;
+  a run operation's is its run, whose slice is on the run's record (erasure reaches it so, T029).
 - **The body** (`OP-<n>.body`) holds the request's exact bytes (empty when it had none). It is
-  written before the record, so a record always has its body. It is runtime-plane content kept
-  only in the engine store, never in Temporal (FR-016), and goes with the record.
-- **Accepting** (FR-008): the engine writes the body and the record, then starts the
-  operation's workflow (task queue `operations`, ID = `id`), and only then answers 202. When the
-  workflow cannot be started (Temporal unreachable), it removes the record and answers 503
-  `UnavailableProblem`: nothing was accepted. Limit: a record that cannot be removed either stays,
-  and its operation runs once its workflow is started at the next engine start; a resend with the
-  same Idempotency-Key finds it.
+  written before the record, so a record always has its body, and it is removed when the end is
+  written: it is needed only by the work. It is runtime-plane content kept only in the engine
+  store, never in Temporal (FR-016). A body with no record (a stop between the two writes) is
+  removed at start.
+- **Accepting** (FR-008): the engine first asks whether the durable service answers
+  (`Operations.Ready`); when it does not, the answer is 503 `UnavailableProblem` and nothing is
+  written (R6). Then it writes the body and the record (a failed write: 503, and what was written
+  is removed), for a run operation starts or signals the run (ADR 0067; a failure: 503 and the
+  record is removed), then starts the operation's workflow (task queue `operations`, ID = `id`),
+  and answers 202. Once the record is written and the run, if any, started, the operation is
+  accepted: a workflow start that fails then is no 503; the outbox starts it. Limit: when a run's
+  start fails and its record cannot be removed either, the record stays and its operation ends
+  `failed` with `the run was not started; send the request again`; a resend with the same
+  Idempotency-Key finds that operation.
+- **One record per key**: concurrent first requests under one key are served one at a time, as
+  in feature 001 (the engine's in-memory key answers); only the first writes a record.
 - **The work** runs in the workflow's one activity, `DoOperation(id)`, which reads the record
   and its body and does what the request asked, as feature 001's operation did. A repeat after a
-  stop (heartbeat lost) is the same work again and does not count as a retry; every step of the
-  work is safe to repeat (`createSlice` creates the slice under its record's `target`, even after
-  a restart; a run's operation finds its run started and only follows it).
-- **Run operations** (`startRun`, `replayRun`): the request starts the run's workflow (ADR 0067)
-  after the record and before the operation's workflow; the operation's work follows the run
-  until its record shows its end, as in feature 001. `resumeRun` and `acceptHandOver` signal the
-  run and answer with the run's operation still open, found by its record (`kind` `startRun` or
-  `replayRun`, `target` the run, no `ended_at`); only when none is open is a new one recorded
-  (`kind` `resumeRun` or `acceptHandOver`). A run operation whose run was never started (the
-  engine stopped between the record and the run's start) ends `failed` with the detail `the run
-  was not started; send the request again`.
+  stop (heartbeat lost) is the same work again and does not count as a retry. A repeat finds work
+  already done and ends `succeeded`:
+
+  | Kind | Already done when | Then |
+  |------|-------------------|------|
+  | `createSlice` | a slice with the record's `target` exists | succeeded, `slice` = target |
+  | `deleteSlice` | the slice no longer exists | succeeded, `slice` = target |
+  | `replaceGoals`, `replaceRules`, `replaceContract` | the part holds the body's content | succeeded (applying it again changes nothing) |
+  | `answerQuestions` | every answered question holds the body's answer | succeeded |
+  | `approvePart` | the part is approved at the body's hash | succeeded |
+  | run kinds | the run's workflow exists | the work only follows the run |
+
+  The slice ID of an unended `createSlice` record is reserved again at start (`slices.Service`),
+  so no other slice gets it and `createSlice` can create it after a restart. An operation whose
+  record is gone when its work runs (its slice erased) ends nothing and its workflow completes.
+- **Run operations**: the work follows the run until its record shows its end, as in feature
+  001. `resumeRun` and `acceptHandOver` signal the run and answer with the run's open operation,
+  found by its record (any run-kind record whose `target` is the run and that has no `ended_at`);
+  only when none is open is a new one recorded. Their own Idempotency-Key is then not in that
+  record: their answer under it is kept in memory (Keys). A run operation whose run was never
+  started ends `failed` with the detail `the run was not started; send the request again`.
+- **Cancelling** (`cancelOperation`): an operation whose record has ended answers 409
+  `OperationEnded`. A run operation cancels its run first (`Runs.Cancel`; `NotFound` means the
+  run has ended, and is no error), then the operation's workflow; an unreachable durable service
+  answers 503 and nothing is cancelled. A cancelled workflow writes `cancelled`. Limit: a cancel
+  that races the work's end may answer 202 while the operation ends `succeeded` or `failed`:
+  the first end written wins, as in feature 001.
 - **Ending**: the activity writes the end when the work ends (succeeded, a `WorkError`, or
   another error that is not retryable). A retryable error (`Retryable`) is retried by the
   workflow by the retry rule (durable sleeps, counted across a stop, FR-010); when the retries
   are used up the workflow's last activity, `EndOperation`, writes `failed` with `failed after
-  <n> attempts: <reason>`. A cancelled workflow writes `cancelled` the same way.
+  <n> attempts: <reason>`. Every end is written once; a later one changes nothing.
 - **Status** clients see: from the record once it has ended; before that `running` while its
-  workflow exists (or Temporal cannot be asked) and `accepted` while it has none yet. Progress of
+  workflow is open (or Temporal cannot be asked) and `accepted` while it has none yet. Progress of
   a run operation comes from its run's record (`done`, `total`), as in feature 001; other kinds
   have none. Queries never need Temporal for an ended operation.
-- **Outbox**: at start the engine starts the workflow of every record that has not ended and
-  has none (`RejectDuplicate`), so an operation recorded just before a stop still runs (FR-009).
+- **Outbox and sweep**, at start and then every minute (an internal value no client sees): a
+  record that has not ended and has no workflow gets one (`RejectDuplicate`), so an operation
+  recorded just before a stop still runs (FR-009); a record that has not ended whose workflow has
+  closed (its end never written) ends `failed` with `the operation's workflow closed with no
+  end`; a record ended more than 24 h ago is removed.
 - **Kept**: 24 h after `ended_at` (`x-limits.idempotency-key-retention-hours`, also the
-  namespace's retention), then `getOperation` answers 404 `NotFound`; the engine removes such
-  records with their bodies at start and then hourly (an internal value no client sees). A
+  namespace's retention). Every read and key lookup checks `ended_at` itself: after that,
+  `getOperation` answers 404 `NotFound` and the key is no longer held, whenever the sweep runs. A
   slice's erasure removes its operations' records at once (FR-017, T029).
 - **Keys**: a request whose Idempotency-Key a record holds is answered with the record's first
   answer (202, the operation as accepted), also after a restart. Every other answer under a key
-  (a refusal, `registerWorker`'s 200, `cancelOperation`'s 202) is kept in the engine's memory as
-  in feature 001 and is judged again after a restart; a 503 is never kept, so the same request
-  may be sent again with the same key (engine contract, info).
+  (a refusal, `registerWorker`'s 200, `cancelOperation`'s 202, a `resumeRun` or
+  `acceptHandOver` answered with an open operation) is kept in the engine's memory as in feature
+  001 and is judged again after a restart; a 503 is never kept, so the same request may be sent
+  again with the same key (engine contract, info).
 - **Without a durable service** (`Config.Operations` nil, the API tests of feature 001): the
   same records (in memory when `Config.Store` keeps none) and the same `DoOperation` run in the
   engine's process with the same retry rule, and do not survive a stop. The engine always sets
@@ -153,7 +186,7 @@ Package `src/engine/durable` holds the workflows and activities; the two ports `
 | `Runs` (the API's port) | Go interface | `Start(run)`, `Signal(run, name)`, `Cancel(run)`, `Exists(run)`, `Closed(run)` (whether the workflow has closed, and its failure's reason; T058), `Delete(id)` | errors `Unavailable`, `NotFound` |
 | `Operation` | workflow, queue `operations`, ID `OP-<n>` | operation ID, kind, target | none: the end is written to the record |
 | `DoOperation`, `EndOperation` | activity | operation ID; `EndOperation` also the status and detail | done, or a retryable failure (`DoOperation`) |
-| `Operations` (the API's port) | Go interface | `Start(op)` (RejectDuplicate: an existing workflow, open or closed, is no error), `Open(op)` (whether its workflow exists and has not closed), `Cancel(op)`, `Delete(op)` | errors `Unavailable`, `NotFound` |
+| `Operations` (the API's port) | Go interface | `Ready()` (whether the durable service answers), `Start(op)` (RejectDuplicate: an existing workflow, open or closed, is no error), `Open(op)` (whether its workflow exists and has not closed), `Cancel(op)`, `Delete(op)` | errors `Unavailable`, `NotFound` |
 | `Operator` (the API's, for the durable worker) | Go interface | `Do(id)` (the work of `DoOperation`), `End(id, status, detail)` (`EndOperation`) | nil, a `Retryable` error, or ctx's error |
 
 Signals: `workers-ready`, `resume`, `accept-hand-over`, `cancel`. The API tests fake `Runs` and

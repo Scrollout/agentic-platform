@@ -37,10 +37,10 @@ Sources: [Feature 002 research, R4](../../specs/002-durable-execution/research.m
 
 # Decision
 
-- The request body is written beside the record (`operations/OP-<n>.body`) before the record, and is removed with it: 24 h after the operation ends, or when its slice is erased.
+- The request body is written beside the record (`operations/OP-<n>.body`) before the record, and is removed when the operation's end is written, or when its slice is erased.
 - The operation's workflow runs one activity that rebuilds the work from the record and the body; every step of that work is safe to repeat, and a repeat after a stop is not a retry.
 - The operation's end (status, result, error) is written to the record once; Temporal holds only the operation's ID, kind, target and its retries.
-- The engine answers 202 after the record and the workflow's start; when the workflow cannot be started, the record is removed and the answer is 503.
+- The engine answers 503 before writing anything when the durable service does not answer; once the record is written, the operation is accepted, and a workflow that failed to start is started by the engine's outbox.
 
 Sources: [Feature 002 data model, Operation record](../../specs/002-durable-execution/data-model.md).
 
@@ -48,6 +48,6 @@ Sources: [Feature 002 data model, Operation record](../../specs/002-durable-exec
 
 - An operation interrupted by a stop does its work again to one end, with its retries counted across the stop.
 - Ended operations are read from the engine store, without Temporal.
-- The engine store holds request bodies for at most 24 h after their operation ends, in the runtime plane.
+- The engine store holds a request body only until its operation ends, in the runtime plane.
 
 Sources: [Feature 002 data model, Operation record](../../specs/002-durable-execution/data-model.md).

@@ -166,8 +166,11 @@ questions on 2026-11-19.
     the engine store (`operations/OP-<n>.body`), with the record's retention and erasure; the
     workflow's one activity, `DoOperation`, rebuilds the work from the record and the body, and
     every step of the work is safe to repeat. The end (status, result, error) is written to the
-    record once, so Temporal holds no outcome text and ended operations are read without it. A
-    workflow that cannot be started removes the record and answers 503, so nothing is accepted.
+    record once, so Temporal holds no outcome text and ended operations are read without it. The
+    body is removed when the end is written. The engine asks whether the durable service answers
+    before it writes anything (503 when not); once the record is written (and a run operation's
+    run started), the operation is accepted and the outbox, at start and every minute, starts a
+    workflow that failed to start (analyze round 16).
     Answers under a key that created no operation stay in memory, as in feature 001, and a 503 is
     never kept. The [data model](data-model.md) holds the whole design.
     Rejected: an unfinished operation ends `failed` after a stop (no body kept): simpler, but
