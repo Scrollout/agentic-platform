@@ -189,7 +189,7 @@ feature 001 passes on this feature.
 - T001 → everything. T002 → T003 to T005, T011. Foundational (T003 to T011) → every story.
   T003 → T004 → T005's judgement and T006; T007 → T008; T009 → T010; T011 needs T004's service
   definitions.
-- US1 (T012 to T021) first. US2 (T022 to T027, T060, T061) after T018, since both change `src/engine/api`
+- US1 (T012 to T021) first. US2 (T022 to T027, T060 to T065) after T018, since both change `src/engine/api`
   and the engine's start; T022 may be written alongside US1. US3 (T028 to T030) after T025, since
   erasure deletes operation records. Polish (T031 to T033) last.
 - Within a story: tests (seen failing) → code → existing-test changes approved by the owner →
