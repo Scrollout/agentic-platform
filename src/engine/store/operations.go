@@ -117,11 +117,14 @@ func (s *Store) PutOperation(r OperationRecord, body []byte) error {
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
+	// A write can fail after its file is in place (the folder sync), so a failure removes every
+	// file this call may have written: a 503 leaves nothing accepted (T064).
 	if err := writeAtomic(dir, r.ID+bodySuffix, body); err != nil {
+		_ = removeFiles(dir, r.ID+bodySuffix)
 		return err
 	}
 	if err := writeAtomic(dir, r.ID+recordSuffix, rec); err != nil {
-		_ = removeFiles(dir, r.ID+bodySuffix)
+		_ = removeFiles(dir, r.ID+recordSuffix, r.ID+bodySuffix)
 		return err
 	}
 	return nil
