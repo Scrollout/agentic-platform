@@ -1573,6 +1573,16 @@ components:
       - interrupted
       - waiting-for-developer
       - ended
+    RunWaitsFor:
+      type: string
+      description: >-
+        Set exactly while the run is `interrupted`, saying what it continues on: `resume` when it
+        continues only on resumeRun (the model was unavailable on every attempt of a step);
+        `step-workers` when it continues by itself once the step workers of its slice register
+        (resumeRun answers WorkersNotReady until then).
+      enum:
+      - resume
+      - step-workers
     RunOutcome:
       type: string
       description: >-
@@ -1631,6 +1641,8 @@ components:
         reason:
           type: string
           description: Why the run waits for the developer, or why it ended other than `done`.
+        waits_for:
+          $ref: '#/components/schemas/RunWaitsFor'
         expires_at:
           type: string
           format: date-time

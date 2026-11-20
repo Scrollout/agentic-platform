@@ -391,7 +391,8 @@ the terminal" says. For example:
 | `ended`, outcome `done` | `RUN-<n> ended done` |
 | `ended`, any other outcome | `RUN-<n> ended <outcome>: <reason>` (`: <reason>` left out without one) |
 | `waiting-for-developer` | `RUN-<n> waits for the developer: <reason>; it expires <expires_at>. Take it over with take-over RUN-<n>, or cancel it with cancel RUN-<n>.` |
-| `interrupted` | `RUN-<n> is interrupted: <reason>; it expires <expires_at>. Resume it with resume RUN-<n>, or cancel it with cancel RUN-<n>.` |
+| `interrupted`, waiting for its step workers (the run's `waits_for` is `step-workers`) | `RUN-<n> is interrupted: <reason>; it expires <expires_at>. It continues by itself once its step workers run: start them with ap build-workers --resume RUN-<n>, or cancel it with cancel RUN-<n>.` |
+| `interrupted`, any other (`waits_for` `resume` or absent) | `RUN-<n> is interrupted: <reason>; it expires <expires_at>. Resume it with resume RUN-<n>, or cancel it with cancel RUN-<n>.` |
 
 ## Run states and exit codes
 
@@ -420,7 +421,7 @@ platform is up again. For a run that waits for its step workers, the launcher's 
 naming `ap build-workers --resume <run>` (see the launcher's `resume` paragraph).
 
 `interrupted` is 2 because, like `waiting-for-developer`, the run is kept, not lost, and goes on
-only when the developer acts; the end line names the command (`resume` or `take-over`), and `run`
+only when the developer acts; the end line names the command (`resume`, `take-over`, or `ap build-workers --resume` for a run whose `waits_for` is `step-workers`, which the client reads from the engine's run, never from the reason's wording), and `run`
 shows the status, so no third code is needed. It is not 1: nothing failed, and the run's operation
 is still running.
 
