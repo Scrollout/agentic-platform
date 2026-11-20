@@ -15,12 +15,15 @@ WORKDIR /src
 COPY catalogue/api-feature-go/template catalogue/api-feature-go/template
 ENV CGO_ENABLED=0 GOFLAGS=-trimpath\ -buildvcs=false GOTOOLCHAIN=local GOTELEMETRY=off
 # The pinned oapi-codegen (the Go checksum database verifies the module), built in its own module
-# cache so the image's cache holds only what the template needs.
+# cache so the image's cache holds only what the template needs. OAPI_CODEGEN is <module>@<version>,
+# so the install is pinned, which hadolint cannot see through the argument.
+# hadolint ignore=DL3062
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
     GOBIN=/out GOFLAGS=-trimpath GOWORK=off go install "${OAPI_CODEGEN}"
 # The template's module cache: every module of its go.mod and go.sum (go.sum verifies each one), so
 # `go mod vendor -mod=mod` and the checks find them with GOPROXY=off. Made read-only by Go itself.
-RUN cd catalogue/api-feature-go/template && GOWORK=off GOMODCACHE=/out/modcache GOFLAGS=-mod=mod go mod download \
+WORKDIR /src/catalogue/api-feature-go/template
+RUN GOWORK=off GOMODCACHE=/out/modcache GOFLAGS=-mod=mod go mod download \
     && GOWORK=off GOMODCACHE=/out/modcache GOFLAGS=-mod=mod go mod vendor -o /tmp/vendor-probe \
     && rm -rf /tmp/vendor-probe
 # The warm base cache (research D37 "Cost", owner 2026-11-15): the standard library of this pinned
@@ -32,7 +35,10 @@ RUN cd catalogue/api-feature-go/template && GOWORK=off GOMODCACHE=/out/modcache 
 # folder (no -trimpath), which differs per project. Each call copies it as its GOCACHE. The
 # packages are listed in a copy of the template with -mod=readonly: /opt/template must stay the
 # repository's bytes (a go list with -mod=mod rewrote its go.mod, and every generate step then
-# failed DependenciesAllowed).
+# failed DependenciesAllowed). The script builds in a scratch folder it removes at its end, so its
+# cd stays inside the one RUN.
+WORKDIR /src
+# hadolint ignore=DL3003
 RUN set -e; mkdir -p /out/warm/warm /tmp/warm-bin; \
     export GOFLAGS=-buildvcs=false GOWORK=off GOPROXY=off GOMODCACHE=/out/modcache GOCACHE=/out/gocache-base \
       HOME=/tmp/warm-home GOPATH=/tmp/warm-gopath; \
@@ -56,8 +62,9 @@ COPY . .
 # src/tests is excluded from the context (src/.dockerignore), so the workspace must not use it.
 RUN go work edit -dropuse=./tests
 ENV CGO_ENABLED=0 GOFLAGS=-trimpath\ -buildvcs=false GOTOOLCHAIN=local GOTELEMETRY=off
+WORKDIR /src/engine
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    cd engine && go build -ldflags="-s -w -buildid=" -o /out/check ./cmd/check
+    go build -ldflags="-s -w -buildid=" -o /out/check ./cmd/check
 
 FROM ${GOLANG_IMAGE} AS base
 RUN adduser -D -u 65532 -h /tmp/home check
@@ -65,6 +72,7 @@ RUN adduser -D -u 65532 -h /tmp/home check
 # The golang image's files without its ENV, which sets GOPATH=/go: the image must set no GOPATH
 # (each call sets its own, below). PATH is the golang image's, without its /go/bin.
 FROM scratch
+# hadolint ignore=DL3067
 COPY --from=base / /
 ENV PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 COPY --from=build /out/check /check

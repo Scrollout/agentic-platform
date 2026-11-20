@@ -24,7 +24,6 @@ Choices where the contract is silent (the code must match them):
 import os
 import re
 import sys
-import time
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path

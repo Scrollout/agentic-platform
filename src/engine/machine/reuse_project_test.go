@@ -46,16 +46,6 @@ func (f *fixture) startIn(id, project string) machine.Run {
 	return r
 }
 
-func (f *fixture) reusedSteps() []string {
-	var out []string
-	for _, e := range f.ev.events {
-		if e.Kind == "ResultReused" {
-			out = append(out, e.Step)
-		}
-	}
-	return out
-}
-
 func stepsCalled(f *fixture) []string {
 	var out []string
 	for _, c := range f.w.calls {

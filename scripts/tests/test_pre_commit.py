@@ -22,10 +22,8 @@ git and docker (markdownlint runs in a container) are prerequisites: a missing o
 import hashlib
 import os
 import shutil
-import signal
 import subprocess
 import tempfile
-import time
 import unittest
 
 import gitenv

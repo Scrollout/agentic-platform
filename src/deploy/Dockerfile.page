@@ -6,8 +6,9 @@ COPY . .
 # src/tests is excluded from the context (src/.dockerignore), so the workspace must not use it.
 RUN go work edit -dropuse=./tests
 ENV CGO_ENABLED=0 GOFLAGS=-trimpath\ -buildvcs=false GOTOOLCHAIN=local GOTELEMETRY=off
+WORKDIR /src/page
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    cd page && go build -ldflags="-s -w -buildid=" -o /out/page ./cmd/page
+    go build -ldflags="-s -w -buildid=" -o /out/page ./cmd/page
 
 FROM scratch
 COPY --from=build /out/page /page

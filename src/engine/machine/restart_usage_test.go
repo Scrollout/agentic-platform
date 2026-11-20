@@ -17,29 +17,10 @@ package machine_test
 
 import (
 	"context"
-	"slices"
 	"testing"
 
 	"github.com/agentic-platform/engine/machine"
 )
-
-// listSink is a readable, listable event record.
-type listSink struct{ recSink }
-
-func (s listSink) Runs() ([]string, error) {
-	var out []string
-	for _, e := range s.events {
-		if !slices.Contains(out, e.Run) {
-			out = append(out, e.Run)
-		}
-	}
-	return out, nil
-}
-
-func restarted(p machine.Pattern, ev listSink, results *machine.Results, clk *clock, w *worker) *machine.Machine {
-	return machine.New(machine.Config{Pattern: p, Worker: w, Checker: &checker{fn: noBlocking}, Clock: clk,
-		Events: ev, Results: results, Model: "claude-haiku-5-5"})
-}
 
 func TestUsageAndSliceInEventsValidateAgainstTheSchema(t *testing.T) {
 	f := reuseFixture(t, machine.NewResults())

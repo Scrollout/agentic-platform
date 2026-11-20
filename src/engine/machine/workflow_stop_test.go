@@ -116,7 +116,7 @@ func TestWorkflowHeartbeatTimeoutRepeatsTheSameAttempt(t *testing.T) {
 		r, ok := c.In.(machine.RestoreRequest)
 		return ok && r.Step.Name == "code" && r.Attempt == 1
 	})
-	if !(first < restored && restored < second) {
+	if first >= restored || restored >= second {
 		t.Fatalf("restore for the repeat at call %d, want between the stopped call %d and the repeat %d", restored, first, second)
 	}
 }

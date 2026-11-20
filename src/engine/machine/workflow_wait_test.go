@@ -28,17 +28,6 @@ func wfFailCode(failing *bool) func(durable.CheckCall) (machine.CheckResult, err
 	}
 }
 
-// wfWorkersGoneFor makes the first call of step fail WorkersNotReady.
-func wfWorkersGoneFor(step string) func(durable.WorkerCall) (machine.Result, error) {
-	gone := wfFirst(durable.CallWorker, 1, wfWorkerOf(step))
-	return func(c durable.WorkerCall) (machine.Result, error) {
-		if gone(durable.CallWorker, c) {
-			return machine.Result{}, temporal.NewNonRetryableApplicationError(wfNoWorkers, durable.WorkersNotReady, nil)
-		}
-		return wfOK(c), nil
-	}
-}
-
 // (f) A hand-over waits for resume, accept-hand-over or cancel, and expires 14 days after the
 // hand-over: the hand-over here comes 3 days into the run (a wait for workers before it), so an
 // expiry counted from the start, or from any later point, is caught. A resume after a hand-over

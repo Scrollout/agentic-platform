@@ -10,7 +10,6 @@ planted case: a temporary tree that is valid except for one violation, judged by
 function. A baseline test proves the temporary tree is valid, so a planted failure is the
 planted violation and nothing else.
 """
-import copy
 import re
 import subprocess
 import sys

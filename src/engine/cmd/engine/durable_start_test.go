@@ -118,7 +118,9 @@ func startFixture(t *testing.T, runs map[string][]string) (env, string) {
 				}
 			}
 		}
-		st.Close()
+		if err := st.Close(); err != nil {
+			t.Fatal(err)
+		}
 	}
 	var calls atomic.Int32
 	lint, analyst := fakeLint(t), fakeAnalyst(t, &calls)
@@ -132,7 +134,11 @@ func TestStartRegistersNamespaceApWithTheContractsRetentionWhenMissing(t *testin
 	if err != nil {
 		t.Fatalf("setupWith: %v", err)
 	}
-	defer closeFn()
+	defer func() {
+		if err := closeFn(); err != nil {
+			t.Error(err)
+		}
+	}()
 	want := []registered{{"ap", contractRetentionHours(t)}}
 	if len(ns.registers) != 1 || ns.registers[0] != want[0] {
 		t.Errorf("registered %v, want %v", ns.registers, want)
@@ -147,7 +153,11 @@ func TestStartKeepsAnExistingNamespaceApUnchanged(t *testing.T) {
 	if err != nil {
 		t.Fatalf("setupWith: %v", err)
 	}
-	defer closeFn()
+	defer func() {
+		if err := closeFn(); err != nil {
+			t.Error(err)
+		}
+	}()
 	if len(ns.registers) != 0 || ns.existing["ap"] != other {
 		t.Errorf("registered %v, retention now %v; want no registration and %v kept", ns.registers, ns.existing["ap"], other)
 	}
@@ -164,7 +174,7 @@ func TestStartRefusesWhenARunsRecordHasNoEndAndNoWorkflowExistsNamingEachRun(t *
 	ns := &fakeNamespaces{existing: map[string]time.Duration{}}
 	h, closeFn, err := setupWith(e.get, durableLinks{Runs: fakeWorkflows{has: map[string]bool{"RUN-2": true}}, Namespaces: ns})
 	if err == nil {
-		closeFn()
+		_ = closeFn()
 		t.Fatal("setupWith succeeded, want a refusal")
 	}
 	if h != nil || closeFn != nil {

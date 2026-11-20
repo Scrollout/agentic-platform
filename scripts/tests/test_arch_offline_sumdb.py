@@ -1,6 +1,5 @@
 """Regression: the offline install of go-arch-lint must not need the checksum database (T098, D40)."""
 import os
-import re
 import shutil
 import unittest
 

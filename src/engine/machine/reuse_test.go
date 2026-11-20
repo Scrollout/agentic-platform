@@ -228,16 +228,3 @@ func TestCompareShowsMissingSideAsAbsent(t *testing.T) {
 	}
 	t.Fatal("no difference reported for the step the second run never reached")
 }
-
-// recSink is the fake readable event record.
-type recSink struct{ *sink }
-
-func (s recSink) Read(run string) ([]machine.Event, error) {
-	var out []machine.Event
-	for _, e := range s.events {
-		if e.Run == run {
-			out = append(out, e)
-		}
-	}
-	return out, nil
-}

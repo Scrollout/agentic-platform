@@ -520,16 +520,6 @@ func (h *wfHarness) checkCalls(step, name string) []durable.CheckCall {
 	return out
 }
 
-func (h *wfHarness) restores(step string) []machine.RestoreRequest {
-	var out []machine.RestoreRequest
-	for _, c := range h.callsOf(durable.RestoreProject) {
-		if r := c.In.(machine.RestoreRequest); r.Step.Name == step {
-			out = append(out, r)
-		}
-	}
-	return out
-}
-
 func attemptsOf(calls []durable.WorkerCall) []int {
 	var out []int
 	for _, c := range calls {

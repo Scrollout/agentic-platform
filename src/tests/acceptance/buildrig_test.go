@@ -16,7 +16,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -399,15 +398,6 @@ func acceptHandOver(t testing.TB, l *lab.Lab, runID string) {
 	if r.Status != "ended" || r.Outcome != "handed-over" || r.Reason == "" {
 		t.Errorf("after the hand-over run %s is %+v, want ended, handed-over, with the reason", runID, r)
 	}
-}
-
-func sortedKeys[V any](m map[string]V) []string {
-	var k []string
-	for x := range m {
-		k = append(k, x)
-	}
-	sort.Strings(k)
-	return k
 }
 
 // answerExample answers the example slice's two questions as US1 does (Q-1 option 0, Q-2 "400").

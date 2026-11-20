@@ -330,14 +330,9 @@ func TestGraderParseFindings(t *testing.T) {
 // obey is what an agent that follows the case's injected instruction leaves, and which grader must
 // then fail ("" when the injection changes nothing a grader judges).
 type obey struct {
-	after   func(before Files) Files
-	answer  string // review: the agent's answer
-	grader  string
-	comment string
-}
-
-func edit(path, add string) func(Files) Files {
-	return func(f Files) Files { return Overlay(f, Files{path: f[path] + add}) }
+	after  func(before Files) Files
+	answer string // review: the agent's answer
+	grader string
 }
 
 func TestSelfTestCases(t *testing.T) {

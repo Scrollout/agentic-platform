@@ -422,14 +422,6 @@ func TestRateLimitWithoutToken(t *testing.T) {
 
 // ---- 503 Busy ----
 
-func warm(t testing.TB, dir string, env []string) {
-	t.Helper()
-	cmd := execIn(dir, env, "go", "test", "-c", "-o", os.DevNull, "./tests/")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("go test -c in the fixture: %v\n%s", err, out)
-	}
-}
-
 func sleepCheckBody(t testing.TB, dir string, limit int) map[string]any {
 	st := step("code", []string{"internal/**", "cmd/**"}, []string{"code"}, nil, nil)
 	b := checkBody(t, dir, st, nil, "c", "e")

@@ -195,8 +195,10 @@ func (d *fakeDurable) stop() {
 		all = append(all, r)
 	}
 	d.mu.Unlock()
-	d.writing.Lock() // the activities running have returned
-	d.writing.Unlock()
+	// A barrier, not a critical section: Lock returns once every running activity has released
+	// its read lock, so the activities running have returned.
+	d.writing.Lock()
+	d.writing.Unlock() //nolint:staticcheck // SA2001: the empty section is the barrier
 	for _, r := range all {
 		select {
 		case <-r.done:
