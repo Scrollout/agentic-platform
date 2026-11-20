@@ -34,8 +34,10 @@ vendors:
     in: [go.temporal.io/sdk/activity, go.temporal.io/sdk/client, go.temporal.io/sdk/temporal, go.temporal.io/sdk/worker,
       go.temporal.io/sdk/workflow, go.temporal.io/api/enums/v1, go.temporal.io/api/serviceerror,
       go.temporal.io/api/workflowservice/v1, go.temporal.io/api/common/v1, google.golang.org/protobuf/types/known/durationpb]
-  temporal-testsuite: # Temporal's test environment, and the logger and interceptor its rigs set
-    in: [go.temporal.io/sdk/testsuite, go.temporal.io/sdk/log, go.temporal.io/sdk/interceptor]
+  temporal-testsuite: # Temporal's test environment, the logger and interceptor its rigs set, and the
+    # recorded histories the replay test reads (T020)
+    in: [go.temporal.io/sdk/testsuite, go.temporal.io/sdk/log, go.temporal.io/sdk/interceptor,
+      go.temporal.io/api/history/v1]
   yaml:
     in: [go.yaml.in/yaml/v3]
 components:
