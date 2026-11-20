@@ -289,7 +289,12 @@ questions on 2026-11-19.
   (S5), in CI's `go` job. They cover attempts across a stop (a heartbeat timeout in the middle of
   an attempt), the 14-day timer, the waits for signals, and budgets that ignore waits.
 - Replay tests: recorded workflow histories replayed with `worker.NewWorkflowReplayer` in the
-  `go` job (S5).
+  `go` job (S5). The histories (T020) were recorded on the owner's clean VM from `eb6e1c8`, trial 1 of
+  the stop-point suite with a scratch-only export by the pinned admin tools, not from CI (owner,
+  2026-11-20: recording in CI would change T014 and `check.yml` for a 40-minute run). They are
+  never re-recorded to make a change pass: a change to the workflow's commands goes behind
+  `workflow.GetVersion` and new histories are added beside them. One replay run is kept, since
+  `replayRun` reuses every step through the same workflow code.
 - Integration: the engine against the real `durable` and `durable-store` services in the
   `docker` job (the recorded model), and the stop points of SC-001 (the engine container stopped
   during an agent step, a procedure step, a review round and a commit, then started) in a new
