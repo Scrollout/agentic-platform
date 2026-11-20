@@ -78,7 +78,9 @@ file, fsync, rename, fsync the folder), with the request body beside it in
   (`Operations.Ready`); when it does not, the answer is 503 `UnavailableProblem` and nothing is
   written (R6). Then it writes the body and the record (a failed write: 503, and what was written
   is removed), for a run operation starts or signals the run (ADR 0067; a failure: 503 and the
-  record is removed), then starts the operation's workflow (task queue `operations`, ID = `id`),
+  record is removed; a failed start first asks whether the run's workflow exists, since its
+  answer may have been lost: when it does, the start is accepted; when that cannot be told, the
+  answer is 503 and the record stays), then starts the operation's workflow (task queue `operations`, ID = `id`),
   and answers 202. Once the record is written and the run, if any, started, the operation is
   accepted: a workflow start that fails then is no 503; the outbox starts it. Limit: when a run's
   start fails and its record cannot be removed either, the record stays and its operation ends
