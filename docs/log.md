@@ -2,6 +2,7 @@
 
 ## 2026-11-20
 
+* **Fix**: Feature 002, T027 fresh review of US2 round 1 (owner 2026-11-20): T064, a failed write of an operation record or body leaves neither behind its 503; T065, a run start whose answer was lost after the workflow was created is an accepted start, so a resend no longer starts a second run beside an untracked one. Suggestions and untested cases in backlog T178. Tests by separate authors.
 * **Fix**: Feature 002, T062 (CI run 44751692832, e2e): a state-changing request the engine has read is answered on its merits even when its client closes its sending side after the body, as `ap`'s `nc` does for `registerWorker`; before, the durable service's check ran on the cancelled request context and answered 503. Test by a separate author (`half_closed_client_test.go`).
 * **Fix**: Feature 002, T060 (T021 review R2-1, owner 2026-11-20): a run whose workflow closes before it records `RunStarted` (for example `InvalidRun`) is ended as never started: nothing is recorded, it blocks no other start, and its operation ends `failed` with the workflow's reason. Test by a separate author (`run_failed_before_start_test.go`); no contract change.
 * **Fix**: Feature 002, T055 (owner, 2026-11-20): `WorkersNotReady` now means only that the step worker's own call (an agent's `Ask`, a procedure's `RunProcedure`) got no complete answer; the same failure of another call inside an attempt (`readStepFiles`, the store, approved parts, a stored input) is an ordinary failed attempt with its usage. Test by a separate author (`worker_own_calls_test.go`).

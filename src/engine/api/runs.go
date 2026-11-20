@@ -563,7 +563,9 @@ func (s *sliceServer) removeRecord(id string) {
 // out by the record, the operation of the contract operation opID recorded, the run's workflow
 // started with both (it records RunStarted, with the project, the operation and replay_of, as its
 // first event), then the operation's workflow. The caller holds s.runs.mu and has checked every
-// refusal. An error wrapping ErrUnavailable or errNotRecorded accepted nothing.
+// refusal. A failed start whose workflow exists anyway is accepted (startedAnyway). An error
+// wrapping ErrUnavailable or errNotRecorded accepted nothing, unless whether the workflow exists
+// could not be told: then the operation's record stays.
 func (s *sliceServer) newRun(ctx context.Context, opID, slice, project, replayOf string, inputs map[string]string, refs []string) (gen.Operation, error) {
 	id, err := s.runs.st.NextRunID()
 	if err != nil {
@@ -578,8 +580,7 @@ func (s *sliceServer) newRun(ctx context.Context, opID, slice, project, replayOf
 	err = s.runs.durable.Start(ctx, RunStart{Run: id, Slice: slice, Project: project, ReplayOf: replayOf, Operation: rec.ID,
 		Pattern: p.ID + "@" + p.Version, Definition: p, Model: s.runs.model, Inputs: inputs, Refs: refs,
 		TaskQueue: RunsQueue, RejectDuplicate: true})
-	if err != nil {
-		s.removeRecord(rec.ID)
+	if err != nil && !s.startedAnyway(ctx, id, rec.ID, err) {
 		return gen.Operation{}, err
 	}
 	s.runs.vmu.Lock()
@@ -591,6 +592,26 @@ func (s *sliceServer) newRun(ctx context.Context, opID, slice, project, replayOf
 	}
 	s.ops.launch(ctx, rec)
 	return acceptedView(rec), nil
+}
+
+// startedAnyway decides a failed start of run id, whose operation is op: the answer may have been
+// lost after the durable service created the workflow (a timeout), so it asks whether the
+// workflow exists. When it does, the start was accepted and the operation follows the run. When
+// it does not, the operation's record is removed. When that cannot be told, the record stays: a
+// resend under the key finds the operation, and its work follows the run or, finding neither a
+// workflow nor a record, ends it failed with "send the request again".
+func (s *sliceServer) startedAnyway(ctx context.Context, id, op string, startErr error) bool {
+	exists, err := s.runs.durable.Exists(ctx, id)
+	switch {
+	case err != nil:
+		log.Printf("engine: starting run %s failed (%v) and whether its workflow exists is unknown: %v", id, startErr, err)
+		return false
+	case exists:
+		log.Printf("engine: starting run %s answered %v, but its workflow exists: the start is accepted", id, startErr)
+		return true
+	}
+	s.removeRecord(op)
+	return false
 }
 
 // notAccepted reports whether err accepted nothing, so the answer is 503.
