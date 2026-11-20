@@ -465,9 +465,10 @@ func (s *sliceServer) canRun() error {
 
 // follow is the work of a run's operation: it lasts until the run's record shows its end and
 // succeeds then, whatever the outcome; a run cancelled other than by cancelling its operation, or
-// whose workflow failed, fails it. A run that has neither a workflow nor a record, and that this
-// engine did not start, was never started: the operation fails, and the request may be sent
-// again. When ctx ends first (the engine stops, or the operation is cancelled), it returns ctx's
+// whose workflow failed, fails it; so does a run whose workflow closed before it recorded
+// RunStarted (closeIfFailed: never started, detail the workflow's reason). A run that has neither
+// a workflow nor a record, and that this engine did not start, was never started: the operation
+// fails, and the request may be sent again. When ctx ends first (the engine stops, or the operation is cancelled), it returns ctx's
 // error and the run goes on.
 func (s *sliceServer) follow(ctx context.Context, id string) (WorkResult, error) {
 	notStarted := &WorkError{Code: gen.ErrorCodeOperationFailed, Detail: detailRunNotStarted}
@@ -489,7 +490,12 @@ func (s *sliceServer) follow(ctx context.Context, id string) (WorkResult, error)
 		if err != nil {
 			return WorkResult{}, err
 		}
-		if ok {
+		if !ok {
+			// a workflow that closed before it recorded RunStarted: the run never started (T060)
+			if ended, detail, err := s.runs.closeIfFailed(ctx, id); err == nil && ended && detail != "" {
+				return WorkResult{}, &WorkError{Code: gen.ErrorCodeOperationFailed, Detail: detail}
+			}
+		} else {
 			if run.Status == machine.StatusEnded {
 				if run.Outcome == machine.OutcomeCancelled {
 					detail := "the run was cancelled"
@@ -613,8 +619,9 @@ func (r *runs) recorded(ctx context.Context, id string, limit time.Duration) {
 // noOtherActiveRun refuses RunActive, naming the run and its slice, while a run of any slice other
 // than except has not ended (FR-021). The caller holds s.runs.mu, so the answer holds until the
 // start, resume or replay has been taken by the durable service.
-// A run whose workflow closed with no end on its record is ended first (closeIfFailed), so a
-// restart leaves no run that blocks every start.
+// A run whose workflow closed with no end on its record, or before it recorded RunStarted, is
+// ended first (closeIfFailed), so neither a restart nor a run that never started leaves a run that
+// blocks every start.
 func (s *sliceServer) noOtherActiveRun(except string) error {
 	for {
 		run, slice, err := s.runs.activeAny(except)
@@ -636,10 +643,14 @@ const workflowFailed = "the run's workflow failed: "
 
 // closeIfFailed ends a run whose workflow has closed (or is gone) while its record shows no end:
 // it appends RunCancelled as the record's next event, detail `the run's workflow failed:
-// <reason>` (data model, "Run record"; T058). It asks the durable service first and reads the
-// record after, so an end the workflow wrote before closing is never followed by a second one.
-// ended says the run has ended (by this call or before); detail is the appended event's, or "".
-// An unreachable durable service or a record it cannot write is an error, and nothing changed.
+// <reason>` (data model, "Run record"; T058). A run whose workflow closed before it recorded
+// RunStarted (its record holds nothing) is ended as never started: nothing is written, the
+// engine stops counting it as started, and detail is `the run's workflow failed: <reason>` on
+// every call (T060). It asks the durable service first and reads the record after, so an end, or
+// a RunStarted, the workflow wrote before closing is never missed or followed by a second end.
+// ended says the run has ended (by this call or before); detail is the appended event's, the
+// never-started run's, or "". An unreachable durable service or a record it cannot write is an
+// error, and nothing changed.
 func (r *runs) closeIfFailed(ctx context.Context, id string) (ended bool, detail string, err error) {
 	closed, reason, err := r.durable.Closed(ctx, id)
 	switch {
@@ -657,10 +668,15 @@ func (r *runs) closeIfFailed(ctx context.Context, id string) (ended bool, detail
 	detail = workflowFailed + reason
 	for {
 		run, events, _, ok, err := r.find(id)
-		if err != nil || !ok {
+		switch {
+		case err != nil:
 			return false, "", err
-		}
-		if run.Status == machine.StatusEnded {
+		case !ok:
+			r.vmu.Lock()
+			delete(r.starting, id)
+			r.vmu.Unlock()
+			return true, detail, nil
+		case run.Status == machine.StatusEnded:
 			return true, "", nil
 		}
 		last := events[len(events)-1]
