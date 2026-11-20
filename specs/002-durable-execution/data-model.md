@@ -138,6 +138,14 @@ file, fsync, rename, fsync the folder), with the request body beside it in
   namespace's retention). Every read checks `ended_at` itself: after that, `getOperation` answers 404
   `NotFound`, whenever the sweep runs (a key is free earlier, see Keys). A
   slice's erasure removes its operations' records at once (FR-017, T029).
+- **Erasing a slice** (`deleteSlice`'s work, after its checks; research R8, T029): for each run
+  of the slice it deletes the run's workflow (`Runs.Delete`), and for each other operation whose
+  `target` is the slice or one of its runs it deletes the operation's workflow
+  (`Operations.Delete`) and its record and body; then it erases the store as in feature 001.
+  `NotFound` (a workflow already gone, as for feature 001's runs or after the retention) is no
+  error; an unavailable durable service is a `Retryable` failure, and the repeat does it again
+  (each deletion is harmless twice). Its own record and workflow are never deleted: they hold only
+  the slice's ID and are removed by the retention (FR-017).
 - **Keys**: a request whose Idempotency-Key a record holds is answered with the record's first
   answer (202, the operation as accepted), also after a restart, for 24 h from `accepted_at`
   (`x-limits.idempotency-key-retention-hours`: "from the first request"; ADR 0073); after that the key is
