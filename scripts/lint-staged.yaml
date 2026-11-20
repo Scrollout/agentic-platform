@@ -22,7 +22,7 @@ linters:
     exclude: ["*/testdata/*"]
     per: go-module
     go: true
-    args: [golangci-lint, run, --enable, gosec, --output.text.path=stdout,
+    args: [golangci-lint, run, --enable, gosec, --build-tags=docker, --output.text.path=stdout,
            --output.text.print-issued-lines=false, --output.text.colors=false, --show-stats=false]
     finding: '^(?P<path>[^:]+\.go):(?P<line>\d+):'
     clean: [0]
