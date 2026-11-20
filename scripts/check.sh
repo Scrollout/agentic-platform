@@ -86,6 +86,12 @@ if [ "${1:-}" = "--prepare" ]; then scripts/generate.sh; fill_module_cache; exit
 #                                          only those check tests (scripts/testrun.py)
 #   scripts/check.sh --list                the step names
 #   scripts/check.sh --prepare             only the generated code and the module cache (CI jobs)
+# Which acceptance tests the docker step runs (CI splits them across jobs, ADR 0074); both unset,
+# it runs every test of every docker suite. Each is a Go test pattern, as go test's -run takes:
+#   AP_ACCEPTANCE_SKIP=<pattern>           the acceptance suite skips the tests it names (-test.skip)
+#   AP_ACCEPTANCE_RUN=<pattern>            the docker step runs only the acceptance suite, only the
+#                                          tests it names (-test.run)
+# Either one set makes the run partial.
 # An unknown step or check test is refused before anything runs. Each step is timed in setup,
 # test and teardown; the run ends with the times and the slowest step.
 STEP_TABLE='py-tests check tests (layout, ruleset), each with planted violations
@@ -120,6 +126,8 @@ done
 # shellcheck disable=SC2086
 [ -z "$py" ] || python3 scripts/testrun.py --list $py >/dev/null || exit 2
 [ -n "$only" ] && echo "== PARTIAL RUN: steps $only${py:+, check tests$py}"
+selected=${AP_ACCEPTANCE_RUN:-}${AP_ACCEPTANCE_SKIP:-}
+[ -z "$selected" ] || echo "== PARTIAL RUN: acceptance tests chosen by AP_ACCEPTANCE_RUN or AP_ACCEPTANCE_SKIP"
 
 times=$(mktemp); trap 'rm -f "$times"' EXIT
 now() { date +%s.%N; }
@@ -199,18 +207,28 @@ s_docker() {
   # package folder. The contract and acceptance suites build the engine they test in the pinned Go
   # container too (src/tests/lab). analystsvc still builds its client with the host's Go, so it
   # stays out until that changes (T040a).
-  for p in recorded lint acceptance contract; do
+  # AP_ACCEPTANCE_RUN / AP_ACCEPTANCE_SKIP (ADR 0074): which acceptance tests to run or skip, see
+  # the usage above; set, they go to the acceptance binary as -test.run / -test.skip.
+  suites="recorded lint acceptance contract"
+  [ -z "${AP_ACCEPTANCE_RUN:-}" ] || suites=acceptance
+  for p in $suites; do
     phase setup
     go_run none "cd tests && GOPROXY=off GOFLAGS=-mod=readonly CGO_ENABLED=0 go test -c -tags docker -o /gopath/$p.test ./$p/"
     phase test
+    set -- -test.count=1
+    if [ "$p" = acceptance ]; then
+      [ -z "${AP_ACCEPTANCE_RUN:-}" ] || set -- "$@" -test.run "$AP_ACCEPTANCE_RUN"
+      [ -z "${AP_ACCEPTANCE_SKIP:-}" ] || set -- "$@" -test.skip "$AP_ACCEPTANCE_SKIP"
+      [ $# -eq 1 ] || echo "== acceptance tests: $*"
+    fi
     if [ -z "$REPORTS" ]; then
-      (cd "src/tests/$p" && "$GO_CACHE/$p.test" -test.count=1)
+      (cd "src/tests/$p" && "$GO_CACHE/$p.test" "$@")
     else
       # For the report (D43): the binary's test2json output goes into a file and is shown while it
       # runs (GNU tail, as on the CI runners; test2json's framing byte removed); its exit code is
       # kept; then the file is converted into src/tests/$p's JUnit report.
       out="$GO_CACHE/$p.out"; : >"$out"
-      (cd "src/tests/$p" && exec "$GO_CACHE/$p.test" -test.count=1 -test.v=test2json) >"$out" 2>&1 &
+      (cd "src/tests/$p" && exec "$GO_CACHE/$p.test" "$@" -test.v=test2json) >"$out" 2>&1 &
       pid=$!
       tail -n +1 -f --pid="$pid" "$out" | tr -d '\026'
       rc=0; wait "$pid" || rc=$?
@@ -268,7 +286,7 @@ awk -v total="$total" '
     }
     printf "  %-14s %7.1f\n  slowest step: %s\n", "all", total, slow
   }' "$times"
-if [ -n "$only" ]; then
+if [ -n "$only$selected" ]; then
   echo "== PARTIAL RUN: a change is accepted only after a full run (scripts/check.sh with no arguments)"
 else
   echo "all checks passed"

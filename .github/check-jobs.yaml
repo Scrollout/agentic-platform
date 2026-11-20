@@ -57,6 +57,15 @@ jobs:
   go: {paths: *code}
   arch: {paths: *code}
   docker: {paths: *code}
-  ap_test_planted: {paths: *code}
+  # The Docker suites' long tests, one job per stop point and per planted scenario (ADR 0074).
+  stop_points_agent_step: {paths: *code}
+  stop_points_procedure_step: {paths: *code}
+  stop_points_review_round: {paths: *code}
+  stop_points_version_history_commit: {paths: *code}
+  ap_test_planted_edit_judging_tests: {paths: *code}
+  ap_test_planted_outside_scope: {paths: *code}
+  ap_test_planted_forbidden_dependency: {paths: *code}
+  ap_test_planted_claims_done: {paths: *code}
+  ap_test_planted_non_converging_review: {paths: *code}
   ap_test_us2: {paths: *code}
   e2e: {paths: *code}

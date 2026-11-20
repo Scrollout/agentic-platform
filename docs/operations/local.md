@@ -112,7 +112,11 @@ test-security rule; no container holds the container engine's socket. `go tool t
 same pinned container, converts the binary's output, and `ap` prints one line per trial, per
 scenario and a total (`planted`), or one per test (`us2`), with a failing test's messages indented
 below it. It exits 0 when everything passes, 1 for a failing trial or test or a suite that does not
-build (the build's error on standard error), and 3 for an unknown suite.
+build (the build's error on standard error), and 3 for an unknown suite. `ap test planted
+<scenario>` runs only that scenario's 3 trials (`-test.run '^TestPlanted$/^<scenario>$'`), as CI
+runs them, one job per scenario; a malformed name, a second argument or a scenario for `us2` exits
+3, and a name no scenario has exits 1 with `test: no test of the planted suite ran`
+([ADR 0074](/decisions/0074-long-ci-suites-split-across-parallel-jobs.md)).
 
 The suites' step agents answer from synthesised recordings, the step recording sets in
 `src/tests/recorded/steps/` (`happy`, `resume`, `planted/<scenario>`; research D34,
@@ -207,7 +211,14 @@ Sources: [Feature 001 research, D44](../../specs/001-prose-to-accepted-slice/res
 The pre-commit hook runs the quick static checks of a commit
 ([playbook](/playbooks/protect-changes-locally.md)); CI on GitHub runs every step of
 `scripts/check.sh` and the acceptance suites on each push, and a task is done when that run is
-green ([ADR 0044](/decisions/0044-full-checks-run-on-github-hosted-runners.md)). On the host, run
+green ([ADR 0044](/decisions/0044-full-checks-run-on-github-hosted-runners.md)). Each test of the
+Docker suites runs in exactly one job: the `docker` job skips `TestPlanted`, `TestStopPoints` and
+the `TestUS2` tests (`AP_ACCEPTANCE_SKIP`), `TestStopPoints` runs one job per stop point
+(`stop_points_<stop point>`, hyphens as underscores, `AP_ACCEPTANCE_RUN`, each with the uninterrupted run its trials are
+compared with), `TestPlanted` one job per scenario (`ap_test_planted_<scenario>`, `ap test planted
+<scenario>`), and the `TestUS2` tests in `ap_test_us2`
+([ADR 0074](/decisions/0074-long-ci-suites-split-across-parallel-jobs.md)); `scripts/check.sh`
+with neither variable set runs them all. On the host, run
 only targeted tests that take seconds to a few minutes while working; the Docker step, `ap test`
 and `e2e.sh` are for CI, since the host is small and shared. The live evals run only when the
 owner starts them, `gh workflow run evals.yml --ref <branch>` (`-f all=true` for every suite),

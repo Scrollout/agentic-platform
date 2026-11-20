@@ -129,7 +129,8 @@ For the platform's own development and CI (src/deploy/README.md):
        ap up --credentials <file> --projects <folder> [--listen <address> ...]
        ap build-workers <slice> <project>
        ap build-workers --resume <run>
-       ap test <suite>
+       ap test <suite>                 the suites: planted, us2
+       ap test planted <scenario>      only that scenario of the planted suite
 EOF
   exit "${1:-3}"
 }
@@ -1580,14 +1581,25 @@ cmd_replay() {
 # contract's lines from the events. No session, no Compose, no tests image: the suites start their
 # own labs with the developer's own Docker access on the host (plan, Exceptions to Engineering
 # Principles), and no container holds the container engine's socket.
+# `test planted <scenario>` runs only that scenario's trials, so CI can run the scenarios on
+# parallel runners (ADR 0074); a well-formed name that is no scenario runs no test (exit 1, below).
 cmd_test() {
-  [ $# -eq 1 ] || usage
+  [ $# -eq 1 ] || [ $# -eq 2 ] || usage
   suite=$1
   case $suite in
     planted) pattern='^TestPlanted$' limit=60m ;;
     us2) pattern='^TestUS2' limit=75m ;;
     *) die 3 "test: unknown suite $suite; the suites are planted, us2" ;;
   esac
+  if [ $# -eq 2 ]; then
+    [ "$suite" = planted ] || usage
+    # Lowercase letters and digits in words joined by single hyphens, spelled out so no locale
+    # widens them: the name goes into the test pattern as it is.
+    case $2 in
+      '' | -* | *- | *--* | *[!abcdefghijklmnopqrstuvwxyz0123456789-]*) usage ;;
+    esac
+    pattern="^TestPlanted\$/^$2\$"
+  fi
   repo=$(CDPATH='' cd -- "$here/../.." && pwd -P)
   pkg=$repo/src/tests/acceptance
   [ -d "$pkg" ] || die 1 "test: no acceptance suite in $pkg"
@@ -1682,7 +1694,9 @@ test_report() {
     }
     END {
       if (suite == "planted") printf "planted: %d of %d scenarios stopped in 3 out of 3 trials\n", good, scenarios
-      if (!ran) { printf "ap: test: no test of the %s suite ran\n", suite > "/dev/stderr"; exit 1 }
+      # For planted, TestPlanted passing with no scenario (a scenario name no scenario has) ran no
+      # test of the suite.
+      if (!ran || (suite == "planted" && scenarios == 0 && !failed)) { printf "ap: test: no test of the %s suite ran\n", suite > "/dev/stderr"; exit 1 }
       if (suite == "planted" && (scenarios == 0 || good != scenarios)) exit 1
       if (failed) exit 1
       if (code != 0) {

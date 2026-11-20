@@ -196,6 +196,9 @@ the binary on the host in `src/tests/acceptance` with `-test.run` (`^TestPlanted
 and `-test.v=test2json`, converts its output with `go tool test2json` in the same pinned container
 (`--network none`), and prints the contract's lines. Exit 0 when every test passes, 1 for a failing
 trial or test or a failed build, 3 for an unknown suite. The binary is removed afterwards.
+`ap test planted <scenario>` runs only that scenario (`^TestPlanted$/^<scenario>$`; ADR 0074):
+exit 3 for a name not made of lowercase letters, digits and single hyphens, a second argument or a
+scenario for `us2`, and 1 with `test: no test of the planted suite ran` for a name no scenario has.
 
 A missing variable stops Compose with a message naming it. Every service runs non-root with a
 read-only root file system, all capabilities dropped, `no-new-privileges`, CPU, memory and process
