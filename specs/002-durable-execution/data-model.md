@@ -135,7 +135,7 @@ file, fsync, rename, fsync the folder), with the request body beside it in
   slice's erasure removes its operations' records at once (FR-017, T029).
 - **Keys**: a request whose Idempotency-Key a record holds is answered with the record's first
   answer (202, the operation as accepted), also after a restart, for 24 h from `accepted_at`
-  (`x-limits.idempotency-key-retention-hours`: "from the first request"); after that the key is
+  (`x-limits.idempotency-key-retention-hours`: "from the first request"; ADR 0073); after that the key is
   free, though the operation is still followed until 24 h after its end. Every other answer under a key
   (a refusal, `registerWorker`'s 200, `cancelOperation`'s 202, a `resumeRun` or
   `acceptHandOver` answered with an open operation) is kept in the engine's memory as in feature
