@@ -130,11 +130,13 @@ file, fsync, rename, fsync the folder), with the request body beside it in
   `runs.closeIfFailed` does, so an end written meanwhile is kept) ends `failed` with `the operation's workflow closed with no
   end`; a record ended more than 24 h ago is removed.
 - **Kept**: 24 h after `ended_at` (`x-limits.idempotency-key-retention-hours`, also the
-  namespace's retention). Every read and key lookup checks `ended_at` itself: after that,
-  `getOperation` answers 404 `NotFound` and the key is no longer held, whenever the sweep runs. A
+  namespace's retention). Every read checks `ended_at` itself: after that, `getOperation` answers 404
+  `NotFound`, whenever the sweep runs (a key is free earlier, see Keys). A
   slice's erasure removes its operations' records at once (FR-017, T029).
 - **Keys**: a request whose Idempotency-Key a record holds is answered with the record's first
-  answer (202, the operation as accepted), also after a restart. Every other answer under a key
+  answer (202, the operation as accepted), also after a restart, for 24 h from `accepted_at`
+  (`x-limits.idempotency-key-retention-hours`: "from the first request"); after that the key is
+  free, though the operation is still followed until 24 h after its end. Every other answer under a key
   (a refusal, `registerWorker`'s 200, `cancelOperation`'s 202, a `resumeRun` or
   `acceptHandOver` answered with an open operation) is kept in the engine's memory as in feature
   001 and is judged again after a restart; a 503 is never kept, so the same request may be sent
