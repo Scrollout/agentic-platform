@@ -420,7 +420,8 @@ func readLines(path string) ([][]byte, error) {
 	return lines, nil
 }
 
-func syncDir(dir string) error {
+// syncDir makes a folder's entries durable. A variable, so a test of the store can make it fail.
+var syncDir = func(dir string) error {
 	d, err := os.Open(dir)
 	if err != nil {
 		return err
