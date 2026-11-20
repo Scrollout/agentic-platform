@@ -76,6 +76,8 @@ func (f fakeWorkflows) Cancel(context.Context, string) error             { retur
 func (f fakeWorkflows) Delete(context.Context, string) error             { return nil }
 func (f fakeWorkflows) Exists(_ context.Context, r string) (bool, error) { return f.has[r], nil }
 
+func (f fakeWorkflows) Closed(context.Context, string) (bool, string, error) { return false, "", nil }
+
 // contractRetentionHours reads the limit from the contract file itself.
 func contractRetentionHours(t *testing.T) time.Duration {
 	t.Helper()

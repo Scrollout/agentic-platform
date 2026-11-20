@@ -99,6 +99,9 @@ type WorkerResult struct {
 	ChangedLines         []machine.Line
 	Before, ProjectFiles []machine.File
 	Took                 time.Duration // how long the call ran
+	// Failure is why the call failed, "" when it did not; Model, Usage and Took then hold what it
+	// used, and nothing else is set.
+	Failure string
 }
 
 // CheckCall is one check of one attempt (machine.CheckRequest), with the attempt's result by hash.
@@ -125,6 +128,7 @@ type CheckResult struct {
 	Refs      []string
 	Confirmed []int
 	Took      time.Duration
+	Failure   string // why the check could not run, "" when it ran; only Took is set with it
 }
 
 // Ran is RestoreProject's and CommitStep's result.

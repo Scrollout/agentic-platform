@@ -36,6 +36,10 @@ const (
 	detailNoWorkers = "the step workers are not running"
 )
 
+// recordRetryEvery is how often a run record write is tried again once the declared rule's
+// retries are spent (data model, "Run record"; T058).
+const recordRetryEvery = time.Minute
+
 // noBlockingFindingOpen is the review check whose failure means a round ended with open findings,
 // not a rejected attempt.
 const noBlockingFindingOpen = "NoBlockingFindingOpen"
@@ -446,8 +450,11 @@ func (r *run) attempt(s machine.Step, at attemptOf) (WorkerResult, verdict, stri
 	used := base
 	used.Usage = &use
 
-	if err != nil {
-		why := "the worker failed: " + errText(err)
+	if err != nil || res.Failure != "" { // a failed call's use counts (above), as in feature 001 (T057)
+		why := "the worker failed: " + res.Failure
+		if err != nil {
+			why = "the worker failed: " + errText(err)
+		}
 		if err := r.reject(used, why); err != nil {
 			return res, rejected, why, err
 		}
@@ -488,6 +495,9 @@ func (r *run) attempt(s machine.Step, at attemptOf) (WorkerResult, verdict, stri
 			Findings: res.Findings, Changed: res.ChangedLines, Before: res.Before, ProjectFiles: res.ProjectFiles,
 			Open: slices.Clone(at.open), ChangedLines: slices.Clone(at.changed), TimeLimit: limit}, &cr)
 		switch {
+		case cerr == nil && cr.Failure != "": // its time counts (T057)
+			r.elapsed += max(cr.Took, 0)
+			cr = CheckResult{Passed: false, Reason: "the check could not run: " + cr.Failure}
 		case cerr == nil:
 			r.elapsed += max(cr.Took, 0)
 		case r.ctx.Err() != nil:
@@ -849,11 +859,14 @@ func (r *run) recordOn(ctx workflow.Context, e *EventRecord) error {
 		case errType(err) == SeqTaken:
 			return temporal.NewNonRetryableApplicationError(fmt.Sprintf("run %s: event %d (%s) is not the one the record holds",
 				r.in.Run, e.Event.Seq, e.Event.Kind), SeqTaken, err)
-		case try == r.rule.Retries:
-			return temporal.NewNonRetryableApplicationError(fmt.Sprintf("run %s: the run record could not be written: %s",
-				r.in.Run, errText(err)), "RecordFailed", err)
 		}
-		if err := workflow.Sleep(ctx, r.rule.Wait(try, r.random)); err != nil {
+		// A store that does not answer is back-pressure, never a defect: the rule's waits, then
+		// one a minute until the event is written (T058).
+		wait := recordRetryEvery
+		if try < r.rule.Retries {
+			wait = r.rule.Wait(try, r.random)
+		}
+		if err := workflow.Sleep(ctx, wait); err != nil {
 			ctx, cancelled = r.root, true
 		}
 		try++

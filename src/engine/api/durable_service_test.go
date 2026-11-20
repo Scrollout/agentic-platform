@@ -216,6 +216,35 @@ func (s *testDurable) Exists(_ context.Context, id string) (bool, error) {
 	return s.runs[id] != nil, nil
 }
 
+func (s *testDurable) Closed(_ context.Context, id string) (bool, string, error) {
+	s.mu.Lock()
+	r := s.runs[id]
+	s.mu.Unlock()
+	if r == nil {
+		return false, "", fmt.Errorf("durable test service: run %s: %w", id, api.ErrNotFound)
+	}
+	select {
+	case <-r.done:
+	default:
+		return false, "", nil
+	}
+	err := r.env.GetWorkflowError()
+	if err == nil {
+		return true, "", nil
+	}
+	for e := err; e != nil; {
+		if app, ok := e.(*temporal.ApplicationError); ok {
+			return true, app.Message(), nil
+		}
+		u, ok := e.(interface{ Unwrap() error })
+		if !ok {
+			break
+		}
+		e = u.Unwrap()
+	}
+	return true, err.Error(), nil
+}
+
 func (s *testDurable) Delete(_ context.Context, id string) error {
 	s.mu.Lock()
 	r := s.runs[id]

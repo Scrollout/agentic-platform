@@ -168,6 +168,8 @@ func (d *fakeDurable) Exists(_ context.Context, id string) (bool, error) {
 	return d.runs[id] != nil, nil
 }
 
+func (d *fakeDurable) Closed(context.Context, string) (bool, string, error) { return false, "", nil }
+
 func (d *fakeDurable) Delete(_ context.Context, id string) error {
 	d.mu.Lock()
 	r := d.runs[id]

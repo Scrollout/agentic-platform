@@ -84,7 +84,9 @@ func failed(kind string, err error) error {
 }
 
 // CallWorker runs one attempt of a step on the step worker. Its error types are WorkersNotReady
-// and ModelUnavailable; any other error is the attempt failing.
+// and ModelUnavailable. A call that fails otherwise is a result whose Failure is the reason, with
+// what the call used and how long it ran, so the budgets count it (T057); an error of any other
+// type is the attempt failing before the call.
 func (a *Activities) CallWorker(ctx context.Context, c WorkerCall) (WorkerResult, error) {
 	open, err := a.findings(c.Open)
 	if err != nil {
@@ -99,19 +101,22 @@ func (a *Activities) CallWorker(ctx context.Context, c WorkerCall) (WorkerResult
 		return WorkerResult{}, failed(WorkersNotReady, err)
 	case errors.Is(err, machine.ErrModelUnavailable):
 		return WorkerResult{}, failed(ModelUnavailable, err)
-	case err != nil:
+	case err != nil && ctx.Err() != nil: // the activity itself ended (a stop or a cancel)
 		return WorkerResult{}, failed("WorkerFailed", err)
+	case err != nil:
+		return WorkerResult{Model: res.Model, Usage: res.Usage, Took: took, Failure: err.Error()}, nil
 	}
 	fs, err := a.store(c.Slice, res.Findings)
 	if err != nil {
-		return WorkerResult{}, failed("WorkerFailed", err)
+		return WorkerResult{Model: res.Model, Usage: res.Usage, Took: took, Failure: err.Error()}, nil
 	}
 	return WorkerResult{Model: res.Model, Outputs: res.Outputs, Usage: res.Usage, Findings: fs, ChangedLines: res.ChangedLines,
 		Before: res.Before, ProjectFiles: res.ProjectFiles, Took: took}, nil
 }
 
 // RunCheck runs one check of an attempt on the check service, with the attempt's outputs and
-// findings read from the artifact store. An error is a check that could not run.
+// findings read from the artifact store. A check that could not run is a result whose Failure is
+// the reason, with how long it ran; an error is a check that could not start.
 func (a *Activities) RunCheck(ctx context.Context, c CheckCall) (CheckResult, error) {
 	fs, err := a.findings(c.Findings)
 	if err != nil {
@@ -134,8 +139,11 @@ func (a *Activities) RunCheck(ctx context.Context, c CheckCall) (CheckResult, er
 		Result: machine.Result{Model: c.Model, Outputs: c.Outputs, Findings: fs, ChangedLines: c.Changed, Before: c.Before,
 			ProjectFiles: c.ProjectFiles, Content: content}}
 	r, took, err := timed(ctx, c.TimeLimit, func(ctx context.Context) (machine.CheckResult, error) { return a.Checker.Check(ctx, req) })
-	if err != nil {
+	switch {
+	case err != nil && ctx.Err() != nil: // the activity itself ended (a stop or a cancel)
 		return CheckResult{}, failed("CheckFailed", err)
+	case err != nil: // the check could not run: its time counts (T057)
+		return CheckResult{Took: took, Failure: err.Error()}, nil
 	}
 	return CheckResult{Passed: r.Passed, Reason: r.Reason, Refs: r.Refs, Confirmed: r.Confirmed, Took: took}, nil
 }

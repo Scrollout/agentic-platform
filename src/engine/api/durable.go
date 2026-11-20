@@ -28,6 +28,9 @@ type Runs interface {
 	Cancel(ctx context.Context, run string) error
 	// Exists says whether the run has a workflow.
 	Exists(ctx context.Context, run string) (bool, error)
+	// Closed says whether the run's workflow has closed and, when it did not complete, why (its
+	// failure's message); a run with no workflow is ErrNotFound (T058).
+	Closed(ctx context.Context, run string) (closed bool, reason string, err error)
 	// Delete removes the run's workflow (erasing a slice).
 	Delete(ctx context.Context, run string) error
 }

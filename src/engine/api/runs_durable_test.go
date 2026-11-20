@@ -105,6 +105,7 @@ func (f *fakeRuns) Exists(_ context.Context, run string) (bool, error) {
 	}
 	return f.exists[run], nil
 }
+func (f *fakeRuns) Closed(context.Context, string) (bool, string, error) { return false, "", nil }
 func (f *fakeRuns) seen() []durableCall {
 	f.mu.Lock()
 	defer f.mu.Unlock()

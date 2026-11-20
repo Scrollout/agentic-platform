@@ -468,7 +468,7 @@ func (s *sliceServer) follow(id string, op *operation) func(ctx context.Context)
 	return func(ctx context.Context) (WorkResult, error) {
 		for {
 			changed := s.runs.rec.next(id)
-			run, _, _, ok, err := s.runs.find(id)
+			run, events, _, ok, err := s.runs.find(id)
 			if err != nil {
 				return WorkResult{}, err
 			}
@@ -482,9 +482,17 @@ func (s *sliceServer) follow(id string, op *operation) func(ctx context.Context)
 				})
 				if run.Status == machine.StatusEnded {
 					if run.Outcome == machine.OutcomeCancelled {
-						return WorkResult{}, &WorkError{Code: gen.ErrorCodeOperationFailed, Detail: "the run was cancelled"}
+						detail := "the run was cancelled"
+						if d := events[len(events)-1].Detail; strings.HasPrefix(d, workflowFailed) {
+							detail = d
+						}
+						return WorkResult{}, &WorkError{Code: gen.ErrorCodeOperationFailed, Detail: detail}
 					}
 					return WorkResult{Run: id}, nil
+				}
+				// a workflow that closed with no end on the record: the run is ended here (T058)
+				if ended, detail, err := s.runs.closeIfFailed(ctx, id); err == nil && ended && detail != "" {
+					return WorkResult{}, &WorkError{Code: gen.ErrorCodeOperationFailed, Detail: detail}
 				}
 			}
 			select {
@@ -561,15 +569,67 @@ func (r *runs) recorded(ctx context.Context, id string, limit time.Duration) {
 // noOtherActiveRun refuses RunActive, naming the run and its slice, while a run of any slice other
 // than except has not ended (FR-021). The caller holds s.runs.mu, so the answer holds until the
 // start, resume or replay has been taken by the durable service.
+// A run whose workflow closed with no end on its record is ended first (closeIfFailed), so a
+// restart leaves no run that blocks every start.
 func (s *sliceServer) noOtherActiveRun(except string) error {
-	run, slice, err := s.runs.activeAny(except)
-	switch {
-	case err != nil:
-		return err
-	case run != "":
+	for {
+		run, slice, err := s.runs.activeAny(except)
+		switch {
+		case err != nil:
+			return err
+		case run == "":
+			return nil
+		}
+		if ended, _, err := s.runs.closeIfFailed(context.Background(), run); err == nil && ended {
+			continue
+		}
 		return &sl.Error{Code: string(gen.ErrorCodeRunActive), Detail: fmt.Sprintf("run %s of slice %s has not ended", run, slice)}
 	}
-	return nil
+}
+
+// workflowFailed begins the detail of the RunCancelled that ends a run whose workflow failed.
+const workflowFailed = "the run's workflow failed: "
+
+// closeIfFailed ends a run whose workflow has closed (or is gone) while its record shows no end:
+// it appends RunCancelled as the record's next event, detail `the run's workflow failed:
+// <reason>` (data model, "Run record"; T058). It asks the durable service first and reads the
+// record after, so an end the workflow wrote before closing is never followed by a second one.
+// ended says the run has ended (by this call or before); detail is the appended event's, or "".
+// An unreachable durable service or a record it cannot write is an error, and nothing changed.
+func (r *runs) closeIfFailed(ctx context.Context, id string) (ended bool, detail string, err error) {
+	closed, reason, err := r.durable.Closed(ctx, id)
+	switch {
+	case errors.Is(err, ErrNotFound):
+		closed = true
+	case err != nil:
+		return false, "", err
+	}
+	if !closed {
+		return false, "", nil
+	}
+	if reason == "" {
+		reason = "it closed with no end"
+	}
+	detail = workflowFailed + reason
+	for {
+		run, events, _, ok, err := r.find(id)
+		if err != nil || !ok {
+			return false, "", err
+		}
+		if run.Status == machine.StatusEnded {
+			return true, "", nil
+		}
+		last := events[len(events)-1]
+		e := machine.Event{Seq: last.Seq + 1, At: time.Now().UTC(), Run: id, Kind: "RunCancelled", Detail: detail,
+			Refs: events[0].Refs}
+		err = r.rec.Record(events[0].Slice, e, "", "")
+		if err == nil {
+			return true, detail, nil
+		}
+		if !errors.Is(err, store.ErrSeqTaken) { // another writer took the seq: read the record again
+			return false, "", err
+		}
+	}
 }
 
 // signal sends a signal to the run's workflow; an error wrapping ErrUnavailable sent nothing.

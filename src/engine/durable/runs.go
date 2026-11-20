@@ -12,6 +12,7 @@ import (
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/temporal"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
@@ -72,6 +73,34 @@ func (r *Runs) Exists(ctx context.Context, run string) (bool, error) {
 		return false, nil
 	}
 	return false, err
+}
+
+// Closed says whether the run's workflow has closed, and why when it did not complete: the
+// failure's message, or how Temporal ended it. A run with no workflow is api.ErrNotFound.
+func (r *Runs) Closed(ctx context.Context, run string) (bool, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, callTimeout)
+	defer cancel()
+	d, err := r.c.DescribeWorkflow(ctx, run, "")
+	if err = classify("reading run "+run, err); err != nil {
+		return false, "", err
+	}
+	switch d.Status {
+	case enumspb.WORKFLOW_EXECUTION_STATUS_RUNNING, enumspb.WORKFLOW_EXECUTION_STATUS_UNSPECIFIED:
+		return false, "", nil
+	case enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED:
+		return true, "", nil
+	}
+	werr := r.c.GetWorkflow(ctx, run, "").Get(ctx, nil)
+	var app *temporal.ApplicationError
+	switch {
+	case werr == nil:
+		return true, "", nil
+	case errors.As(werr, &app):
+		return true, app.Message(), nil
+	case errors.Unwrap(werr) != nil:
+		return true, errors.Unwrap(werr).Error(), nil
+	}
+	return true, werr.Error(), nil
 }
 
 // Delete removes the run's workflow and its history.
