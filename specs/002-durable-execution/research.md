@@ -245,8 +245,8 @@ questions on 2026-11-19.
 ### R8. Erasing a slice erases its workflows
 
 - **Decision**: the `DeleteSlice` operation, after its refusal checks, deletes the workflow of
-  each run of the slice and of each other operation that targets the slice
-  (`DeleteWorkflowExecution`, S9), then erases the store as today, those operation records
+  each run of the slice (`Runs.Delete`) and of each other operation that targets the slice or one
+  of its runs (`Operations.Delete`; `DeleteWorkflowExecution`, S9), then erases the store as today, those operation records
   included. Its own record and workflow stay followable until the 24 h retention removes them;
   they hold only the slice's ID (FR-017, clarified 2026-11-19). A test reads PostgreSQL's `executions`, `history_node`, `current_executions` and
   `executions_visibility` tables for the deleted IDs and fails if any row is left (S14 could not
