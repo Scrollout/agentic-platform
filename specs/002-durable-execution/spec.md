@@ -62,6 +62,9 @@ feature keeps except where a requirement below changes it.
   retried until it is written; a run the platform cannot carry on ends `cancelled`, its detail
   beginning `the run's workflow failed:` with the reason, and its operation fails (owner, from
   the US1 review, T058).
+- Q: An agent call cut off by its step worker dying reports no usage, and a worker that dies on
+  every call is never a failed attempt (T050); does FR-003 add a bound? → A: No: FR-003 states it
+  as a limit (owner, 2026-11-20).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -203,7 +206,11 @@ feature 001 passes on this feature's code.
   the platform is running the run. A step's attempts MUST count across a stop: only the
   interrupted attempt is made again, with its own number, and a step fails its checks at most 3
   times across stops. A developer's resume after a hand-over starts a fresh count for the step it
-  resumes (feature 001 starts the count again at 1 after every resume, backlog T138).
+  resumes (feature 001 starts the count again at 1 after every resume, backlog T138). Limit
+  (owner, 2026-11-20): an agent call cut off because its step worker died, or that got no
+  complete answer, reports no usage, so what it spent is not counted, and such a call is not a
+  failed attempt: it is bounded by the retry rule's 3 retries and then the wait for the step
+  workers, again after each rebuild of them.
 - **FR-004**: A run waiting for the developer MUST keep waiting across a stop, and MUST expire 14
   days after its hand-over.
 - **FR-005**: After the platform is up again, a run interrupted by the stop MUST continue by
