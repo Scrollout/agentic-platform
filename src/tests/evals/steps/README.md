@@ -192,8 +192,10 @@ sh src/tests/evals/steps/run.sh graders   # grader self-tests and fixtures: no D
 sh src/tests/evals/steps/run.sh live      # the real suite: 60 agent runs; needs the agents and the key; COSTS MONEY
 ```
 
-`graders` is also what `go test -run 'Grader|SelfTest' ./evals/steps` runs (from `src/tests`), and
-takes about 3 to 4 minutes: each fixture builds and runs real Go tests. It needs the pinned
+`graders` is also what `go test -timeout 20m -run 'Grader|SelfTest' ./evals/steps` runs (from
+`src/tests`). With the held-out and mutant graders it takes about 13 minutes on a loaded 16-CPU
+host, more than `go test`'s default 10-minute limit: each fixture builds and runs real Go tests,
+and every tests trial builds and runs the reference and 8 mutants. It needs the pinned
 oapi-codegen (`AP_OAPI_CODEGEN`, `PATH`, `$HOME/go/bin`, or an offline `go install` of the pin) and
 the Go module cache filled for godog and the oapi-codegen runtime, as the engine's procedure tests do.
 

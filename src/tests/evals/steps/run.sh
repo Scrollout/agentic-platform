@@ -11,7 +11,7 @@ mode=${1:-}
 case "$mode" in
 graders)
   # oapi-codegen (pinned, src/deploy/images.lock) builds the fixtures: AP_OAPI_CODEGEN, PATH or $HOME/go/bin.
-  PATH="$PATH:$HOME/go/bin" exec go test -count=1 -run 'Grader|SelfTest' ./evals/steps ;;
+  PATH="$PATH:$HOME/go/bin" exec go test -count=1 -timeout 20m -run 'Grader|SelfTest' ./evals/steps ;;
 live) ;;
 *) echo "usage: run.sh graders|live" >&2; exit 2 ;;
 esac
