@@ -113,6 +113,10 @@ questions on 2026-11-19.
     stopped`), restores the project to the last accepted step (FR-002), and makes the same
     attempt again with the same number. An attempt counts as failed only when its checks fail
     (FR-003, owner).
+  - A stop that lands between two activities (while a workflow task runs, or none is due) loses
+    no activity: Temporal gives the workflow's next task to the restarted engine, no heartbeat
+    times out, and the run records no stop (FR-006's limit, owner 2026-11-21; seen in CI run
+    44881682941, T072).
   - When the engine is up again its Temporal worker takes the workflow up by itself (FR-005,
     owner) and records `RunResumed` (detail `continued after the platform stopped`).
   - An accepted step is never made again: the workflow's state holds every accepted step; a

@@ -66,6 +66,13 @@ feature keeps except where a requirement below changes it.
   every call is never a failed attempt (T050); does FR-003 add a bound? → A: No: FR-003 states it
   as a limit (owner, 2026-11-20).
 
+### Session 2026-11-21
+
+- Q: A stop that lands while the run is between two calls (no call in flight) loses nothing, and
+  the run never learns of it (CI run 44881682941, T072); must FR-006 record it? → A: No: FR-006
+  states it as a limit; the stop-point test stops the engine only once the stopped call is in
+  flight (owner, 2026-11-21).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A run survives a platform stop (Priority: P1)
@@ -220,7 +227,10 @@ feature 001 passes on this feature's code.
   on every attempt) still waits for the developer.
 - **FR-006**: Every run MUST still end in exactly one recorded outcome (done, handed over,
   expired, cancelled), and its record MUST keep feature 001's events and order, with every stop
-  and continuation recorded.
+  and continuation recorded. Limit (owner, 2026-11-21): a stop is recorded when a step, check,
+  project or record call was in flight; a stop that lands while the run is between two calls
+  loses no call, is not seen by the run and is not recorded, and the run continues as if
+  uninterrupted. Nothing is recorded after a run's end event (T071).
 - **FR-007**: A run that continued after a stop MUST be replayable, reusing every accepted result
   without a model call, with byte-identical artifacts.
 
