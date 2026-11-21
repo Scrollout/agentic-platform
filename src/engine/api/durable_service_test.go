@@ -281,6 +281,13 @@ func (s *testDurable) Tick() {
 	}
 }
 
+func (s *testDurable) Waiting(run string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r := s.runs[run]
+	return r != nil && len(r.waits) > 0
+}
+
 func (s *testDurable) Close() {
 	s.mu.Lock()
 	s.closed = true

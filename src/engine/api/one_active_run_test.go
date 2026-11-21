@@ -245,6 +245,7 @@ func TestARunOfAnotherSliceDueToExpireIsExpiredFirst(t *testing.T) {
 	x.failStep("tests")
 	one := x.opOf(x.startOf("S-1", "notes-app"), "run")
 	x.waitStatus(one.Target, "waiting-for-developer")
+	waitForTimer(t, x.st, one.Target) // the record says so before the workflow sets its expiry (T070)
 	x.c.set(nil)
 
 	x.r.clock.Advance(14*24*time.Hour + time.Hour) // S-1's run has waited past 14 days

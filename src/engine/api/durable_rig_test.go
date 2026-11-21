@@ -50,6 +50,9 @@ type DurableTestService interface {
 	// Tick lets every run whose durable timer is due by the clock's time go on, and returns once
 	// each such run has ended or 10 s have passed.
 	Tick()
+	// Waiting tells whether the run's workflow holds a wait that follows the clock (a hand-over's
+	// or an interruption's expiry), so that a test moves the clock only once the wait is set (T070).
+	Waiting(run string) bool
 	// Close ends every run still running without recording anything more, and waits for them.
 	Close()
 }
@@ -61,6 +64,23 @@ var durableServices = struct {
 	sync.Mutex
 	by map[any]DurableTestService // by the store the runs are recorded in
 }{by: map[any]DurableTestService{}}
+
+// waitForTimer returns once the run recorded in st holds a wait that follows the rig clock, so a
+// clock move that should end that wait finds it set; it fails the test after 10 s.
+func waitForTimer(t *testing.T, st SliceStore, run string) {
+	t.Helper()
+	durableServices.Lock()
+	svc := durableServices.by[baseStore(st)]
+	durableServices.Unlock()
+	if svc == nil {
+		t.Fatalf("no durable service records into this store")
+	}
+	for end := time.Now().Add(10 * time.Second); !svc.Waiting(run); time.Sleep(5 * time.Millisecond) {
+		if time.Now().After(end) {
+			t.Fatalf("%s holds no clock wait after 10 s", run)
+		}
+	}
+}
 
 // baseStore is the store under s: a hiddenRun's store, or s itself.
 func baseStore(s SliceStore) any {
