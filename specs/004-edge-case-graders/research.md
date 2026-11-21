@@ -99,7 +99,8 @@ say).
      per trial on the host mounted writable as `GOCACHE` for these build commands only (a
      `Cache` field on the runner value the build phase uses; the run phase's runner has none).
      The overlay JSON and each mutant's `app.go` are written inside the scratch copy, which every
-     build container mounts read-only. For
+     build container mounts read-only. The cache and binaries folders are removed after the trial.
+     For
      `MutantsKilled` the variants are the reference implementation and each mutant, given as an
      `-overlay` that replaces `internal/app/app.go` (S5, S8), and `<pkg>` is `tests`; for
      `HeldOutTestsPass` the one variant is the agent's code, with `<pkg>` `heldout`. Compiling
