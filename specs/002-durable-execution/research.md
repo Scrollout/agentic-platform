@@ -115,8 +115,8 @@ questions on 2026-11-19.
     (FR-003, owner).
   - A stop that lands between two activities (while a workflow task runs, or none is due) loses
     no activity: Temporal gives the workflow's next task to the restarted engine, no heartbeat
-    times out, and the run records no stop (FR-006's limit, owner 2026-11-21; seen in CI run
-    44881682941, T072).
+    times out, and the run records no stop (FR-006's limit, owner 2026-11-21; the likely cause,
+    from the code and not reproduced, of the missed stop in CI run 44881682941, T072).
   - When the engine is up again its Temporal worker takes the workflow up by itself (FR-005,
     owner) and records `RunResumed` (detail `continued after the platform stopped`).
   - An accepted step is never made again: the workflow's state holds every accepted step; a

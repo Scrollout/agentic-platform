@@ -37,10 +37,12 @@ who writes the events and when:
   engine that is down from that moment until the workflow's retention (24 h) has passed finds a
   run with no end and no workflow, and its start check refuses it as it refuses feature 001's
   leftovers (R7).
-- A stop in the middle of a run adds two events, in this order, at the point where the run
+- A stop while one of the run's calls (activities) is in flight adds two events, in this order, at the point where the run
   was: `RunInterrupted` with `detail` `the platform stopped`, then `RunResumed` with `detail`
   `continued after the platform stopped`. A developer's resume keeps feature 001's `RunResumed`
-  without that detail.
+  without that detail. A stop between two calls loses no call and adds nothing, and nothing
+  follows a run's end event: a stop or a cancel during its write records nothing more (FR-006's
+  limit, T071, T072).
 - An attempt the stop interrupted is made again with the same `attempt` number. If its
   `AttemptMade` was already recorded, the record holds it twice, before and after the
   `RunInterrupted` and `RunResumed` pair; inspect and compare take the later one. Only an attempt
@@ -220,7 +222,8 @@ workflow tests mock the activities. The engine gets the handler and its `Operato
 ## Run states (unchanged names)
 
 ```text
-running ──platform stops──▶ running (RunInterrupted, RunResumed; same attempt again)
+running ──platform stops during a call──▶ running (RunInterrupted, RunResumed; same attempt again)
+running ──platform stops between two calls──▶ running (nothing recorded; FR-006's limit)
 running ──engine restarts, step workers still running──▶ running (RunInterrupted, RunResumed; registrations kept, ADR 0071)
 running ──a worker call fails WorkersNotReady──▶ the same call again by the retry rule (durable sleeps; nothing recorded)
 running ──every retry fails WorkersNotReady (the workers are gone, a reboot)──▶ interrupted (RunInterrupted `the step workers are not running`)
