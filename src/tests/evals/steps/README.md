@@ -271,6 +271,7 @@ Measured with `HeldOutTestsPass` and `MutantsKilled` (runs 44933201919 and 44957
 2026-11-21, the three agents' jobs side by side): code about 21 to 23 minutes, tests about 35
 minutes, review about 38 minutes, so a full run takes about 40 minutes. The two graders add about
 25 seconds to a code trial and about 45 seconds to a tests trial and call no model (research S9).
+The summary showed no tokens line: these trials carry no `usage`, so the cost is not reported.
 
 ## Owner's decisions (T049b)
 
