@@ -43,6 +43,9 @@ adds to.
 - Q: The agent's tests do not build against a mutant: is that mutant killed if the same tests
   build and pass on the reference? → A: No: it is not a kill, reported `(did not run)`; the
   grader fails closed (owner, from `/speckit-analyze` round 1, C5).
+- Q: US3 scenario 4 said a report with no held-out or mutant results "shows the columns as
+  not reported", while FR-017, research R5 and the summary's contract print such a report
+  exactly as before. Which holds? → A: exactly as before, with no new columns (owner, T033).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -127,7 +130,8 @@ applicable trial, and read its output.
 3. **Given** a review case, which has neither grader, **When** the summary is written, **Then**
    those columns show that they do not apply, not a zero.
 4. **Given** a report written before this feature (no held-out or mutant results), **When** the
-   summary is written, **Then** it still works and shows the columns as not reported.
+   summary is written, **Then** it still works and prints exactly as before, with no new
+   columns.
 
 ---
 

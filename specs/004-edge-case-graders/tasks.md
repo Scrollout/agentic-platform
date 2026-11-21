@@ -151,7 +151,12 @@ mutants (SC-002, SC-003).
 ### Implementation for User Story 3
 
 - [X] T016 [US3] Code: `scripts/ci-evals-summary.py`: the columns and failure lines per the README's "The report", only when some trial carries `counts`; the docstring updated. T015 and every existing `scripts/tests/test_ci_evals_summary*.py` pass unchanged (depends on T015). Done 2026-11-21 (fresh Opus code author): 23 of 23 T015 tests, the quarantine tests and `test_ci_scripts`' 20 summary tests pass; where the README is silent: quarantined cases get failure lines, a case with no trials an empty cell, a trial with no result from its grader `—` and no line; failure lines go before the tokens line
-- [ ] T017 [US3] Push (ask the owner, naming the jobs): CI green; fresh review of US3 (read-only, another model, own worktree, judging the CI run) against FR-016 and FR-017; findings fixed or recorded; `/speckit-converge` for US3 (depends on T016)
+- [X] T017 [US3] Push (ask the owner, naming the jobs): CI green; fresh review of US3 (read-only, another model, own worktree, judging the CI run) against FR-016 and FR-017; findings fixed or recorded; `/speckit-converge` for US3 (depends on T016). Done 2026-11-21: run 44929645585 (`c6d323e`) green 26/26; round 1 (fresh Sonnet, read-only, its worktree at `c6d323e`) found no blocking finding, suggestions recorded as T031 and T032; `/speckit-converge` for US3 appended T033 (scenario 4 against FR-017), closed by the owner's clarification
+
+### Findings of the US3 fresh review (T017 round 1, fresh Sonnet reviewer, 2026-11-21, at c6d323e: no blocking finding)
+
+- [ ] T031 [US3] Findings S1 to S3 (suggestions, cases left untested): `scripts/ci-evals-summary.py` trusts the shape of `counts`: a `failed` that is not a list of strings raises a traceback (a string is joined letter by letter), a missing or non-integer `passed` or `total` prints `None/6`, and `passed < total` with an empty `failed` gives no failure line. The harness writes these fields from `Result`, so it does not occur today. Contract first: the README's "The report" states what the summary does with a malformed `counts` (it says the report is malformed and exits 1, no traceback); then a test author's tests and the code. Not blocking T017 or T018; done, or closed with the owner, before T021
+- [X] T032 [US3] Finding S4 (suggestion): a trial that is not an object raises `AttributeError`; closed: pre-existing (today's script reads `t.get("passed")` the same way), not changed by US3. Also reported: case names and reasons are not escaped in the Markdown table; closed: the report's names are the harness's own fixed names, as before US3
 
 **Checkpoint**: every story works with no model.
 
@@ -188,3 +193,7 @@ mutants (SC-002, SC-003).
 4. US3: the summary.
 5. One paid live run (owner), any instruction fix it calls for, docs, final review; the owner
    merges.
+
+## Phase 7: Convergence
+
+- [X] T033 Reconcile US3 acceptance scenario 4 ("shows the columns as not reported") with FR-017, research R5 and the README's "The summary" (a report with no `counts` prints exactly as before, with no new columns), which the code follows: the owner clarifies the spec through `/speckit-clarify`, then `/speckit-analyze` re-runs per US3/AC4 (contradicts). Done 2026-11-21: the owner chose "exactly as before"; spec clarification and scenario 4 reworded; analyze round 6 (fresh Sonnet, the changed lines only): 0 CRITICAL/HIGH, MEDIUMs fixed in T031 and here; LOW-1 (FR-017 says "without these results", the contract "no `counts`") accepted: a stopped grader with no counts on every trial shows no line, as the contract states
