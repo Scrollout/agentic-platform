@@ -26,8 +26,8 @@ Unchanged, except that a grader result (`trials[].results[]`) may carry `counts`
 
 | Field | Meaning |
 |-------|---------|
-| `counts` | Present only on `HeldOutTestsPass` and `MutantsKilled`, and only when the grader got as far as running its variants. Absent when it stopped earlier; then `reason` says why (the tests do not pass against the reference implementation, the code does not build) |
-| `counts.total` | Held-out tests run, or mutants judged. At least 1 |
+| `counts` | Present only on `HeldOutTestsPass` and `MutantsKilled`, and only when the grader got as far as running its variants. Absent when it stopped earlier; then `reason` says why (`not run: <grader> failed` when an earlier grader of the trial failed; the tests do not pass against the reference implementation; the code does not build) |
+| `counts.total` | The fixed list judged: the held-out file's 6 tests, or the table's 8 mutants; never the number of events a run happened to report |
 | `counts.passed` | Held-out tests passed, or mutants killed. `0 ≤ passed ≤ total` |
 | `counts.failed` | The names of the held-out tests that failed, or of the mutants that survived, sorted; `total − passed` entries. A name is followed by `(timed out)` or `(did not run)`, after a space, when that is the reason |
 

@@ -37,6 +37,12 @@ adds to.
 - Q: If the current tests or code agent fails the new graders in the first live run, does this
   feature change that agent's instruction until it passes, or record a backlog task and quarantine
   the case? → A: Change the instruction until it passes; no quarantine (owner, FR-019).
+- Q: A measurement (research S8) estimates the grader self-tests at about 3.5 minutes longer, more
+  than SC-004's 2; what bound holds? → A: At most 5 minutes longer, measured; if missed, the owner
+  decides again (owner, from `/speckit-analyze` round 1, C4).
+- Q: The agent's tests do not build against a mutant: is that mutant killed if the same tests
+  build and pass on the reference? → A: No: it is not a kill, reported `(did not run)`; the
+  grader fails closed (owner, from `/speckit-analyze` round 1, C5).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -129,9 +135,10 @@ applicable trial, and read its output.
 
 - An agent's code does not build: the slice's tests already fail the trial; the held-out grader
   reports that it could not run, which is a failure, not a pass.
-- The tests agent's tests do not build against a mutant: that mutant counts as killed only if the
-  same tests build against the unchanged reference implementation and pass there; otherwise the
-  mutant grader fails, saying the tests do not pass against a correct implementation.
+- The tests agent's tests do not build against the unchanged reference implementation or do not
+  pass there: the mutant grader fails, saying the tests do not pass against a correct
+  implementation, and judges no mutant. They do not build against one mutant only: that mutant is
+  not killed and is named `(did not run)` (fail closed).
 - A mutant that no test of the reference set kills is a defect of the eval, not of the agent; the
   self-tests catch it before any live run.
 - A held-out test that the reference implementation fails is a defect of the eval; the self-tests
@@ -175,7 +182,8 @@ applicable trial, and read its output.
 - **FR-007**: The mutants MUST include at least one per rule of the slice, and the first-item and
   empty-input bugs of `review/planted-r2` and `review/planted-r3`.
 - **FR-008**: A mutant MUST count as killed only when the agent's tests build, pass against the
-  unchanged reference implementation, and fail against the mutant within a stated time limit.
+  unchanged reference implementation, and build and fail against the mutant within a stated time
+  limit.
 - **FR-009**: The mutants MUST NOT be readable by the agent at any time during a trial.
 
 #### Both graders
@@ -230,7 +238,7 @@ applicable trial, and read its output.
   tests eval trial, naming at least one surviving mutant (self-test, no model).
 - **SC-003**: The reference implementation passes 100% of the held-out tests, and the reference
   tests kill 100% of the mutants.
-- **SC-004**: The grader self-tests take at most 2 minutes longer than today's 3 to 4 minutes.
+- **SC-004**: The grader self-tests take at most 5 minutes longer than today's 3 to 4 minutes.
 - **SC-005**: A live tests or code trial takes at most 2 minutes longer to grade than today, and a
   full live run costs no more model tokens than today (the graders call no model).
 - **SC-006**: After one live run with the owner's go-ahead, the summary shows the held-out and

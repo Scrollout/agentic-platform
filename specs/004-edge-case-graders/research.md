@@ -14,6 +14,7 @@ a cited primary source, or the code and fixtures of the step agents' evals as th
 | S4 | [OpenSSF Concise Guide for Evaluating Open Source Software](https://best.openssf.org/Concise-Guide-for-Evaluating-Open-Source-Software.html) (2025-03-28): whether the dependency is needed at all, maintenance and releases, more than one maintainer, security practices and Scorecard results, licence and adoption, a trial in an isolated environment |
 | S5 | [`cmd/go`](https://pkg.go.dev/cmd/go): `go test -c` compiles a test binary without running it; `-overlay` replaces or adds source files for one build by a JSON map; "Go generate is never run automatically by go build, go test, and so on"; with `CGO_ENABLED=0` no C toolchain runs. [`cmd/test2json`](https://pkg.go.dev/cmd/test2json): `go tool test2json -t <binary>` runs a test binary and reports each test's pass or fail as JSON events |
 | S6 | The step agents' evals on `main` (`cb13b11`): [README](../../src/tests/evals/steps/README.md); `grade.go` (`GradeTests`, `GradeCode`, `Result`); `cases.go` (`plantR2`, `plantR3`, `reviewBefore`); `sandbox.go` (`DockerRunner`: no network, read-only project, read-only root, a fresh tmpfs `/tmp` per `go` command); `harness_evals_test.go` (the trial loop, `Trial`, `CaseReport`, `report.json`); `testdata/slice/` (rules R-1 to R-3, examples E-1 to E-4, the contract); `testdata/ref/` (reference tests and implementation); [`scripts/ci-evals-summary.py`](../../scripts/ci-evals-summary.py) and its test `scripts/tests/test_ci_evals_summary_quarantine.py` |
+| S8 | Experiment on the owner's host (16 CPUs, Go 1.26, warm module and build cache), 2026-11-21, a temporary test in `src/tests/evals/steps` (removed afterwards): the generated notes project with the reference tests; `go test -c -vet=off -mod=vendor -overlay=<json> -o <dir>/ ./tests` with `internal/app/app.go` replaced by the reference implementation, then by two mutants (every id 1; ids from 0): 3.7 s for the first build, 1.21 s and 1.28 s for the next; each binary run through `go tool test2json -t <bin> -test.v=test2json -test.count=1` from `tests/` in 0.12 to 0.13 s; the reference variant reported 6 passes and 0 fails, the mutants 3 and 4 fails with exit status 1. Without `-test.v=test2json` passing tests emit no events (reported by the analyze reviewer, 2026-11-21) |
 | S7 | Constitution Principle XIX and the Engineering Principle "Checks prove they can fail"; backlog T180 (owner, 2026-11-20); the spec's clarifications (owner, 2026-11-21) |
 
 ## Principle VI evaluation: a mutation tool or hand-planted mutants
@@ -29,8 +30,8 @@ that each name the rule and the killing example.
 | zimmski/go-mutesting (S3) | As avito's | Unmaintained since 2021, Scorecard 2.3 | Rejected |
 | Hand-planted mutants (S6) | Each mutant is a declared one-line change of the reference implementation, named by rule and example; the review cases already plant `plantR2` and `plantR3` this way | No new dependency | **Chosen** |
 
-**Justification for custom code** (Principle VI): the mutants are test data, about seven
-one-line replacements, not a mutation engine; no tool plants user-defined mutants (S1 to S3). The
+**Justification for custom code** (Principle VI): the mutants are test data, eight
+one-line replacements (`R-1/newest-first` reverses the list in a one-line function literal), not a mutation engine; no tool plants user-defined mutants (S1 to S3). The
 grader that runs them reuses the evals' own runner and the go toolchain (S5). A mutation tool
 stays a candidate for a later need: measuring how much of a real project's code its tests check,
 which is a different question from this eval's (whether the tests agent binds what the examples
@@ -76,7 +77,7 @@ say).
   | `TestR1_EmptyList` | R-1 | no notes | 200 and a JSON array with no item (the contract's `type: array`; `null` is not an array) |
   | `TestR1_ThreeInOrder` | R-1 | three notes | `a`, `b`, `c` in that order |
   | `TestR2_FiveIDs` | R-2 | five notes | ids 1 to 5 in creation order |
-  | `TestR2_TextKept` | R-2, contract | a text with spaces and non-ASCII letters | the created note and the listed note carry the text as sent |
+  | `TestR2_TextKept` | R-2, contract | a text with inner spaces and non-ASCII letters, no leading or trailing space | the created note and the listed note carry the text as sent |
   | `TestR3_RefusedNotListed` | R-3 | an empty text after one note | 400, and the list still holds only the first note |
   | `TestR3_RefusalIsAnError` | R-3, contract | an empty text | 400 with a JSON object whose `message` is a string |
 
@@ -93,34 +94,51 @@ say).
 ### R3. A grader that runs model-written code builds every variant first, then runs each alone
 
 - **Decision**: both new graders work in two phases on a scratch copy of the agent's project:
-  1. **Build**, in one throwaway grading container: `go test -c -vet=off` once per variant into a
-     folder of test binaries. For `MutantsKilled` the variants are the reference implementation
-     and each mutant, given to the build as an `-overlay` that replaces `internal/app/app.go`
-     (S5); for `HeldOutTestsPass` the one variant is the agent's code with the held-out package.
-     Compiling runs none of the agent's code (S5: no `go generate`, `CGO_ENABLED=0`), so the
-     build cache can be shared across the variants inside this one container.
-  2. **Run**, one fresh throwaway grading container per binary (no network, read-only root, a
-     fresh tmpfs, the binaries and the project read-only), through `go tool test2json` (S5), so
-     each test's result is known by name and no run can leave anything for the next.
-- **Rationale**: one `go test` per variant, each in its own container with a cold cache (today's
-  `DockerRunner`, S6), compiles godog and `net/http` eight or nine times per tests trial. Running
-  the variants in one container would let the agent's tests, run against the reference first,
-  leave a file or a cache entry that makes every later variant fail, which would count every
-  mutant as killed. Building first and running each binary alone keeps the grade sound
-  (Principle XVIII, Sound) and the time small.
-- **Alternatives**: one container per variant with `go test` (sound, but about 8 cold builds per
-  tests trial, likely above SC-005); one container for everything (fast, not sound).
-- **To measure** (tasks): the build and run times of both graders, live, against SC-004 and
-  SC-005; if they miss, the owner decides.
+  1. **Build**: `go test -c -vet=off -mod=vendor -o <bins>/<variant>/ ./<pkg>/...` once per
+     variant, each in its own throwaway grading container as today, with one build-cache folder
+     per trial on the host mounted writable as `GOCACHE` for these build commands only. For
+     `MutantsKilled` the variants are the reference implementation and each mutant, given as an
+     `-overlay` that replaces `internal/app/app.go` (S5, S8), and `<pkg>` is `tests`; for
+     `HeldOutTestsPass` the one variant is the agent's code, with `<pkg>` `heldout`. Compiling
+     runs none of the agent's code (S5: no `go generate`, `CGO_ENABLED=0`), so a shared cache is
+     safe during builds.
+  2. **Run**: each test binary in its own fresh throwaway grading container (no network, read-only
+     root, a fresh tmpfs, no build cache), with the project root and the binaries' folder mounted
+     read-only and the working directory set to the binary's package folder (`<copy>/tests` or
+     `<copy>/heldout`), so the slice's tests find `../features` as under `go test`. The command is
+     `go tool test2json -t <binary> -test.v=test2json -test.count=1` (S5, S8), so every test's
+     result is known by name.
+  3. **Fail fast**: a new grader runs only when every earlier grader of the trial passed; otherwise
+     it fails with the reason `not run: <grader> failed` and no `counts`. The trial already fails,
+     so its verdict is unchanged; this keeps grading time low for trials that are already red,
+     above all the self-tests' planted violations.
+- **Rationale**: running the variants in one container would let the agent's tests, run first
+  against the reference, leave a file or a cache entry that makes every later variant fail, which
+  would count every mutant as killed; only the run phase executes agent code, and there every
+  binary is alone. A shared cache for builds only keeps one cold build per trial (S8: 3.7 s
+  first, about 1.25 s for each further variant on a warm host).
+- **Alternatives**: `go test` per variant in a cold container each (sound, about 9 cold builds
+  per tests trial); one container for everything (fast, not sound); one binary that selects the
+  mutant at run time from an environment variable or argument (one build, but the agent's tests
+  could read the selector and fail on purpose).
+- **Estimate** (S8, to be measured in T008, T012 and T018): host self-tests about 15 s per full
+  `MutantsKilled` and 4 s per full `HeldOutTestsPass`; with fail fast, about 11 and 13 full runs
+  in the self-tests, about 3.5 minutes added in all, within SC-004's 5 (owner, 2026-11-21). Live, one cold build (estimated under a
+  minute on a CI runner) plus about 2 s per further variant and about 2 s per run container.
 
 ### R4. A mutant counts as killed only against a passing baseline
 
-- **Decision**: `MutantsKilled` first runs the agent's tests against the reference
+- **Decision**: `counts.total` is the fixed list (the held-out file's six tests, the table's eight
+  mutants), never the events a run happened to report, so a test or mutant that never ran is
+  named `(did not run)`. `MutantsKilled` first runs the agent's tests against the reference
   implementation. If they do not build or do not all pass there, the grader fails with that reason
   and judges no mutant (FR-008). A mutant is killed when its run reports a failed test or a
   panic, within the run's time limit (`checks.DefaultGoTimeout`, as every other grader); a run that
-  times out or cannot start is reported as such and is not a kill. A binary that does not build
-  for a mutant (cannot happen for a body-only change, but is reported if it does) is not a kill.
+  times out or cannot start is reported as such and is not a kill. Every package under `tests/`
+  is built; a mutant is killed when any of them fails. A binary that does not build for a mutant
+  (cannot happen for a body-only change, but is reported if it does) is not a kill. Limit: the
+  baseline runs once, so an agent test that is flaky could pass it and then fail a mutant by
+  chance.
 - **Rationale**: spec FR-008 and its edge cases; a kill must come from the planted bug alone.
 
 ### R5. Grader results carry counts and names; the summary shows them only when present

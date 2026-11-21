@@ -2,6 +2,7 @@
 
 ## 2026-11-21
 
+* **Analyze**: Feature 004 analyze round 1: variant builds share a per-trial build cache and each binary runs alone from its package folder ([ADR 0077](/decisions/0077-variant-builds-share-a-cache-runs-stay-alone.md), superseding ADR 0076's mechanics); SC-004 is at most 5 minutes (owner); a mutant the tests do not build against is not a kill (owner). Backlog T188: OpenSSF Scorecard and Best Practices for this repository (owner).
 * **Plan**: Feature 004 planned: hand-planted mutants declared in one table ([ADR 0075](/decisions/0075-eval-mutants-planted-by-hand.md)), graders that build every variant first and run each test binary alone ([ADR 0076](/decisions/0076-variant-graders-build-first-run-each-alone.md)); reference [Go mutation testing tools](/references/go-mutation-testing-tools.md).
 * **Spec**: Feature 004 (backlog T180) specified: the step agents' evals judge edge cases, not only the examples (held-out tests for the code agent, mutants for the tests agent, both in the run summary); N-013 is `yes` (owner) and `specified` in the [problem space](/overview/problem-space.md); glossary terms Eval, Grader, Held-out test, Mutant.
 * **Evals**: The analyst evals' cases `example` and `revise-inject-approvals-field` failed one of three trials each on `main` (evals run 44888638411), with no change to the analyst since its last green run; they are quarantined under backlog T185 (owner 2026-11-21): still run and reported, not counted, and a quarantine must name an open backlog task.

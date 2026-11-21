@@ -37,7 +37,7 @@ As today (`grader`, `passed`, `reason`), plus `counts` for the two new graders
 
 | Field | Rule |
 |-------|------|
-| `counts.total` | ≥ 1 |
+| `counts.total` | The fixed list: 6 held-out tests or 8 mutants, not the events a run reported |
 | `counts.passed` | `0 ≤ passed ≤ total`; held-out tests passed or mutants killed |
 | `counts.failed` | `total − passed` names, sorted |
 

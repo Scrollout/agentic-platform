@@ -23,7 +23,7 @@ Expected:
 - `MutantsKilled` passes on the reference tests with every mutant killed, and fails on the planted
   weak test set, naming at least one surviving mutant (SC-002, SC-003).
 - Every mutant's line occurs once in the reference implementation, and every rule has a mutant.
-- The whole run takes at most 2 minutes longer than before (SC-004); the test prints its time.
+- The whole run takes at most 5 minutes longer than before (SC-004); the test prints its time.
 
 ## 2. The summary shows the new results (no model)
 
