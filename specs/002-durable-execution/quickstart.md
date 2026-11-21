@@ -46,6 +46,10 @@ never used before. With `durable` stopped, a state-changing request answers 503 
 with `Retry-After` and nothing is accepted; the reads still answer. Automated: the operations
 integration tests in the `docker` job.
 
+Measured on the owner's clean VM on 2026-11-21 (T032, research S18): sections 1 to 3 as
+expected; a fresh clone reached an accepted build in about 12.5 minutes, `durable` and
+`durable-store` idle at 221 MiB together, the engine at 14 MiB.
+
 ## 4. Nothing feature 001 delivered changed (US3, SC-003)
 
 Every CI job that judged feature 001 is green on this feature's commit, the planted suite 3 of 3

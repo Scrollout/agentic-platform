@@ -1,5 +1,9 @@
 # Directory Update Log
 
+## 2026-11-21
+
+* **Measurement**: Feature 002, T032 on the owner's clean VM: a fresh clone reached an accepted build in about 12.5 minutes (SC-004), Temporal and PostgreSQL idle at 221 MiB together (limit 512 MiB), the engine at 14 MiB; a run continued by itself after the engine was killed during an agent step, and an operation survived an engine kill (research S18).
+
 ## 2026-11-20
 
 * **Implementation**: Feature 002, T034 (owner 2026-11-19): the engine's run carries `waits_for` (`resume` or `step-workers`) while it is interrupted, and the terminal client gives a run waiting for its step workers its own end line, naming `ap build-workers --resume RUN-<n>` or `cancel RUN-<n>`, read from that field, never from the reason's wording. T035: a new lab test proves the durable services' lab settings equal compose.yaml's. T037: `parser.ParseDir` replaced.
