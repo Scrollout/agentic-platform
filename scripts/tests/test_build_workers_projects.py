@@ -41,8 +41,6 @@ import hashlib
 import json
 import os
 import secrets
-import shutil
-import subprocess
 import tempfile
 import time
 import unittest
@@ -548,7 +546,7 @@ class ProjectStepContainersTest(bw.BuildWorkersRig, unittest.TestCase):
         r = self.ap("resume", run)
         self.assertEqual(r.returncode, 3, "%s: exit %d: %s" % (what, r.returncode, r.stderr))
         self.assertIn("resume: the step workers of %s for the project %s are not running; run ap build-workers "
-                      "--resume %s, then ap resume %s" % (SLICE, project, run, run), r.stderr)
+                      "--resume %s" % (SLICE, project, run), r.stderr)
         new = self.assertNothingChanged(before, what)
         self.assertRunsRead(new, "/runs/" + run)
 

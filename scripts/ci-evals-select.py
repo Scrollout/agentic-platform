@@ -5,7 +5,7 @@ research D45, ADR 0048; constitution XIX).
 Run from the repository root, with its inputs in the environment:
   RUNS    the successful evals runs, newest first, as the GitHub API lists them (a JSON list of
           objects with head_sha, head_branch and conclusion). The base is the newest run that
-          succeeded, on main or 001-prose-to-accepted-slice, whose head is a commit here and an
+          succeeded, on any branch, whose head is a commit here and an
           ancestor of SHA (SHA itself included). When RUNS is unset, BEFORE names the base (T115).
   SHA     the commit judged (default HEAD)
   ALL     true chooses every suite (evals.yml's dispatch input `all`)

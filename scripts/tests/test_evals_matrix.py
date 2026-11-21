@@ -18,7 +18,6 @@ the workflow gives no BEFORE) is judged by scripts/tests/test_workflows_evals_cu
 
 The loading helpers are scripts/tests/test_workflows.py's, imported unchanged.
 """
-import copy
 import re
 import tempfile
 import unittest

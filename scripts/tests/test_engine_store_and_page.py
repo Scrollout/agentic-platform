@@ -14,7 +14,6 @@ Names the implementer follows:
                  recorded it is verified, passed, and no such scale is given. `ap down` keeps the
                  volume (no -v / --volumes).
 """
-import re
 import unittest
 
 import test_compose as tc

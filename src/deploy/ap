@@ -64,6 +64,14 @@ access_log=$state_dir/access.log
 # other container and no other host user can read them; `ap` writes them from a one-off container
 # running as that user.
 grants_dir=$state_dir/grants
+# The durable store's password (feature 002, research R1): made once by `up` in the folder `durable/` (mode 700; the file is
+# mode 644 because Compose mounts it with the host's owner and mode, ADR 0070), random, never printed; Compose gives it to the store and the server as a secret. `down` keeps it with
+# the store's volume, which holds the data it protects.
+durable_dir=$state_dir/durable
+durable_password_file=$durable_dir/durable-store-password
+# Not a session variable: it follows from the state folder, so every Compose call gets it.
+AP_DURABLE_PASSWORD_FILE=$durable_password_file
+export AP_DURABLE_PASSWORD_FILE
 engine_user=65532:65532
 # Each slice's worker tokens: one line per step, `<step> <worker token> <call token>`, and a line
 # `id <hex>` that changes with them.
@@ -121,7 +129,8 @@ For the platform's own development and CI (src/deploy/README.md):
        ap up --credentials <file> --projects <folder> [--listen <address> ...]
        ap build-workers <slice> <project>
        ap build-workers --resume <run>
-       ap test <suite>
+       ap test <suite>                 the suites: planted, us2
+       ap test planted <scenario>      only that scenario of the planted suite
 EOF
   exit "${1:-3}"
 }
@@ -763,6 +772,13 @@ cmd_up() {
   old_umask=$(umask)
   umask 077
   mkdir -p -- "$state_dir" && chmod 700 -- "$state_dir" || die 1 "cannot create $state_dir or make it private (mode 700)"
+  mkdir -p -- "$durable_dir" && chmod 700 -- "$durable_dir" || die 1 "cannot create $durable_dir or make it private (mode 700)"
+  if [ ! -e "$durable_password_file" ]; then
+    ptmp=$durable_password_file.$$
+    { rand >"$ptmp" && chmod 644 "$ptmp" && mv -f -- "$ptmp" "$durable_password_file"; } || { rm -f -- "$ptmp"; die 1 "cannot write $durable_password_file"; }
+  fi
+  [ -f "$durable_password_file" ] && [ ! -L "$durable_password_file" ] && [ -s "$durable_password_file" ] ||
+    die 1 "$durable_password_file is not a non-empty regular file; remove it only if you also remove the durable-store volume"
   tmp=$sess.$$
   {
     echo "# agentic-platform session, written by ap up; removed by ap down"
@@ -1497,7 +1513,7 @@ cmd_resume() {
   is_project "$run_project" || die 1 "resume: the engine's answer for the run $run has no project name"
   if [ "$run_status" = interrupted ]; then
     steps=$(read_pattern) || exit $?
-    gone="resume: the step workers of $run_slice for the project $run_project are not running; run ap build-workers --resume $run, then ap resume $run"
+    gone="resume: the step workers of $run_slice for the project $run_project are not running; run ap build-workers --resume $run"
     read_tokens "$run_slice"
     [ "$complete" = yes ] && [ -n "$tokens_id" ] || die 3 "$gone"
     phash=$(project_hash "$run_project")
@@ -1565,14 +1581,25 @@ cmd_replay() {
 # contract's lines from the events. No session, no Compose, no tests image: the suites start their
 # own labs with the developer's own Docker access on the host (plan, Exceptions to Engineering
 # Principles), and no container holds the container engine's socket.
+# `test planted <scenario>` runs only that scenario's trials, so CI can run the scenarios on
+# parallel runners (ADR 0074); a well-formed name that is no scenario runs no test (exit 1, below).
 cmd_test() {
-  [ $# -eq 1 ] || usage
+  [ $# -eq 1 ] || [ $# -eq 2 ] || usage
   suite=$1
   case $suite in
     planted) pattern='^TestPlanted$' limit=60m ;;
     us2) pattern='^TestUS2' limit=75m ;;
     *) die 3 "test: unknown suite $suite; the suites are planted, us2" ;;
   esac
+  if [ $# -eq 2 ]; then
+    [ "$suite" = planted ] || usage
+    # Lowercase letters and digits in words joined by single hyphens, spelled out so no locale
+    # widens them: the name goes into the test pattern as it is.
+    case $2 in
+      '' | -* | *- | *--* | *[!abcdefghijklmnopqrstuvwxyz0123456789-]*) usage ;;
+    esac
+    pattern="^TestPlanted\$/^$2\$"
+  fi
   repo=$(CDPATH='' cd -- "$here/../.." && pwd -P)
   pkg=$repo/src/tests/acceptance
   [ -d "$pkg" ] || die 1 "test: no acceptance suite in $pkg"
@@ -1667,7 +1694,9 @@ test_report() {
     }
     END {
       if (suite == "planted") printf "planted: %d of %d scenarios stopped in 3 out of 3 trials\n", good, scenarios
-      if (!ran) { printf "ap: test: no test of the %s suite ran\n", suite > "/dev/stderr"; exit 1 }
+      # For planted, TestPlanted passing with no scenario (a scenario name no scenario has) ran no
+      # test of the suite.
+      if (!ran || (suite == "planted" && scenarios == 0 && !failed)) { printf "ap: test: no test of the %s suite ran\n", suite > "/dev/stderr"; exit 1 }
       if (suite == "planted" && (scenarios == 0 || good != scenarios)) exit 1
       if (failed) exit 1
       if (code != 0) {

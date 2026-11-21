@@ -37,6 +37,19 @@ def gateway_pin():
         if len(f) >= 2 and f[0] == "nginx":
             return f[1]
     raise AssertionError("no nginx pin in images.lock")
+DURABLE_PINS = ("temporal-server", "temporal-admin-tools", "postgres")
+
+
+def durable_pins():
+    """The three durable-execution pins (Temporal's server, its admin tools, PostgreSQL), read from images.lock."""
+    pins = {}
+    for line in (REPO / "src/deploy/images.lock").read_text().splitlines():
+        f = line.split()
+        if len(f) >= 2 and f[0] in DURABLE_PINS:
+            pins[f[0]] = f[1]
+    if sorted(pins) != sorted(DURABLE_PINS):
+        raise AssertionError("images.lock lacks pins for %s" % sorted(set(DURABLE_PINS) - set(pins)))
+    return pins
 KEY = "fake-model-key-TESTKEY-0123456789abcdef"  # also written in fixtures/compose/bad-key-in-env.yaml
 TOKENS = {"AP_CLIENT_TOKEN": "c11e47" + "a" * 26, "AP_PAGE_TOKEN": "9a6e00" + "b" * 26,
           "AP_WORKER_TOKEN": "w0rke4" + "c" * 26,
@@ -49,7 +62,8 @@ RULES = ["name", "read_only", "cap_drop", "no_new_privileges", "privileged", "no
          "credentials_only_gateway", "key_in_env", "page_port_loopback", "other_ports",
          "token_engine", "token_page", "token_cli", "token_worker", "token_gateway", "token_lint",
          "token_analyst", "token_check", "image_digest",
-         "pull_policy_never", "gateway_digest", "restart", "page_isolation", "internal_isolated"]
+         "pull_policy_never", "gateway_digest", "restart", "page_isolation", "internal_isolated",
+         "durable_networks"]
 SOCKETS = ("docker.sock", "containerd.sock", "podman.sock")
 # Services are identified by the role of the variable their image comes from (ADR 0028: the image
 # is a signed digest reference the launcher passes in), not by an image name.
@@ -99,6 +113,8 @@ PLANTED = {
     "bad-internal-not-isolated": "internal_isolated",
     "bad-page-no-route-bridge": "page_isolation",
     "bad-forwarder-token": "page_isolation", "bad-forwarder-projects-mount": "page_isolation",
+    # T006(b): the durable-execution services sit on internal networks only
+    "bad-durable-networks": "durable_networks",
     "bad-forwarder-engine-network": "page_isolation", "bad-forwarder-egress-network": "page_isolation",
 }
 GOOD = {"good": ["agent-one", "analyst", "check-one", "cli", "contract-lint", "engine", "gateway", "page", "tests"],
@@ -121,6 +137,8 @@ def image_kind(svc):
         return ("nginx", "gateway")
     if repo == "docker-agent":  # the analyst runs on the upstream docker-agent pin, as the gateway on nginx
         return ("docker-agent", "analyst")
+    if ref in durable_pins().values():  # Temporal's server, its admin tools and PostgreSQL, on their pins
+        return (repo, "durable")
     for n, role in IMAGE_VARS.values():
         if repo == "ap-" + n:
             return (n, role)
@@ -251,6 +269,9 @@ def check_config(cfg, env):
         kinds = [net_kind(nets.get(n)) for n in _networks(svc)]
         if role == "forwarder":
             pass  # judged by page_isolation below
+        elif role == "durable":
+            if svc.get("network_mode") or any(k != "internal" for k in kinds):
+                fail("durable_networks", name)
         elif role != "gateway":
             if svc.get("network_mode") not in (None, "none") or "egress" in kinds:
                 fail("network_egress", name)
@@ -275,7 +296,7 @@ def check_config(cfg, env):
         # upstream images pinned by digest too
         if not re.search(r"@sha256:[0-9a-f]{64}$", image_ref(svc)):
             fail("gateway_digest" if role == "gateway" else "image_digest", name)
-        if role not in ("gateway", "forwarder", "analyst") and svc.get("pull_policy") != "never":
+        if role not in ("gateway", "forwarder", "analyst", "durable") and svc.get("pull_policy") != "never":
             fail("pull_policy_never", name)
         # restart: unset or "no" (a stopped platform stays stopped; `ap down` is how it ends)
         restart_policy = ((svc.get("deploy") or {}).get("restart_policy") or {}).get("condition")
@@ -470,6 +491,8 @@ class ComposeTest(unittest.TestCase):
             self.assertEqual(roles.count(r), 1, "expected exactly one %s service, got %s" % (r, by_name))
         self.assertLessEqual(roles.count("client"), 1)
         self.assertLessEqual(roles.count("forwarder"), 1, "at most one publishing forwarder: %s" % by_name)
+        self.assertEqual(sorted(n for n, r in by_name.items() if r == "durable"),
+                         ["durable", "durable-schema", "durable-store"])
         self.assertEqual(roles.count("other"), 0, "service with an unknown image: %s" % {
             n: cfg["services"][n].get("image") for n, r in by_name.items() if r == "other"})
 
@@ -478,10 +501,12 @@ class ComposeTest(unittest.TestCase):
         and nothing is a tag (the launcher verified these digests; ADR 0028)."""
         cfg = self.checker_input(COMPOSE) if COMPOSE.is_file() else self.fail("no compose.yaml")
         by_name = roles_of(cfg, self.env)
-        refs = [s.get("image") for n, s in cfg["services"].items() if by_name[n] not in ("gateway", "forwarder", "analyst")]
+        refs = [s.get("image") for n, s in cfg["services"].items() if by_name[n] not in ("gateway", "forwarder", "analyst", "durable")]
         self.assertEqual(sorted(set(refs)), sorted(IMAGE_ENV.values()), refs)
         for ref in refs:
             self.assertRegex(ref, r"@sha256:[0-9a-f]{64}$")
+        durable = sorted(s["image"] for n, s in cfg["services"].items() if by_name[n] == "durable")
+        self.assertEqual(durable, sorted(durable_pins().values()))
         gw = [s for n, s in cfg["services"].items() if by_name[n] == "gateway"]
         self.assertEqual([s["image"] for s in gw], [gateway_pin()])
         self.assertRegex(gateway_pin(), r"@sha256:[0-9a-f]{64}$", "the gateway pin in images.lock needs a digest")

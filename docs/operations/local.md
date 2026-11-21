@@ -5,7 +5,7 @@ description: The platform on one developer's machine, started by the ap launcher
 tags: [operations, deployment, local]
 status: draft
 resource: /src/deploy/compose.yaml
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-18T16:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-20T23:30:00Z }
 ---
 
 # Purpose
@@ -15,7 +15,7 @@ installed on the host beyond a container runtime with Compose and the gVisor run
 
 # Topology
 
-Ten services, declared once in `src/deploy/compose.yaml`, plus the local image registry
+Thirteen services, declared once in `src/deploy/compose.yaml`, plus the local image registry
 `ap-registry`, which `build.sh` and `ap up` start when it isn't running:
 
 - The model gateway, the only container with egress and the only one that can read the provider key.
@@ -26,7 +26,18 @@ Ten services, declared once in `src/deploy/compose.yaml`, plus the local image r
   only way out.
 - The read-only run page, and its forwarder, which publishes the page's port on `127.0.0.1` only.
 - The terminal client, run per command. The test harness is no service (see Deployment).
-- The step agent workers and the check service (the project folder read-only, the Go toolchain, the pinned oapi-codegen and the template's module cache in its image, so it runs offline), under gVisor with CPU, memory and process limits; the check service answers only the engine, with its own session token, and `ap up` starts it with the engine. The step workers are started per slice and project by `ap build-workers <slice> <project>` (run by `ap build` first): one container per step of the pattern from the `step-agent` or `procedure-worker` template, each mounting only its project, read-only except its step's writable folders (the whole root for generate) and with `.git` always read-only; each gets its own call token, its grant is a file in `${XDG_STATE_HOME:-~/.local/state}/agentic-platform/grants` (owned by the engine's user, mounted only by the engine, read-only; research D31), and the launcher registers it with the engine. Each project has its own step containers, named `agentic-platform-worker-<slice>-<step>-<p>` (`<p>` the first 12 hex digits of the SHA-256 of the project name) and labelled with the slice, step and project, so building another project of the slice leaves the first one's running; `build-workers` refuses with exit 4 (`RunActive`) while a run of the slice has not ended. `ap resume <run>` registers the run's own running containers again and passes the command on; when they or the slice's tokens are gone (after `ap down` or a host reboot) it exits 3 naming `ap build-workers --resume <run>`, which rebuilds that interrupted run's containers in its existing folder, creating nothing in it; then `ap resume <run>` continues the run. `ap replay <run> <project>` builds the run's slice into a new, empty project. Running `build-workers` again changes nothing, and `ap down` removes the workers, their grants and their tokens ([ADR 0036](/decisions/0036-step-containers-per-project-resume-reuses-them.md)).
+- The step agent workers and the check service (the project folder read-only, the Go toolchain, the pinned oapi-codegen and the template's module cache in its image, so it runs offline), under gVisor with CPU, memory and process limits; the check service answers only the engine, with its own session token, and `ap up` starts it with the engine. The step workers are started per slice and project by `ap build-workers <slice> <project>` (run by `ap build` first): one container per step of the pattern from the `step-agent` or `procedure-worker` template, each mounting only its project, read-only except its step's writable folders (the whole root for generate) and with `.git` always read-only; each gets its own call token, its grant is a file in `${XDG_STATE_HOME:-~/.local/state}/agentic-platform/grants` (owned by the engine's user, mounted only by the engine, read-only; research D31), and the launcher registers it with the engine. Each project has its own step containers, named `agentic-platform-worker-<slice>-<step>-<p>` (`<p>` the first 12 hex digits of the SHA-256 of the project name) and labelled with the slice, step and project, so building another project of the slice leaves the first one's running; `build-workers` refuses with exit 4 (`RunActive`) while a run of the slice has not ended. `ap resume <run>` registers the run's own running containers again and passes the command on; when they or the slice's tokens are gone (after `ap down` or a host reboot) it exits 3 naming `ap build-workers --resume <run>`, which rebuilds that interrupted run's containers in its existing folder, creating nothing in it; once they are registered the run continues by itself, with no `ap resume` (feature 002). `ap replay <run> <project>` builds the run's slice into a new, empty project. Running `build-workers` again changes nothing, and `ap down` removes the workers, their grants and their tokens ([ADR 0036](/decisions/0036-step-containers-per-project-resume-reuses-them.md)).
+- The durable services (feature 002): Temporal's server (`durable`), on the internal network
+  `durable` with the engine and on `durable-store` with PostgreSQL (`durable-store`, its data on
+  the volume `durable-store`), and the schema job (`durable-schema`), which converges both
+  databases and exits before the server starts; the engine starts after the server answers. They
+  keep runs and operations going across a stop: a run the stop cut off continues by itself when
+  the engine is back, making only the interrupted attempt again
+  ([ADR 0065](/decisions/0065-temporal-and-postgresql-in-compose.md),
+  [ADR 0067](/decisions/0067-a-run-is-one-temporal-workflow.md)). PostgreSQL's password is made
+  once by `ap up` in `${XDG_STATE_HOME:-~/.local/state}/agentic-platform/durable/` (folder mode
+  700, file mode 644, because Compose ignores a file secret's owner and mode) and kept with the
+  volume ([ADR 0070](/decisions/0070-engine-registers-the-namespace-password-folder-private.md)).
 - The project worker, the check program's third deployment, in its own small image with git (git pinned by exact Alpine package version), under gVisor and the only service with the projects folder writable: it keeps each new project's git version history and restores the project before each attempt, runs as the developer so they own the files and the repository, keeps its records on the volume `project-worker-state`, answers only the engine with its own session token, and `ap up` starts it with the check service.
 
 Every service runs non-root, with a read-only root file system, all capabilities dropped and
@@ -80,7 +91,8 @@ uses, which the platform's own development and CI call directly.
 `src/deploy/ap up --credentials <file> --projects <folder>` checks its inputs and creates new
 session tokens, or keeps those of a started session, so running it twice changes nothing. It passes the tokens and paths to Compose through environment variables only.
 `ap down` stops everything and keeps run records and projects: the engine's store is the named
-volume `engine-store`, which only the engine mounts and `down` does not remove. Until the run page
+volume `engine-store`, which only the engine mounts, and Temporal's state is the volume
+`durable-store`; `down` removes neither. Until the run page
 exists (T056), `ap up` without a built `page` image starts everything else and says the run page is
 not built yet. The launcher's commands are in the
 terminal contract, `src/cli/contract.md`. The variables and services are in `src/deploy/README.md`.
@@ -112,7 +124,11 @@ test-security rule; no container holds the container engine's socket. `go tool t
 same pinned container, converts the binary's output, and `ap` prints one line per trial, per
 scenario and a total (`planted`), or one per test (`us2`), with a failing test's messages indented
 below it. It exits 0 when everything passes, 1 for a failing trial or test or a suite that does not
-build (the build's error on standard error), and 3 for an unknown suite.
+build (the build's error on standard error), and 3 for an unknown suite. `ap test planted
+<scenario>` runs only that scenario's 3 trials (`-test.run '^TestPlanted$/^<scenario>$'`), as CI
+runs them, one job per scenario; a malformed name, a second argument or a scenario for `us2` exits
+3, and a name no scenario has exits 1 with `test: no test of the planted suite ran`
+([ADR 0074](/decisions/0074-long-ci-suites-split-across-parallel-jobs.md)).
 
 The suites' step agents answer from synthesised recordings, the step recording sets in
 `src/tests/recorded/steps/` (`happy`, `resume`, `planted/<scenario>`; research D34,
@@ -207,7 +223,14 @@ Sources: [Feature 001 research, D44](../../specs/001-prose-to-accepted-slice/res
 The pre-commit hook runs the quick static checks of a commit
 ([playbook](/playbooks/protect-changes-locally.md)); CI on GitHub runs every step of
 `scripts/check.sh` and the acceptance suites on each push, and a task is done when that run is
-green ([ADR 0044](/decisions/0044-full-checks-run-on-github-hosted-runners.md)). On the host, run
+green ([ADR 0044](/decisions/0044-full-checks-run-on-github-hosted-runners.md)). Each test of the
+Docker suites runs in exactly one job: the `docker` job skips `TestPlanted`, `TestStopPoints` and
+the `TestUS2` tests (`AP_ACCEPTANCE_SKIP`), `TestStopPoints` runs one job per stop point
+(`stop_points_<stop point>`, hyphens as underscores, `AP_ACCEPTANCE_RUN`, each with the uninterrupted run its trials are
+compared with), `TestPlanted` one job per scenario (`ap_test_planted_<scenario>`, `ap test planted
+<scenario>`), and the `TestUS2` tests in `ap_test_us2`
+([ADR 0074](/decisions/0074-long-ci-suites-split-across-parallel-jobs.md)); `scripts/check.sh`
+with neither variable set runs them all. On the host, run
 only targeted tests that take seconds to a few minutes while working; the Docker step, `ap test`
 and `e2e.sh` are for CI, since the host is small and shared. The live evals run only when the
 owner starts them, `gh workflow run evals.yml --ref <branch>` (`-f all=true` for every suite),

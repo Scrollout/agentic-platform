@@ -12,8 +12,8 @@ The selector's interface, fixed by these tests:
   match; `**/` matches any folders (none included), `**` anything, `*` and `?` stay within one
   path segment.
 - RUNS is check.yml's successful runs, newest first, as a JSON list of {head_sha, head_branch,
-  conclusion}. The base is the newest run with conclusion `success` on `main` or
-  `001-prose-to-accepted-slice` whose head_sha is a commit here and an ancestor of SHA.
+  conclusion}. The base is the newest run with conclusion `success` on any branch
+  whose head_sha is a commit here and an ancestor of SHA.
 - stdout is one JSON list of job ids in the declaration's order: every always job, and every
   paths job whose patterns match a file changed from the base to SHA (both paths of a rename and
   deleted files count). Every job for EVENT=workflow_dispatch, when RUNS is unset, empty, not
@@ -241,7 +241,7 @@ class BaseRuleTest(unittest.TestCase):
 
     def test_run_on_another_branch_is_not_a_base(self):
         runs = [run_of(self.code, branch="other"), run_of(self.r.base)]
-        self.assertEqual(self.r.run(runs, self.docs), EVERY)
+        self.assertEqual(self.r.run(runs, self.docs), self.docs_only)
         runs = [run_of(self.code, branch="main"), run_of(self.r.base)]
         self.assertEqual(self.r.run(runs, self.docs), self.docs_only)
 
@@ -285,7 +285,6 @@ class EveryJobTest(unittest.TestCase):
     def test_no_base_run(self):
         for runs in (None, "", "not json", "[]", "{}", '"x"', "[1, 2]",
                      [run_of(self.r.base, conclusion="failure")],
-                     [run_of(self.r.base, branch="feature/other")],
                      [{"head_branch": FEATURE, "conclusion": "success"}]):
             with self.subTest(runs):
                 self.assertEqual(self.r.run(runs, self.docs), EVERY)

@@ -1,7 +1,8 @@
 #!/bin/sh
 # Quick static checks before a commit, of what the staged files can affect: root layout, secret
-# scan, knowledge bundle, markdown, contract lint, committed generated blocks, and gofmt and go vet
-# of each changed Go module. No test suite runs here: the full scripts/check.sh runs in CI on every
+# scan, knowledge bundle, markdown, contract lint, committed generated blocks, gofmt and go vet
+# of each changed Go module, and the linters of each stack on the lines the commit adds or changes
+# (scripts/lint-staged.py over scripts/lint-staged.yaml, T041). No test suite runs here: the full scripts/check.sh runs in CI on every
 # push (research D41, ADR 0044), and a task is done when that run is green.
 #
 # The checks run on the staged snapshot, never on the working tree: the index is exported into a
@@ -63,6 +64,10 @@ git diff --cached --name-only -z --no-renames >"$work/changed"
 [ -s "$work/changed" ] || exit 0
 git diff --cached --name-only -z --no-renames --diff-filter=d >"$work/content"
 git diff --cached --name-only -z --no-renames --diff-filter=d -- '*.md' ':(exclude)scripts/tests/' >"$work/md"
+# diff: the lines the commit adds or changes, for the linters (scripts/lint-staged.py). Renames
+# are found here, so a moved file's unchanged lines are not judged again.
+git diff --cached -U0 --find-renames --diff-filter=d --no-color --no-ext-diff --no-textconv \
+  --src-prefix=a/ --dst-prefix=b/ >"$work/diff"
 touches() { ! git diff --cached --quiet --no-renames -- "$@"; }
 docs=; contracts=; go=; inline=
 touches 'docs/' && docs=1
@@ -180,5 +185,7 @@ if [ -n "$go" ]; then
       -e GOPROXY=off -e GOFLAGS=-mod=readonly "$image" sh -ec 'out=$(find . -name "*.go" -not -path "*/testdata/*" -print | xargs -r gofmt -l); [ -z "$out" ] || { echo "gofmt: these files are not formatted:"; echo "$out"; exit 1; }; go vet ./...'
   done
 fi
+run "linters on the changed lines"
+python3 scripts/lint-staged.py "$work/diff"
 echo "pre-commit: staged snapshot passed"
 echo "pre-commit: done in $(( $(date +%s) - started )) s"

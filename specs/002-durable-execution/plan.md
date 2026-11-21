@@ -1,0 +1,202 @@
+# Implementation Plan: Runs and operations survive a platform stop, on an adopted durable-execution engine
+
+**Branch**: `002-durable-execution` | **Date**: 2026-11-19 | **Spec**: [spec.md](spec.md)
+
+**Input**: Feature specification from `specs/002-durable-execution/spec.md` (clarified
+2026-11-18)
+
+## Summary
+
+The engine's own durable execution (resume, checkpoints, retries, timeouts, the in-memory job
+queue) is replaced by Temporal, as [ADR 0056](../../docs/decisions/0056-durable-execution-custom-for-the-mvp-temporal-after.md)
+decided. Temporal's server and PostgreSQL run in Compose, pinned by digest (research R1). Each
+run is one workflow whose code is the engine's step rules and whose calls (step workers, checks,
+the project worker, the record) are activities (R3). A run a stop interrupted continues by itself
+and makes only the interrupted attempt again (FR-003, FR-005). Each state-changing request is
+recorded in the engine store before it is acknowledged and then runs as a workflow (R4). The run
+record stays the engine's, with its published schema unchanged (R2). One retry rule, declared in
+the engine contract, replaces three hand-written ones (R5). Everything feature 001 delivered keeps
+working (US3).
+
+## Technical Context
+
+**Language/Version**: Go 1.26 (the engine and terminal client's stack); POSIX sh for the
+launcher's Compose changes
+
+**Primary Dependencies**: Temporal server 1.32.2 (`temporalio/server`), `temporalio/admin-tools`
+1.32.2 (schema job), Temporal Go SDK `go.temporal.io/sdk` v1.51.0, PostgreSQL 16
+(`postgres:16-alpine`); everything else as feature 001
+
+**Storage**: the engine store as feature 001 (run record, artifacts, slices) plus
+`operations/OP-<n>.json` with its request body `operations/OP-<n>.body` (ADR 0072), `operation-sequence.json` and `workers.json` (step worker registrations, ADR 0071); Temporal's state in PostgreSQL (volume
+`durable-store`) ([data model](data-model.md))
+
+**Testing**: Go `testing` with Temporal's `testsuite` (workflow unit tests, time skipping) and
+`worker.NewWorkflowReplayer` (replay) in CI's `go` job; the engine against real Temporal and
+PostgreSQL in the `docker` job, where the stop-point acceptance suite also runs in the labs;
+feature 001's suites unchanged
+
+**Target Platform**: Linux with Docker 28+, Compose and gVisor, as feature 001
+
+**Project Type**: the local multi-container tool of feature 001
+
+**Performance Goals**: a run stopped and continued ends as an uninterrupted one (SC-001); a lost
+engine is found within 30 s (activity heartbeat timeout)
+
+**Constraints**: the added services (`durable` and `durable-store`) use at most 512 MiB idle
+(SC-004; measured about 200 MiB, research S14); the engine's own memory with its Temporal worker
+is measured and reported alongside, within its feature 001 limit of 512 MiB; no egress; non-root, read-only root, no capabilities; nothing protected in
+Temporal's state (FR-016)
+
+**Scale/Scope**: one developer, one machine, one run at a time (feature 001's RunActive rule)
+
+## Constitution Check
+
+*Evaluated before research and again after design: PASS with the Complexity Tracking rows below.
+Feature 001's approved exceptions (II, V, XI partial, XII, XIII partial, XVI partial) still apply
+to the platform; this feature closes its Principle VI exception and the retry-wait part of its Single-owner exception,
+and extends its Principle V exception to the two added services.*
+
+| Principle | Status | How this plan complies |
+|-----------|--------|------------------------|
+| I. Needs before solutions | Pass | Serves N-040 (owner confirmed 2026-11-18); no design taken from another project |
+| II. Two planes | Pass (feature 001's exception unchanged) | Temporal and PostgreSQL join the one local deployment |
+| III. API-first | Pass | No management path bypasses the API; the contract changes additively first (the engine contract and the terminal contract, T001) |
+| IV. Asynchronous operations | Pass | Every state-changing request is recorded, queued (task queue `operations`) and answered with an operation reference; retries with backoff and jitter (R5); failed operations stay visible; one task queue per workload class (`runs`, `operations`) |
+| V. Zero-trust identity | Exception (Complexity Tracking) | Temporal's frontend and PostgreSQL trust their internal networks and a per-install password |
+| VI. Adopt mature OSS | Pass | Temporal and PostgreSQL adopted after the evaluation (research, Principle VI evaluation); the custom code kept is justified there; feature 001's exception is removed |
+| VII. Pluggable providers | Not affected | No provider changes |
+| VIII. Containers | Pass | Three pinned images, non-root, read-only root, no capabilities, internal networks only (S14); no Kubernetes dependency |
+| IX. Knowledge stays true | Pass | ADRs 0065 to 0069, components `temporal` and `postgresql`, the Temporal reference updated, the architecture overview at implementation |
+| X. No silent loss | Pass | A run and an operation are acknowledged only after they are recorded (R4); a run continues after a stop without repeating a completed side effect (R3); upgrades update the schema before the server (R1) |
+| XI. Agent data privacy | Pass (feature 001's partial exception unchanged) | Temporal holds IDs, hashes and numbers only (R2); retention 24 h; erasure deletes workflows (R8); the server's version check is off (S11) |
+| XII. Tenant isolation | Not applicable | One developer |
+| XIII. Secure supply chain | Pass | Images and the SDK pinned by version and digest; the schema job and server share one version line |
+| XIV. Safe defaults | Pass | No new agent capability; a failed durable record blocks the request (503) |
+| XV. Compatible public APIs | Pass | Additive only: `x-limits` retry values, a 503 response, the operation-retention text, in the engine contract; `oasdiff` gates it |
+| XVI. Human control | Pass (feature 001's exception unchanged) | Protected paths and changed existing tests carry the owner's trailers |
+| XVII. Declare, derive, converge | Pass | The schema job converges the database; the retry rule is declared once and its use checked against it |
+| XVIII. Abstractions say what | Pass | `src/retry` has three callers; activities are named for what they do |
+| XIX. Evals | Pass | No prompt, model or tool changes; the regression eval suites run before merge as for any agent-logic change |
+| XX. Deterministic acceptance | Not affected | No check of agent work changes |
+| Contract-first | Pass | The engine contract and the terminal contract change before code (T001, committed alone) |
+| Existing tests change only with approval | Pass, by task | The plan names the existing tests expected to change (Project Structure); each task that changes one names it and waits for the owner's approval |
+| Fresh review | Pass | A fresh read-only reviewer per story and before done, judging the CI run |
+| Layout, Clean tree, Built artifacts | Pass | New code under `src/`; tests excluded by `src/.dockerignore` as before |
+
+## Decisions
+
+Each decision that outlives this feature has a record in `docs/decisions/`, linked back here.
+
+| Decision | Research | Record |
+|----------|----------|--------|
+| Temporal's server (all services in one process) and PostgreSQL 16 run in Compose, pinned by digest, with a schema job that converges both databases before the server starts (owner: PostgreSQL, 2026-11-19) | R1 | [ADR 0065](../../docs/decisions/0065-temporal-and-postgresql-in-compose.md) |
+| The engine registers the namespace `ap` when it connects; the PostgreSQL password file is mode 644 in a mode-700 folder, because Compose ignores a file secret's owner and mode (owner, 2026-11-19, found in T004) | R1 | [ADR 0070](../../docs/decisions/0070-engine-registers-the-namespace-password-folder-private.md) |
+| The run record stays the engine's, with its schema; Temporal keeps only execution state, and every event is written by an idempotent activity (owner, 2026-11-19) | R2 | [ADR 0066](../../docs/decisions/0066-the-run-record-stays-the-engines.md) |
+| A run is one workflow running the engine's step rules; every call is an activity with a heartbeat; a stop repeats only the interrupted attempt and the run continues by itself | R3 | [ADR 0067](../../docs/decisions/0067-a-run-is-one-temporal-workflow.md) |
+| An operation is recorded in the engine store before it is acknowledged, then runs as a workflow with the operation's ID; the record keeps its ID for 24 h after its end and its Idempotency-Key for 24 h from acceptance | R4 | [ADR 0068](../../docs/decisions/0068-operations-recorded-then-run-as-workflows.md), key window [ADR 0073](../../docs/decisions/0073-idempotency-key-held-24-h-from-acceptance.md) |
+| An operation's request body is kept beside its record in the engine store, its work is rebuilt from both after a stop, and its end is written to the record (owner, 2026-11-20, found before T022) | R4 | [ADR 0072](../../docs/decisions/0072-operation-request-bodies-kept-in-the-engine-store.md) |
+| Step worker registrations are kept in the engine store (endpoint and grant hash, no token), so a run continues by itself after an engine restart (owner, 2026-11-19, found by T014 in CI) | R10 | [ADR 0071](../../docs/decisions/0071-step-worker-registrations-kept-in-the-engine-store.md) |
+| One retry rule, declared in the engine contract's `x-limits` and applied by `src/retry` with durable timers, replaces Temporal's unjittered activity retries and the three hand-written forms (owner, 2026-11-19) | R5 | [ADR 0069](../../docs/decisions/0069-one-retry-rule-declared-in-the-engine-contract.md) |
+
+## Threat model
+
+New elements: the Temporal server (frontend, history, matching, worker in one process), the
+schema job, PostgreSQL and its volume, the engine's Temporal worker, the workflow histories, the
+operation records. Trust boundaries: the `durable` network (engine to server) and the
+`durable-store` network (server and schema job to PostgreSQL). No new external interface, model,
+tool or agent context; no untrusted content enters a model's context through this change.
+
+| Element | S | T | R | I | D | E | OWASP mapping | Mitigation |
+|---------|---|---|---|---|---|---|---------------|------------|
+| Temporal frontend | ✓ | ✓ | | ✓ | ✓ | ✓ | ASI03 identity and privilege abuse, LLM10 unbounded consumption | Reachable only on the internal `durable` network, which only the engine joins; no published port; agent and step containers are on other networks (feature 001's isolation); the default authorizer's open access is the Principle V exception below |
+| PostgreSQL | ✓ | ✓ | | ✓ | ✓ | | ASI03 | Only on `durable-store`, joined by the server and the schema job; password made by `ap` per install (file mode 644 in its own mode-700 folder in the state folder, R1), passed by Compose from that file; runs as 70:70, no capabilities |
+| Workflow histories | | ✓ | | ✓ | | | LLM02 sensitive information disclosure | Hold IDs, hashes, numbers and short reasons only (R2); retention 24 h; deleted with the slice (R8); no payload codec needed because nothing protected is in them |
+| Engine's Temporal worker | | ✓ | ✓ | | ✓ | | ASI08 cascading failures | Activities are the engine's own calls with their feature 001 limits; heartbeat timeouts bound a lost call; one run at a time |
+| Operation records and request bodies | | ✓ | ✓ | ✓ | | | LLM02 | In the engine store (mode 700 volume, only the engine mounts it), atomic writes; keys stored as SHA-256 only; the request body (protected content, as the slice it changes) stays in the runtime plane, never in Temporal, and is removed with its record 24 h after the operation ends or when its slice is erased (ADR 0072, FR-016, FR-017) |
+| Step worker registrations (`workers.json`) | ✓ | ✓ | | ✓ | | | LLM02, ASI03 | In the engine store (mode 700 volume, only the engine mounts it), atomic writes; holds the endpoint and the SHA-256 naming the grant file, never a token; the call token is read from the grant file the launcher owns, so a removed grant means not registered; `registerWorker` needs that worker's token and the contract checks the endpoint's shape (ADR 0071) |
+| Retry rule | | | | | ✓ | | LLM10 | Capped exponential backoff with jitter, at most 3 retries (S15) |
+| Images | ✓ | ✓ | | | | | LLM03 supply chain | Pinned by digest in `images.lock`; no signature available upstream (Scorecard Signed-Releases 0), so the digest is the check, as for nginx and cosign |
+| Server version check | | | | ✓ | | | — | Off (`frontend.enableServerVersionCheck: false`); the networks have no egress anyway |
+
+## Project Structure
+
+### Documentation (this feature)
+
+```text
+specs/002-durable-execution/
+├── plan.md              # this file
+├── research.md          # Phase 0
+├── data-model.md        # Phase 1
+├── quickstart.md        # Phase 1
+├── checklists/
+│   └── requirements.md
+└── tasks.md             # /speckit-tasks
+```
+
+### Source Code (repository root)
+
+```text
+src/
+├── retry/                         # new module: the retry rule's Wait(n, random); go.work and an archfile
+├── engine/
+│   ├── api/preview/2026-11-12-preview/openapi.yaml   # x-limits retry values, 503 UnavailableProblem, operation retention text
+│   ├── api/operations.go          # operation record, body and outbox; DoOperation's work; status from the record; backoff removed
+│   ├── api/runs.go                # start, resume, cancel and hand-over through workflows and signals
+│   ├── api/durable.go             # the ports the durable service implements (Runs; Operations with US2)
+│   ├── durable/                   # new: the run workflow (the step rules), Temporal client and worker, task queues, the activities
+│   ├── machine/                   # domain types, StateOf, Compare; resume, load and historyBackoff removed; the in-process driver until T040
+│   ├── store/                     # RecordEvent once per seq; operation records and their sequence; step worker registrations (ADR 0071)
+│   └── cmd/engine/                # start the Temporal worker; refuse runs left open by feature 001 (R7)
+├── cli/runs.go, cli/api/           # the client's resend wait from src/retry, the values from the embedded contract
+├── cli/contract.md                # the resume paragraph, the retry values' home, interrupted's meaning
+└── deploy/
+    ├── compose.yaml               # durable-store, durable-schema, durable; networks durable and durable-store
+    ├── durable/                   # dynamic config, the schema job's script
+    ├── images.lock                # temporal-server, temporal-admin-tools, postgres pins
+    └── ap                         # the PostgreSQL password file; `down` keeps the volume; resume's message
+src/tests/lab/                     # the labs start the durable services
+src/tests/acceptance/              # new: stop-point, operation-restart and erasure suites
+```
+
+**Structure Decision**: the change lives in the engine (`src/engine`), a new shared module
+`src/retry`, the client's resend wait, and the deployment packaging. `src/check`, `src/page` and
+the agents do not change.
+
+**Existing tests expected to change** (each with the owner's approval, recorded per task with
+`Tests-approved-by:`): the machine's resume and restart tests
+(`resume_after_interrupt_test.go`, `restart_interrupt_test.go`, `restart_usage_test.go`,
+`open_round_resume_test.go`, `fix_round_test.go`'s `TestResumedRunContinuesAFixWithTheSameRound`,
+`reuse_test.go`'s resume cases, `history_test.go`'s retry and crash cases,
+`history_jitter_test.go`), the API's operation and retry tests (`skeleton_test.go`'s retry and
+backoff cases, `runs_ops_test.go`'s resume and restart cases, `operations_wait_test.go`),
+`cmd/engine`'s `restart_test.go` and `close_waits_test.go`, `scripts/tests/test_compose.py`'s
+real-file checks (the three new services have images that are none of the platform's own, which
+it classifies `other` and refuses on internal networks), `scripts/tests/test_build_workers_projects.py`
+(the launcher's `resume` exit-3 message), and the test labs in `src/tests/lab`. The tasks first try to keep each
+assertion and change only how the test drives the engine.
+
+## Feature 001 items this feature replaces
+
+Backlog T086 (when `RunInterrupted` is appended: replaced by R3), T138 (attempts across a stop:
+FR-003) and T158 (a failed `RunCompleted` append: replaced by the activity's retry, R5) close.
+T055c stays open: its client resend wait moves to `src/retry` (R5), and its other items (an
+HTTP-date `Retry-After`, `take-over`'s wait, the rest) are not this feature's. T159 (which refused answers count as attempts) stays in the
+backlog: it is not this feature's decision.
+
+## Exceptions
+
+| Rule | Location | Reason |
+|------|----------|--------|
+| Single owner for rules | `src/engine/machine/drive.go` (`Machine.Start`) beside `src/engine/durable/workflow.go` | The run rules live in the workflow; the old in-process driver has no production caller since T018, but feature 001's machine tests still drive it, and moving them changes existing tests (owner approval per test). Kept for this feature by the owner, 2026-11-20 (T040; first recorded 2026-11-19, analyze round 6) |
+
+## Complexity Tracking
+
+| Violation | Why Needed | Simpler Alternative Rejected Because |
+|-----------|------------|-------------------------------------|
+| Principle V (partial), extending feature 001's exception: Temporal's frontend accepts any caller on the internal `durable` network, and PostgreSQL authenticates the server with a password `ap` makes per install, readable by any user inside the three containers (ADR 0070) | One developer on one machine; the two services are reachable only from the engine and the server on internal networks, as feature 001's services are; owner, 2026-11-19 | mTLS with a local CA and per-session certificates for both, more parts and tests for a local tool; required with hosting, with feature 001's other V and XI exceptions |
+
+The project owner approved the Principle V extension on 2026-11-19, for this local,
+single-developer version only. This feature removes feature 001's Principle VI exception (the
+engine's own durable execution, D56) and its Single-owner exception (the retry wait) when it is
+done (SC-005).

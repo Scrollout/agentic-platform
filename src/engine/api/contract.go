@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agentic-platform/retry"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/santhosh-tekuri/jsonschema/v6/kind"
 	"go.yaml.in/yaml/v3"
@@ -75,6 +76,7 @@ type contract struct {
 	perAddress     int                   // requests without an accepted token in any one-second window per source address
 	keepKeys       time.Duration         // how long an idempotency key is kept
 	maxBody        int64                 // largest request body, in bytes
+	retry          retry.Rule            // the retry rule of x-limits
 	keyMin, keyMax int                   // Idempotency-Key length
 	// runID and hash are the contract's rules for a run ID and an artifact hash, which the run
 	// operations take as path and query parameters.
@@ -348,7 +350,11 @@ func parseContract(raw []byte, version string) (contract, error) {
 	if limits[2] > math.MaxInt64/int64(time.Hour) {
 		return contract{}, fmt.Errorf("x-limits.idempotency-key-retention-hours: %d hours is too long", limits[2])
 	}
-	c := contract{version: version, ops: map[string]contractOp{}, byID: map[string]string{}, perSecond: int(limits[0]), perAddress: int(limits[1]),
+	rule, err := retryRuleOf(raw)
+	if err != nil {
+		return contract{}, fmt.Errorf("x-limits: %w", err)
+	}
+	c := contract{version: version, retry: rule, ops: map[string]contractOp{}, byID: map[string]string{}, perSecond: int(limits[0]), perAddress: int(limits[1]),
 		keepKeys: time.Duration(limits[2]) * time.Hour, maxBody: limits[3]}
 
 	paths, err := pairs(&d.Paths, "paths")
@@ -468,3 +474,15 @@ func pairs(n *yaml.Node, what string) ([]pair, error) {
 	}
 	return out, nil
 }
+
+// RetryRule returns the retry rule of the embedded contract's x-limits: how many times a call that
+// failed retryably is tried again, and how long each retry waits.
+func RetryRule() retry.Rule { return engineContract.retry }
+
+// retryRuleOf returns the rule an OpenAPI document gives.
+func retryRuleOf(openapi []byte) (retry.Rule, error) { return retry.Parse(openapi) }
+
+// Retention is how long the embedded contract's x-limits keep an idempotency key, and an ended
+// operation, after it ends (idempotency-key-retention-hours); the durable service keeps a closed
+// workflow as long (ADR 0070).
+func Retention() time.Duration { return engineContract.keepKeys }

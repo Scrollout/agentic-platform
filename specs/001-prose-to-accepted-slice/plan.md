@@ -55,7 +55,7 @@ per token on the API
 | III. API-first | Pass | The engine API is the only management path; the CLI and page are clients; an API client without workers gets an explicit refusal (D5, D7) |
 | IV. Asynchronous operations | Exception (approved, partial) | Every state change returns an operation that can be followed and cancelled; failures are retried with backoff and kept visibly as failed (D7); `registerWorker` answers at once, not with an operation (Complexity Tracking) |
 | V. Zero-trust identity | Exception (approved, partial) | Per-session, per-container tokens; full workload identity deferred (D12) |
-| VI. Adopt mature OSS | Exception (approved) | Scorecard and licence table (D22); nginx replaces a custom gateway; custom code only where no project fits (D21), except the engine's durable execution, run store and job queue, kept for the MVP and moved to Temporal after it (D56, Complexity Tracking) |
+| VI. Adopt mature OSS | Pass | Scorecard and licence table (D22); nginx replaces a custom gateway; custom code only where no project fits (D21). The engine's own durable execution, run store and job queue, kept for the MVP by an approved exception (D56), moved to Temporal in feature 002, which removed the exception (2026-11-20) |
 | VII. Pluggable providers | Pass | Model reached only through the gateway; the pattern is a declaration |
 | VIII. Containers and sandboxed execution | Pass | Every part in a container; non-root, read-only root, no capabilities; agent steps and checks under gVisor with resource limits (D13); images signed with SBOM and provenance, verified by the launcher at start |
 | IX. Knowledge stays true | Pass | Tasks record decisions, components, glossary terms and the log |
@@ -200,13 +200,17 @@ test files and evals (one Docker ignore rule for every image, `src/.dockerignore
 
 ## Complexity Tracking
 
+Feature 002 removed the Principle VI exception for the engine's own durable execution (D56,
+[ADR 0056](../../docs/decisions/0056-durable-execution-custom-for-the-mvp-temporal-after.md)): runs
+and operations run on Temporal ([spec](../002-durable-execution/spec.md), SC-005; the removed
+row is in the history of this file).
+
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
 | Principle II: no separate control and runtime planes | One developer on one machine; the engine both manages and runs | Two planes would double the deployables before any user exists; they come with hosting |
 | Principle V: per-session tokens instead of workload identity | Calls stay authenticated without an identity provider on a laptop | An identity provider for a single-user local tool; deferred to hosting |
 | Principle XI (partial): no encryption between local containers or at rest | Containers share one internal network on one machine; data stays on the developer's disk | TLS and disk encryption for a local tool; required once anything is hosted |
 | Principle XIII (partial): git in the project worker image pinned by package version, not digest (`images.lock` `alpine-git` `2.49.1-r0`, `src/deploy/Dockerfile.project`; ADR 0033) | The project worker needs git; an Alpine package has no digest, and the base image is pinned by digest, so a new package release fails the build until the pin moves. Approved by the project owner on 2026-11-13 | The Debian base with git, pinned by digest, made the check image 1.29 GB, too large for the owner's host (ADR 0033) |
-| Principle VI: the engine's own durable execution (resume, checkpoints, retries, timeouts in `src/engine/machine`), run store (`src/engine/store`) and job queue (`src/engine/api/operations.go`), which Temporal provides (D56) | Built, tested and green in CI before the evaluation was made; approved by the project owner on 2026-11-17 for the MVP only | Adopting Temporal now rewrites `machine` and most of its tests and adds a server and a database to a small host before the MVP is accepted; T151 adopts it after the MVP |
 | Principles IV and XV: `registerWorker` (engine API) answers 200 at once, not with an operation, and takes no idempotency key | A step worker registers its endpoint when it starts; registering again replaces the endpoint with the same one, so a repeat changes nothing (T066 review, owner, 2026-11-17) | An `Idempotency-Key` header with a retention window for a call that is idempotent by its own effect |
 | Principle XII: no tenant isolation | Single developer by scope (FR-021) | Not applicable until the hosted version |
 | Principle XVI (partial): local git hooks instead of branch protection and code owners | One person commits and pushes to the public repository, without pull requests (owner, 2026-11-16; D41); the hooks require `Approved-by:` and `Tests-approved-by:` trailers, and GitHub Actions runs every check on every push | Code owners and required reviews or checks need pull requests, which a one-person project does not use (a ruleset blocks force-push and deletion of `main` and the feature branch, which needs none; T106); hooks can be skipped with `--no-verify` and a red run does not block a push, so the trailers record approval rather than enforce it |
@@ -222,6 +226,11 @@ push, and the git hooks run the quick checks before a commit. They hold for this
 single-developer version only and are recorded in the commit that carries this plan.
 
 ## Exceptions to Engineering Principles
+
+Feature 002 removed the Single-owner exception for the retry wait (three hand-written
+backoff forms, owner 2026-11-17): one rule in `src/retry`, declared in the engine contract
+([ADR 0069](../../docs/decisions/0069-one-retry-rule-declared-in-the-engine-contract.md); the
+removed row is in the history of this file).
 
 | Rule | Location | Reason |
 |------|----------|--------|
@@ -248,4 +257,3 @@ single-developer version only and are recorded in the commit that carries this p
 | Fix the cause, not the check (a deliberate change to a check) | `scripts/hooks/pre-commit` keeps only the quick static checks (T108) | The full run in the hook took 12 to 25 minutes and timed out under other projects' load on the owner's shared host (T105); it now runs on every push in GitHub Actions (D41), so nothing is checked less, only later: a commit is accepted before CI judges it (a stated limit, ADR 0044). Owner, 2026-11-16; the hook's tests change only as T108's text records. |
 | Fix the cause, not the check (a deliberate change to a check) | `TestSameRequestSameResponse` in `src/engine/checksvc/checks_test.go`, and the planted `non-converging-review` fix files and recordings (T135) | A review round after the first now needs `round_scope` (research D55, ADR 0055), so the test's round-2 step sends one for NoBlockingFindingOpen whose `open` repeats its own finding; what it asserts (the same request gives the same response, the round only names the call) is unchanged. The planted fixes now change the lines the next round's findings name, so those findings stay in scope; the scenario still hands over after 3 rounds, `planted_test.go` unchanged. Approved by the project owner on 2026-11-17 (T135's text). |
 | Fix the cause, not the check (a deliberate change to a check) | `Lab.Do` in `src/tests/lab/lab.go` retries a 429 `RateLimited` up to 3 times, 1 s apart (T110 e) | On GitHub's faster runner `TestUS1` went over the contract's per-token limit (`x-limits.requests-per-second-per-token`, 20); the engine is right. A client backing off on a documented 429 is the contract's behaviour, not a re-run of a flaky test: every assertion stays, and a 429 that lasts beyond 3 s still fails the test. Owner approved on 2026-11-16 |
-| Single owner for rules (the retry wait) | `backoff` in `src/engine/api/operations.go`, `historyBackoff` in `src/engine/machine/drive.go`, the retry wait in `src/cli/runs.go` | Three hand-written backoff-with-jitter forms, each tested where it is used; merging them before the MVP changes existing tests for no change in behaviour. T151 gives them one owner when Temporal takes over the engine's retries (D56; owner, 2026-11-17) |

@@ -26,8 +26,18 @@ vendors:
     in: [github.com/oapi-codegen/runtime]
   oasdiff:
     in: [github.com/oasdiff/oasdiff/checker, github.com/oasdiff/oasdiff/diff, github.com/oasdiff/oasdiff/load]
+  retry-module:
+    in: [github.com/agentic-platform/retry]
   slice-module:
     in: [github.com/agentic-platform/slice]
+  temporal:
+    in: [go.temporal.io/sdk/activity, go.temporal.io/sdk/client, go.temporal.io/sdk/temporal, go.temporal.io/sdk/worker,
+      go.temporal.io/sdk/workflow, go.temporal.io/api/enums/v1, go.temporal.io/api/serviceerror,
+      go.temporal.io/api/workflowservice/v1, go.temporal.io/api/common/v1, google.golang.org/protobuf/types/known/durationpb]
+  temporal-testsuite: # Temporal's test environment, the logger and interceptor its rigs set, and the
+    # recorded histories the replay test reads (T020)
+    in: [go.temporal.io/sdk/testsuite, go.temporal.io/sdk/log, go.temporal.io/sdk/interceptor,
+      go.temporal.io/api/history/v1]
   yaml:
     in: [go.yaml.in/yaml/v3]
 components:
@@ -41,6 +51,7 @@ components:
   cmd-check: { in: cmd/check }
   cmd-engine: { in: cmd/engine }
   contracts: { in: contracts }
+  durable: { in: durable }
   machine: { in: machine }
   procedures: { in: procedures }
   slices: { in: slices }
@@ -50,8 +61,12 @@ deps:
   analyst:
     mayDependOn: [agentcall, analyst, slices]
   api:
-    mayDependOn: [api-gen, machine, slices, store]
-    canUse: [jsonschema, slice-module, yaml]
+    # durable, temporal and temporal-testsuite for the durable rig's tests only (T019; package
+    # api_test runs the real run workflow in Temporal's testsuite). go-arch-lint cannot tell test
+    # files from code, so api's code must not use them: api defines the ports durable implements
+    # (data model). Owner-approved 2026-11-19.
+    mayDependOn: [api, api-gen, durable, machine, slices, store]
+    canUse: [jsonschema, retry-module, slice-module, temporal, temporal-testsuite, yaml]
   api-gen:
     canUse: [oapi-runtime]
   checks:
@@ -65,14 +80,21 @@ deps:
   cmd-engine:
     # A named exception (D40 F2): setup.go holds logic (sliceWorkers, the agent-definition digest),
     # not only wiring; moving it into a package is follow-up T097.
-    mayDependOn: [analyst, api, canonical, contracts, machine, slices, steps, store]
-    canUse: [slice-module, yaml]
+    # durable: the engine starts its Temporal worker and client (T018). temporal and
+    # temporal-testsuite for the durable fake's tests only (T019, owner-approved 2026-11-19).
+    mayDependOn: [analyst, api, canonical, contracts, durable, machine, slices, steps, store]
+    canUse: [slice-module, temporal, temporal-testsuite, yaml]
   contracts:
     mayDependOn: [contracts, slices]
     canUse: [kin-openapi, oasdiff]
+  durable:
+    # api for the retry rule of the engine contract (api.RetryRule); api defines the ports durable implements.
+    mayDependOn: [api, machine, store]
+    canUse: [retry-module, temporal]
   machine:
-    mayDependOn: [machine]
-    canUse: [jsonschema]
+    # durable, retry-module, temporal, temporal-testsuite and yaml for the run workflow's tests (T012).
+    mayDependOn: [durable, machine]
+    canUse: [jsonschema, retry-module, temporal, temporal-testsuite, yaml]
   procedures:
     mayDependOn: [canonical, checks, procedures]
     canUse: [modfile]

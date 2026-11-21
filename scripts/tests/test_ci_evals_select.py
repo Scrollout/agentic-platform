@@ -28,8 +28,6 @@ selector's rules are judged apart from the real declaration; RealDeclarationTest
 done criteria of T115 on the real src/tests/evals/suites.yaml and images.lock.
 """
 import json
-import os
-import shutil
 import subprocess
 import sys
 import tempfile

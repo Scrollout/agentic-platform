@@ -29,7 +29,6 @@ const (
 )
 
 const (
-	maxTries     = 4 // one try and up to 3 more (contract.md, "Idempotency and the run ID")
 	recordedStop = "stopped; the request may have been recorded: see runs"
 )
 
@@ -73,7 +72,7 @@ type lostError struct {
 }
 
 func (l *lostError) Error() string {
-	return fmt.Sprintf("engine: no answer to %s after %d tries (%v)", l.op, maxTries, l.err)
+	return fmt.Sprintf("engine: no answer to %s after %d tries (%v)", l.op, tries(), l.err)
 }
 
 func sleep(ctx context.Context, d time.Duration) error {
@@ -87,17 +86,15 @@ func sleep(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// send makes one engine call, sending it again after a lost answer up to 3 more times, after 1, 2
-// and 4 seconds with up to half again of jitter; a 429 waits at least its Retry-After. It returns the
+// send makes one engine call, sending it again after a lost answer by the contract's retry rule
+// (retryRule); a 429 waits at least its Retry-After. It returns the
 // first answer that is not lost, with its body read.
 func (s *session) send(ctx context.Context, op string, do func(context.Context) (*http.Response, error)) (*http.Response, error) {
 	var last error
 	var retryAfter time.Duration
-	for try := 0; try < maxTries; try++ {
+	for try := 0; try < tries(); try++ {
 		if try > 0 {
-			base := time.Second << (try - 1)
-			d := base + time.Duration(mrand.Int64N(int64(base/2)+1))
-			d = max(d, retryAfter)
+			d := max(retryRule().Wait(try-1, mrand.Float64), retryAfter)
 			if err := sleep(ctx, d); err != nil {
 				return nil, err
 			}
@@ -181,7 +178,7 @@ func mutate[T interface {
 	r, err := call(ctx, s, op, http.StatusAccepted, func(ctx context.Context) (*http.Response, error) { return do(ctx, &key) }, parse)
 	var lost *lostError
 	if errors.As(err, &lost) {
-		return nil, failf(exitFailed, "engine: no answer to %s after %d tries (Idempotency-Key %s); it may have been recorded: see runs", op, maxTries, key)
+		return nil, failf(exitFailed, "engine: no answer to %s after %d tries (Idempotency-Key %s); it may have been recorded: see runs", op, tries(), key)
 	}
 	if err != nil {
 		return nil, err
@@ -373,6 +370,10 @@ func endLine(r *gen.Run) (string, int) {
 		return fmt.Sprintf("%s waits for the developer%s%s. Take it over with take-over %s, or cancel it with cancel %s.",
 			r.Id, reason(": "), expires, r.Id, r.Id), exitWaits
 	case gen.RunStatusInterrupted:
+		if r.WaitsFor != nil && *r.WaitsFor == gen.RunWaitsForStepWorkers {
+			return fmt.Sprintf("%s is interrupted%s%s. It continues by itself once its step workers run: start them with ap build-workers --resume %s, or cancel it with cancel %s.",
+				r.Id, reason(": "), expires, r.Id, r.Id), exitWaits
+		}
 		return fmt.Sprintf("%s is interrupted%s%s. Resume it with resume %s, or cancel it with cancel %s.",
 			r.Id, reason(": "), expires, r.Id, r.Id), exitWaits
 	case gen.RunStatusEnded:

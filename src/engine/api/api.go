@@ -15,8 +15,11 @@
 // is retried when it fails for a passing reason, and ends `succeeded`, `failed` (with the
 // reason) or `cancelled`. The limits a client sees (requests per second per token and per
 // address, how long idempotency keys are kept, the largest body) are the contract's
-// `x-limits`. Limit: the engine keeps its operations and idempotency keys in memory, so a
-// restart forgets them.
+// `x-limits`. A state-changing call is answered 503 while the durable service does not answer,
+// and nothing is accepted. An accepted operation is recorded before its 202 (with its
+// Idempotency-Key and its body, ADR 0072), so it, its ID and the first answer under its key
+// outlive a restart when Config.Store keeps operation records; every other answer under a key is
+// kept in memory until a restart, and a 503 is never kept.
 package api
 
 import (
@@ -24,9 +27,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"mime"
 	"net"
@@ -95,21 +100,45 @@ type Config struct {
 	// Workers is the registry registerWorker fills; the StepWorker finds each step's worker in
 	// it. nil means the handler keeps its own, which nothing else reads.
 	Workers *Workers
-	// StepWorker runs one attempt of a step and StepChecker one check (machine.Worker and
-	// machine.Checker). Without both, a start that passes every refusal is WorkersNotReady: the
-	// engine cannot drive a run.
+	// Runs is the durable service that runs each run as a workflow (feature 002): startRun,
+	// replayRun, resumeRun, acceptHandOver, cancelling a run's operation and registerWorker go
+	// through it, and the handler never drives a run itself. nil means no run can start: a start
+	// that passes every refusal is WorkersNotReady.
+	Runs Runs
+	// Record is the run record the runs' workflows write and the accepted results they reuse
+	// (NewRunRecord); the engine gives the same one to its durable worker, and a start is then
+	// answered once the run's RunStarted is recorded (at most 10 s). nil means the handler keeps
+	// its own over Store and answers a start as soon as the durable service has taken it.
+	Record *RunRecord
+	// StepWorker, StepChecker and History are not used by the handler: the runs' workflows call
+	// the step workers, the check service and the project worker through the engine's durable
+	// worker (package durable).
 	StepWorker  machine.Worker
 	StepChecker machine.Checker
-	// History is the project worker's version history (machine.Config.History): restoreStep
-	// before every attempt, commitStep after every accepted or reused step. nil makes no calls.
-	History machine.History
+	History     machine.History
 	// Model is the model the pattern's agent steps use, part of their reuse keys. Empty means no
 	// accepted result of an agent step is reused (a replay runs those steps again).
 	Model string
+	// Operations is the durable service that runs each accepted operation's work as a workflow
+	// (NewEngine's Operator does the work); every state-changing call first asks it whether it
+	// answers. nil means the engine runs the work in its own process, by the same retry rule,
+	// with Sleep between retries; it does not survive a stop. The operation records are kept in
+	// Config.Store when it keeps them (OperationRecords), else in memory.
+	Operations Operations
 }
 
-// NewHandler returns the engine's whole HTTP handler.
+// NewHandler returns the engine's whole HTTP handler (NewEngine's).
 func NewHandler(cfg Config) http.Handler {
+	h, _ := NewEngine(cfg)
+	return h
+}
+
+// NewEngine returns the engine's whole HTTP handler and the Operator that does the work of the
+// operations it accepts, which the durable service's worker calls (Config.Operations). Before it
+// returns, it reserves again the slice of each createSlice that has not ended and runs the
+// outbox and the sweep once; with Config.Context set, it runs them again every minute until
+// Config.Context ends (counted in Config.Running).
+func NewEngine(cfg Config) (http.Handler, Operator) {
 	now := cfg.Now
 	if now == nil {
 		now = time.Now
@@ -123,14 +152,29 @@ func NewHandler(cfg Config) http.Handler {
 		base = context.Background()
 	}
 	c := engineContract
-	srv := &server{contract: c, ops: &operations{base: base, now: now, sleep: sleep, work: cfg.Work, running: cfg.Running, ops: map[string]*operation{}},
-		pages: newPageKeys(), analyst: make(chan struct{}, analystCallsAtOnce)}
+	ops := &operations{durable: cfg.Operations, now: now, keep: c.keepKeys}
+	if r, ok := cfg.Store.(OperationRecords); ok {
+		ops.records = r
+	} else {
+		ops.records = &memoryRecords{recs: map[string]*memoryRecord{}}
+	}
+	if ops.durable == nil {
+		ops.durable = &localOperations{op: ops, base: base, running: cfg.Running, sleep: sleep, wfs: map[string]*localWork{}}
+	}
+	srv := &server{contract: c, ops: ops, jobs: cfg.Work, pages: newPageKeys(), analyst: make(chan struct{}, analystCallsAtOnce)}
+	ops.work = srv.work
 	var impl gen.StrictServerInterface = srv
 	if cfg.Slices != nil {
 		if cfg.Store == nil {
 			panic("api: Config.Slices needs Config.Store")
 		}
-		impl = &sliceServer{server: srv, svc: cfg.Slices, store: cfg.Store, workers: workersOf(cfg), projects: cfg.Projects, runs: newRuns(cfg, cfg.Slices, now, base)}
+		ss := &sliceServer{server: srv, svc: cfg.Slices, store: cfg.Store, workers: workersOf(cfg), projects: cfg.Projects, runs: newRuns(cfg, cfg.Slices)}
+		ss.useOperations()
+		impl = ss
+	}
+	ops.sweep(base, time.Time{})
+	if cfg.Context != nil {
+		ops.sweepEveryMinute(base, cfg.Running)
 	}
 	mux := http.NewServeMux()
 	gen.HandlerWithOptions(gen.NewStrictHandlerWithOptions(impl, nil, gen.StrictHTTPServerOptions{
@@ -148,14 +192,26 @@ func NewHandler(cfg Config) http.Handler {
 		limit:     newLimiter(now, c.perSecond),
 		anonymous: newLimiter(now, c.perAddress),
 		keys:      &keyStore{now: now, keep: c.keepKeys, entries: map[string]*keyEntry{}},
-	}
+		ops:       ops,
+	}, ops
 }
 
+// workersOf is the handler's worker registry: Config.Workers (or a new one), reading the grants
+// folder and, when Config.Store keeps registrations, holding them there (ADR 0071) and starting
+// from those it kept.
 func workersOf(cfg Config) *Workers {
-	if cfg.Workers != nil {
-		return cfg.Workers
+	w := cfg.Workers
+	if w == nil {
+		w = NewWorkers()
 	}
-	return NewWorkers()
+	w.mu.Lock()
+	w.dir = cfg.GrantsDir
+	w.kept, _ = cfg.Store.(registrationStore)
+	w.mu.Unlock()
+	if err := w.load(); err != nil {
+		log.Printf("engine: reading the kept step worker registrations: %v; the workers must register again", err)
+	}
+	return w
 }
 
 // mustRouteEveryOperation checks that the generated routes and the contract read by
@@ -180,6 +236,7 @@ type front struct {
 	// anonymous counts requests without an accepted token, per source address.
 	anonymous *limiter
 	keys      *keyStore
+	ops       *operations // the operation records, and whether the durable service answers
 }
 
 type rawBodyKey struct{}
@@ -240,16 +297,31 @@ func (f *front) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, newProblem(http.StatusBadRequest, gen.ErrorCode(code), detail))
 		return
 	}
+	request := sha256.Sum256([]byte(r.Method + " " + r.URL.Path + "\x00" + string(body)))
+	if op.lists("503", "Unavailable") { // a state change: nothing is accepted while the durable service does not answer
+		// A state change the engine has read is answered on its merits: a client that closes its
+		// sending side after the body (as `nc` does) must not cancel it half-way. Each call it
+		// makes is bounded by its own timeout (T062).
+		r = r.WithContext(context.WithoutCancel(r.Context()))
+		if err := f.ops.durable.Ready(r.Context()); err != nil {
+			_ = unavailableFor(err).write(w)
+			return
+		}
+	}
+	hashes := requestHashes{body: hex.EncodeToString(request[:])}
 	ctx := context.WithValue(r.Context(), rawBodyKey{}, body)
 	if tok.grant != nil {
 		ctx = context.WithValue(ctx, grantKey{}, *tok.grant)
+	}
+	if tok.file != "" {
+		ctx = context.WithValue(ctx, grantFileKey{}, tok.file)
 	}
 	r = r.WithContext(ctx)
 	r.Body = io.NopCloser(bytes.NewReader(body))
 
 	keys := r.Header.Values("Idempotency-Key")
 	if !op.idempotent || len(keys) == 0 {
-		f.mux.ServeHTTP(w, r)
+		f.mux.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), requestHashesKey{}, hashes)))
 		return
 	}
 	if n := len(keys[0]); len(keys) > 1 || n < f.contract.keyMin || n > f.contract.keyMax {
@@ -257,7 +329,25 @@ func (f *front) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fmt.Sprintf("send one Idempotency-Key of %d to %d characters", f.contract.keyMin, f.contract.keyMax)))
 		return
 	}
-	f.keys.serve(w, r, tok.id+"\x00"+keys[0], sha256.Sum256([]byte(r.Method+" "+r.URL.Path+"\x00"+string(body))), f.mux)
+	// The key of an operation a request created is its record's, and outlives a restart; every
+	// other answer under a key is kept in memory (keyStore).
+	key := sha256.Sum256([]byte(tok.token + "\x00" + keys[0]))
+	hashes.key = hex.EncodeToString(key[:])
+	switch rec, found, err := f.ops.records.OperationByKey(hashes.key); {
+	case err != nil:
+		log.Printf("engine: reading the operation records by key: %v", err)
+		_ = unavailableFor(errNotRecorded).write(w)
+		return
+	case found && f.ops.keyHeld(rec):
+		if rec.Body != hashes.body {
+			writeProblem(w, newProblem(http.StatusConflict, gen.ErrorCodeIdempotencyKeyReused, "this Idempotency-Key was used with a different request"))
+			return
+		}
+		writeAccepted(w, rec)
+		return
+	}
+	r = r.WithContext(context.WithValue(r.Context(), requestHashesKey{}, hashes))
+	f.keys.serve(w, r, tok.id+"\x00"+keys[0], request, f.mux)
 }
 
 // jsonContent reports whether a request's Content-Type header values are exactly one media
@@ -415,7 +505,10 @@ func (k *keyStore) serve(w http.ResponseWriter, r *http.Request, key string, req
 		k.mu.Unlock()
 
 		if !seen {
-			k.first(e, r, next)
+			if rec := k.first(e, r, next); rec != nil && e.resp == nil {
+				writeRecorded(w, rec) // a 503, which is never kept
+				return
+			}
 		} else if e.request != request {
 			writeProblem(w, newProblem(http.StatusConflict, gen.ErrorCodeIdempotencyKeyReused, "this Idempotency-Key was used with a different request"))
 			return
@@ -427,20 +520,21 @@ func (k *keyStore) serve(w http.ResponseWriter, r *http.Request, key string, req
 			}
 			continue // the first call did not finish; this one takes its place
 		}
-		for name, values := range e.resp.Header() {
-			w.Header()[name] = values
-		}
-		w.WriteHeader(e.resp.Code)
-		_, _ = w.Write(e.resp.Body.Bytes())
+		writeRecorded(w, e.resp)
 		return
 	}
 }
 
-// first serves the first call with a key. If it panics, the key is dropped, so no partial
-// response is replayed.
-func (k *keyStore) first(e *keyEntry, r *http.Request, next http.Handler) {
+// first serves the first call with a key and returns its answer, nil if it panicked. A 503
+// (nothing was accepted) is not kept, and neither is the answer of a call that panicked, so no
+// partial response is replayed: the key is dropped.
+func (k *keyStore) first(e *keyEntry, r *http.Request, next http.Handler) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
+	served := false
 	defer func() {
+		if served && rec.Code != http.StatusServiceUnavailable {
+			e.resp = rec
+		}
 		if e.resp == nil {
 			k.mu.Lock()
 			if k.entries[e.key] == e {
@@ -451,7 +545,17 @@ func (k *keyStore) first(e *keyEntry, r *http.Request, next http.Handler) {
 		close(e.done)
 	}()
 	next.ServeHTTP(rec, r)
-	e.resp = rec
+	served = true
+	return rec
+}
+
+// writeRecorded writes a recorded answer.
+func writeRecorded(w http.ResponseWriter, rec *httptest.ResponseRecorder) {
+	for name, values := range rec.Header() {
+		w.Header()[name] = values
+	}
+	w.WriteHeader(rec.Code)
+	_, _ = w.Write(rec.Body.Bytes())
 }
 
 // newProblem returns an RFC 9457 problem. Status 0 is an operation's error, which has no HTTP status.

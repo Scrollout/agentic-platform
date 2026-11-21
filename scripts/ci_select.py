@@ -2,7 +2,7 @@
 research D45, D50; ADR 0048, ADR 0053).
 
 scripts/ci-evals-select.py chooses the eval suites and scripts/ci-check-select.py the check jobs a
-commit needs. Both compare the commit with the newest green run of their workflow on a dev branch
+commit needs. Both compare the commit with the newest green run of their workflow, on any branch,
 whose head is an ancestor of it, and both match changed paths against globs:
   glob_re(glob)              `**/` any folders (none included), `**` anything, `*` any
                              characters and `?` one character within a path segment; every
@@ -12,7 +12,7 @@ whose head is an ancestor of it, and both match changed paths against globs:
   matches(path, patterns)    GitHub's `paths` filter: patterns in order, a later one wins, a
                              pattern starting with `!` excludes; no matching pattern is False
   is_commit(sha)             sha names a commit here (not empty, not all zeros)
-  base_from_runs(raw, sha)   the head of the newest successful run on a dev branch that is a
+  base_from_runs(raw, sha)   the head of the newest successful run, on any branch, that is a
                              commit here and an ancestor of sha (sha itself included), or ""
   changed_files(before, sha) the paths changed between them, both paths of a rename and deleted
                              files included; None when git diff fails
@@ -21,9 +21,6 @@ Run from the repository root.
 import json
 import re
 import subprocess
-
-BRANCHES = ("main", "001-prose-to-accepted-slice")
-
 
 def glob_re(glob):
     out, i = "", 0
@@ -71,7 +68,7 @@ def base_from_runs(raw, sha):
     if not isinstance(runs, list):
         return ""
     for r in runs:
-        if not isinstance(r, dict) or r.get("conclusion") != "success" or r.get("head_branch") not in BRANCHES:
+        if not isinstance(r, dict) or r.get("conclusion") != "success":
             continue
         head = r.get("head_sha") or ""
         if isinstance(head, str) and is_commit(head) and git("merge-base", "--is-ancestor", head, sha).returncode == 0:

@@ -1,0 +1,72 @@
+# The linters the pre-commit hook runs on a commit's staged changes (T041; run by
+# scripts/lint-staged.py). Each judges only the lines the commit adds or changes: an older finding
+# on an untouched line is not reported (owner, 2026-11-19; old findings are tracked in tasks).
+#
+# Per linter:
+#   image     its name in src/deploy/images.lock (pinned by version and digest)
+#   paths     the staged paths it judges (fnmatch globs; `*` also matches `/`)
+#   shebang   optional: also an extensionless staged file whose first line matches this regex
+#   exclude   optional: globs of paths it never judges
+#   per       `file` (one run over every staged path it judges) or `go-module` (one run per Go
+#             module of src/go.work with a staged path, inside the module, over the changed
+#             package folders)
+#   args      the container's arguments; the staged paths (or `./<package>` folders) follow
+#   finding   a regex over each output line; its groups `path` and `line` place a finding
+#   clean     the exit codes that mean no finding
+#   found     the exit codes that mean findings
+#   go        optional: true mounts the Go module and lint caches, as the hook's go vet does
+linters:
+  - name: golangci-lint
+    image: golangci-lint
+    paths: ["src/*.go"]
+    exclude: ["*/testdata/*"]
+    per: go-module
+    go: true
+    args: [golangci-lint, run, --enable, gosec, --build-tags=docker, --output.text.path=stdout,
+           --output.text.print-issued-lines=false, --output.text.colors=false, --show-stats=false]
+    finding: '^(?P<path>[^:]+\.go):(?P<line>\d+):'
+    clean: [0]
+    found: [1]
+  - name: ruff
+    image: ruff
+    paths: ["*.py"]
+    per: file
+    args: [check, --no-cache, --output-format=concise, --select, "E,F,W,B,S", --ignore, E501,
+           --per-file-ignores, "scripts/tests/*:S101", --per-file-ignores, "scripts/tests/*:S603",
+           --per-file-ignores, "scripts/tests/*:S607"]
+    finding: '^(?P<path>[^:]+):(?P<line>\d+):\d+: '
+    clean: [0]
+    found: [1]
+  - name: shellcheck
+    image: shellcheck
+    paths: ["*.sh"]
+    shebang: '^#!\s*(/usr/bin/env\s+)?(/bin/|/usr/bin/)?(sh|bash|dash)\b'
+    per: file
+    args: [-f, gcc]
+    finding: '^(?P<path>[^:]+):(?P<line>\d+):\d+: '
+    clean: [0]
+    found: [1]
+  - name: hadolint
+    image: hadolint
+    paths: ["*Dockerfile", "*Dockerfile.*", "*.Dockerfile"]
+    per: file
+    args: [hadolint, --no-color]
+    finding: '^(?P<path>[^:]+):(?P<line>\d+) '
+    clean: [0]
+    found: [1]
+  - name: actionlint
+    image: actionlint
+    paths: [".github/workflows/*.yml", ".github/workflows/*.yaml"]
+    per: file
+    args: [-oneline, -no-color]
+    finding: '^(?P<path>[^:]+):(?P<line>\d+):\d+: '
+    clean: [0]
+    found: [1]
+  - name: zizmor
+    image: zizmor
+    paths: [".github/workflows/*.yml", ".github/workflows/*.yaml", "*action.yml", "*action.yaml"]
+    per: file
+    args: [--offline, --format, github]
+    finding: '^::\w+ file=(?P<path>[^,]+),line=(?P<line>\d+)'
+    clean: [0]
+    found: [10, 11, 12, 13, 14]

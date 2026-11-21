@@ -5,6 +5,7 @@ use (
 	./cli
 	./engine
 	./page
+	./retry
 	./slice
 	./tests
 )

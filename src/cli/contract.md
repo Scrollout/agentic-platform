@@ -23,8 +23,11 @@ Two names, two jobs:
     below and this session's tokens); the launcher then registers each with the engine again and
     passes the command on. When one is missing or stopped, or the slice's tokens are gone (after
     `ap down` or a host reboot), it changes nothing and exits 3 with `resume: the step workers of
-    <slice> for the project <project> are not running; run ap build-workers --resume <run>, then ap
-    resume <run>`.
+    <slice> for the project <project> are not running; run ap build-workers --resume <run>`.
+    A run that a platform stop interrupted continues by itself once its step workers are
+    registered, so `ap build-workers --resume <run>` alone lets it continue, with no `ap resume`.
+    The engine keeps the registrations across its own restart, so when only the engine restarted
+    and the step containers still run, the run continues with no command at all.
 
   `build-workers <slice> <project>` makes the
   project folder with an empty `.git` and the folders the steps write, starts one step container per
@@ -48,7 +51,8 @@ Two names, two jobs:
   down` or a host reboot. It reads the run (`getRun`) for its slice and project and accepts that
   run's existing project folder only, creating nothing in it; it makes the slice's tokens if they
   are gone, writes the grants, starts the project's step containers (same names, labels and mounts)
-  and registers them; running it again changes nothing. It exits 4 for an unknown run (`NotFound`)
+  and registers them, and the engine then continues the run by itself; running it again changes
+  nothing. It exits 4 for an unknown run (`NotFound`)
   or one that is not `interrupted` (`RunNotInterrupted`), 3 when the project folder, its `.git` or
   a step's folder is missing or not a folder (naming it), and 1 as `build-workers` does.
 
@@ -307,12 +311,15 @@ lowercase hex digits from the operating system's random source. It sends that ke
 mutating call (`startRun`, `resumeRun`, `replayRun` or `acceptHandOver`).
 
 When that call gets no answer (a connection error or the client's 2-minute timeout), or answers
-502, 503 or 504, the client sends the same request with the same key and body again, up to 3
-more times, after 1, 2 and 4 seconds, each with up to half again of random jitter (research
-D7); a 429 waits its `Retry-After` first. The engine returns the first result for a key it has
+502, 503 or 504, the client sends the same request with the same key and body again, as the
+engine contract's retry rule says (`x-limits`: `retry-attempts` more times, each after the wait
+that `retry-first-wait-ms`, `retry-longest-wait-ms` and `retry-jitter-fraction` give; the client
+reads them from the engine contract it was generated from); a 429 waits its `Retry-After`
+first. The engine returns the first result for a key it has
 kept (24 hours, `x-limits.idempotency-key-retention-hours`), so a retry never starts a second
-run. When every try is lost the client exits 1 with `engine: no answer to <operation> after 4
-tries (Idempotency-Key <key>); it may have been recorded: see runs`. Any other answer is final:
+run. When every try is lost the client exits 1 with `engine: no answer to <operation> after <n>
+tries (Idempotency-Key <key>); it may have been recorded: see runs`, `<n>` being `retry-attempts`
+plus the first try. Any other answer is final:
 a problem is a refusal (exit 4).
 
 The first line on standard output after the 202, before any event is read, names the run and its
@@ -384,7 +391,8 @@ the terminal" says. For example:
 | `ended`, outcome `done` | `RUN-<n> ended done` |
 | `ended`, any other outcome | `RUN-<n> ended <outcome>: <reason>` (`: <reason>` left out without one) |
 | `waiting-for-developer` | `RUN-<n> waits for the developer: <reason>; it expires <expires_at>. Take it over with take-over RUN-<n>, or cancel it with cancel RUN-<n>.` |
-| `interrupted` | `RUN-<n> is interrupted: <reason>; it expires <expires_at>. Resume it with resume RUN-<n>, or cancel it with cancel RUN-<n>.` |
+| `interrupted`, waiting for its step workers (the run's `waits_for` is `step-workers`) | `RUN-<n> is interrupted: <reason>; it expires <expires_at>. It continues by itself once its step workers run: start them with ap build-workers --resume RUN-<n>, or cancel it with cancel RUN-<n>.` |
+| `interrupted`, any other (`waits_for` `resume` or absent) | `RUN-<n> is interrupted: <reason>; it expires <expires_at>. Resume it with resume RUN-<n>, or cancel it with cancel RUN-<n>.` |
 
 ## Run states and exit codes
 
@@ -406,8 +414,14 @@ return; an error before that has its own code.
 | SIGTERM (detached; the run continues) | 143 |
 | a usage error (a malformed run ID, a missing argument) | 3 |
 
+A run is `interrupted` only while it waits for the developer (the model was unavailable on every
+attempt) or for its step workers (`ap build-workers --resume <run>` registers them); a platform
+stop alone does not leave a run `interrupted`, because the run continues by itself once the
+platform is up again. For a run that waits for its step workers, the launcher's `resume` exits 3
+naming `ap build-workers --resume <run>` (see the launcher's `resume` paragraph).
+
 `interrupted` is 2 because, like `waiting-for-developer`, the run is kept, not lost, and goes on
-only when the developer acts; the end line names the command (`resume` or `take-over`), and `run`
+only when the developer acts; the end line names the command (`resume`, `take-over`, or `ap build-workers --resume` for a run whose `waits_for` is `step-workers`, which the client reads from the engine's run, never from the reason's wording), and `run`
 shows the status, so no third code is needed. It is not 1: nothing failed, and the run's operation
 is still running.
 
@@ -461,7 +475,12 @@ The planted-failure scenarios are test harness code in `src/tests/`, run with th
 | `planted` | `TestPlanted` in `src/tests/acceptance` (SC-003): five scenarios, 3 trials each |
 | `us2` | the `TestUS2` tests in `src/tests/acceptance` (spec US2.1 and US2.7 to US2.10; US2.2 to US2.6 are judged by `planted`) |
 
-Another name exits 3 with `test: unknown suite <name>; the suites are planted, us2`. For `planted`,
+Another name exits 3 with `test: unknown suite <name>; the suites are planted, us2`. `test planted <scenario>` runs only that scenario's 3 trials, so CI can run the scenarios
+on parallel runners (ADR 0074); its output is the same lines for that one scenario, and the total
+counts it alone (`planted: 1 of 1 scenarios stopped in 3 out of 3 trials`). A scenario name that
+is not words of lowercase letters and digits joined by single hyphens (`^[a-z0-9]+(-[a-z0-9]+)*$`), a second argument, or a scenario given to
+`us2` exits 3; a well-formed name that is no scenario of the suite runs no test and exits 1 with
+`test: no test of the planted suite ran`. For `planted`,
 standard output has one line per trial and one per scenario, then a total, for example:
 
 ```text
@@ -486,7 +505,7 @@ test binary in the pinned Go container (`images.lock`'s `golang`), offline (`--n
 `${XDG_CACHE_HOME:-~/.cache}/agentic-platform/go`, with `-tags docker`, as `scripts/check.sh` builds
 its `docker` suites, then runs that binary on the host, in the suite's package folder of the
 repository the launcher is in, with `-test.run` selecting the suite (`^TestPlanted$` for `planted`,
-`^TestUS2` for `us2`) and `-test.v=test2json`, and prints the lines
+`^TestPlanted$/^<scenario>$` for `planted <scenario>`, `^TestUS2` for `us2`) and `-test.v=test2json`, and prints the lines
 above from its events. The suites start their own labs with the container engine, so no container
 holds the container engine's socket and no tests image is built. The binary uses the developer's
 own Docker access on the host, an owner-approved exception to the constitution's test-security

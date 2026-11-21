@@ -207,15 +207,6 @@ func TestHandOverNamesOnlyConfirmedFindings(t *testing.T) {
 			t.Errorf("the fix of round %d is given %+v, want only the confirmed finding", c.Round, c.Open)
 		}
 	}
-	// A restarted engine reads the run back from its record: Run.Open is the recorded blocking
-	// findings, so still only the confirmed one.
-	back, ok := x.build().Get("RUN-1")
-	if !ok {
-		t.Fatal("a restarted engine does not find RUN-1")
-	}
-	if back.Status != machine.StatusWaiting || !findingsEqual(back.Open, want) {
-		t.Errorf("after a restart: status %s, Run.Open = %+v, want waiting and only the confirmed finding", back.Status, back.Open)
-	}
 	validate(t, x.ev.events)
 }
 

@@ -92,7 +92,9 @@ func Open(dir string, ids *slice.Schemas) (*Store, error) {
 		runSlice:  map[slice.RunID]slice.ID{},
 		owned:     map[slice.ID]map[slice.Hash]bool{},
 	}
-	for _, d := range []string{s.artifacts, s.slices} {
+	// The store holds request bodies and run content: a folder it creates, its own included, is
+	// its owner's only. An existing folder keeps its mode.
+	for _, d := range []string{dir, s.artifacts, s.slices} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return nil, err
 		}
@@ -109,6 +111,9 @@ func Open(dir string, ids *slice.Schemas) (*Store, error) {
 		if err := os.Remove(t); err != nil {
 			return nil, err
 		}
+	}
+	if err := s.openOperations(); err != nil {
+		return nil, err
 	}
 	entries, err := os.ReadDir(s.slices)
 	if err != nil {
@@ -158,7 +163,22 @@ func (s *Store) Close() error { return nil }
 // It returns only after the event is durably recorded; on error nothing was acknowledged and the
 // call may be retried. The first Append for a run ties the run to slice; appending that run under
 // another slice is an error.
-func (s *Store) Append(sliceID string, e Event) (Event, error) {
+func (s *Store) Append(sliceID string, e Event) (Event, error) { return s.record(sliceID, e, false) }
+
+// ErrSeqTaken is returned (wrapped) by RecordEvent for a Seq that is held with other content, or
+// that lies beyond the next one.
+var ErrSeqTaken = errors.New("store: seq taken")
+
+// RecordEvent records e, whose Seq the caller sets, under slice, and returns the event as stored.
+// A Seq one beyond the run's last is appended; a Seq already held with an equal event succeeds and
+// writes nothing; a Seq held with other content, or beyond the next one, is ErrSeqTaken; a Seq
+// below 1 is refused. Otherwise it behaves like Append, durability and validation included.
+func (s *Store) RecordEvent(sliceID string, e Event) (Event, error) {
+	return s.record(sliceID, e, true)
+}
+
+// record is Append (callerSeq false: the store sets Seq) or RecordEvent (callerSeq true: the caller's Seq).
+func (s *Store) record(sliceID string, e Event, callerSeq bool) (Event, error) {
 	sl, err := s.ids.ParseID(sliceID)
 	if err != nil {
 		return Event{}, fmt.Errorf("store: %w", err)
@@ -175,7 +195,22 @@ func (s *Store) Append(sliceID string, e Event) (Event, error) {
 	if owner, ok := s.runSlice[run]; ok && owner != sl {
 		return Event{}, fmt.Errorf("store: run %s belongs to slice %s, not %s", run, owner, sl)
 	}
-	e.Seq = len(s.events[run]) + 1
+	held := s.events[run]
+	if callerSeq {
+		switch {
+		case e.Seq < 1:
+			return Event{}, fmt.Errorf("store: event of run %s has seq %d, below 1", run, e.Seq)
+		case e.Seq <= len(held):
+			if held[e.Seq-1] == e {
+				return e, nil
+			}
+			return Event{}, fmt.Errorf("run %s seq %d: %w", run, e.Seq, ErrSeqTaken)
+		case e.Seq > len(held)+1:
+			return Event{}, fmt.Errorf("run %s seq %d is beyond the next, %d: %w", run, e.Seq, len(held)+1, ErrSeqTaken)
+		}
+	} else {
+		e.Seq = len(held) + 1
+	}
 	line, err := json.Marshal(e)
 	if err != nil {
 		return Event{}, err
@@ -278,8 +313,8 @@ func (s *Store) ArtifactCount(sliceID string) (int, error) {
 	return len(s.owned[sl]), nil
 }
 
-// EraseSlice removes every event of the slice's runs and every artifact stored for the slice,
-// from disk. An artifact another slice also stored stays readable for it. Erasing an unknown
+// EraseSlice removes every event of the slice's runs, every artifact stored for the slice and its
+// step workers' registrations, from disk. An artifact another slice also stored stays readable for it. Erasing an unknown
 // slice does nothing; an interrupted erasure is completed by calling it again.
 func (s *Store) EraseSlice(sliceID string) error {
 	sl, err := s.ids.ParseID(sliceID)
@@ -304,6 +339,9 @@ func (s *Store) EraseSlice(sliceID string) error {
 		return err
 	}
 	if err := syncDir(s.slices); err != nil {
+		return err
+	}
+	if err := s.eraseWorkers(sl.String()); err != nil {
 		return err
 	}
 	delete(s.owned, sl)
@@ -382,7 +420,8 @@ func readLines(path string) ([][]byte, error) {
 	return lines, nil
 }
 
-func syncDir(dir string) error {
+// syncDir makes a folder's entries durable. A variable, so a test of the store can make it fail.
+var syncDir = func(dir string) error {
 	d, err := os.Open(dir)
 	if err != nil {
 		return err

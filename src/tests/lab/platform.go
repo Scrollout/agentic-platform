@@ -6,10 +6,13 @@
 package lab
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -113,7 +116,107 @@ func (s Settings) runArgs() (flags, command []string) {
 		flags = append(flags, "--entrypoint", s.Entrypoint[0])
 		command = append(command, s.Entrypoint[1:]...)
 	}
+	if s.HealthCmd != "" {
+		flags = append(flags, "--health-cmd", s.HealthCmd, "--health-interval", "5s", "--health-timeout", "5s",
+			"--health-retries", "60", "--health-start-period", s.Healthy)
+	}
 	return flags, append(command, s.Command...)
+}
+
+// startDurable starts the lab's own durable-store, durable-schema and durable, as compose.yaml
+// declares them, each on the lab's two internal networks (the store's, and `durable`, where the
+// server has the alias `durable`), and waits until the server is healthy. It returns the name of
+// the durable network, which the engine joins. Costs about 200 MiB and a few seconds per lab.
+func (l *Lab) startDurable(t *testing.T) (durableNet string) {
+	t.Helper()
+	netArgs := func(name string) {
+		Docker(t, append(append([]string{"network", "create", "--internal", "-o", "com.docker.network.bridge.gateway_mode_ipv4=isolated"}, labelArgs()...), name)...)
+		t.Cleanup(func() { Run("docker", "network", "rm", name) })
+	}
+	durableNet, storeNet := uniq("aptest-lab-durable-net"), uniq("aptest-lab-store-net")
+	netArgs(durableNet)
+	netArgs(storeNet)
+
+	// The password file as ADR 0070 has it: a private folder (mode 700) holding a mode-644 file.
+	dir, err := os.MkdirTemp("", "aptest-lab-durable-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	pw := make([]byte, 16)
+	if _, err := rand.Read(pw); err != nil {
+		t.Fatal(err)
+	}
+	pwFile := filepath.Join(dir, "durable-store-password")
+	if err := os.WriteFile(pwFile, []byte(hex.EncodeToString(pw)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(pwFile, 0o644); err != nil { // not narrowed by the umask
+		t.Fatal(err)
+	}
+	secret := []string{"-v", pwFile + ":/run/secrets/durable-store-password:ro"}
+	durableDir := filepath.Join(l.root, "src", "deploy", "durable")
+
+	data := uniq("aptest-lab-durable-data")
+	Docker(t, append(append([]string{"volume", "create"}, labelArgs()...), data)...)
+	t.Cleanup(func() { Run("docker", "volume", "rm", "-f", data) })
+
+	run := func(service, image string, detach bool, networks []string, alias string, extra ...string) string {
+		s, err := DurableSettings(service)
+		if err != nil {
+			t.Fatal(err)
+		}
+		flags, cmd := s.runArgs()
+		name := uniq("aptest-lab-" + service)
+		// With a second network the container is created, connected, then started, so both networks
+		// are attached before it starts, as Compose does.
+		verb := "run"
+		if len(networks) > 1 {
+			verb = "create"
+		}
+		a := []string{verb, "--name", name, "--network", networks[0]}
+		if detach && verb == "run" {
+			a = append(a, "-d")
+		}
+		if alias != "" {
+			a = append(a, "--network-alias", alias)
+		}
+		a = append(append(append(append(a, labelArgs()...), flags...), extra...), image)
+		t.Cleanup(func() { Run("docker", "rm", "-f", name) })
+		Docker(t, append(a, cmd...)...)
+		for _, n := range networks[1:] {
+			Docker(t, "network", "connect", n, name)
+		}
+		if verb == "create" {
+			Docker(t, "start", name)
+		}
+		return name
+	}
+	healthy := func(name string) {
+		deadline := time.Now().Add(180 * time.Second)
+		for time.Now().Before(deadline) {
+			if out, _ := Run("docker", "inspect", "-f", "{{.State.Health.Status}}", name); out == "healthy" {
+				return
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+		logs, _ := Run("docker", "logs", name)
+		t.Fatalf("%s did not become healthy: %s", name, logs)
+	}
+
+	store := run("durable-store", Pin(t, "postgres"), true, []string{storeNet}, "durable-store",
+		append([]string{"-v", data + ":/var/lib/postgresql/data"}, secret...)...)
+	healthy(store)
+	// The schema job runs to its end (exit 0) before the server starts.
+	run("durable-schema", Pin(t, "temporal-admin-tools"), false, []string{storeNet}, "",
+		append([]string{"-v", filepath.Join(durableDir, "schema.sh") + ":/durable/schema.sh:ro"}, secret...)...)
+	server := run("durable", Pin(t, "temporal-server"), true, []string{durableNet, storeNet}, "durable",
+		append([]string{"-v", filepath.Join(durableDir, "dynamicconfig.yaml") + ":/etc/temporal/config/dynamicconfig/ap.yaml:ro"}, secret...)...)
+	healthy(server)
+	return durableNet
 }
 
 // startServices starts the check service and the project worker as compose.yaml declares them,

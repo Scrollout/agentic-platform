@@ -9,7 +9,9 @@ import (
 	"go/parser"
 	"go/printer"
 	"go/token"
+	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -20,22 +22,21 @@ import (
 // step's tests must fail against. It is derived from ServerInterface alone, so it is the same for
 // the same generated code.
 func stubFor(genDir string) ([]byte, error) {
-	fset := token.NewFileSet()
-	files, err := parser.ParseDir(fset, genDir, nil, parser.SkipObjectResolution)
+	entries, err := os.ReadDir(genDir)
 	if err != nil {
 		return nil, err
 	}
-	for _, pkg := range files {
-		names := make([]string, 0, len(pkg.Files))
-		for n := range pkg.Files {
-			names = append(names, n)
+	fset := token.NewFileSet()
+	for _, e := range entries { // in file name order
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") {
+			continue
 		}
-		slices.Sort(names)
-		for _, n := range names {
-			f := pkg.Files[n]
-			if iface := serverInterface(f); iface != nil {
-				return writeStub(fset, f, iface)
-			}
+		f, err := parser.ParseFile(fset, filepath.Join(genDir, e.Name()), nil, parser.SkipObjectResolution)
+		if err != nil {
+			return nil, err
+		}
+		if iface := serverInterface(f); iface != nil {
+			return writeStub(fset, f, iface)
 		}
 	}
 	return nil, errors.New("no ServerInterface in gen/ (oapi-codegen's std-http-server)")

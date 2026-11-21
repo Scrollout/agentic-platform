@@ -6,11 +6,14 @@
 ARG NODE_IMAGE
 FROM ${NODE_IMAGE} AS tools
 WORKDIR /tools
+# npm-tools and lint-service are named build contexts (build.sh), not stages.
+# hadolint ignore=DL3022
 COPY --from=npm-tools package.json package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund --cache /tmp/npm-cache && rm -rf /tmp/npm-cache
 
 FROM ${NODE_IMAGE}
 COPY --from=tools /tools/node_modules /tools/node_modules
+# hadolint ignore=DL3022
 COPY --from=lint-service server.mjs /app/server.mjs
 ENV TOOLS=/tools HOME=/tmp NODE_ENV=production
 USER 65532:65532

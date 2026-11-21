@@ -22,10 +22,8 @@ git and docker (markdownlint runs in a container) are prerequisites: a missing o
 import hashlib
 import os
 import shutil
-import signal
 import subprocess
 import tempfile
-import time
 import unittest
 
 import gitenv
@@ -941,7 +939,7 @@ class CommitMsgHandoverTest(CloneCase):
         self.assertEqual(self.head(), before)
 
     def test_protected_path_with_approved_by_commits(self):
-        self.stage("scripts/x.sh", "echo x\n")
+        self.stage("scripts/x.sh", "#!/bin/sh\necho x\n")
         r = self.commit()
         self.assertEqual(r.returncode, 0, self.out(r))
 

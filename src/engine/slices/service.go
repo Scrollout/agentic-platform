@@ -185,6 +185,28 @@ func (s *Service) Reserve() string {
 	return id
 }
 
+// ReserveAgain reserves an ID that Reserve gave out before a restart and that no slice holds yet,
+// so CreateAs can create the slice under it and Reserve never gives it out (an operation accepted
+// before the restart names it). An ID a slice holds needs nothing. A malformed ID, or one beyond
+// the last ID given out, is InvalidRequest and reserves nothing.
+func (s *Service) ReserveAgain(id string) error {
+	sid, err := s.schemas.ParseID(id)
+	if err != nil {
+		return &Error{Code: "InvalidRequest", Detail: err.Error()}
+	}
+	n, _ := strconv.Atoi(strings.TrimPrefix(sid.String(), "S-"))
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	switch _, held := s.slices[id]; {
+	case held:
+		return nil
+	case n < 1 || n > s.last:
+		return &Error{Code: "InvalidRequest", Detail: "slice ID " + id + " was never given out"}
+	}
+	s.reserved[id] = true
+	return nil
+}
+
 // CreateAs is Create under an ID Reserve gave out, with Create's refusals. A malformed ID, one
 // Reserve did not give out, or one a slice already holds gives InvalidRequest before the analyst
 // runs; one Reserve gave out while it could not store the ID sequence gives OperationFailed. A refused CreateAs leaves the ID reserved, so it may be retried; an approved slice of the

@@ -103,7 +103,7 @@ type rsEngine struct {
 
 func rsStart(t *testing.T, lint, analyst *httptest.Server, dir string) *rsEngine {
 	t.Helper()
-	h, closeFn, err := setup(goodEnv(lint.URL, analyst.URL, dir).get)
+	h, closeFn, err := setupWith(goodEnv(lint.URL, analyst.URL, dir).get, testDurable(t))
 	if err != nil {
 		t.Fatalf("setup on %s: %v", dir, err)
 	}

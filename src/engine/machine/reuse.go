@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"slices"
 	"strconv"
 	"sync"
 )
@@ -38,6 +39,18 @@ func ReuseKey(p KeyParts) string {
 		field(strconv.Itoa(p.Round))
 	}
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+// KeyOf is the reuse key of a step given open findings and changed lines (a fix or a later review
+// round), and the inputs it covers: parts' inputs, then, when there are findings or lines, their
+// hash (contextHash), exactly as the machine's own steps key them.
+func KeyOf(parts KeyParts, open []Finding, changed []Line) ([]string, string) {
+	in := slices.Clone(parts.Inputs)
+	if len(open) > 0 || len(changed) > 0 {
+		in = append(in, contextHash(open, changed))
+	}
+	parts.Inputs = in
+	return in, ReuseKey(parts)
 }
 
 // contextHash is the hash of the findings and changed lines a fix or a later review round is

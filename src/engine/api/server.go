@@ -2,6 +2,9 @@ package api
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -9,14 +12,16 @@ import (
 	"sync/atomic"
 
 	"github.com/agentic-platform/engine/api/gen"
+	"github.com/agentic-platform/engine/store"
 )
 
 // server implements the operations. The skeleton holds no slices or runs yet: lists are empty
 // and a slice or run asked for by ID is not found. createSlice starts its operation, whose
-// work Config.Work does.
+// work Config.Work does (jobs).
 type server struct {
 	contract  contract
 	ops       *operations
+	jobs      func(ctx context.Context, job Job) (WorkResult, error) // Config.Work
 	lastSlice atomic.Int64
 	pages     pageKeys
 	// analyst holds one place per operation that may work with the analyst at once.
@@ -40,23 +45,41 @@ func notFound(what string) gen.NotFoundApplicationProblemPlusJSONResponse {
 }
 
 func (s *server) CreateSlice(ctx context.Context, _ gen.CreateSliceRequestObject) (gen.CreateSliceResponseObject, error) {
-	raw, _ := ctx.Value(rawBodyKey{}).([]byte) // the front checked it against the contract
 	target := "S-" + strconv.FormatInt(s.lastSlice.Add(1), 10)
-	op := s.ops.start(Job{Kind: gen.OperationKindProposeSlice, Target: target, Body: raw})
+	op, err := s.ops.accept(ctx, "createSlice", target)
+	if err != nil {
+		return unavailableFor(err), nil
+	}
 	return gen.CreateSlice202JSONResponse{AcceptedJSONResponse: gen.AcceptedJSONResponse{Body: op}}, nil
 }
 
-func (s *server) GetOperation(_ context.Context, req gen.GetOperationRequestObject) (gen.GetOperationResponseObject, error) {
-	op, ok := s.ops.get(req.OperationId)
-	if !ok {
+// work is the skeleton's work of an operation: Config.Work's job.
+func (s *server) work(ctx context.Context, rec store.OperationRecord, body []byte) (WorkResult, error) {
+	if s.jobs == nil {
+		return WorkResult{}, errors.New("this engine has no worker for this kind of operation yet")
+	}
+	return s.jobs(ctx, Job{Kind: operationKinds[rec.Kind], Target: rec.Target, Body: body})
+}
+
+func (s *server) GetOperation(ctx context.Context, req gen.GetOperationRequestObject) (gen.GetOperationResponseObject, error) {
+	op, ok, err := s.ops.get(ctx, req.OperationId)
+	switch {
+	case err != nil:
+		return nil, fmt.Errorf("reading operation %s: %w", req.OperationId, err)
+	case !ok:
 		return gen.GetOperation404ApplicationProblemPlusJSONResponse{NotFoundApplicationProblemPlusJSONResponse: notFound("operation " + req.OperationId)}, nil
 	}
 	return gen.GetOperation200JSONResponse{OperationJSONResponse: gen.OperationJSONResponse{Body: op}}, nil
 }
 
-func (s *server) CancelOperation(_ context.Context, req gen.CancelOperationRequestObject) (gen.CancelOperationResponseObject, error) {
-	op, found, hadEnded := s.ops.cancelOp(req.OperationId)
+func (s *server) CancelOperation(ctx context.Context, req gen.CancelOperationRequestObject) (gen.CancelOperationResponseObject, error) {
+	op, found, hadEnded, err := s.ops.cancel(ctx, req.OperationId)
 	switch {
+	case errors.Is(err, ErrUnavailable):
+		return unavailableFor(err), nil
+	case err != nil:
+		log.Printf("engine: cancelling operation %s: %v", req.OperationId, err)
+		return unavailableFor(errNotRecorded), nil
 	case !found:
 		return gen.CancelOperation404ApplicationProblemPlusJSONResponse{NotFoundApplicationProblemPlusJSONResponse: notFound("operation " + req.OperationId)}, nil
 	case hadEnded:

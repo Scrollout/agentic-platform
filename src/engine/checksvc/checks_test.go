@@ -448,8 +448,6 @@ func TestProjectFilesListsTheFolder(t *testing.T) {
 
 // ---- 5. path attacks: the project folder ----
 
-type linkSetup func(t *testing.T, root, outside string)
-
 func TestProjectFolderThatIsNotAFolderIsUnreadable(t *testing.T) {
 	root := t.TempDir()
 	outside := t.TempDir()

@@ -9,11 +9,9 @@ The planted violation is a launcher copy without `--wait`: the judge fails it. T
 test_ap_compose_override.py's (imported, unchanged); only the docker stand-in differs: it fails a
 `compose ... up` call when STUB_UP_EXIT is set.
 """
-import os
 import unittest
 
 import test_ap_compose_override as base
-from test_launcher import IMAGE_NAMES, image_value
 
 WRAPPER = '''#!/usr/bin/env python3
 import os, subprocess, sys

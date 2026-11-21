@@ -110,7 +110,7 @@ func TestSetupRefusesAProjectURLThatIsNotHTTP(t *testing.T) {
 
 func TestSetupStartsWithTheProjectWorkerSet(t *testing.T) {
 	var calls atomic.Int32
-	h, closeFn, err := setup(withProject(goodEnv(fakeLint(t).URL, fakeAnalyst(t, &calls).URL, t.TempDir())).get)
+	h, closeFn, err := setupWith(withProject(goodEnv(fakeLint(t).URL, fakeAnalyst(t, &calls).URL, t.TempDir())).get, testDurable(t))
 	if err != nil {
 		t.Fatal(err)
 	}

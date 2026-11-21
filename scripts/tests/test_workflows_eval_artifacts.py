@@ -31,7 +31,6 @@ Fixture keys are built at run time by concatenation, so this file does not match
 The loading helpers are scripts/tests/test_workflows.py's, imported unchanged.
 """
 import copy
-import os
 import re
 import subprocess
 import tempfile

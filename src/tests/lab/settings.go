@@ -41,6 +41,8 @@ type Settings struct {
 	Env         map[string]string
 	Entrypoint  []string // nil: the image's
 	Command     []string // nil or empty: none given
+	HealthCmd   string   // the shell command of the container's health check; "" for none
+	Healthy     string   // how long a failing check is ignored at the start, as `--health-start-period` takes it
 }
 
 // sandboxed is compose.yaml's x-sandboxed (with x-hardened) for the lab's host.
@@ -182,4 +184,61 @@ func ImageBuilds(root string) ([]ImageBuild, error) {
 		out = append(out, ib)
 	}
 	return out, nil
+}
+
+// DurableServices is the Compose services the lab starts for each lab, in start order: the
+// durable execution engine's store, its schema job and its server (feature 002, T011).
+var DurableServices = []string{"durable-store", "durable-schema", "durable"}
+
+// DurableSettings is the settings the lab starts the Compose service `service` with, as compose.yaml
+// declares them (x-hardened, its user, tmpfs, limits, environment, entrypoint and health check).
+// The password file, the mounts, the networks and the pins are the lab's own (platform.go).
+func DurableSettings(service string) (Settings, error) {
+	hardened := Settings{ReadOnly: true, CapDrop: []string{"ALL"}, SecurityOpt: []string{"no-new-privileges:true"}}
+	switch service {
+	case "durable-store":
+		s := hardened
+		s.User = "70:70"
+		s.Env = map[string]string{
+			"POSTGRES_USER":          "temporal",
+			"POSTGRES_PASSWORD_FILE": "/run/secrets/durable-store-password",
+			"PGDATA":                 "/var/lib/postgresql/data/pgdata",
+		}
+		s.Tmpfs = []string{"/tmp:mode=1777,size=16m", "/var/run/postgresql:uid=70,gid=70,mode=0700,size=1m"}
+		s.CPUs, s.Memory, s.Pids = "1", "256m", 128
+		s.HealthCmd, s.Healthy = "pg_isready -U temporal -d temporal", "30s"
+		return s, nil
+	case "durable-schema":
+		s := hardened
+		s.User = "1000:1000"
+		s.Entrypoint = []string{"/bin/sh", "/durable/schema.sh"}
+		s.Command = []string{}
+		s.Env = map[string]string{
+			"POSTGRES_SEEDS":        "durable-store",
+			"POSTGRES_USER":         "temporal",
+			"DURABLE_PASSWORD_FILE": "/run/secrets/durable-store-password",
+		}
+		s.Tmpfs = []string{"/tmp:mode=1777,size=16m"}
+		s.CPUs, s.Memory, s.Pids = "0.5", "128m", 64
+		return s, nil
+	case "durable":
+		s := hardened
+		s.User = "1000:1000"
+		s.Entrypoint = []string{"/bin/sh", "-c", "POSTGRES_PWD=$(cat /run/secrets/durable-store-password) && export POSTGRES_PWD && exec /etc/temporal/entrypoint.sh"}
+		s.Command = []string{}
+		s.Env = map[string]string{
+			"DB":                       "postgres12",
+			"DB_PORT":                  "5432",
+			"POSTGRES_SEEDS":           "durable-store",
+			"POSTGRES_USER":            "temporal",
+			"NUM_HISTORY_SHARDS":       "4",
+			"BIND_ON_IP":               "0.0.0.0",
+			"DYNAMIC_CONFIG_FILE_PATH": "config/dynamicconfig/ap.yaml",
+		}
+		s.Tmpfs = []string{"/tmp:mode=1777,size=16m"}
+		s.CPUs, s.Memory, s.Pids = "1", "256m", 256
+		s.HealthCmd, s.Healthy = "nc -z localhost 7233", "30s"
+		return s, nil
+	}
+	return Settings{}, fmt.Errorf("the lab starts no durable service %q (only %s)", service, strings.Join(DurableServices, ", "))
 }

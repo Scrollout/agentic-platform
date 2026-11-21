@@ -183,7 +183,7 @@ class GoCommitTest(QuickCase):
 class NoSuiteTest(QuickCase):
     def test_a_failing_staged_check_test_commits_without_being_run(self):
         self.stage("scripts/tests/test_fails.py", FAILING_SCRIPT_TEST)
-        self.stage("scripts/x.sh", "echo x\n")
+        self.stage("scripts/x.sh", "#!/bin/sh\necho x\n")
         r = self.commit_t()
         self.assertEqual(r.returncode, 0, self.out(r))
         self.assertNotIn("PLANTED-SCRIPT-TEST-FAILURE", self.out(r))

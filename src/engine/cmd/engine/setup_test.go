@@ -230,7 +230,7 @@ func TestSetupServesSliceOperationsWithEmbeddedSchemaPatternAndAnalyst(t *testin
 	var calls atomic.Int32
 	lint, analyst := fakeLint(t), fakeAnalyst(t, &calls)
 	dir := t.TempDir()
-	h, closeFn, err := setup(goodEnv(lint.URL, analyst.URL, dir).get)
+	h, closeFn, err := setupWith(goodEnv(lint.URL, analyst.URL, dir).get, testDurable(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +277,7 @@ func TestSetupServesSliceOperationsWithEmbeddedSchemaPatternAndAnalyst(t *testin
 
 	// A second engine over the same store directory starts, and names the same analyst definition.
 	closeFn()
-	h2, close2, err := setup(goodEnv(lint.URL, analyst.URL, dir).get)
+	h2, close2, err := setupWith(goodEnv(lint.URL, analyst.URL, dir).get, testDurable(t))
 	if err != nil {
 		t.Fatalf("second setup on the same store directory: %v", err)
 	}
@@ -289,7 +289,7 @@ func TestSetupServesSliceOperationsWithEmbeddedSchemaPatternAndAnalyst(t *testin
 
 func TestSetupDoesNotServeTheSkeleton(t *testing.T) {
 	var calls atomic.Int32
-	h, closeFn, err := setup(goodEnv(fakeLint(t).URL, fakeAnalyst(t, &calls).URL, t.TempDir()).get)
+	h, closeFn, err := setupWith(goodEnv(fakeLint(t).URL, fakeAnalyst(t, &calls).URL, t.TempDir()).get, testDurable(t))
 	if err != nil {
 		t.Fatal(err)
 	}

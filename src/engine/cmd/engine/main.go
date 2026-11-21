@@ -9,12 +9,18 @@
 // project's version history (restoreStep before every attempt, commitStep after every accepted
 // step). ENGINE_GRANTS_DIR, optional, is the existing folder of step worker grants the
 // launcher writes (one file per grant, read at each worker-token authentication; research D31);
-// unset, no step worker can register. See setup.
+// unset, no step worker can register. ENGINE_DURABLE_ADDRESS, optional, is the durable service's
+// host:port (default durable:7233), where every run runs as a workflow; the engine registers its
+// namespace and starts its worker there before it serves anything. See setup.
+//
+// `engine health` exits 0 when the engine accepts connections on ENGINE_LISTEN_ADDRESS, else 1:
+// the image's healthcheck (see health).
 package main
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -24,6 +30,13 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "health" {
+		if err := health(os.Getenv); err != nil {
+			fmt.Fprintln(os.Stderr, "engine health:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		log.Fatal("engine: ", err)
 	}

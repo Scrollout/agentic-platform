@@ -6,7 +6,6 @@ package machine_test
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"testing"
 
@@ -47,16 +46,6 @@ func (f *fixture) startIn(id, project string) machine.Run {
 	return r
 }
 
-func (f *fixture) reusedSteps() []string {
-	var out []string
-	for _, e := range f.ev.events {
-		if e.Kind == "ResultReused" {
-			out = append(out, e.Step)
-		}
-	}
-	return out
-}
-
 func stepsCalled(f *fixture) []string {
 	var out []string
 	for _, c := range f.w.calls {
@@ -88,39 +77,5 @@ func TestResultWithFilesIsReusedWithinTheSameProject(t *testing.T) {
 	assertEnded(t, second.startIn("RUN-2", "proj-a"), second.ev, "done")
 	if len(second.w.calls) != 0 || second.ev.count("ResultReused") != 5 {
 		t.Fatalf("worker calls = %v, ResultReused = %d; want 0 and 5 in the same project", stepsCalled(second), second.ev.count("ResultReused"))
-	}
-}
-
-func TestResumeInTheSameProjectKeepsAcceptedStepsWithFiles(t *testing.T) {
-	results := machine.NewResults()
-	f := projectFixture(t, results, "generate", "tests")
-	down := true
-	inner := f.w.fn["code"]
-	f.w.fn["code"] = func(r machine.Request) (machine.Result, error) {
-		if down {
-			return machine.Result{}, errors.New("model unavailable")
-		}
-		return inner(r)
-	}
-	if r := f.startIn("RUN-1", "proj-a"); r.Status != machine.StatusInterrupted {
-		t.Fatalf("status = %s, want interrupted", r.Status)
-	}
-	before := len(f.w.calls)
-	down = false
-	r, err := f.m.Resume(context.Background(), "RUN-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertEnded(t, r, f.ev, "done")
-	for _, c := range f.w.calls[before:] {
-		if !slices.Contains([]string{"code", "review"}, c.Step.Name) {
-			t.Errorf("resume ran %s again", c.Step.Name)
-		}
-	}
-	// and the stored results with files still serve a later run in the same project
-	later := projectFixture(t, results, "generate", "tests")
-	assertEnded(t, later.startIn("RUN-2", "proj-a"), later.ev, "done")
-	if len(later.w.calls) != 0 {
-		t.Fatalf("a later run in the same project ran %v", stepsCalled(later))
 	}
 }

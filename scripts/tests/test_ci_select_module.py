@@ -9,8 +9,8 @@ The module's interface, fixed by these tests:
 - matches(path, patterns): GitHub's `paths` filter: the patterns in order, the last one that
   matches decides, a pattern starting with `!` excludes; no pattern matching is False.
 - base_from_runs(raw_json, sha): in the current directory's repository, the head_sha of the
-  newest run (first in the list) with conclusion `success` on `main` or
-  `001-prose-to-accepted-slice` whose head_sha is a commit here and an ancestor of sha (sha itself
+  newest run (first in the list) with conclusion `success` on any branch
+  whose head_sha is a commit here and an ancestor of sha (sha itself
   included); "" otherwise, also for text that is not a JSON list.
 - changed_files(before, sha): the paths changed from before to sha, both paths of a rename and
   deleted files included; None when the diff fails.
@@ -123,6 +123,8 @@ class GitFunctionsTest(unittest.TestCase):
                 run_of(self.code, branch="other"), run_of(self.code), run_of(self.r.base)]
         self.assertEqual(self.m.base_from_runs(json.dumps(runs), self.head), self.code)
         self.assertEqual(self.m.base_from_runs(json.dumps([run_of(self.code, branch="main")]),
+                                               self.head), self.code)
+        self.assertEqual(self.m.base_from_runs(json.dumps([run_of(self.code, branch="other")]),
                                                self.head), self.code)
 
     def test_sha_itself_qualifies(self):

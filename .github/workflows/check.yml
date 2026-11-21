@@ -1,5 +1,7 @@
-# The checks a push needs (research D41, D50, ADR 0044, ADR 0053): one job per scripts/check.sh
-# step and per acceptance suite, each on its own GitHub-hosted runner, then a summary of the run.
+# The checks a push needs (research D41, D50, ADR 0044, ADR 0053, ADR 0074): one job per
+# scripts/check.sh step and per acceptance suite, the long suites split across several jobs (one
+# per stop point, one per planted scenario) so each test runs in exactly one job, each on its own
+# GitHub-hosted runner, then a summary of the run.
 # The config job names the jobs whose files changed since the last green check run
 # (.github/check-jobs.yaml); the always jobs run on every push, every job on a dispatch. A first
 # job reads the runner label and the tool versions from src/deploy/images.lock, their one home.
@@ -286,33 +288,40 @@ jobs:
         name: arch
         run: scripts/ci-step.sh arch scripts/check.sh --only arch
 
+  # Each test of the Docker suites runs in exactly one job (ADR 0074): this job skips the tests
+  # the stop-point, planted and Story 2 jobs run. The anchors (&) here are reused by those jobs.
   docker:
     name: "Service tests with Docker (recorded model)"
     needs: config
     if: contains(fromJSON(needs.config.outputs.jobs), 'docker')
     runs-on: ${{ needs.config.outputs.runner }}
     timeout-minutes: 90
-    outputs:
+    outputs: &step-outputs
       seconds: ${{ steps.run.outputs.seconds }}
       error: ${{ steps.run.outputs.error }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - &checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Generated code and module cache
+      - &prepare
+        name: Generated code and module cache
         run: scripts/check.sh --prepare
-      - name: Install the pinned gVisor
+      - &gvisor
+        name: Install the pinned gVisor
         run: scripts/ci-gvisor.sh
       - id: run
         name: docker
         env:
           AP_TEST_REPORT_DIR: ${{ runner.temp }}/test-reports
+          AP_ACCEPTANCE_SKIP: '^(TestPlanted|TestStopPoints|TestUS2.*)$'
         run: scripts/ci-step.sh docker scripts/check.sh --only docker
       # The tests' results in the job's summary (research D43, ADR 0046): counts and each failed
       # test with its message; annotate_only needs no checks: write. A green job writes no table
       # and a step that finds no result fails (research D47, ADR 0051); the summary is written only
       # when the job has failed (research D49, ADR 0052).
-      - name: Test report
+      - &test-report
+        name: Test report
         if: always()
         uses: mikepenz/action-junit-report@a16be3a69023e9bd7e748ede768b3282ea7b30ce # v6.7.1
         with:
@@ -323,6 +332,85 @@ jobs:
           skip_success_summary: true
           require_tests: true
           job_summary: ${{ job.status != 'success' }}
+
+  # TestStopPoints, one job per stop point of stopPoints (src/tests/acceptance/stop_points_test.go;
+  # ADR 0074), built as the docker job builds it: the stop point's 3 trials and the uninterrupted
+  # run they are compared with, which each job runs for itself.
+  stop_points_agent_step:
+    name: "Acceptance: a stopped run continues (agent-step)"
+    needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'stop_points_agent_step')
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs: *step-outputs
+    steps:
+      - *checkout
+      - *prepare
+      - *gvisor
+      - id: run
+        name: stop-points-agent-step
+        env:
+          AP_TEST_REPORT_DIR: ${{ runner.temp }}/test-reports
+          AP_ACCEPTANCE_RUN: '^TestStopPoints$/^(uninterrupted|agent-step)$'
+        run: scripts/ci-step.sh stop-points-agent-step scripts/check.sh --only docker
+      - *test-report
+
+  stop_points_procedure_step:
+    name: "Acceptance: a stopped run continues (procedure-step)"
+    needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'stop_points_procedure_step')
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs: *step-outputs
+    steps:
+      - *checkout
+      - *prepare
+      - *gvisor
+      - id: run
+        name: stop-points-procedure-step
+        env:
+          AP_TEST_REPORT_DIR: ${{ runner.temp }}/test-reports
+          AP_ACCEPTANCE_RUN: '^TestStopPoints$/^(uninterrupted|procedure-step)$'
+        run: scripts/ci-step.sh stop-points-procedure-step scripts/check.sh --only docker
+      - *test-report
+
+  stop_points_review_round:
+    name: "Acceptance: a stopped run continues (review-round)"
+    needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'stop_points_review_round')
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs: *step-outputs
+    steps:
+      - *checkout
+      - *prepare
+      - *gvisor
+      - id: run
+        name: stop-points-review-round
+        env:
+          AP_TEST_REPORT_DIR: ${{ runner.temp }}/test-reports
+          AP_ACCEPTANCE_RUN: '^TestStopPoints$/^(uninterrupted|review-round)$'
+        run: scripts/ci-step.sh stop-points-review-round scripts/check.sh --only docker
+      - *test-report
+
+  stop_points_version_history_commit:
+    name: "Acceptance: a stopped run continues (version-history-commit)"
+    needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'stop_points_version_history_commit')
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs: *step-outputs
+    steps:
+      - *checkout
+      - *prepare
+      - *gvisor
+      - id: run
+        name: stop-points-version-history-commit
+        env:
+          AP_TEST_REPORT_DIR: ${{ runner.temp }}/test-reports
+          AP_ACCEPTANCE_RUN: '^TestStopPoints$/^(uninterrupted|version-history-commit)$'
+        run: scripts/ci-step.sh stop-points-version-history-commit scripts/check.sh --only docker
+      - *test-report
 
   deps:
     name: "Dependencies and licences"
@@ -358,26 +446,82 @@ jobs:
         name: secrets
         run: scripts/ci-step.sh secrets scripts/check.sh --only secrets
 
-  ap_test_planted:
-    name: "Acceptance: planted defects are stopped"
+  # TestPlanted, one job per scenario of plantedScenarios (src/tests/acceptance/planted_test.go;
+  # ADR 0074): `ap test planted <scenario>` runs that scenario's 3 trials.
+  ap_test_planted_edit_judging_tests:
+    name: "Acceptance: planted defects are stopped (edit-judging-tests)"
     needs: config
-    if: contains(fromJSON(needs.config.outputs.jobs), 'ap_test_planted')
+    if: contains(fromJSON(needs.config.outputs.jobs), 'ap_test_planted_edit_judging_tests')
     runs-on: ${{ needs.config.outputs.runner }}
-    timeout-minutes: 120
-    outputs:
-      seconds: ${{ steps.run.outputs.seconds }}
-      error: ${{ steps.run.outputs.error }}
+    timeout-minutes: 90
+    outputs: *step-outputs
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Install the pinned gVisor
-        run: scripts/ci-gvisor.sh
-      - name: Generated code and module cache
-        run: scripts/check.sh --prepare
+      - *checkout
+      - *gvisor
+      - *prepare
       - id: run
-        name: ap-test-planted
-        run: scripts/ci-step.sh ap-test-planted src/deploy/ap test planted
+        name: ap-test-planted-edit-judging-tests
+        run: scripts/ci-step.sh ap-test-planted-edit-judging-tests src/deploy/ap test planted edit-judging-tests
+
+  ap_test_planted_outside_scope:
+    name: "Acceptance: planted defects are stopped (outside-scope)"
+    needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'ap_test_planted_outside_scope')
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs: *step-outputs
+    steps:
+      - *checkout
+      - *gvisor
+      - *prepare
+      - id: run
+        name: ap-test-planted-outside-scope
+        run: scripts/ci-step.sh ap-test-planted-outside-scope src/deploy/ap test planted outside-scope
+
+  ap_test_planted_forbidden_dependency:
+    name: "Acceptance: planted defects are stopped (forbidden-dependency)"
+    needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'ap_test_planted_forbidden_dependency')
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs: *step-outputs
+    steps:
+      - *checkout
+      - *gvisor
+      - *prepare
+      - id: run
+        name: ap-test-planted-forbidden-dependency
+        run: scripts/ci-step.sh ap-test-planted-forbidden-dependency src/deploy/ap test planted forbidden-dependency
+
+  ap_test_planted_claims_done:
+    name: "Acceptance: planted defects are stopped (claims-done)"
+    needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'ap_test_planted_claims_done')
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs: *step-outputs
+    steps:
+      - *checkout
+      - *gvisor
+      - *prepare
+      - id: run
+        name: ap-test-planted-claims-done
+        run: scripts/ci-step.sh ap-test-planted-claims-done src/deploy/ap test planted claims-done
+
+  ap_test_planted_non_converging_review:
+    name: "Acceptance: planted defects are stopped (non-converging-review)"
+    needs: config
+    if: contains(fromJSON(needs.config.outputs.jobs), 'ap_test_planted_non_converging_review')
+    runs-on: ${{ needs.config.outputs.runner }}
+    timeout-minutes: 90
+    outputs: *step-outputs
+    steps:
+      - *checkout
+      - *gvisor
+      - *prepare
+      - id: run
+        name: ap-test-planted-non-converging-review
+        run: scripts/ci-step.sh ap-test-planted-non-converging-review src/deploy/ap test planted non-converging-review
 
   ap_test_us2:
     name: "Acceptance: Story 2, slice to accepted change"
@@ -479,9 +623,17 @@ jobs:
       - go
       - arch
       - docker
+      - stop_points_agent_step
+      - stop_points_procedure_step
+      - stop_points_review_round
+      - stop_points_version_history_commit
       - deps
       - secrets
-      - ap_test_planted
+      - ap_test_planted_edit_judging_tests
+      - ap_test_planted_outside_scope
+      - ap_test_planted_forbidden_dependency
+      - ap_test_planted_claims_done
+      - ap_test_planted_non_converging_review
       - ap_test_us2
       - e2e
       - evals-current
