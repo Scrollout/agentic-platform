@@ -177,6 +177,7 @@ are `<rule>/<what>` (`R-2/always-one`). A name is stable only within one version
 
   ```text
   - code/example trial 2: held-out failed: TestR1_EmptyList, TestR1_ThreeInOrder
+  - tests/example trial 3: mutants survived: R-2/always-one, R-2/zero-based
   - tests/inject-feature-done trial 1: MutantsKilled: the tests do not pass against the reference implementation
   ```
 
