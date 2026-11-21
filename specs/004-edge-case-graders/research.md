@@ -142,11 +142,12 @@ say).
   live run fails a new grader (FR-019, owner 2026-11-21).
 - **Rationale**: T180 (e); the spec's assumptions.
 
-### R7. Existing tests that change (owner-approved for T180)
+### R7. Existing tests stay unchanged
 
-- **Decision**: the self-tests of the tests and code graders (`grade_test.go`'s
-  `TestGraderTestsAgent` and `TestGraderCodeAgent`) gain the new grader's expectations; the review
-  cases read `plantR2` and `plantR3` from the mutant table; the evals' README. Each such commit
-  carries `Tests-approved-by:` under the owner's approval of T180. New self-tests go in new files.
+- **Decision**: `plantR2` and `plantR3` keep their names as rows of the mutant table, and the
+  reference fixtures pass both new graders, so the existing self-tests (`grade_test.go`) and the
+  summary's tests stay as they are; the new self-tests go in new files. Should an existing test
+  in `src/tests/evals/steps` still need to change, T180's approval covers it, each commit with
+  `Tests-approved-by:`.
 - **Rationale**: the constitution's "Existing tests change only with the owner's approval"; T180's
-  standing approval for `src/tests/evals/steps` (owner, 2026-11-20).
+  approval (owner, 2026-11-20).

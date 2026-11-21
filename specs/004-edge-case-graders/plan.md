@@ -130,7 +130,6 @@ src/tests/evals/steps/
 ├── sandbox.go                 # DockerRunner: the run of one binary with only it and the project mounted read-only
 ├── grade_heldout_test.go      # new self-tests: reference passes, fitted implementation fails
 ├── grade_mutants_test.go      # new self-tests: reference tests kill all, weak tests leave survivors; table checks
-├── grade_test.go              # existing self-tests gain the new graders' results (T180 approval)
 ├── README.md                  # the graders, held-out tests, mutants, the report's counts
 └── testdata/
     ├── heldout/heldout_test.go        # new: the held-out tests
@@ -143,9 +142,11 @@ scripts/tests/test_ci_evals_summary_counts.py   # new
 engine, the agents' definitions (unless FR-019 applies), the analyst evals and CI's workflows do
 not change.
 
-**Existing tests expected to change** (T180's approval, each commit with `Tests-approved-by:`):
-`grade_test.go`'s `TestGraderTestsAgent` and `TestGraderCodeAgent`, and `cases.go` with any case
-self-test that names `plantR2` or `plantR3`.
+**Existing tests expected to change**: none. `plantR2` and `plantR3` keep their names when they
+move into the mutant table, and the reference fixtures pass the new graders, so `grade_test.go`'s
+clean cases stay green unchanged. Should one need to change, T180's approval covers
+`src/tests/evals/steps` (each commit with `Tests-approved-by:`); the summary's existing tests in
+`scripts/tests/` stay unchanged (research R5).
 
 ## Exceptions
 
