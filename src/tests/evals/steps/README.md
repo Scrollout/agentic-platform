@@ -100,15 +100,36 @@ changed.
 Not held out, because the rules do not fix the answer: whether a refused note uses up an id,
 whether whitespace-only text is empty, concurrent requests.
 
+Limit: a test binary's results are read from its test2json events, and the agent's code runs in
+the same process, so code that prints forged events and exits could pass a test it fails. The
+same holds for every grader that runs the agent's code (`AllTestsPass` reads an exit code that code
+controls). The graders judge an agent that writes the service, not one that attacks the test
+runner; the trial's scope and the review step are that boundary.
+
 ### Mutants (`MutantsKilled`)
 
 Planted by hand in one table (`mutants.go`), each a one-line change of
 `internal/app/app.go` in the reference implementation, given to the build as an `-overlay`. The
 review cases `review/planted-r2` and `review/planted-r3` take their planted bugs from the same
 table. A mutant is killed when a run of one of the agent's test binaries against it reports a
-failed test or a panic, within the run's time limit; a run that times out or cannot start, or a
-binary that does not build, is not a kill. If the agent's tests do not all pass against the
+failed test or a panic, within the run's time limit (10 minutes per build or run,
+`checks.DefaultGoTimeout`); a run that times out or cannot start, or a binary that does not build,
+is not a kill. If the agent's tests do not all pass against the
 reference implementation, the grader fails with that reason and judges no mutant.
+
+Limits:
+
+- A binary that ends by `os.Exit` or `log.Fatal` (no `panic:`, no failed test event), or a
+  package-level failure from `TestMain`, is read as `did not run`, so that mutant survives: the
+  grader fails closed.
+- The baseline runs once, before the mutants. A test that keeps state between runs could pass it
+  and then fail every mutant, so all of them look killed. In Docker, as in the live evals, the
+  copy is read-only, `/tmp` is fresh for each call and there is no network, so no state survives
+  a run; only the host runner of the self-tests (locally and in CI's `go` job) has this limit.
+- A test that hangs costs up to 10 minutes per run of each test package under `tests/`, for the
+  baseline and each of the 8 mutants: up to 90 minutes per test package for one trial (each of the
+  9 builds has the same 10-minute limit, but a build runs no test). Only a hanging agent test
+  reaches it.
 
 | Mutant | Rule | Killed by | Planted bug |
 |--------|------|-----------|-------------|

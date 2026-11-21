@@ -35,7 +35,7 @@ model. No mutation tool is adopted: none plants user-defined mutants (Principle 
 
 **Project Type**: test harness of the existing platform
 
-**Performance Goals**: grader self-tests at most 5 minutes longer (SC-004, owner 2026-11-21; estimated about 3.5, research S8); a live tests or code
+**Performance Goals**: grader self-tests at most 5 minutes longer, measured in CI (SC-004, owner 2026-11-21; estimated about 3.5, research S8); a live tests or code
 trial at most 2 minutes longer to grade (SC-005), measured (research R3)
 
 **Constraints**: no model call in a grader; held-out tests and mutants unreachable from the

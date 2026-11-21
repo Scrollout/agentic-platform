@@ -46,6 +46,13 @@ adds to.
 - Q: US3 scenario 4 said a report with no held-out or mutant results "shows the columns as
   not reported", while FR-017, research R5 and the summary's contract print such a report
   exactly as before. Which holds? → A: exactly as before, with no new columns (owner, T033).
+- Q: SC-004 holds in CI (+2 min 46 s) and is missed on the loaded host (+9 min 49 s): where is it
+  measured? → A: in CI, the `go` job's `evals/steps` package time; the host's time depends on its
+  load (owner, T029).
+- Q: An agent test that hangs makes a tests trial's grading take up to 10 minutes per run, beyond
+  SC-005's 2 minutes: does SC-005 cover it? → A: No: SC-005 is measured on trials whose tests do
+  not hang; a hang is bounded by the run time limit, stated in the step evals' README (owner,
+  T030).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -242,8 +249,10 @@ applicable trial, and read its output.
   tests eval trial, naming at least one surviving mutant (self-test, no model).
 - **SC-003**: The reference implementation passes 100% of the held-out tests, and the reference
   tests kill 100% of the mutants.
-- **SC-004**: The grader self-tests take at most 5 minutes longer than today's 3 to 4 minutes.
-- **SC-005**: A live tests or code trial takes at most 2 minutes longer to grade than today, and a
+- **SC-004**: The grader self-tests take at most 5 minutes longer than before this feature,
+  measured in CI (the `go` job's `evals/steps` package time).
+- **SC-005**: A live tests or code trial whose tests do not hang takes at most 2 minutes longer to
+  grade than today, and a
   full live run costs no more model tokens than today (the graders call no model).
 - **SC-006**: After one live run with the owner's go-ahead, the summary shows the held-out and
   mutant results for every tests and code trial.
