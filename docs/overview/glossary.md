@@ -23,6 +23,9 @@ sources:
   - id: spec-002
     resource: ../../specs/002-durable-execution/spec.md
     title: Feature 002 specification, Key Entities
+  - id: spec-004
+    resource: ../../specs/004-edge-case-graders/spec.md
+    title: Feature 004 specification, Key Entities
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-18T09:00:00Z }
 ---
 
@@ -88,3 +91,16 @@ These terms come from the Feature 002 specification.
 | Retry rule | The one declaration of how a failed call is retried: how many times, how long to wait, the jitter and the longest wait. |
 
 Sources: [Feature 002 specification](../../specs/002-durable-execution/spec.md).
+
+# Feature 004 terms
+
+These terms come from the Feature 004 specification.
+
+| Term | Meaning |
+|------|---------|
+| Eval | A repeatable trial of an agent on a fixed case, judged by graders; a case passes (pass^k) only when all k trials pass. |
+| Grader | A deterministic test of what an agent produced in an eval trial. A model never decides. |
+| Held-out test | A test of a slice's rules on an input no example shows, kept from the agent and run against its code after the trial. |
+| Mutant | A correct implementation with one planted bug; a set of tests kills it when they fail against it and pass against the correct one. |
+
+Sources: [Feature 004 specification](../../specs/004-edge-case-graders/spec.md).

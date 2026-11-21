@@ -8,7 +8,7 @@ sources:
   - id: owner
     resource: https://claude.ai/code/session_01P2TmGw3MdjVyoyhGeQK7np
     title: Project owner's answers, 2026-11-11
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-20T23:30:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-21T15:00:00Z }
 ---
 
 # How to use these tables
@@ -29,7 +29,8 @@ constitution's Principle I makes this the one place needs are stated.
 
 Every `yes` and `later` on this page was set by the project owner on 2026-11-11, except N-040,
 set to `yes` by feature 002's spec on 2026-11-18 because constitution Principle X already requires
-it, confirmed by the owner the same day.
+it, confirmed by the owner the same day, and N-013, set to `yes` by the owner on 2026-11-21 for
+feature 004 because Principle XIX already requires it.
 
 Feature 001's rows (2026-11-17): `done` where its acceptance tests and the planted suite pass in CI
 (check run 44157173351) and no open task records a gap; `in progress` where the MVP covers only
@@ -67,7 +68,7 @@ service is still to do.
 | N-010 | Define an agent (instructions, model, tools, collaborators) and keep every version of it | undecided | [Docker Agent](/references/docker-agent.md) | | todo |
 | N-011 | Run agents against more than one model provider, and switch providers without redefining the agent | undecided | [Docker Agent](/references/docker-agent.md) | | todo |
 | N-012 | Package an agent and share it with others | undecided | [Docker Agent](/references/docker-agent.md) | | todo |
-| N-013 | Know that a changed agent still behaves as expected before it is released | undecided | [Docker Agent](/references/docker-agent.md) | | todo |
+| N-013 | Know that a changed agent still behaves as expected before it is released | yes | [Docker Agent](/references/docker-agent.md) | [004](../../specs/004-edge-case-graders/spec.md) | specified |
 
 # Sessions
 
