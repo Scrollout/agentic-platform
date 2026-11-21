@@ -2,6 +2,7 @@
 
 ## 2026-11-21
 
+* **Status**: Feature 002 done (T033): converge for the whole feature appended nothing; the final fresh review closed its one blocking finding (T071) in round 2; CI run 44886296672 green on all 26 jobs; FR-006 states the limit of a stop between two calls (T072); N-040 is `done` in the [problem space](/overview/problem-space.md). The merge to `main` is the owner's.
 * **Implementation**: Feature 002, T071 (T033 final review): nothing is recorded after a run's end event; a cancel or a platform stop during its write ends the run with that event's outcome (FR-006).
 * **Measurement**: Feature 002, T032 on the owner's clean VM: a fresh clone reached an accepted build in about 12.5 minutes (SC-004), Temporal and PostgreSQL idle at 221 MiB together (limit 512 MiB), the engine at 14 MiB; a run continued by itself after the engine was killed during an agent step, and an operation survived an engine kill (research S18).
 

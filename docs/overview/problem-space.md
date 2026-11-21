@@ -38,9 +38,9 @@ name the checks' implementation, T136), N-052 (proposing a new pattern moved to 
 and N-055 (the platform applies the spec's rules, tests and reviews, not yet the docs and
 decisions).
 
-N-040 (2026-11-20): `in progress`: feature 002's three stories pass in CI (check run
-44805187019) and in the regression evals (run 44809763108); it becomes `done` when the clean-machine
-measurement (T032) and the final review (T033) pass.
+N-040 (2026-11-21): `done` by feature 002: its three stories pass in CI (check run 44886296672
+at aab7fcb) and in the regression evals (run 44809763108), the clean-machine measurement (T032)
+passed, and the final review (T033) closed its one blocking finding (T071).
 
 Sources: [Project owner's answers, 2026-11-11](https://claude.ai/code/session_01P2TmGw3MdjVyoyhGeQK7np).
 
@@ -94,7 +94,7 @@ N-030 follows from N-002 and N-005: a hosted service serves several organization
 
 | ID | Need | In scope | Prior art | Spec | State |
 |----|------|----------|-----------|------|-------|
-| N-040 | Never silently lose work the platform has accepted | yes | | [002](../../specs/002-durable-execution/spec.md) | in progress |
+| N-040 | Never silently lose work the platform has accepted | yes | | [002](../../specs/002-durable-execution/spec.md) | done |
 | N-041 | Keep running agents working while management functions are down | undecided | | | todo |
 | N-042 | Show who did what, when, through an audit trail | undecided | | | todo |
 
