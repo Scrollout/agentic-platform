@@ -6,7 +6,9 @@ usage: python3 scripts/ci-evals-summary.py <report.json>
 One line per case: its agent and its pass^3 result, judged on its trials (every trial passed);
 then the total, and the token use and cost when the trials carry `usage`
 ({"input_tokens", "output_tokens", "cost_usd"}). The text goes to $GITHUB_STEP_SUMMARY, or to
-standard output without it. Exits 1 when a case failed or the report cannot be read.
+standard output without it. A case with `quarantined_by` (a flaky case quarantined under that open
+task) is shown as quarantined and not counted. Exits 1 when a counted case failed or the report
+cannot be read.
 """
 import json
 import os
@@ -26,15 +28,24 @@ def main(argv: list[str]) -> int:
         print(f"ci-evals-summary: cannot read {argv[1]}: {e}", file=sys.stderr)
         return 1
     rows = ["| Case | Agent | pass^3 |", "|------|-------|--------|"]
-    passed = 0
+    passed = counted = quarantined = 0
     tokens_in = tokens_out = 0
     cost = 0.0
     used = False
     for c in cases:
         trials = c.get("trials") or []
         ok = bool(trials) and all(t.get("passed") is True for t in trials)
-        passed += ok
-        rows.append(f"| {c.get('case', '?')} | {c.get('agent', '?')} | {'✅ pass' if ok else '❌ fail'} |")
+        task = c.get("quarantined_by")
+        if task:
+            # A flaky case quarantined under an open task (constitution, Fix the cause): reported,
+            # not counted.
+            quarantined += 1
+            result = f"⚠️ quarantined ({task}): {'pass' if ok else 'fail'}"
+        else:
+            counted += 1
+            passed += ok
+            result = '✅ pass' if ok else '❌ fail'
+        rows.append(f"| {c.get('case', '?')} | {c.get('agent', '?')} | {result} |")
         for t in trials:
             u = t.get("usage")
             if isinstance(u, dict):
@@ -42,7 +53,11 @@ def main(argv: list[str]) -> int:
                 tokens_in += int(u.get("input_tokens", 0))
                 tokens_out += int(u.get("output_tokens", 0))
                 cost += float(u.get("cost_usd", 0))
-    lines = [f"## Evals: {passed} of {len(cases)} cases pass^3", "", *rows, ""]
+    if quarantined:
+        head = f"## Evals: {passed} of {counted} counted cases pass^3, {quarantined} quarantined"
+    else:
+        head = f"## Evals: {passed} of {counted} cases pass^3"
+    lines = [head, "", *rows, ""]
     if used:
         lines += [f"Tokens: {tokens_in} in, {tokens_out} out; cost ${cost:.2f}", ""]
     text = "\n".join(lines)
@@ -52,7 +67,7 @@ def main(argv: list[str]) -> int:
             f.write(text)
     else:
         print(text)
-    return 0 if passed == len(cases) else 1
+    return 0 if passed == counted else 1
 
 
 if __name__ == "__main__":

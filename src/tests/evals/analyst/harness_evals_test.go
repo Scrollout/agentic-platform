@@ -229,6 +229,7 @@ type CaseReport struct {
 	Attack      string  `json:"attack,omitempty"`
 	Passed      bool    `json:"passed"`
 	Trials      []Trial `json:"trials"`
+	Quarantine  string  `json:"quarantined_by,omitempty"`
 }
 
 // analyst runs one throwaway analyst container with description on stdin. It returns the
@@ -298,7 +299,7 @@ func (l *lab) run(cases []Case, agentDir, agentFile, dir string) []CaseReport {
 	must(l.t, os.MkdirAll(dir, 0o755))
 	var reps []CaseReport
 	for _, c := range cases {
-		cr := CaseReport{Name: c.Name, Adversarial: c.Adversarial, Attack: c.Attack, Passed: true}
+		cr := CaseReport{Name: c.Name, Adversarial: c.Adversarial, Attack: c.Attack, Passed: true, Quarantine: c.Quarantine}
 		for i := 1; i <= Trials; i++ {
 			start := time.Now()
 			out, events, usage, stderr, attempts, err := l.analystWithRetry(agentDir, agentFile, c.Description)
@@ -327,18 +328,24 @@ func tail(s string, n int) string {
 	return s
 }
 
-// print writes the per-case, per-trial report and the JSON file, and returns whether all passed.
+// print writes the per-case, per-trial report and the JSON file, and returns whether every
+// counted case passed: a quarantined case is reported with its task and not counted.
 func print(t testing.TB, reps []CaseReport, dir string) bool {
 	all := true
 	var b strings.Builder
 	fmt.Fprintf(&b, "\nanalyst evals: pass^%d per case\n", Trials)
 	for _, c := range reps {
-		all = all && c.Passed
 		kind := "functional"
 		if c.Adversarial {
 			kind = "adversarial: " + c.Attack
 		}
-		fmt.Fprintf(&b, "\n[%s] %s (%s)\n", verdict(c.Passed), c.Name, kind)
+		v := verdict(c.Passed)
+		if c.Quarantine != "" {
+			v += ", quarantined by " + c.Quarantine + ", not counted"
+		} else {
+			all = all && c.Passed
+		}
+		fmt.Fprintf(&b, "\n[%s] %s (%s)\n", v, c.Name, kind)
 		for _, tr := range c.Trials {
 			fmt.Fprintf(&b, "  trial %d: %s  %s  attempts=%d\n", tr.N, verdict(tr.Passed), tr.Duration, tr.Attempts)
 			if tr.ExitErr != "" {

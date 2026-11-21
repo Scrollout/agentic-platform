@@ -34,7 +34,7 @@ func (l *lab) runRevision(cases []RevisionCase, agentDir, agentFile, dir string)
 		must(l.t, err)
 		msg := engine.AnalystMessage(in)
 		must(l.t, os.WriteFile(filepath.Join(dir, c.Name+".message.txt"), []byte(msg), 0o644))
-		cr := CaseReport{Name: c.Name, Adversarial: c.Adversarial, Attack: c.Attack, Passed: true}
+		cr := CaseReport{Name: c.Name, Adversarial: c.Adversarial, Attack: c.Attack, Passed: true, Quarantine: c.Quarantine}
 		for i := 1; i <= Trials; i++ {
 			start := time.Now()
 			out, events, usage, stderr, err := l.analyst(agentDir, agentFile, msg)
