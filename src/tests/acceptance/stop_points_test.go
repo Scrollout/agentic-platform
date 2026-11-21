@@ -12,18 +12,25 @@
 // `durable-store` holds text of the recordings' prompts, completions or findings.
 //
 // How each stop point is reached (the run's events through the API, never a sleep; a call that
-// must hang is held by pausing the container it goes to, which makes the stop exact):
+// must hang is held by pausing the container it goes to, which makes the stop exact). A kill on
+// an event alone can land while the run's workflow is between two activities; then no activity is
+// lost, nothing times out, and the run correctly records no stop (FR-006's limit). So for the
+// three stop points that hang on an activity, the test also waits until the durable service shows
+// that activity (stopPoint.hangs) as STARTED in the run's workflow, and only then kills the engine:
 //   - agent step: the `resume` set holds the code step's first model answer for 30 s;
 //     l.WaitModelRequest returns once the model has the request, so the engine is killed inside the
 //     step worker's call, the model call in flight.
 //   - procedure step: the generate step's container is paused before the run starts; the engine
-//     records StepStarted for generate, then its call hangs; the engine is killed on that event.
-//   - review round: the same with the review step's container; killed on StepStarted for review.
+//     records StepStarted for generate, then its call hangs; the engine is killed once the
+//     workflow's CallWorker activity is STARTED.
+//   - review round: the same with the review step's container; killed once StepStarted for review is
+//     recorded and its CallWorker activity is STARTED.
 //   - commit: the code step's answer is held as for the agent step; once the model has the request
 //     the project worker (the commit's service) is paused. The step is accepted by the checks, which
 //     the project worker does not serve, and the commit of an accepted step is made before the next
 //     step starts (machine/drive.go flush), so the engine hangs in the code step's commit; it is
-//     killed on StepAccepted for code, with no StepStarted for review yet.
+//     killed once StepAccepted for code is recorded, with no StepStarted for review yet, and the
+//     workflow's CommitStep activity is STARTED.
 //
 // After the restart a paused step container is restarted (its stale, never-answered request would
 // otherwise run beside the continued attempt), and the paused project worker is resumed (its stale
@@ -74,6 +81,9 @@ type stopPoint struct {
 	reach func(t *testing.T, l *lab.Lab, slice, run string) []Event
 	// inside returns why the record is not that of the stop point, or "".
 	inside func(evs []Event) string
+	// hangs is the type of the activity the stop point hangs on ("" for none): the kill waits until
+	// the run's workflow shows it as a STARTED pending activity.
+	hangs string
 	// pausedProjectWorker is whether reach paused the lab's project worker.
 	pausedProjectWorker bool
 }
@@ -99,6 +109,7 @@ var stopPoints = []stopPoint{
 	{
 		name:      "procedure-step",
 		pauseStep: "generate",
+		hangs:     "CallWorker",
 		reach: func(t *testing.T, l *lab.Lab, slice, run string) []Event {
 			return spWaitEvents(t, l, run, 10*time.Minute, "StepStarted for generate", spStarted("generate"))
 		},
@@ -112,6 +123,7 @@ var stopPoints = []stopPoint{
 	{
 		name:      "review-round",
 		pauseStep: "review",
+		hangs:     "CallWorker",
 		reach: func(t *testing.T, l *lab.Lab, slice, run string) []Event {
 			return spWaitEvents(t, l, run, 10*time.Minute, "StepStarted for review", spStarted("review"))
 		},
@@ -124,6 +136,7 @@ var stopPoints = []stopPoint{
 	},
 	{
 		name:                "version-history-commit",
+		hangs:               "CommitStep",
 		pausedProjectWorker: true,
 		reach: func(t *testing.T, l *lab.Lab, slice, run string) []Event {
 			// The restore of the code step's attempt is done once the model has its request, so
@@ -198,6 +211,9 @@ func stopTrial(t *testing.T, sp stopPoint, base baseline) {
 	at := sp.reach(t, l, slice, run)
 	if why := sp.inside(at); why != "" {
 		t.Fatalf("%s: the engine would not be stopped at the stop point: %s; record %v", sp.name, why, kindsOf(at))
+	}
+	if sp.hangs != "" {
+		spWaitActivityStarted(t, l, run, sp.hangs, 2*time.Minute)
 	}
 	l.RestartEngine(t) // kills the engine's container and starts it again; nobody calls resumeRun
 	if paused != "" {
@@ -399,6 +415,60 @@ func spDurable(t *testing.T, l *lab.Lab) (network, server, store string) {
 		t.Fatalf("no durable-store next to the server %s", server)
 	}
 	return
+}
+
+// spWaitActivityStarted polls the durable service until the workflow of the run (its ID is the run
+// ID, in the namespace ap) has a pending activity of the given type in the state STARTED, that is,
+// the engine's worker has taken the call and it is hanging, so a kill now loses it. A describe that
+// fails or whose output is not JSON is tried again (the service may be busy); at the limit the test
+// fails with the last output. SCHEDULED does not count: the worker has not taken the call yet.
+func spWaitActivityStarted(t *testing.T, l *lab.Lab, run, activity string, limit time.Duration) {
+	t.Helper()
+	network, _, _ := spDurable(t, l)
+	deadline := time.Now().Add(limit)
+	last := ""
+	for {
+		out, code := lab.Run("docker", "run", "--rm", "--network", network, "--read-only", "--cap-drop", "ALL",
+			"--security-opt", "no-new-privileges", "--user", "1000:1000", "--tmpfs", "/tmp:mode=1777,size=16m", "-e", "HOME=/tmp",
+			"--memory", "128m", "--pids-limit", "64", "--entrypoint", "temporal", lab.Pin(t, "temporal-admin-tools"),
+			"workflow", "describe", "--address", "durable:7233", "--namespace", "ap", "--workflow-id", run, "--output", "json")
+		last = fmt.Sprintf("exit %d: %.800s", code, out)
+		if code == 0 {
+			if start := strings.Index(out, "{"); start >= 0 {
+				var doc any
+				if json.Unmarshal([]byte(out[start:]), &doc) == nil && spActivityStarted(doc, activity) {
+					return
+				}
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("run %s: no pending activity %s in state STARTED within %s; last describe: %s", run, activity, limit, last)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// spActivityStarted reports whether the described workflow has a pending activity of the type in
+// the state STARTED. The CLI's JSON names the type as an object {"name": ...} or as a string, and
+// the state as PENDING_ACTIVITY_STATE_STARTED or Started; both forms are accepted.
+func spActivityStarted(doc any, activity string) bool {
+	pending, _ := spFind(doc, "pendingActivities")
+	list, _ := pending.([]any)
+	for _, p := range list {
+		m, _ := p.(map[string]any)
+		name := ""
+		switch ty := m["activityType"].(type) {
+		case string:
+			name = ty
+		case map[string]any:
+			name, _ = ty["name"].(string)
+		}
+		state, _ := m["state"].(string)
+		if name == activity && strings.HasSuffix(strings.ToUpper(state), "STARTED") {
+			return true
+		}
+	}
+	return false
 }
 
 // spNamespace requires the namespace `ap` to exist with 24 h retention, described by the pinned
