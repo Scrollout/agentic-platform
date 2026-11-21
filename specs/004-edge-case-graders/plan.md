@@ -97,7 +97,7 @@ external interface or agent context.
 |---------|---|---|---|---|---|---|---------------|------------|
 | Held-out tests and mutants | | ✓ | | ✓ | | | ASI01 goal manipulation (gaming the grader) | Under `testdata/`, outside every folder a trial's agent container mounts; never in the message (FR-004, FR-009); an injection case cannot reach them |
 | Scratch copy of the agent's project | | ✓ | | | | | LLM05 improper output handling | The agent's project is copied, never changed; the copy is mounted read-only into every grading container |
-| Build container | | ✓ | | | ✓ | ✓ | LLM05, ASI05 unexpected code execution | Compiling runs no agent code (no `go generate`, `CGO_ENABLED=0`, `-vet=off`); no network, read-only root, no capabilities, memory and PID limits (`DockerRunner`) |
+| Build container | | ✓ | | | ✓ | ✓ | LLM05, ASI05 unexpected code execution | Compiling runs no agent code (no `go generate`, `CGO_ENABLED=0`, `-vet=off`); no network, read-only root, no capabilities, memory and PID limits (`DockerRunner`); the writable build-cache and binaries folders are per trial, never mounted into a run container, and removed after the trial; their size is bounded by one small project's build (accepted, as the evals' temp folders are) |
 | Run containers | | ✓ | | | ✓ | ✓ | ASI05, LLM10 unbounded consumption | One fresh container per binary, so a run cannot leave a file or cache entry for the next; time limit `checks.DefaultGoTimeout`; a time-out is not a pass or a kill |
 | Grader verdict | ✓ | ✓ | | | | | ASI09 human-agent trust exploitation | A mutant is killed only after the same tests pass on the reference implementation (R4); an agent's answer is never read by these graders |
 

@@ -50,8 +50,9 @@ test names are Go test names starting with their rule (`TestR1_EmptyList`); muta
   ```
 
   A column lists the case's trials in order. `n/a`: the grader does not judge that agent. `—`: a
-  trial of that agent that reports no counts (the grader stopped before its variants; its reason
-  is in the failure lines).
+  trial of that agent that reports no counts: the grader did not run because an earlier grader of
+  the trial failed (`not run: <grader> failed`), or it stopped before its variants; its reason is
+  in the failure lines.
 - After the table, one line per trial with a failed held-out test, a surviving mutant, or a
   stopped new grader:
 

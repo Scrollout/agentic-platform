@@ -96,7 +96,10 @@ say).
 - **Decision**: both new graders work in two phases on a scratch copy of the agent's project:
   1. **Build**: `go test -c -vet=off -mod=vendor -o <bins>/<variant>/ ./<pkg>/...` once per
      variant, each in its own throwaway grading container as today, with one build-cache folder
-     per trial on the host mounted writable as `GOCACHE` for these build commands only. For
+     per trial on the host mounted writable as `GOCACHE` for these build commands only (a
+     `Cache` field on the runner value the build phase uses; the run phase's runner has none).
+     The overlay JSON and each mutant's `app.go` are written inside the scratch copy, which every
+     build container mounts read-only. For
      `MutantsKilled` the variants are the reference implementation and each mutant, given as an
      `-overlay` that replaces `internal/app/app.go` (S5, S8), and `<pkg>` is `tests`; for
      `HeldOutTestsPass` the one variant is the agent's code, with `<pkg>` `heldout`. Compiling
