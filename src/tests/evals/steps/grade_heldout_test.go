@@ -544,7 +544,8 @@ func TestGraderHeldOutNotMounted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the held-out file is not where the grader expects it: %v", err)
 	}
-	if !strings.HasPrefix(file, root+string(filepath.Separator)) {
+	// The repository may be the file system's root (CI's container mounts it at /).
+	if rel, err := filepath.Rel(root, file); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		t.Fatalf("the held-out file %s is not in the repository %s", file, root)
 	}
 	heldDir := filepath.Dir(file)
