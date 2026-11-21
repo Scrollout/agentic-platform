@@ -144,15 +144,23 @@ func (e Env) unchanged(grader, before, after string, own, globs []string, of fun
 }
 
 // GradeTests judges the tests agent's result: the project it left, from the project it started with.
+// The last result is always MutantsKilled, run on after only when every earlier result passed;
+// otherwise it fails with the reason "not run: <first failing grader> failed" and no counts.
 func (e Env) GradeTests(before, after string) []Result {
 	st := e.step("tests")
-	return []Result{
+	rs := []Result{
 		e.scope(st, before, after),
 		e.deps(st, after),
 		fold(GTestsBuild, checks.TestsBuild(e.Runner, after)),
 		fold(GBound, checks.GodogStrict(e.Runner, after)),
 		fold(GFailsStub, checks.TestsFailAgainstStub(e.Runner, after)),
 	}
+	for _, r := range rs {
+		if !r.Passed {
+			return append(rs, fail(GMutants, "not run: %s failed", r.Grader))
+		}
+	}
+	return append(rs, e.MutantsKilled(after))
 }
 
 // GradeCode judges the code agent's result. approved is the contract text the slice approved.
