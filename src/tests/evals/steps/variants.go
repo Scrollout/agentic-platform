@@ -71,6 +71,9 @@ const overlayDir = ".apeval-overlays"
 
 // Variants tells, for each variant of project in order, whether it built and, per test binary,
 // which tests passed, failed, timed out or did not run. The project itself is never written.
+// Limit: Add files and overlays are written into the copy with os.WriteFile, which follows a
+// symbolic link the project left at that path; the graders run the scope grader first, which
+// fails a trial that left one, so only a direct caller can reach it (tasks T022).
 //
 // It copies project to a fresh scratch folder (regular files and folders; a symbolic link is
 // copied as a link, never followed) and adds Add. Then:

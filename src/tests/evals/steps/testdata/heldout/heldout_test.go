@@ -197,8 +197,11 @@ func TestR3_RefusalIsAnError(t *testing.T) {
 	if err := json.Unmarshal(r.body, &e); err != nil {
 		t.Fatalf("expected a JSON object with a message, got body %q", r.body)
 	}
+	// json.Unmarshal accepts null into a string, so the raw value must be checked: a JSON string
+	// starts with a quote (a missing message is empty, null, a number or an object do not).
+	raw := bytes.TrimSpace(e["message"])
 	var msg string
-	if err := json.Unmarshal(e["message"], &msg); err != nil {
+	if len(raw) == 0 || raw[0] != '"' || json.Unmarshal(raw, &msg) != nil {
 		t.Fatalf("expected a JSON object whose message is a string, got body %q", r.body)
 	}
 }
