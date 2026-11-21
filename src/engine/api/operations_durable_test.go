@@ -458,8 +458,15 @@ func (x *dopRig) boot() {
 		x.t.Fatalf("the slices over the store: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	x.t.Cleanup(cancel)
 	x.st, x.svc, x.cancel, x.running = st, svc, cancel, &sync.WaitGroup{}
+	// The engine's work may still write the store after a test's last request: stop it and wait
+	// for it, as restart does, before the temporary folders are removed (T069).
+	ops, running := x.ops, x.running
+	x.t.Cleanup(func() {
+		cancel()
+		ops.wait(x.t)
+		waitReturns(x.t, running)
+	})
 	x.ops.set(func(f *dopOps) { f.ctx = ctx })
 	rec := &recorder{}
 	cfg := Config{
