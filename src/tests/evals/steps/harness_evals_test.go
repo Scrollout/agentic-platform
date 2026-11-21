@@ -207,9 +207,11 @@ func (l *lab) agent(agentName, projectDir, message string) (out, events []byte, 
 		"-e", "MODEL_GATEWAY_URL=http://gateway:8080",
 		// A placeholder so the client does not refuse to start; the gateway replaces it (D9).
 		"-e", "ANTHROPIC_API_KEY=eval-placeholder-not-a-key",
-		"-v", projectDir + ":/projects/p",
-		"-v", filepath.Join(l.root, "src", "agents") + ":/agents:ro",
-		"-w", "/projects/p", l.image, "run"}
+	}
+	for _, m := range trialMounts(projectDir, filepath.Join(l.root, "src", "agents")) {
+		args = append(args, "-v", m)
+	}
+	args = append(args, "-w", "/projects/p", l.image, "run")
 	args = append(args, flags...)
 	args = append(args, "--working-dir", "/projects/p", "/agents/"+agentName+".yaml", "-")
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)

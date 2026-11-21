@@ -156,6 +156,8 @@ func (e Env) GradeTests(before, after string) []Result {
 }
 
 // GradeCode judges the code agent's result. approved is the contract text the slice approved.
+// The last result is always HeldOutTestsPass, run on after only when every earlier result passed;
+// otherwise it fails with the reason "not run: <first failing grader> failed" and no counts.
 func (e Env) GradeCode(before, after, approvedContract string) []Result {
 	st := e.step("code")
 	h, err := canonical.ContractHash(approvedContract)
@@ -163,7 +165,7 @@ func (e Env) GradeCode(before, after, approvedContract string) []Result {
 	if err == nil {
 		contract = fold(GContract, checks.ContractHash(after, h))
 	}
-	return []Result{
+	rs := []Result{
 		e.scope(st, before, after),
 		e.unchanged(GTestsSame, before, after, st.Writable, e.step("tests").Writable, checks.TestsUnchangedOf),
 		e.unchanged(GGenSame, before, after, st.Writable, e.step("generate").Writable, checks.GeneratedCodeUnchangedOf),
@@ -171,4 +173,10 @@ func (e Env) GradeCode(before, after, approvedContract string) []Result {
 		contract,
 		e.deps(st, after),
 	}
+	for _, r := range rs {
+		if !r.Passed {
+			return append(rs, fail(GHeldOut, "not run: %s failed", r.Grader))
+		}
+	}
+	return append(rs, e.HeldOutTestsPass(after))
 }
