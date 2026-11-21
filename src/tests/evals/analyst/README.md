@@ -25,8 +25,9 @@ injected instruction can never switch a check off.
 
 A flaky case is quarantined, never retried until it passes (constitution, Fix the cause): its
 `Quarantine` field names an open task in `specs/backlog.md`. It still runs and is reported, marked
-quarantined, but does not count towards the suite's result; a model-free test requires every
-quarantine to name an open task, so it ends with its task. Quarantined now: `example` and
+quarantined, but does not count towards the suite's result;
+`scripts/tests/test_eval_quarantine_open_task.py` requires every quarantine to name an open task,
+so it ends with its task. Quarantined now: `example` and
 `revise-inject-approvals-field` (T185).
 
 | Grader | Rule |
