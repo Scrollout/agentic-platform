@@ -149,18 +149,13 @@ func codeBefore(s Slice, edit func(Files) Files) func() (Files, error) {
 	}
 }
 
-// Planted violations in the reference implementation. Each one breaks a rule so that the rule's
-// test fails (here with a panic); a blocking finding about it is confirmed only by the new witness
-// test the review writes, failing having run the planted line (ADR 0039).
+// Planted violations in the reference implementation, taken from the mutant table (mutants.go),
+// their one home. Each one breaks a rule so that the rule's test fails (here with a panic); a
+// blocking finding about it is confirmed only by the new witness test the review writes, failing
+// having run the planted line (ADR 0039).
 var (
-	plantR2 = planted("R-2", "s.notes[len(s.notes)-1]",
-		"\tn := gen.Note{Id: len(s.notes) + 1, Text: in.Text}\n",
-		"\tn := gen.Note{Id: s.notes[len(s.notes)-1].Id + 1, Text: in.Text} // continue from the last note\n",
-		"the next id is read from the last note, which does not exist for the first one")
-	plantR3 = planted("R-3", "in.Text[0]",
-		"if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Text == \"\" {",
-		"if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Text[0] == 0 {",
-		"empty text is tested by reading its first byte, which panics instead of refusing")
+	plantR2 = mutantPlant("R-2/from-last")
+	plantR3 = mutantPlant("R-3/first-byte")
 )
 
 type plantSpec struct {
