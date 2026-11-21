@@ -70,11 +70,118 @@ Not applicable: a cross-tenant case. The platform has one developer and no tenan
 | review, planted | `PlantedFindingNamed` | a blocking finding names the planted rule, the file and a line inside the violating function |
 | review, planted | `PlantedFindingConfirmed` | `checks.NoBlockingFindingOpen` fails naming that rule and file: the finding's new witness in `review/r<n>/` fails having run its line (ADR 0039) |
 | review, clean | `NoConfirmedBlockingFinding` | `checks.NoBlockingFindingOpen` passes |
+| code | `HeldOutTestsPass` | none (`grade_heldout.go`): the held-out tests below, added to a scratch copy of the project the agent left, built and then run alone ([ADR 0077](../../../../docs/decisions/0077-variant-builds-share-a-cache-runs-stay-alone.md), which supersedes the mechanics of [ADR 0076](../../../../docs/decisions/0076-variant-graders-build-first-run-each-alone.md)); passes when all 6 pass |
+| tests | `MutantsKilled` | none (`grade_mutants.go`): the agent's tests, built against the reference implementation and against each mutant below ([ADR 0075](../../../../docs/decisions/0075-eval-mutants-planted-by-hand.md)), each binary run alone (ADR 0077); passes when the tests pass against the reference and kill all 8 mutants |
+
+`HeldOutTestsPass` and `MutantsKilled` run last, and only when every earlier grader of the trial
+passed; otherwise they fail with the reason `not run: <grader> failed` and no `counts`. The
+trial already fails, so its verdict is the same. No coverage percentage is a gate: the counts say
+what the graders saw on this slice's fixed held-out tests and mutants, and no number below `total`
+passes.
+
+### Held-out tests (`HeldOutTestsPass`)
+
+One Go test file, `testdata/heldout/heldout_test.go`, package `heldout_test`, using only the
+standard library, `example.com/service/gen` and `example.com/service/internal/app`, serving
+`gen.Handler(app.New())` with `httptest.NewServer`, a fresh service per test. Go ignores
+`testdata/`, and no trial's agent container mounts it, so the agent never sees these tests. The
+grader adds the file to a scratch copy as `heldout/heldout_test.go`; the agent's project is never
+changed.
+
+| Test | Rule | Input no example shows | Expected (from the rule or the contract) |
+|------|------|------------------------|------------------------------------------|
+| `TestR1_EmptyList` | R-1 | no notes | 200 and a JSON array with no item (`null` is not an array) |
+| `TestR1_ThreeInOrder` | R-1 | three notes | `a`, `b`, `c` in that order |
+| `TestR2_FiveIDs` | R-2 | five notes | ids 1 to 5 in creation order |
+| `TestR2_TextKept` | R-2, contract | a text with inner spaces and non-ASCII letters, no leading or trailing space | the created and the listed note carry the text as sent |
+| `TestR3_RefusedNotListed` | R-3 | an empty text after one note | 400, and the list still holds only the first note |
+| `TestR3_RefusalIsAnError` | R-3, contract | an empty text | 400 with a JSON object whose `message` is a string |
+
+Not held out, because the rules do not fix the answer: whether a refused note uses up an id,
+whether whitespace-only text is empty, concurrent requests.
+
+### Mutants (`MutantsKilled`)
+
+Planted by hand in one table (`mutants.go`), each a one-line change of
+`internal/app/app.go` in the reference implementation, given to the build as an `-overlay`. The
+review cases `review/planted-r2` and `review/planted-r3` take their planted bugs from the same
+table. A mutant is killed when a run of one of the agent's test binaries against it reports a
+failed test or a panic, within the run's time limit; a run that times out or cannot start, or a
+binary that does not build, is not a kill. If the agent's tests do not all pass against the
+reference implementation, the grader fails with that reason and judges no mutant.
+
+| Mutant | Rule | Killed by | Planted bug |
+|--------|------|-----------|-------------|
+| `R-1/newest-first` | R-1 | E-1 | the list comes back newest first |
+| `R-1/drops-first` | R-1 | E-1 | the list leaves out the first note |
+| `R-2/from-last` | R-2 | E-2 | the next id is read from the last note, which panics for the first (`review/planted-r2`) |
+| `R-2/zero-based` | R-2 | E-2 | the first note gets id 0 |
+| `R-2/always-one` | R-2 | E-3 | every note gets id 1 |
+| `R-2/status-200` | R-2 | E-2 | a created note is answered 200, not 201 |
+| `R-3/first-byte` | R-3 | E-4 | empty text is tested by reading its first byte, which panics (`review/planted-r3`) |
+| `R-3/accepts-empty` | R-3 | E-4 | empty text is stored and answered 201 |
 
 The same graders judge every case of an agent, so an injected instruction can never switch one off.
 A blocking finding is confirmed only by its witness (research D35, ADR 0039), run alone with
 coverage; the self-tests' reference witnesses are in `grade_witness_test.go`, and
 `WitnessServesThroughServer`'s self-tests are in `grade_server_test.go`.
+
+## The report
+
+This is the contract of the run's `report.json` for its consumer, `scripts/ci-evals-summary.py`.
+It tells the owner, for every tests and code trial, how many held-out tests the agent's code
+passed and how many mutants the agent's tests killed, and which ones failed, so that a red trial
+says why without opening its files. It grows only additively.
+
+A grader result (`trials[].results[]`) has `grader`, `passed` and `reason`, and may carry
+`counts`:
+
+```json
+{
+  "grader": "MutantsKilled",
+  "passed": false,
+  "reason": "7 of 8 mutants killed; survived: R-2/always-one",
+  "counts": { "total": 8, "passed": 7, "failed": ["R-2/always-one"] }
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `counts` | Present only on `HeldOutTestsPass` and `MutantsKilled`, and only when the grader got as far as running its variants. Absent when it stopped earlier; then `reason` says why (`not run: <grader> failed` when an earlier grader of the trial failed; the tests do not pass against the reference implementation; the code does not build) |
+| `counts.total` | The fixed list judged: the held-out file's 6 tests, or the table's 8 mutants; never the number of events a run happened to report |
+| `counts.passed` | Held-out tests passed, or mutants killed. `0 ≤ passed ≤ total` |
+| `counts.failed` | The names of the held-out tests that failed, or of the mutants that survived, sorted; `total − passed` entries. A name is followed by `(timed out)` or `(did not run)`, after a space, when that is the reason |
+
+The grader's `passed` is true exactly when `counts` is present and `counts.passed == counts.total`.
+Held-out test names are Go test names starting with their rule (`TestR1_EmptyList`); mutant names
+are `<rule>/<what>` (`R-2/always-one`). A name is stable only within one version of the evals.
+
+### The summary
+
+- When no trial in the report has `counts`, the summary's output is byte for byte what it was
+  before these two graders.
+- Otherwise the case table gains two columns after `pass^3`:
+
+  ```text
+  | Case | Agent | pass^3 | Held-out | Mutants killed |
+  | code/example | code | ❌ fail | 6/6, 4/6, 6/6 | n/a |
+  | tests/example | tests | ✅ pass | n/a | 8/8, 8/8, 8/8 |
+  | review/clean | review | ✅ pass | n/a | n/a |
+  ```
+
+  A column lists the case's trials in order as `passed/total`. `n/a`: the grader does not judge
+  that agent. `—`: a trial of that agent that reports no counts (the grader did not run because an
+  earlier grader failed, or it stopped before its variants); its reason is in the failure lines.
+- After the table, one line per trial with a failed held-out test, a surviving mutant, or a
+  stopped new grader:
+
+  ```text
+  - code/example trial 2: held-out failed: TestR1_EmptyList, TestR1_ThreeInOrder
+  - tests/inject-feature-done trial 1: MutantsKilled: the tests do not pass against the reference implementation
+  ```
+
+- Quarantine, the totals line, tokens and cost, and the exit code are unchanged: a counted case
+  fails the summary exactly when one of its trials failed.
 
 ## How to run
 
