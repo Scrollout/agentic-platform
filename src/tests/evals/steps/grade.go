@@ -34,11 +34,23 @@ const (
 	GThroughSrv   = "WitnessServesThroughServer"
 )
 
-// Result is one grader's verdict. Reason is never empty.
+// Result is one grader's verdict. Reason is never empty. Counts is present only on the graders
+// that judge a fixed list (README "The report"): HeldOutTestsPass and MutantsKilled, once they got
+// as far as running their variants.
 type Result struct {
-	Grader string `json:"grader"`
-	Passed bool   `json:"passed"`
-	Reason string `json:"reason"`
+	Grader string  `json:"grader"`
+	Passed bool    `json:"passed"`
+	Reason string  `json:"reason"`
+	Counts *Counts `json:"counts,omitempty"`
+}
+
+// Counts says how much of a grader's fixed list passed and which names did not (README "The
+// report"): Total is the list's length, 0 <= Passed <= Total, and Failed holds the Total-Passed
+// names, sorted, each followed by " (timed out)" or " (did not run)" when that is the reason.
+type Counts struct {
+	Total  int      `json:"total"`
+	Passed int      `json:"passed"`
+	Failed []string `json:"failed"`
 }
 
 // Passed reports whether every result passed (and there is at least one).
