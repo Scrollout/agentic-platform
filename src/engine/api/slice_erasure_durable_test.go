@@ -335,7 +335,15 @@ func TestSliceErasureLeavesItsOwnOperationFollowedFor24hAfterItsEndOnly(t *testi
 	if slices.Contains(x.sops.f.tried(), own) {
 		t.Errorf("the erasing operation's own workflow %s was deleted", own)
 	}
-	if ok, err := x.ops.Open(context.Background(), own); err != nil || ok {
+	// The record's end is written before the workflow closes: wait for the close.
+	var ok bool
+	var err error
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(5 * time.Millisecond) {
+		if ok, err = x.ops.Open(context.Background(), own); err != nil || !ok || time.Now().After(deadline) {
+			break
+		}
+	}
+	if err != nil || ok {
 		t.Errorf("the erasing operation's workflow: open=%v err=%v, want closed and still there", ok, err)
 	}
 	rec := x.record(own)
