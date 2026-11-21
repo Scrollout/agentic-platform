@@ -267,6 +267,11 @@ full run is therefore about 15M to 25M tokens, about $2 to $3 at Haiku's $0.10 /
 (the pattern's basis), and 1.5 to 3 hours sequentially. These are estimates; the first live run
 gives the real figure.
 
+Measured with `HeldOutTestsPass` and `MutantsKilled` (runs 44933201919 and 44957174113,
+2026-11-21, the three agents' jobs side by side): code about 21 to 23 minutes, tests about 35
+minutes, review about 38 minutes, so a full run takes about 40 minutes. The two graders add about
+25 seconds to a code trial and about 45 seconds to a tests trial and call no model (research S9).
+
 ## Owner's decisions (T049b)
 
 Found by this suite, decided by the owner on 2026-11-13, landed in the engine. No workaround is

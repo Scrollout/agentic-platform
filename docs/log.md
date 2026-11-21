@@ -1,5 +1,9 @@
 # Directory Update Log
 
+## 2026-11-22
+
+* **Implementation**: Feature 004 (backlog T180): the step agents' evals judge edge cases, not only the examples. Every code case is judged by `HeldOutTestsPass` (six held-out tests the agent never sees) and every tests case by `MutantsKilled` (eight hand-planted mutants, [ADR 0075](/decisions/0075-eval-mutants-planted-by-hand.md), built with a shared cache and run alone, [ADR 0077](/decisions/0077-variant-builds-share-a-cache-runs-stay-alone.md)); the evals summary shows `Held-out` and `Mutants killed` per trial and names what failed, and prints a report with no counts as before. Live runs 44933201919 and 44957174113: every steps case pass^3; grading adds about 25 s per code trial and 45 s per tests trial; CI's grader self-tests +2 min 46 s (SC-004, measured in CI, owner). Limits stated in `src/tests/evals/steps/README.md`.
+
 ## 2026-11-21
 
 * **Analyze**: Feature 004 analyze round 1: variant builds share a per-trial build cache and each binary runs alone from its package folder ([ADR 0077](/decisions/0077-variant-builds-share-a-cache-runs-stay-alone.md), superseding ADR 0076's mechanics); SC-004 is at most 5 minutes (owner); a mutant the tests do not build against is not a kill (owner). Backlog T188: OpenSSF Scorecard and Best Practices for this repository (owner).
