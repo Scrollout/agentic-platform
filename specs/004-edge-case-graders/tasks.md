@@ -150,7 +150,7 @@ mutants (SC-002, SC-003).
 
 ### Implementation for User Story 3
 
-- [ ] T016 [US3] Code: `scripts/ci-evals-summary.py`: the columns and failure lines per the README's "The report", only when some trial carries `counts`; the docstring updated. T015 and every existing `scripts/tests/test_ci_evals_summary*.py` pass unchanged (depends on T015)
+- [X] T016 [US3] Code: `scripts/ci-evals-summary.py`: the columns and failure lines per the README's "The report", only when some trial carries `counts`; the docstring updated. T015 and every existing `scripts/tests/test_ci_evals_summary*.py` pass unchanged (depends on T015). Done 2026-11-21 (fresh Opus code author): 23 of 23 T015 tests, the quarantine tests and `test_ci_scripts`' 20 summary tests pass; where the README is silent: quarantined cases get failure lines, a case with no trials an empty cell, a trial with no result from its grader `—` and no line; failure lines go before the tokens line
 - [ ] T017 [US3] Push (ask the owner, naming the jobs): CI green; fresh review of US3 (read-only, another model, own worktree, judging the CI run) against FR-016 and FR-017; findings fixed or recorded; `/speckit-converge` for US3 (depends on T016)
 
 **Checkpoint**: every story works with no model.
