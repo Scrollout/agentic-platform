@@ -841,9 +841,23 @@ func errText(err error) string {
 func (r *run) record(e *EventRecord) error { return r.recordOn(r.ctx, e) }
 
 func (r *run) recordOn(ctx workflow.Context, e *EventRecord) error {
+	stopped, cancelled, err := r.write(ctx, e)
+	switch {
+	case err != nil:
+		return err
+	case cancelled:
+		return errEnded
+	case stopped:
+		return r.stopPair(nil)
+	}
+	return nil
+}
+
+// write appends e with the next seq until the store holds it, and says whether a stop or a
+// cancellation came during the write.
+func (r *run) write(ctx workflow.Context, e *EventRecord) (stopped, cancelled bool, _ error) {
 	e.Slice = r.in.Slice
 	e.Event.Seq, e.Event.At, e.Event.Run = r.seq+1, workflow.Now(ctx), r.in.Run
-	stopped, cancelled := false, false
 	for try := 0; ; {
 		err := r.exec(ctx, RecordEvent, 0, e, nil)
 		if err == nil {
@@ -857,7 +871,7 @@ func (r *run) recordOn(ctx workflow.Context, e *EventRecord) error {
 			stopped = true
 			continue
 		case errType(err) == SeqTaken:
-			return temporal.NewNonRetryableApplicationError(fmt.Sprintf("run %s: event %d (%s) is not the one the record holds",
+			return stopped, cancelled, temporal.NewNonRetryableApplicationError(fmt.Sprintf("run %s: event %d (%s) is not the one the record holds",
 				r.in.Run, e.Event.Seq, e.Event.Kind), SeqTaken, err)
 		}
 		// A store that does not answer is back-pressure, never a defect: the rule's waits, then
@@ -872,13 +886,7 @@ func (r *run) recordOn(ctx workflow.Context, e *EventRecord) error {
 		try++
 	}
 	r.seq++
-	if cancelled {
-		return errEnded
-	}
-	if stopped {
-		return r.stopPair(nil)
-	}
-	return nil
+	return stopped, cancelled, nil
 }
 
 // stopPair records that the platform stopped and the run continued by itself, and returns then.
@@ -892,9 +900,10 @@ func (r *run) stopPair(then error) error {
 	return then
 }
 
-// end records the run's terminal event and ends it.
+// end records the run's terminal event and ends it. Nothing is recorded after it (FR-006): a
+// stop or a cancellation during its write ends the run with this outcome all the same.
 func (r *run) end(ctx workflow.Context, kind string, o machine.Outcome, detail string, open []Finding) error {
-	if err := r.recordOn(ctx, &EventRecord{Event: machine.Event{Kind: kind, Refs: r.in.Refs, Detail: detail}, Open: open}); err != nil {
+	if _, _, err := r.write(ctx, &EventRecord{Event: machine.Event{Kind: kind, Refs: r.in.Refs, Detail: detail}, Open: open}); err != nil {
 		return err
 	}
 	r.outcome = o

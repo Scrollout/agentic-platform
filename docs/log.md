@@ -2,6 +2,7 @@
 
 ## 2026-11-21
 
+* **Implementation**: Feature 002, T071 (T033 final review): nothing is recorded after a run's end event; a cancel or a platform stop during its write ends the run with that event's outcome (FR-006).
 * **Measurement**: Feature 002, T032 on the owner's clean VM: a fresh clone reached an accepted build in about 12.5 minutes (SC-004), Temporal and PostgreSQL idle at 221 MiB together (limit 512 MiB), the engine at 14 MiB; a run continued by itself after the engine was killed during an agent step, and an operation survived an engine kill (research S18).
 
 ## 2026-11-20
