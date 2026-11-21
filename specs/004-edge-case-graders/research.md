@@ -112,9 +112,13 @@ say).
      `<copy>/heldout`), so the slice's tests find `../features` as under `go test`. The command is
      `go tool test2json -t <binary> -test.v=test2json -test.count=1` (S5, S8), so every test's
      result is known by name. Each variant's binaries are written to a folder with a fresh
-     random name, never the variant's index or name, and the overlay files are removed before
-     any run, so a test binary cannot tell from its own path or the copy whether it runs against
-     the baseline or a mutant (found by the T005 author, 2026-11-21).
+     random name, never the variant's index or name, a run container mounts only that one
+     folder (never the folder holding every variant's), and the overlay files are removed before
+     any run, so a test binary cannot tell from its own path, its siblings or the copy whether it
+     runs against the baseline or a mutant (found by the T005 author, 2026-11-21). Accepted
+     limits (analyze round 4, LOW): a binary's own modification time and the paths compiled into
+     it differ between variants only by build order and random names, with no reference value
+     visible to the test.
   3. **Fail fast**: a new grader runs only when every earlier grader of the trial passed; otherwise
      it fails with the reason `not run: <grader> failed` and no `counts`. The trial already fails,
      so its verdict is unchanged; this keeps grading time low for trials that are already red,
