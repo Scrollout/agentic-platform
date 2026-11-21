@@ -94,7 +94,7 @@ say).
 ### R3. A grader that runs model-written code builds every variant first, then runs each alone
 
 - **Decision**: both new graders work in two phases on a scratch copy of the agent's project:
-  1. **Build**: `go test -c -vet=off -mod=vendor -o <bins>/<variant>/ ./<pkg>/...` once per
+  1. **Build**: `go test -c -vet=off -mod=vendor -o <bins>/<random>/ ./<pkg>/...` once per
      variant, each in its own throwaway grading container as today, with one build-cache folder
      per trial on the host mounted writable as `GOCACHE` for these build commands only (a
      `Cache` field on the runner value the build phase uses; the run phase's runner has none).
@@ -107,7 +107,7 @@ say).
      runs none of the agent's code (S5: no `go generate`, `CGO_ENABLED=0`), so a shared cache is
      safe during builds.
   2. **Run**: each test binary in its own fresh throwaway grading container (no network, read-only
-     root, a fresh tmpfs, no build cache), with the project root and the binaries' folder mounted
+     root, a fresh tmpfs, no build cache), with the project root and that variant's binaries folder mounted
      read-only and the working directory set to the binary's package folder (`<copy>/tests` or
      `<copy>/heldout`), so the slice's tests find `../features` as under `go test`. The command is
      `go tool test2json -t <binary> -test.v=test2json -test.count=1` (S5, S8), so every test's
