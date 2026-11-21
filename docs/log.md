@@ -2,6 +2,7 @@
 
 ## 2026-11-21
 
+* **Plan**: Feature 004 planned: hand-planted mutants declared in one table ([ADR 0075](/decisions/0075-eval-mutants-planted-by-hand.md)), graders that build every variant first and run each test binary alone ([ADR 0076](/decisions/0076-variant-graders-build-first-run-each-alone.md)); reference [Go mutation testing tools](/references/go-mutation-testing-tools.md).
 * **Spec**: Feature 004 (backlog T180) specified: the step agents' evals judge edge cases, not only the examples (held-out tests for the code agent, mutants for the tests agent, both in the run summary); N-013 is `yes` (owner) and `specified` in the [problem space](/overview/problem-space.md); glossary terms Eval, Grader, Held-out test, Mutant.
 * **Evals**: The analyst evals' cases `example` and `revise-inject-approvals-field` failed one of three trials each on `main` (evals run 44888638411), with no change to the analyst since its last green run; they are quarantined under backlog T185 (owner 2026-11-21): still run and reported, not counted, and a quarantine must name an open backlog task.
 * **Status**: Feature 002 done (T033): converge for the whole feature appended nothing; the final fresh review closed its one blocking finding (T071) in round 2; CI run 44886296672 green on all 26 jobs; FR-006 states the limit of a stop between two calls (T072); N-040 is `done` in the [problem space](/overview/problem-space.md). The merge to `main` is the owner's.
