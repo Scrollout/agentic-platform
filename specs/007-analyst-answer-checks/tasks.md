@@ -164,6 +164,17 @@ again, then fails and changes nothing (FR-003, FR-004, FR-005, FR-010; research 
   `src/engine/slices/service.go` `propose` adds them after `unusable`'s faults when the input has
   a current proposal. T008 and T009 pass; `slices_retry2_test.go`, `slices_retry_links_test.go`
   and the other existing tests stay green
+- [ ] T021 [US2] Contract (design gap from CI run 45067768028, arch lint: `slices` may not import
+  the Gherkin parser; research R2): `src/slice/README.md` gains `ExampleRules(text)`: "returns
+  each `E-<n>` that a scenario under a `Rule: R-<n>` block carries as an `@E-<n>` tag, with that
+  rule, in document order, each once (an ID carried twice keeps its first rule); scenarios outside
+  such a block are not listed; empty text gives none; an error means the text is not Gherkin"
+- [ ] T022 [P] [US2] Test author: new `src/slice/example_rules_test.go` for `ExampleRules` as T021
+  states (order, first rule kept, scenarios outside a `Rule: R-<n>` block or under a block not
+  named `R-<n>` left out, several `@E` tags on one scenario, empty and blank text, not Gherkin)
+- [ ] T023 [US2] Code author: `src/slice/tags.go` `ExampleRules` (T022 passes); `src/engine/slices/kept.go`
+  uses it and no longer imports the Gherkin parser; T008, T009 and every existing test pass;
+  `go-arch-lint` passes
 - [ ] T011 [US2] Commit; push (owner go-ahead) and fix until CI is green; record the run in
   research; fresh review of US2; `/speckit-converge` for US2
 

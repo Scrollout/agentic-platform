@@ -118,6 +118,7 @@ specs/007-analyst-answer-checks/
 ```text
 src/engine/slices/proposal.go        # new: ParseProposal, AnswerFault (R1)
 src/engine/slices/kept.go            # new: the IDs a revision must keep (R2)
+src/slice/tags.go, src/slice/README.md   # ExampleRules: each example ID with its rule (R2)
 src/engine/slices/service.go         # propose: AnswerFault and lost IDs as faults
 src/engine/analyst/http.go           # Propose parses with slices.ParseProposal
 src/engine/README.md                 # Slices: the two refusals (contract)

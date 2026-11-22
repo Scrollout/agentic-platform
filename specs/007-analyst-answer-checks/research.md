@@ -85,7 +85,10 @@ Reproduced with Go 1.26.11 (scratch module, not committed):
   removed the goal directly) keeps its ID but not that goal, so the analyst may repair the
   broken link (analyze round 1). When the revision's own examples or contract do not parse, that
   part's IDs are not compared either: the attempt already has a syntax fault and is sent back
-  (T010). The rule is the service's alone; the eval grader `KeepsIDs` (S9)
+  (T010). Example IDs with their rules are read by a new `slice.ExampleRules(text)` beside
+  `ExampleScenarios`, since the `slice` module owns parsing the Gherkin examples and the engine's
+  `slices` package may not import the Gherkin parser (arch lint, CI run 45067768028: the first
+  `kept.go` imported it; a design gap fixed in the plan, T021-T023). The rule is the service's alone; the eval grader `KeepsIDs` (S9)
   judges the analyst independently and stays as it is.
 - **Spec alignment**: S9 keeps an example under its rule, and FR-003 says "re-homes"; the spec's
   FR-003 now names a kept example under the same rule explicitly (plan finding, recorded in the
