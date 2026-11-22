@@ -277,6 +277,10 @@ slice views.
   pending: no prompt, model or agent definition changes); CI green on the last commit. Correction
   (T008): the selector marks the `analyst` and `steps` suites pending, as the contract schemas
   they read changed; a paid eval run is due before the merge (owner: in a new session)
+  Runs: 45047239704 (e38de01): steps green, analyst failed `revise-inject-approvals-field` (backlog
+  T195, quarantined f757838, owner-approved); 45051980598 (f757838): steps green, analyst failed
+  `revise-inject-drop-rules` trial 1 (backlog T196). Neither touches 006's code: open until T195/T196
+  or the owner decides
 - [ ] T033 Final review finding F-S1 (fresh Sonnet review at 5adb80d, suggestion): right after an
   upgrade, `List` re-checks every stale slice one after another, each up to the checks' own time
   limits, before it answers; slow with many slices, not wrong. Non-blocking
