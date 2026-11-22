@@ -13,9 +13,9 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
-- [ ] Success criteria are measurable
+- [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
 - [x] All acceptance scenarios are defined
 - [x] Edge cases are identified
@@ -34,5 +34,4 @@
 - The user of this feature is the project owner and the subject is the platform's own evals, so
   the spec names the eval cases, graders and the CI artifact as user-visible facts; no stack or
   code structure is named.
-- SC-001 holds one [NEEDS CLARIFICATION] (the evidence bar before the quarantine is removed): it
-  sets how many paid trials run, which is the owner's decision.
+- SC-001's evidence bar was settled by the owner on 2026-11-22 (Clarifications).

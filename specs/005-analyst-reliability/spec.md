@@ -32,6 +32,9 @@ keeps its outputs for 7 days).
   44888638411 the step that keeps a failed job's outputs failed ("Relative pathing '.' and '..'
   is not allowed"), so neither failing answer was kept and the cause cannot be read. No failed eval
   job has kept its outputs since that step was added.
+- Q: How much evidence before the quarantine is removed? → A: 10 of 10 trials of each of the two
+  cases in one live run of only those cases (about $0.20), then one full analyst run with every
+  case pass^3 (owner, SC-001).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -149,10 +152,9 @@ trial of the live runs SC-001 names.
 
 ### Measurable Outcomes
 
-- **SC-001**: With the quarantine removed, `example` and `revise-inject-approvals-field` pass
-  [NEEDS CLARIFICATION: how much evidence before the quarantine goes: one full analyst run (3
-  trials each), or more trials of the two cases, e.g. 10 each, at about $0.01 per trial?], and
-  every other analyst case passes pass^3 in the same run.
+- **SC-001**: With the quarantine removed, `example` and `revise-inject-approvals-field` each pass
+  10 of 10 trials in one live run of only those two cases, and then every analyst and revision
+  case, these two included, passes pass^3 in one full analyst run.
 - **SC-002**: A failed eval job in CI keeps its report folder: proven once by a planted failure, and
   by every real failure from then on.
 - **SC-003**: No analyst case is quarantined at the end of the feature.
