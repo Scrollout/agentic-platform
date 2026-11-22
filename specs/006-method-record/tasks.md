@@ -46,7 +46,8 @@ checks), US3 (the record readable through the views).
   again after any change to spec, plan, tasks or a design artifact. Round 1 (fresh Sonnet, at
   4fd7522): 3 CRITICAL, 6 HIGH, 6 MEDIUM, 4 LOW, fixed at their source (research, "Analyze round
   1"; the owner chose the committed identity for F2 and F3). Round 2 (fresh Sonnet, at b58ef1e):
-  0 CRITICAL, 1 HIGH (N1), 3 MEDIUM, 2 LOW, fixed (research, "Analyze round 2").
+  0 CRITICAL, 1 HIGH (N1), 3 MEDIUM, 2 LOW, fixed (research, "Analyze round 2"). Round 3 (fresh
+  Sonnet, at ab929e1): 0 CRITICAL, 0 HIGH, 1 MEDIUM (M1) fixed in wording. Gate passed.
 
 ---
 
@@ -179,7 +180,10 @@ before the answer; read under A it is as stored.
   called); a fresh slice created under B stores `checks_method` B; a store write that fails during
   the re-check leaves the record stale, the answer shows the new results, and the next read checks
   again; a slow lint during one slice's re-check does not hold a read of another slice (the
-  re-check runs outside the service's lock); a service without an identity re-checks nothing
+  re-check runs outside the service's lock); two reads of one stale slice at once run its checks
+  once; an `Approve` or `Answer` that lands during a re-check (between its start and its store) is
+  kept, and the slice's results are current afterwards (research R4 "How"); a service without an
+  identity re-checks nothing
 - [ ] T014 [P] [US2] Test author: new `src/engine/api/slices_checks_method_test.go`: `getSlice`
   answers `checks_method` (the engine's identity) when every check ran and none while one could
   not run, and the answer conforms to `slice.schema.json`; `listSlices`' summaries show the state

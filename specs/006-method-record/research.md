@@ -142,16 +142,21 @@ the code on `main` (`e4348bf`), a reproduced experiment, or a cited document. De
   `checks_method` differs from it (an older record has none) as stale: the service runs every
   check again (part checks, compatibility, lint) outside its lock and under the checks' own time
   limits, as `replace` does, applies the approval rule as after any check (S4), and stores the
-  record with `checks_method` set before it answers, unless the record changed meanwhile (then it
-  checks again). A stale approved slice is offered by `Create` only once re-checked and still
+  record with `checks_method` set before it answers. A stale approved slice is offered by `Create` only once re-checked and still
   approved. How: each public entry that reads a slice (`Get`, `List`, `Create`, and every
   operation through `find`) first calls a step that, under the lock, collects the stale records it
   will read, then, without the lock, re-checks each under that slice's `changing` mutex (the one
-  `replace` holds, so a re-check and a change of one slice never interleave) with
-  `context.Background()` and the checks' own time limits, and, under the lock again, stores the
-  result when the record is still the one it checked; when a change replaced the record meanwhile,
-  that change ran its checks under the current method itself (every check run sets
-  `checks_method`), so nothing repeats. `find` keeps its contract (the caller holds the lock). A
+  `replace` holds, so a re-check and a contract change of one slice never interleave). Holding
+  that mutex it re-reads the record and tests again whether it is stale (a reader queued behind
+  another's re-check, or behind `replace`, which checks under the current method, finds it current
+  and runs nothing); it then runs the checks on a copy of the record's parts, with
+  `context.Background()` and the checks' own time limits, and, under the lock again, applies the
+  results onto the record as it is then, as `replace` does for a contract change: when the parts
+  it checked (the `parts` hashes and the contract baseline) are unchanged, the results, the
+  approval rule and `checks_method` are applied and stored, and an approval or answer that landed
+  meanwhile is kept and judged by the approval rule; when an answer changed the parts meanwhile,
+  that change ran its checks under the current method (every check run sets `checks_method`), so
+  the record is already current. `find` keeps its contract (the caller holds the lock). A
   check that could not run is a failed check with its reason, as today, and leaves
   `checks_method` unset, so the next read checks again (analyze F12). A store write that fails
   leaves the record stale: the answer shows the new results, and the next read checks again. The
@@ -199,6 +204,15 @@ the code on `main` (`e4348bf`), a reproduced experiment, or a cited document. De
 - N3 (how a re-check runs outside the lock) → R4 "How".
 - N4 (FR-004 and SC-003 missed the failed-lookup limit) → spec.
 - N5 (a task reference) → fixed. N6 (production builds no `machine.Machine`) → T006.
+
+## Analyze round 3 (fresh Sonnet, at ab929e1)
+
+N1, N2, N4, N5, N6 closed; N3 partly: M1 (MEDIUM, no block) R4 "How" left undefined what "the
+record is still the one it checked" compares, and `Approve`, `Answer` and `CheckApprove` change a
+record without the `changing` mutex → R4 "How" now re-tests staleness after the mutex, compares
+the checked parts, and applies the results onto the record as it is then; T013 gains the case.
+0 CRITICAL, 0 HIGH: the gate is passed. The constitution's three rounds are used; the M1 wording
+fix is not reviewed again by an agent.
 
 ## E1. The identity is reproducible and selective (2026-11-22)
 
