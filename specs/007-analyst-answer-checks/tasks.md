@@ -242,7 +242,7 @@ case pass^3, none quarantined.
   `python3 scripts/okf.py check` reports `OK`
 - [X] T016 SC-004: record in research that an answer usable on the first attempt makes one
   analyst call (T004, T008 and the live run's attempts)
-- [ ] T017 Final fresh review of the whole feature (rules above) and `/speckit-converge`; findings
+- [X] T017 Final fresh review of the whole feature (rules above) and `/speckit-converge`; findings
   fixed or recorded as tasks; FR-009: `git diff main -- src/agents/ src/engine/api/preview/2026-11-12-preview/slice-proposal.schema.json`
   shows no change
 - [ ] T018 Before the owner's merge: read the branch's `evals-current` output; then, after the
