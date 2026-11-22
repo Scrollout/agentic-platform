@@ -228,3 +228,19 @@ repository at `e4348bf`:
 
 It took 0.04 s. Same source in another folder gives the same identity, documentation and the
 terminal client do not change it, and a change to a check does (SC-002).
+
+## Implementation findings
+
+- **I1 (T008, CI run 45032308393, arch job)**: the `method` package's external tests import it,
+  so the arch file lets `method` depend on itself, as every other component with external tests
+  does (370516f).
+- **I2 (T008, CI run 45033385634, py-tests job, `test_eval_suites_declaration`)**: the analyst
+  eval suite reaches every package its harness imports, and the slice service then imported
+  `method`, whose embedded `method.sha256` changes with any engine file. Declaring it would make
+  the analyst suite pending, and so a paid eval run due, on every engine change. *Owner,
+  2026-11-22*: `slices.Config.Method` is the identity's hex string, parsed once by the engine's
+  start (`method.Current`); the stored `checks_method` is checked with the contract's hash rule
+  (`slice-defs.schema.json` `hash`, the type `slice.schema.json` gives it); `slices` no longer
+  depends on `method` (arch file); the committed test `method_start_test.go` compares the string
+  (owner-approved change). `machine`, `durable` and `api` keep `method.ID`; no eval suite reads
+  them.

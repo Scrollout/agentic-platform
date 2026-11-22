@@ -77,7 +77,7 @@ the slice record and view, two contract schemas
 | Fresh review | Pass | A fresh read-only reviewer per story and before done, judging the CI run |
 | Layout | Pass | New files in `src/engine/method/` and `scripts/` |
 | Clean tree | Exception | The derived `method.sha256` is committed (owner, 2026-11-22; Exceptions) |
-| Arch lint | Pass | `src/engine/.go-arch-lint.yml` gains the `method` component (no dependencies) and `method` in `mayDependOn` of every component that takes a `method.ID` (`cmd-engine`, `api`, `machine`, `durable`, `slices`), in T001 |
+| Arch lint | Pass | `src/engine/.go-arch-lint.yml` gains the `method` component (no dependencies) and `method` in `mayDependOn` of every component that takes a `method.ID` (`cmd-engine`, `api`, `machine`, `durable`; `slices` takes the hex string, research I2), in T001 |
 
 ## Decisions
 
