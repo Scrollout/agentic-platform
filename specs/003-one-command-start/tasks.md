@@ -42,7 +42,7 @@ option B; ADR 0063).
 
 - **Known gap** (owner, 2026-11-18): FR-001's "stopped" state is not fully met while a session
   file outlives its containers (after a reboot `start` says `already started; nothing changed` and
-  `start --check` exits 0); it is backlog T166, after the MVP, from US1's fresh review.
+  `start --check` exits 0); it is backlog T166, after the MVP, from US1's fresh review. Closed 2026-11-22 by T166: `start` is started only when the session's engine is running.
 
 ---
 
