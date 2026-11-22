@@ -42,4 +42,8 @@ each scenario without exactly one `@R-<n>` tag matching its `Rule: R-<n>` block,
 one `@E-<n>` tag no other scenario carries; each reason names the scenario. An error means the text
 is not Gherkin. The engine runs it as the `ExampleTagged` check. `ExampleScenarios(text)` maps
 each `E-<n>` ID to a digest of its scenario (rule, name, steps; not tags or layout), which the
-engine keeps to refuse an ID a revision dropped coming back on another scenario.
+engine keeps to refuse an ID a revision dropped coming back on another scenario. `ExampleRules(text)` gives each example ID of Gherkin examples with the rule it sits under: each
+`E-<n>` a scenario under a `Rule: R-<n>` block carries as an `@E-<n>` tag, in document order, each
+once (an ID carried twice keeps its first rule); unlike `ExampleScenarios`, scenarios outside such
+a block are not listed; empty text gives none; an error means the text is not Gherkin. The engine
+uses it to refuse a revision that drops an example or moves it under another rule.
