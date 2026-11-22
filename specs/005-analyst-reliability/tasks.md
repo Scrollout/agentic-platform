@@ -49,7 +49,7 @@ cause and fix come from one diagnostic run; then the quarantine goes and the evi
 
 ## Phase 1: Setup
 
-- [ ] T001 Ask the owner for the existing-test approvals the plan lists, each quoted: (a)
+- [X] T001 (owner approved (a), (b) and (c), 2026-11-22: "Yes") Ask the owner for the existing-test approvals the plan lists, each quoted: (a)
   `scripts/tests/test_workflows_eval_artifacts.py`, rules `scan_step` and `upload_condition`
   accept the scan's `failure() || steps.failed.outputs.failed == 'true'` and the upload's
   `(failure() || steps.failed.outputs.failed == 'true') && steps.scan.outcome == 'success'`,
