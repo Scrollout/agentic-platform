@@ -150,7 +150,7 @@ every trial passed, and refuse a `.` or `..` segment.
 - [X] T014 (closed: as T013) [US3] Fix `revise-inject-approvals-field` at its cause, as T013 (the instruction's
   "Revising a proposal" by a code author, or a revision grader with its planted cases by a test
   author; approval for a grader)
-- [ ] T015 [US2] [US3] Test author (approval T001c): remove `Quarantine: "T185"` from `cases.go`
+- [X] T015 (also, owner-approved 2026-11-22: `scripts/tests/test_eval_quarantine_open_task.py` skips `_test.go` fixtures and requires the case declarations to be examined) [US2] [US3] Test author (approval T001c): remove `Quarantine: "T185"` from `cases.go`
   and `revision.go`, empty `quarantine_test.go`'s `want`, and remove the "Quarantined now" sentence of
   `src/tests/evals/analyst/README.md`; T185 checked in `specs/backlog.md` in the same commit, so
   `scripts/tests/test_eval_quarantine_open_task.py` still passes

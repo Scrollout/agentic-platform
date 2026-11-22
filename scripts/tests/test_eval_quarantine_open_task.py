@@ -4,7 +4,10 @@ task. This runs on the whole repository (CI's Go job mounts only src/, which has
 
 The rule is `open_task_problems(go_sources, backlog)`. A value must look like T<digits> and have a
 backlog line that starts `- [ ] <value> ` (exact ID; `- [X]`/`- [x]` is closed; a mention in the
-middle of a line is not a task line).
+middle of a line is not a task line). Files ending `_test.go` are skipped: eval cases are declared
+in the suites' non-test files (`cases.go`, `revision.go`), and a test file's `Quarantine` literal is
+a fixture (feature 005, owner-approved 2026-11-22). With no case quarantined the real-repository
+test still requires that the non-test files declaring the cases were examined.
 """
 import re
 import unittest
@@ -24,6 +27,8 @@ def open_task_problems(go_sources, backlog):
             open_ids.add(m.group(1))
     examined, problems = 0, []
     for path, text in sorted(go_sources.items()):
+        if path.endswith("_test.go"):  # fixtures, not case declarations
+            continue
         for m in QUARANTINE.finditer(text):
             value = m.group(1)
             if value == "":  # an empty Quarantine is "not quarantined"
@@ -79,6 +84,12 @@ class OpenTaskRule(unittest.TestCase):
         self.assertEqual((examined, len(problems)), (3, 1))
 
 
+    def test_test_file_fixture_is_skipped(self):
+        self.assertEqual(open_task_problems({"x_test.go": 'Quarantine: "T186"'}, self.BACKLOG), (0, []))
+        self.assertEqual(open_task_problems({"x.go": 'Quarantine: "T186"'}, self.BACKLOG)[0], 1)
+        self.assertEqual(len(open_task_problems({"x.go": 'Quarantine: "T186"'}, self.BACKLOG)[1]), 1)
+
+
 class OpenTaskRealRepository(unittest.TestCase):
     def test_real_quarantines_name_open_tasks(self):
         files = sorted((ROOT / "src" / "tests" / "evals").rglob("*.go"))
@@ -86,8 +97,10 @@ class OpenTaskRealRepository(unittest.TestCase):
         sources = {str(f.relative_to(ROOT)): f.read_text() for f in files}
         backlog = (ROOT / "specs" / "backlog.md").read_text()
         examined, problems = open_task_problems(sources, backlog)
-        print(f"examined {len(files)} .go files, {examined} quarantines")
-        self.assertGreater(examined, 0, "no Quarantine found; the check lost its targets")
+        declared = [f for f in sources if not f.endswith("_test.go")]
+        print(f"examined {len(declared)} non-test .go files, {examined} quarantines")
+        for want in ("src/tests/evals/analyst/cases.go", "src/tests/evals/analyst/revision.go"):
+            self.assertIn(want, declared, "the case declarations were not examined; the check lost its targets")
         self.assertEqual(problems, [])
 
 
