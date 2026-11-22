@@ -49,7 +49,9 @@ starts after US1's code is committed.
   again after any change to spec, plan, tasks or a design artifact. Round 1 (fresh Sonnet, at
   cd97fc0): 0 CRITICAL, 3 HIGH (F1 stub cases cannot show an accepted retry, F2 case-variant keys,
   F3 the retry message with no previous proposal), 4 MEDIUM, 3 LOW, fixed at their source (spec
-  Clarifications, research R1-R3, data model).
+  Clarifications, research R1-R3, data model). Round 2 (fresh Sonnet, at f213664): all fixed; 0
+  CRITICAL, 0 HIGH, N1 MEDIUM and N2 LOW (the contract draft lacked the goal exception and the
+  quoting) fixed in wording. Gate passed.
 
 ---
 

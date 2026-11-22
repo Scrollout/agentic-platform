@@ -98,8 +98,8 @@ fails naming R-1 and the slice, its approvals and its history are unchanged.
 1. **Given** a slice with G-1, G-2, R-1..R-3, their examples and operations, **When** the
    analyst's revision lacks R-1 and its examples, **Then** the platform asks again with faults
    naming R-1 and each lost example.
-2. **Given** a revision in which R-2 serves another goal than before, **When** it is read, **Then**
-   it is unusable in the same way.
+2. **Given** a revision in which R-2 serves another goal than before, and the current proposal
+   has R-2's goal, **When** it is read, **Then** it is unusable in the same way.
 3. **Given** a revision that keeps every ID and adds new ones, **When** it is read, **Then** it is
    accepted as today.
 4. **Given** every attempt drops an ID, **When** the last is refused, **Then** the answer fails
@@ -169,7 +169,8 @@ analyst run passes every case pass^3 with no case quarantined.
   proposal, within the pattern's attempts, in both a new slice and a revision; after the last
   attempt the request MUST fail and change nothing.
 - **FR-003**: A revision MUST keep every goal, term, rule, example and contract operation ID of
-  the slice's current proposal, every kept rule MUST serve the same goal and every kept example
+  the slice's current proposal, every kept rule MUST serve the same goal (when the current
+  proposal has that goal) and every kept example
   MUST stay under the same rule; otherwise it is unusable, with one fault per lost or re-homed ID.
 - **FR-004**: An unusable revision (FR-003) MUST be sent back to the analyst within the pattern's
   attempts and, after the last attempt, the answer MUST fail with OperationFailed naming the lost
