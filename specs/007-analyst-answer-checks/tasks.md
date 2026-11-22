@@ -58,7 +58,7 @@ starts after US1's code is committed.
 
 ## Phase 1: Setup (contract first)
 
-- [ ] T001 Contract (committed alone): `src/engine/README.md` section Slices gains the additions
+- [X] T001 Contract (committed alone): `src/engine/README.md` section Slices gains the additions
   of [contracts/analyst-answer-rules.md](contracts/analyst-answer-rules.md) (`ParseProposal`,
   `AnswerFault`, the kept-IDs rule of `Answer`; the sentence "such as rules naming a removed goal"
   about withdrawals after `Answer` is reworded, since a revision now keeps every ID; "An analyst

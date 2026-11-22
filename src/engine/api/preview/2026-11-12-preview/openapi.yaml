@@ -82,9 +82,10 @@ paths:
       summary: Propose a slice from a description
       description: Proposes a slice from the developer's prose. The operation's target is the new slice;
         when it succeeds the slice holds goals, terms, rules, examples, a contract, any questions and
-        its check results. At most 4 operations that need the analyst (createSlice and answerQuestions)
-        work at once across the engine; any other waits, `running`, until one ends, and one
-        cancelled while it waits never calls the analyst.
+        its check results. An analyst answer that repeats a key is asked for again; after the
+        pattern's attempts the operation fails with OperationFailed. At most 4 operations that need
+        the analyst (createSlice and answerQuestions) work at once across the engine; any other
+        waits, `running`, until one ends, and one cancelled while it waits never calls the analyst.
       security:
       - clientToken: []
       x-error-codes:
@@ -368,7 +369,11 @@ paths:
       x-operation-name: Agentic.Engine/slices/answers/write
       summary: Answer open questions
       description: Records the developer's answers with the slice. The slice is then revised and checked
-        again, and may hold new questions, up to 10 in total. The operation's target is the slice.
+        again, and may hold new questions, up to 10 in total. The revision keeps every goal, term,
+        rule, example and operation of the slice; a revision that drops or moves one, or an
+        answer that repeats a key, is asked for again, and after the pattern's attempts the
+        operation fails with OperationFailed and the slice is unchanged. To remove an item, change
+        its part. The operation's target is the slice.
         At most 4 operations that need the analyst (createSlice and answerQuestions) work at once
         across the engine; any other waits, `running`, until one ends, and one cancelled while it
         waits never calls the analyst.
