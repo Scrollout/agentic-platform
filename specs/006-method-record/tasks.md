@@ -27,44 +27,51 @@ checks), US3 (the record readable through the views).
   quoting what changes and why, before it is briefed, and its commit carries
   `Tests-approved-by: Marius Gologan (<date>)`. New self-tests of the engine are plain Go tests
   (no build tag) unless they need Docker.
-- **Protected paths**: `scripts/` and `src/deploy/build.sh` need the owner's `Approved-by:`; no
-  dependency is added.
+- **Protected paths**: `scripts/` and `src/engine/.go-arch-lint.yml` need the owner's
+  `Approved-by:`; no dependency is added.
+- **The identity file**: whoever changes a file the declaration includes runs
+  `scripts/method-digest.py` and commits `src/engine/method/method.sha256` with the change.
 - **Test time**: locally only the new test files and the packages they touch (`go test` of
-  `./method/... ./machine/... ./durable/... ./slices/... ./api/... ./cmd/engine/...` in
-  `src/engine`, each capped at 10 minutes, after `scripts/check.sh --prepare`), and
-  `python3 scripts/testrun.py` on the new Python test files (cap 5 minutes); no full
-  `scripts/check.sh`, Docker lab or image build. The full test command is the CI run of the pushed
-  commit; each push is told to the owner (which jobs, how long) and waits for a go-ahead.
+  `./method/... ./machine/... ./slices/... ./api/... ./cmd/engine/...` in `src/engine`, each
+  capped at 10 minutes, after `scripts/check.sh --prepare`), and `python3 scripts/testrun.py` on
+  the new Python test files (cap 5 minutes); no full `scripts/check.sh`, Docker lab or image
+  build. The full test command is the CI run of the pushed commit; each push is told to the owner
+  (which jobs, how long) and waits for a go-ahead.
 - **Briefs**: every test-author and reviewer brief says: think through the edge cases and list
   those checked; it gives a time limit and a cap on full runs.
 - **Fresh review**: each story and the feature end with a fresh review by a read-only agent on
   another model than the author's, in its own worktree checked out at the branch commit with the
   uncommitted and untracked files, judging the CI run; at most 3 rounds. Then `/speckit-converge`.
 - **Gate**: `/speckit-analyze` (fresh reviewer) must report no CRITICAL or HIGH before T001, and
-  again after any change to spec, plan, tasks or a design artifact.
+  again after any change to spec, plan, tasks or a design artifact. Round 1 (fresh Sonnet, at
+  4fd7522): 3 CRITICAL, 6 HIGH, 6 MEDIUM, 4 LOW, fixed at their source (research, "Analyze round
+  1"; the owner chose the committed identity for F2 and F3).
 
 ---
 
 ## Phase 1: Setup (contract first)
 
-- [ ] T001 Contract (committed alone): `src/engine/method/method.yaml` with the declaration of
-  [contracts/method-declaration.md](contracts/method-declaration.md) and, in its header comment,
-  that contract's rules, the identity's computation and the command table (the draft then links
-  to it); `run-event.schema.json` gains optional `method` and `slice.schema.json` optional
+- [ ] T001 Contract (committed alone): `src/engine/method/README.md` (the contract of
+  [contracts/method-declaration.md](contracts/method-declaration.md): what it does, the
+  declaration's rules, the identity's computation, the command table, the Go side) and
+  `src/engine/method/method.json` (the declaration as there); the draft then links to them;
+  `run-event.schema.json` gains optional `method` and `slice.schema.json` optional
   `checks_method` in `src/engine/api/preview/2026-11-12-preview/`, worded as
   [contracts/engine-api-additions.md](contracts/engine-api-additions.md) (draft then a link);
-  `.gitignore` gains `src/engine/method/method.sha256`; `scripts/generate.sh` regenerates the API
-  code, and `scripts/generate.sh --check` passes
+  `src/engine/.go-arch-lint.yml` gains the component `method` (`src/engine/method`, no
+  dependencies) and `method` in `mayDependOn` of `cmd-engine`, `machine`, `durable` and `slices`
+  (owner `Approved-by:`); `scripts/generate.sh` regenerates the API code, and
+  `scripts/generate.sh --check` passes
 
 ---
 
 ## Phase 2: Foundational - the method identity (blocks every story)
 
-**Purpose**: one identity, derived from the declaration, embedded in the engine (FR-001, FR-002,
-FR-010; research R1, R2).
+**Purpose**: one identity, derived from the declaration, committed, checked and embedded in the
+engine (FR-001, FR-002, FR-010; research R1, R2).
 
-**Independent Test**: `test_method_digest.py` and `method_test.go` pass; `--check` fails on a
-stale file and passes after the script runs.
+**Independent Test**: `test_method_digest.py`, `test_check_method_step.py` and `method_test.go`
+pass; `--check` fails on a stale file and passes after the script runs.
 
 - [ ] T002 [P] Test author: new `scripts/tests/test_method_digest.py` for
   `scripts/method-digest.py` on a throwaway fixture Git repository (never the real tree), per
@@ -72,28 +79,37 @@ stale file and passes after the script runs.
   of the manifest (recomputed independently in the test from the rules); a second run changes
   nothing (`unchanged`, file bytes and mtime kept); the same tree cloned into another folder gives
   the same identity; a change to an included file changes it; a change to a file matching an
-  `exclude` glob (`README.md`, `_test.go`, `testdata/`), to an ignored file or to a path outside
-  every `include` leaves it unchanged; an untracked, not ignored included file counts; a pin's
-  reference change changes it; `--check` exits 0 when equal and 1 when the file is stale or
-  missing, writing nothing; `--list` prints the manifest; exit 2, writing nothing, for each
-  planted bad declaration (unknown key, missing key, empty list, duplicate entry, an `include`
-  glob that matches nothing, a pin not in `images.lock`) and outside a Git work tree
-- [ ] T003 [P] Test author: new `src/engine/method/method_test.go`: `Parse` accepts exactly 64
+  `exclude` glob (`README.md` at the top and in a folder, `_test.go`, `testdata/`, the identity
+  file itself), to an ignored file or to a path outside every `include` leaves it unchanged, while
+  a file named `NOTREADME.md` is included (the exclusion names `README.md` only); matching is
+  case-sensitive (`readme.md` is included); an untracked, not ignored included file counts; a
+  tracked file deleted from the working tree is left out; a listed pin's reference change changes
+  it, a change to a pin the declaration does not name leaves it unchanged; `--check` exits 0 when
+  equal and 1 when the file is stale or missing, writing nothing, and its message names both
+  values and the script; `--list` prints the manifest; exit 2, writing nothing, for each planted
+  bad declaration (invalid JSON, unknown key, missing key, empty list, duplicate entry, a non-string
+  entry, an `include` glob that matches nothing, a pin not in `images.lock`), for a symbolic link
+  among the selected files, and outside a Git work tree
+- [ ] T003 [P] Test author: new `scripts/tests/test_check_method_step.py`: `scripts/check.sh
+  --only go` in a copy of the repository (the way the existing check.sh tests copy it, their
+  helpers unchanged) with a stale `src/engine/method/method.sha256` fails, printing the script's
+  message, before any Go command runs (a stub on `PATH` records Docker and Go calls: none); with
+  the current identity it gets past the method check (the stub then stops the run); clean and
+  planted cases
+- [ ] T004 [P] Test author: new `src/engine/method/method_test.go`: `Parse` accepts exactly 64
   lowercase hex digits, trims one trailing newline, and rejects empty, 63 or 65 digits, upper case,
   a non-hex character, inner or leading space, two newlines, each error naming what was found;
   `Current()` returns the parsed embedded identity (equal to `Parse` of the file's bytes)
-- [ ] T004 Code author: `scripts/method-digest.py` (T002) and `src/engine/method/method.go`
-  (`//go:embed method.sha256`; `ID`, `Parse`, `Current`; T003); T002 and T003 pass
-- [ ] T005 Code author: `scripts/check.sh` runs `scripts/method-digest.py` in `--prepare` and
-  before its Go steps, and `scripts/method-digest.py --check` among its drift checks;
-  `src/deploy/build.sh` runs `scripts/method-digest.py` before it builds the Go images, failing
-  the build when it fails (owner `Approved-by:` for both)
+- [ ] T005 Code author: `scripts/method-digest.py` (T002); `src/engine/method/method.go`
+  (`//go:embed method.sha256`; `ID`, `Parse`, `Current`; T004); `src/engine/method/method.sha256`
+  written by the script; `scripts/check.sh`'s Go step (`go_checks`) runs
+  `python3 scripts/method-digest.py --check` first (T003; owner `Approved-by:`); T002 to T004 pass
 - [ ] T006 [P] Test author: new `src/engine/cmd/engine/method_start_test.go`: the engine's setup
-  fails, naming `method.sha256` and `scripts/method-digest.py`, when the identity it is given does
-  not parse, and passes `method.Current()` to the run machine, the durable activities and the
-  slice service (observable through T009, T013 and T016's behaviour, or a setup seam the brief
-  names)
-- [ ] T007 Code author: `src/engine/cmd/engine/setup.go` takes the identity (T006)
+  fails, naming `src/engine/method/method.sha256` and `scripts/method-digest.py`, when the identity
+  it is given does not parse, and gives the run machine, the durable activities and the slice
+  service the identity it was given (through a setup seam the brief names, e.g. the identity as a
+  setup parameter, `method.Current()` by default)
+- [ ] T007 Code author: `src/engine/cmd/engine/setup.go` takes the identity (T006); T006 passes
 - [ ] T008 Commit T001 to T007; push (owner go-ahead; say which jobs run) and fix until CI is
   green; record the run in research
 
@@ -112,25 +128,31 @@ under B.
 
 - [ ] T009 [P] [US1] Test author: new `src/engine/machine/reuse_method_test.go`: `KeyParts.Method`
   changes the key; an empty `Method` gives exactly the key without it (the key of today); a key
-  with a method differs from every key without one for the same other parts; with
-  `Config.Method` A, a run reuses a result accepted under A (`ResultReused`, no worker call) and
-  runs a step whose result was accepted under B or recorded without a method; every
-  `AttemptMade`, `StepAccepted`, `StepRejected` (open round included) and `ResultReused` carries
-  `method` A, and its `reuse_key` equals `ReuseKey` of its own fields; other event kinds carry no
+  with a method differs from every key without one for the same other parts, round or not; with
+  `Config.Method` A, the non-durable machine reuses a result accepted under A (`ResultReused`, no
+  worker call) and runs a step whose result was accepted under B or recorded without a method;
+  every `AttemptMade`, `StepAccepted`, open-round `StepRejected` and `ResultReused` carries
+  `method` A, and its `reuse_key` equals `ReuseKey` of its own fields; no other event kind carries
   `method`
-- [ ] T010 [P] [US1] Test author: new `src/engine/durable/reuse_method_test.go` (the workflow test
-  environment of the existing durable tests, helpers used unchanged): with `Activities.Method` A,
-  `LookupReuse` computes every key itself (the workflow passes no key) with A, also when findings
-  are open; a result accepted under A is reused, one under B or without a method is not; a run
+- [ ] T010 [P] [US1] Test author: new `src/engine/machine/workflow_reuse_method_test.go` (package
+  `machine_test`, beside the existing workflow tests; their helpers `newWF`, `wfRegister`,
+  `wfValidate` used unchanged; a lookup registered with the real `durable.Activities` and an
+  in-memory result store): with `Activities.Method` A, `LookupReuse` computes the key itself from
+  the parts with A (whatever key the workflow passes), also with open findings and changed lines,
+  and returns `Method` A; the workflow records the returned key, inputs and method on the step's
+  events, which conform to `run-event.schema.json`; a result accepted under A is reused, one under
+  B or without a method is not; an open review round kept under A is not reused under B; a run
   interrupted with A and resumed by activities with B looks up its remaining steps under B and its
-  later step events name B, the earlier ones A; an open review round kept under A is not reused
-  under B; the recorded histories in `src/engine/machine/testdata/histories/` still replay
+  later events name B, the earlier ones A; a lookup that fails leaves the step's method-less key
+  and no `method` on its events, and its result is not reused by a later lookup under A; with
+  `Activities.Method` empty every key is today's
 - [ ] T011 [US1] Code author: `src/engine/machine/reuse.go` (`KeyParts.Method`, written after the
   round only when not empty), `machine.go` (`Event.Method` `json:"method,omitempty"`,
-  `Config.Method`), `drive.go`; `src/engine/durable/durable.go`, `activities.go` (`Activities.Method`;
-  `Reused.Method`), `workflow.go` (no key computed in the workflow; the step's events take the key
-  and method `LookupReuse` returns); T009 and T010 pass, and every existing test of `machine` and
-  `durable` passes unchanged
+  `Config.Method`), `drive.go`; `src/engine/durable/durable.go`, `activities.go`
+  (`Activities.Method`; `Reused.Method`; the key from the parts with the method when it is set),
+  `workflow.go` (the lookup's `Key`, `Inputs` and `Method` taken whenever its `Key` is not empty;
+  no activity call, order or condition changes); T009 and T010 pass, every existing test of
+  `machine` and `durable` passes unchanged, and the recorded histories replay
 - [ ] T012 [US1] Commit; push (owner go-ahead) and fix until CI is green; fresh review of US1
   (rules above); findings fixed or recorded as tasks; `/speckit-converge` for US1
 
@@ -148,22 +170,27 @@ before the answer; read under A it is as stored.
 - [ ] T013 [P] [US2] Test author: new `src/engine/slices/checks_method_test.go`: a slice service
   given identity B over a store holding a slice whose record has `checks_method` A (or none): `Get`,
   every operation that reads the slice (`Approve`, `Buildable`, `ReplaceGoals`, `Answer`,
-  `ApprovedParts`, `CheckApprove`) and `List` run every check again before they answer
-  (part checks, contract compatibility and lint, through the existing fakes), store the record
-  with `checks_method` B, and keep goals, rules, examples, terms and contract byte for byte; a part
-  whose check now fails loses its approval, recorded as `withdrawn` with that part in `refs`, and
-  `Buildable` refuses; a compatibility or lint check that could not run is a failed check with its
-  reason and `Buildable` refuses; with `checks_method` B already, nothing is checked again (the
-  fakes are not called); a fresh slice created under B stores `checks_method` B; a store write that
-  fails during the re-check makes the read fail with `OperationFailed` and changes nothing
+  `ApprovedParts`, `CheckApprove`), `List`, and `Create` with the description of an approved stale
+  slice run every check again before they answer (part checks, contract compatibility and lint,
+  through the existing fakes), store the record with `checks_method` B, and keep goals, rules,
+  examples, terms and contract byte for byte; a part whose check now fails loses its approval,
+  recorded as `withdrawn` with that part in `refs`, `Buildable` refuses, and `Create` does not
+  offer that slice as approved; a compatibility or lint check that could not run is a failed check
+  with its reason, `Buildable` refuses, the record keeps no `checks_method`, and the next read
+  checks again; with `checks_method` B already, nothing is checked again (the fakes are not
+  called); a fresh slice created under B stores `checks_method` B; a store write that fails during
+  the re-check leaves the record stale, the answer shows the new results, and the next read checks
+  again; a slow lint during one slice's re-check does not hold a read of another slice (the
+  re-check runs outside the service's lock); a service without an identity re-checks nothing
 - [ ] T014 [P] [US2] Test author: new `src/engine/api/slices_checks_method_test.go`: `getSlice`
-  and `listSlices` answer `checks_method` (the engine's identity) on every slice, and the answer
-  conforms to `slice.schema.json`; `startRun` on a slice re-checked under a new method whose check
-  now fails is refused as for any failing check
+  answers `checks_method` (the engine's identity) when every check ran and none while one could
+  not run, and the answer conforms to `slice.schema.json`; `listSlices`' summaries show the state
+  that follows the re-check; `startRun` on a slice re-checked under a new method whose check now
+  fails is refused as for any failing check
 - [ ] T015 [US2] Code author: `src/engine/slices/persist.go` (`checks_method` in the record),
-  `service.go` (the service's identity; re-check in `find` and `List`), `checks.go` if needed;
-  `src/engine/api/slices.go` (the view); T013 and T014 pass, and every existing test of `slices`
-  and `api` passes unchanged
+  `service.go` (the service's identity; the re-check in `find`, `List` and `approvedFor`, outside
+  the lock as `replace` does), `checks.go` (whether each check ran); `src/engine/api/slices.go`
+  (the view); T013 and T014 pass, and every existing test of `slices` and `api` passes unchanged
 - [ ] T016 [US2] Commit; push (owner go-ahead) and fix until CI is green; fresh review of US2;
   findings fixed or recorded; `/speckit-converge` for US2
 
@@ -176,12 +203,12 @@ before the answer; read under A it is as stored.
 **Goal**: FR-004, FR-009, SC-002, SC-003: the method is readable through the existing run and
 slice views.
 
-**Independent Test**: `listRunEvents` of a run shows `method` on every step outcome, conforming to
+**Independent Test**: `listRunEvents` of a run shows `method` on every event that carries a reuse key, conforming to
 `run-event.schema.json`.
 
 - [ ] T017 [P] [US3] Test author: new `src/engine/api/run_events_method_test.go`: after a run
   under identity A, `listRunEvents` returns `method` A on every `AttemptMade`, `StepAccepted`,
-  `StepRejected` and `ResultReused` and on no other kind, each event conforming to
+  `ResultReused` and open-round `StepRejected` and on no other kind, each event conforming to
   `run-event.schema.json`; an event read back from a run record written before feature 006 has no
   `method` and still conforms; two engines given the same identity record the same `method`
 - [ ] T018 [US3] Code author: whatever T017 needs in `src/engine/api/runs.go` (the view and the
@@ -210,15 +237,15 @@ slice views.
 
 ## Dependencies
 
-- T001 first. T002, T003 and T006 in parallel after it; T004 after T002 and T003; T005 after T004;
-  T007 after T006 and T004; T008 after T005 and T007.
+- T001 first. T002, T003, T004 and T006 in parallel after it; T005 after T002 to T004; T007
+  after T006 and T005; T008 after T007.
 - US1 (T009 to T012), US2 (T013 to T016) and US3 (T017 to T019) each need Phase 2; US3's events
   need T011. US1 and US2 touch different packages and can run side by side.
 - T020 to T023 last.
 
 ## Parallel examples
 
-- T002, T003, T006: three new test files, three test authors.
+- T002, T003, T004, T006: four new test files, test authors working in parallel.
 - T009 and T010; T013 and T014; and US1's tests beside US2's.
 
 ## Implementation strategy

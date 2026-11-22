@@ -9,7 +9,7 @@ Both additions are optional properties (additive within Principle XV; no new ver
 ```json
 "method": {
   "$ref": "slice-defs.schema.json#/$defs/hash",
-  "description": "The method identity the step was judged under, which its reuse_key covers (feature 006). Present on AttemptMade, StepAccepted, StepRejected and ResultReused events recorded since feature 006; absent on earlier events and on every other kind."
+  "description": "The method identity the step was judged under, which its reuse_key covers (feature 006). Present on the events that carry a reuse_key (AttemptMade, StepAccepted, ResultReused, and the StepRejected that leaves a review round open) recorded since feature 006 with a successful reuse lookup; absent on earlier events and on every other kind."
 }
 ```
 
@@ -22,5 +22,6 @@ Both additions are optional properties (additive within Principle XV; no new ver
 }
 ```
 
-`checks_method` is set on every slice the engine returns; it is optional in the schema only so
-that the schema still describes records written before feature 006.
+`getSlice` returns `checks_method` whenever every check of the slice ran under the engine's
+method; it is absent while a check could not run (the next read checks again) and on records
+written before feature 006. `listSlices` returns summaries, without checks, unchanged.

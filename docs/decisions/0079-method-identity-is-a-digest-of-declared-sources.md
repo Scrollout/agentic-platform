@@ -1,7 +1,7 @@
 ---
 type: Decision
 title: "ADR 0079: The method identity is a digest of the method's declared sources and pins"
-description: The parts of the platform that produce and judge a step's result are declared once in src/engine/method/method.yaml; their identity is the SHA-256 of a manifest of those files and pins, derived by scripts/method-digest.py, checked by the test command and embedded in the engine.
+description: The parts of the platform that produce and judge a step's result are declared once in src/engine/method/method.json; their identity is the SHA-256 of a manifest of those files and pins, derived by scripts/method-digest.py, committed, checked by the test command and embedded in the engine.
 tags: [decisions, engine, reuse, reproducibility]
 status: draft
 decision: accepted
@@ -36,13 +36,14 @@ Sources: [Feature 006 research, R1](../../specs/006-method-record/research.md).
 
 # Decision
 
-- The method's parts are declared once, in `src/engine/method/method.yaml`: `include` and
+- The method's parts are declared once, in `src/engine/method/method.json`: `include` and
   `exclude` globs over repository paths, and the pins of `src/deploy/images.lock` it runs on.
   The declaration lies inside what it declares.
 - The method identity is the SHA-256 of a manifest: each declared file that Git lists as tracked
   or untracked and not ignored, as its SHA-256 and path in path order, then each pin's reference.
-- `scripts/method-digest.py` derives it into a gitignored file the engine embeds; `--check` fails
-  the test command when it is stale; `src/deploy/build.sh` derives it before every Go image build.
+- `scripts/method-digest.py` derives it into `src/engine/method/method.sha256`, which is
+  committed (owner, 2026-11-22: an exception to the Clean tree rule) and embedded in the engine;
+  `--check` in the test command fails a commit whose identity is stale.
 - The engine's code is taken whole, not package by package.
 
 Sources: [Feature 006 research, R1 and R2](../../specs/006-method-record/research.md).
@@ -55,5 +56,7 @@ Sources: [Feature 006 research, R1 and R2](../../specs/006-method-record/researc
   or their pins changes it, and the next run of every slice pays its model calls again.
 - A new image or module that judges steps must be added to the declaration; until it is, a change
   to it is not seen.
+- After changing a declared file the author runs the script and commits the new identity with the
+  change, or the CI run fails.
 
 Sources: [Feature 006 research, R1](../../specs/006-method-record/research.md).

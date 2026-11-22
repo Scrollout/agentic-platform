@@ -32,6 +32,8 @@ Principle XX ("record the method, inputs, model, and rule versions").
 - Q: Is the method compared as a whole, or per step with only the parts that judge it? → A: As a
   whole (owner): any change to the method re-runs every step and re-checks every slice
   (Assumptions).
+- Q (analyze round 1): commit the derived identity, or generate it at every build entry point? →
+  A: commit it, checked by the test command (owner; research R2, plan Exceptions).
 - Found while planning (research R1): the engine's code is taken whole, not package by package,
   so a change to any of its non-test code changes the method identity; FR-001 and FR-002 say so.
 
@@ -106,14 +108,14 @@ method.
 **Why this priority**: without it a result cannot be traced or reproduced (N-053), but reuse
 (US1, US2) is what makes stale results harmful.
 
-**Independent Test**: run a slice, read its run record and its slice: every accepted, reused or
-rejected step and every check result names a method identity, and two runs on the same platform
+**Independent Test**: run a slice, read its run record and its slice: every step outcome that
+carries a reuse key, and the slice's check results, name a method identity, and two runs on the same platform
 name the same one.
 
 **Acceptance Scenarios**:
 
-1. **Given** a finished run, **When** its record is read, **Then** every step outcome names the
-   method identity it was judged under, with the pattern's id and declared version.
+1. **Given** a finished run, **When** its record is read, **Then** every step outcome that
+   carries a reuse key names the method identity it was judged under, with the pattern's id and declared version.
 2. **Given** two installations built from the same source, **When** each runs, **Then** both
    name the same method identity.
 3. **Given** two platform versions that differ in any part of the method, **When** each runs,
@@ -131,10 +133,14 @@ name the same one.
   identity (no build time, path or host in it).
 - A method change while a run is in progress: a run keeps the method it started with until it
   ends or is resumed; a resumed run after an upgrade judges its remaining steps under the new
-  method and does not reuse results from the old one.
+  method and does not reuse results from the old one. Limit: a step whose reuse lookup was
+  already recorded before the upgrade keeps that lookup's key, which names the old method or
+  none; its result is never reused by a later run under the new method (fail closed), but its
+  record names the old method although the new code judged it.
 - A slice loaded under a new method whose checks cannot run (for example a check's service is
   down) is shown with that check failed and the reason it could not run, never with its old
-  results, and cannot be built while it fails, as for any check that could not run today.
+  results, and cannot be built while it fails; its checks run again on its next read, until every
+  check has run under the new method.
 - The pattern's declared version may still be changed by hand; a method change without a version
   change must still be detected.
 
@@ -152,8 +158,9 @@ name the same one.
 - **FR-003**: A step's accepted or open result MUST be reused only when it was produced under the
   current method identity, besides the conditions that apply today (same step, inputs, agent
   definition, model and review round).
-- **FR-004**: Every step outcome in a run record (made, accepted, rejected, reused) MUST name the
-  method identity it was judged under, besides the pattern's id and declared version.
+- **FR-004**: Every step outcome in a run record that carries a reuse key (an attempt made, a
+  step accepted, a result reused, a review round left open) MUST name the method identity its key
+  covers, besides the pattern's id and declared version.
 - **FR-005**: A slice's stored check results MUST name the method identity that produced them.
 - **FR-006**: When a slice is loaded and its check results name a different method identity, or
   none, the platform MUST run its checks again and keep the new results before showing them; it
@@ -165,8 +172,8 @@ name the same one.
   an unknown method: not reused, and checked again.
 - **FR-009**: The developer and the client MUST be able to read the method identity of a run and
   of a slice's check results through the platform's existing views of runs and slices.
-- **FR-010**: A build of the platform MUST fail when the method identity it carries does not match
-  the parts it ships (so the identity cannot go stale by hand).
+- **FR-010**: The project's test command MUST fail when the method identity the platform carries
+  does not match the parts it declares (so the identity cannot go stale unseen).
 
 ### Key Entities
 
@@ -186,8 +193,8 @@ name the same one.
   as before (same count as today).
 - **SC-002**: Two builds of the same source give the same method identity, and a change to a part
   outside the method (documentation, the terminal client) leaves it unchanged.
-- **SC-003**: 100% of step outcomes in a run record and of a slice's check results name a method
-  identity.
+- **SC-003**: 100% of the step outcomes that carry a reuse key in a run record, and of the slices
+  the platform shows with every check run, name a method identity.
 - **SC-004**: A run that reuses every step takes no longer than today, within 1 second.
 
 ## Assumptions

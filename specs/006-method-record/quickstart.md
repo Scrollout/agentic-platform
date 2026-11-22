@@ -6,8 +6,7 @@ run by hand during the feature except the first section (seconds, no Docker).
 ## The identity (US3, SC-002, FR-010)
 
 ```sh
-scripts/method-digest.py            # method: <identity> (<n> files, 5 pins) written
-scripts/method-digest.py            # ... unchanged
+scripts/method-digest.py            # method: <identity> (<n> files, 6 pins) unchanged (committed)
 scripts/method-digest.py --check    # exit 0
 echo '// x' >> src/engine/checks/shared.go
 scripts/method-digest.py --check    # exit 1: the stored and the computed identity differ
@@ -18,7 +17,9 @@ git checkout src/engine/README.md
 ```
 
 `python3 scripts/testrun.py scripts/tests/test_method_digest.py` proves the same on a fixture
-repository, with planted violations (a glob that matches nothing, an unknown pin, an unknown key).
+repository, with planted violations (a glob that matches nothing, an unknown pin, an unknown key);
+`scripts/tests/test_check_method_step.py` proves that `scripts/check.sh --only go` fails on a
+stale identity before any Go command runs.
 
 ## Reuse under the method (US1, SC-001)
 
@@ -29,14 +30,17 @@ The engine's Go tests (`go test ./machine/... ./durable/...` in `src/engine`, af
 - a result recorded before feature 006 (key without a method) is not reused;
 - a durable run interrupted under A and resumed by an engine with B looks up its remaining steps
   under B, and its events name B;
-- every step outcome event names the method, and its `reuse_key` is the key of its own fields;
+- every event that carries a `reuse_key` names the method, and its `reuse_key` is the key of its
+  own fields;
 - the recorded Temporal histories still replay.
 
 ## Slice checks under the method (US2)
 
 `go test ./slices/... ./api/...`: a slice stored under A, read under A, shows its stored checks;
 read under B (or stored with none), its checks run again before the answer, `checks_method` is
-B, a part whose check now fails loses its approval, and `startRun` is refused while a check fails.
+B, a part whose check now fails loses its approval, `Create` does not offer it as approved unless
+it still is, a check that could not run leaves it to be checked again, and `startRun` is refused
+while a check fails.
 
 ## The whole platform
 

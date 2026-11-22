@@ -45,12 +45,13 @@ Sources: [Feature 006 research, R3 and R4](../../specs/006-method-record/researc
   ([ADR 0079](/decisions/0079-method-identity-is-a-digest-of-declared-sources.md)), written after
   the round, so a key without one is unchanged; the engine always has one, so no key recorded
   before is matched.
-- Every step outcome event (`AttemptMade`, `StepAccepted`, `StepRejected`, `ResultReused`) names
-  the identity its key was computed with.
+- Every event that carries a reuse key (`AttemptMade`, `StepAccepted`, `ResultReused`, and the
+  `StepRejected` that leaves a review round open) names the identity its key covers.
 - A durable run's key is computed by the engine at each lookup, with its current identity, never
-  from the workflow's input.
+  from the workflow's input; the workflow takes the key the lookup returns.
 - A slice record names the identity its checks ran under; on first use under another identity, or
-  with none, every check runs again, with the usual approval rule, before the slice is shown.
+  with none, every check runs again, with the usual approval rule, before the slice is shown; a
+  check that could not run leaves the slice to be checked again on its next read.
 - The rest of ADR 0059 stands.
 
 Sources: [Feature 006 research, R3 and R4](../../specs/006-method-record/research.md); [ADR 0059](/decisions/0059-run-store-is-json-lines-and-a-content-addressed-store.md).
@@ -59,7 +60,10 @@ Sources: [Feature 006 research, R3 and R4](../../specs/006-method-record/researc
 
 - After an upgrade nothing judged by the old method is reused or shown as current; the record
   says which method judged each step, and a reader can recompute its key.
-- A run resumed across an upgrade judges its remaining steps under the new method.
+- A run resumed across an upgrade judges its remaining steps under the new method; a step whose
+  lookup was recorded before the upgrade keeps the old key, so its result is never reused, though
+  its record names the old method.
+- A step whose lookup failed keeps a key without a method: its result is never reused.
 - The first read of each slice after an upgrade waits for its checks.
 
 Sources: [Feature 006 plan](../../specs/006-method-record/plan.md).

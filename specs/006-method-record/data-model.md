@@ -21,7 +21,7 @@ covers no method, so no key the engine computes now equals it: those results are
 
 | Field | On | Meaning |
 |-------|----|---------|
-| `method` | `AttemptMade`, `StepAccepted`, `StepRejected`, `ResultReused` | the identity the step's `reuse_key` was computed with |
+| `method` | the events that carry a `reuse_key`: `AttemptMade`, `StepAccepted`, `ResultReused`, and the `StepRejected` that leaves a review round open | the identity the step's `reuse_key` was computed with; absent when the step's reuse lookup failed (its key then covers no method, research R3) |
 
 A run resumed after an upgrade records its later steps under the new identity; its earlier events
 keep theirs. A reader recomputes `reuse_key` from the event's `pattern`, `step`, `inputs`,
@@ -31,11 +31,14 @@ keep theirs. A reader recomputes `reuse_key` from the event's `pattern`, `step`,
 
 | Field | Meaning | Rules |
 |-------|---------|-------|
-| `checks_method` | the identity `checks[]` were produced under | set whenever the checks run; a record without it (written before feature 006) counts as another method |
+| `checks_method` | the identity `checks[]` were produced under | set when every check ran; unset while a check could not run, and on records written before feature 006, both of which count as another method |
 
-**Re-check under a new method**: when the slice service reaches a slice (any operation, or the
-list) whose `checks_method` is not the engine's identity, it runs every check of the slice again
-(part checks, contract compatibility, contract lint), withdraws the approval of any part whose
-check now fails (recorded as `withdrawn`, as after any check), sets `checks_method` and stores the
-record, before it answers. The slice's content is unchanged. A check that could not run is a
-failed check with its reason, so the slice cannot be built while it fails.
+**Re-check under a new method** (research R4): when the slice service reaches a slice (any
+operation, the list, or `Create`'s offer of an existing approved slice) whose `checks_method` is
+not the engine's identity, it runs every check of the slice again (part checks, contract
+compatibility, contract lint) outside its lock, withdraws the approval of any part whose check now
+fails (recorded as `withdrawn`, as after any check), sets `checks_method` when every check ran, and
+stores the record, before it answers. The slice's content is unchanged. A check that could not run
+is a failed check with its reason, so the slice cannot be built while it fails, and its next read
+checks again. A store write that fails leaves the record stale; the answer still shows the new
+results.

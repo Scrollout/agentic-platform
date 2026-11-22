@@ -7,8 +7,8 @@
 ## Summary
 
 The platform's method gets one identity: the SHA-256 of a manifest of its declared source files
-and pins, declared once in `src/engine/method/method.yaml`, computed by one converging script and
-embedded in the engine (research R1, R2). The reuse key covers it, and every step outcome event
+and pins, declared once in `src/engine/method/method.json`, computed by one converging script,
+committed and checked by the test command, and embedded in the engine (research R1, R2). The reuse key covers it, and every step outcome event
 names it, so a result accepted under another method is never reused; durable runs take it from the
 engine at each lookup, so a run resumed after an upgrade judges its remaining steps under the new
 method (R3). A slice stores the identity its checks ran under and runs them again on first use
@@ -19,8 +19,8 @@ under another (R4). Records written before the feature count as another method.
 **Language/Version**: Go 1.26 (the engine, as feature 001); Python 3 (the new script, as the other
 `scripts/`)
 
-**Primary Dependencies**: none added; PyYAML (already used by `scripts/okf.py` and
-`scripts/lint-staged.py`), Git (`git ls-files`)
+**Primary Dependencies**: none added; Python's standard library (`json`, `hashlib`,
+`fnmatch`), Git (`git ls-files`)
 
 **Storage**: the engine store's slice records gain `checks_method`; the run records' step events
 gain `method`; no migration (research R3, R4)
@@ -37,9 +37,11 @@ repository; CI's check run of the pushed commit as the full test command
 identity is computed in well under a second (E1: 0.04 s)
 
 **Constraints**: the activity calls of the durable run workflow and their order do not change
-(the recorded histories must replay); keys and events without a method are unchanged byte for
-byte, so existing tests that compute them stand; `scripts/` and `src/deploy/build.sh` changes
-carry the owner's `Approved-by:`
+and their conditions (the recorded histories must replay); keys and events without a method are
+unchanged byte for byte, and the workflow keeps its own key when the lookup returns none, so
+existing tests that compute them stand; `scripts/check.sh`, the new script and
+`src/engine/.go-arch-lint.yml` carry the owner's `Approved-by:`; `src/deploy/build.sh` and
+`check.sh --prepare` do not change
 
 **Scale/Scope**: one declaration, one script, one Go package, the reuse key, four event kinds,
 the slice record and view, two contract schemas
@@ -64,8 +66,8 @@ the slice record and view, two contract schemas
 | XIII. Supply chain | Pass | The pins the method names are those of `images.lock`; a pin change changes the identity |
 | XIV. Safe defaults | Pass | An unknown or missing method means not reused and checked again (fail closed); the engine does not start without a valid identity |
 | XV. Compatible APIs | Pass | Two optional properties, additive in the preview version |
-| XVI. Human control | Pass | `scripts/check.sh`, `src/deploy/build.sh` and the new script carry the owner's `Approved-by:` |
-| XVII. Declare, derive, converge | Pass | One declaration; the identity is derived and checked (`--check`), never kept by hand; the script converges |
+| XVI. Human control | Pass | `scripts/check.sh`, the new script and `src/engine/.go-arch-lint.yml` carry the owner's `Approved-by:` |
+| XVII. Declare, derive, converge | Pass | One declaration; the identity is derived and checked (`--check` in the test command), never kept by hand; the script converges |
 | XVIII. Abstractions say what | Pass | One script, one package (`method.Current`), named for what they give |
 | XIX. Evals | Not affected | No prompt, model, tool, policy or agent logic changes; the step evals' inputs are unchanged |
 | XX. Deterministic acceptance | Pass | The point of the feature: a result is accepted only by the checks of the method that runs now, and records it |
@@ -73,7 +75,9 @@ the slice record and view, two contract schemas
 | Checks prove they can fail | Pass | The script's tests plant a changed file, a dead glob, an unknown pin and key; `--check` fails on a stale file |
 | Existing tests change only with approval | Pass | None expected (constraints); if one must change, the owner is asked before its brief |
 | Fresh review | Pass | A fresh read-only reviewer per story and before done, judging the CI run |
-| Layout, Clean tree | Pass | `method.sha256` is gitignored; new files in `src/engine/method/`, `scripts/` |
+| Layout | Pass | New files in `src/engine/method/` and `scripts/` |
+| Clean tree | Exception | The derived `method.sha256` is committed (owner, 2026-11-22; Exceptions) |
+| Arch lint | Pass | `src/engine/.go-arch-lint.yml` gains the `method` component (no dependencies) and `method` in `mayDependOn` of every component that takes a `method.ID` (`cmd-engine`, and `machine`, `durable`, `slices` where their configuration takes the type), in T001 |
 
 ## Decisions
 
@@ -91,7 +95,7 @@ run-event views gain one field each. One element changes:
 
 | Element | S | T | R | I | D | E | OWASP mapping | Mitigation |
 |---------|---|---|---|---|---|---|---------------|------------|
-| The method identity (build input of the engine) | | ✓ | ✓ | | | | ASI06 memory and context poisoning (a stale accepted result treated as current) | Derived only by the script, never by hand; `--check` in the test command and `build.sh` writing it before every build keep it true (FR-010); an identity that does not parse stops the engine; a missing one is no match (fail closed) |
+| The method identity (build input of the engine) | | ✓ | ✓ | | | | ASI06 memory and context poisoning (a stale accepted result treated as current) | Derived only by the script, never by hand; `--check` in the test command fails a commit whose identity is stale, so it is not merged (FR-010); an identity that does not parse stops the engine; a missing one is no match (fail closed) |
 
 ## Project Structure
 
@@ -115,14 +119,15 @@ specs/006-method-record/
 
 ```text
 src/engine/method/
-├── method.yaml          # new: the declaration (contract in its header)
+├── README.md            # new: the contract (declaration rules, identity, command, Go side)
+├── method.json          # new: the declaration
 ├── method.go            # new: //go:embed method.sha256; Current, Parse, ID
-└── method.sha256        # generated, gitignored
+└── method.sha256        # derived by the script, committed (Exceptions)
+src/engine/.go-arch-lint.yml              # the `method` component
 scripts/method-digest.py                  # new (research R2)
 scripts/tests/test_method_digest.py       # new
-scripts/check.sh                          # runs the script in --prepare and --check among drift checks
-src/deploy/build.sh                       # runs the script before the Go images build
-.gitignore                                # src/engine/method/method.sha256
+scripts/tests/test_check_method_step.py   # new: check.sh's Go step fails on a stale identity
+scripts/check.sh                          # the Go step runs `method-digest.py --check` first
 src/engine/api/preview/2026-11-12-preview/run-event.schema.json   # `method`
 src/engine/api/preview/2026-11-12-preview/slice.schema.json       # `checks_method`
 src/engine/machine/reuse.go               # KeyParts.Method
@@ -137,12 +142,16 @@ src/engine/cmd/engine/setup.go            # method.Current() into the machine, a
 sits beside the package that embeds it, inside the engine module, so it is part of what it
 declares.
 
-**Existing tests expected to change**: none. Keys and events without a method are unchanged
-(research R3), and slice services built without a method see every stored record as current.
+**Existing tests expected to change**: none. Keys and events without a method are unchanged, the
+harness's fake lookup returns no key so the workflow keeps its own (research R3), slice services
+built without a method see every stored record as current (R4), and `build.sh` and
+`check.sh --prepare` do not change (R2).
 
 ## Exceptions
 
-None.
+| Rule | Location | Reason |
+|------|----------|--------|
+| Clean tree ("regenerable code ... MUST NOT be committed") | `src/engine/method/method.sha256` | A 65-byte derived value, not code, committed so that every Go build, vet and lint path has it without a new step, and checked by `scripts/method-digest.py --check` in the test command (research R2; owner, 2026-11-22, analyze round 1) |
 
 ## Complexity Tracking
 
