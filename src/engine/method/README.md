@@ -47,8 +47,8 @@ Rules (each breach exits 2 and names the key or entry, before anything is writte
 
 - exactly the keys `include`, `exclude` and `pins`, each a non-empty list of distinct non-empty
   strings;
-- every `include` glob matches at least one file (a glob that matches nothing is a typo that would
-  drop a part silently);
+- every `include` glob matches at least one listed file, before the excludes apply (a glob that
+  matches nothing is a typo that would drop a part silently);
 - every pin names a line of `src/deploy/images.lock`;
 - no selected path is a symbolic link.
 

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/agentic-platform/engine/machine"
+	"github.com/agentic-platform/engine/method"
 	"github.com/agentic-platform/engine/store"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/temporal"
@@ -46,6 +47,8 @@ type Activities struct {
 	Results   *machine.Results // nil: no result is reused or kept
 	Artifacts Artifacts
 	Events    Events
+	// Method is the method identity the engine runs under, which the reuse key covers (feature 006).
+	Method method.ID
 }
 
 // timed runs call within limit (none when 0), heartbeating every heartbeatEvery, and returns how

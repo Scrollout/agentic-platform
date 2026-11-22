@@ -23,6 +23,7 @@ import (
 	"github.com/agentic-platform/engine/contracts"
 	"github.com/agentic-platform/engine/durable"
 	"github.com/agentic-platform/engine/machine"
+	"github.com/agentic-platform/engine/method"
 	"github.com/agentic-platform/engine/slices"
 	"github.com/agentic-platform/engine/steps"
 	"github.com/agentic-platform/engine/store"
@@ -68,6 +69,12 @@ const defaultDurableAddress = "durable:7233"
 // durableWait is how long the engine tries to reach the durable service at start before it
 // gives up: the service, or the network to it, may come up just after the engine.
 const durableWait = 30 * time.Second
+
+// methodIdentity gives the method identity the engine runs under; tests replace it.
+var methodIdentity = method.Current
+
+// newSlices builds the engine's slice service; tests replace it to see its Config.
+var newSlices = slices.New
 
 // durableLinks is what the engine needs from the durable service, given at start.
 type durableLinks struct {
@@ -191,6 +198,10 @@ func setupWith(getenv func(string) string, d durableLinks) (http.Handler, func()
 		return nil, nil, err
 	}
 	dir, grants := env["ENGINE_STORE_DIR"], env["ENGINE_GRANTS_DIR"]
+	id, err := methodIdentity()
+	if err != nil {
+		return nil, nil, fmt.Errorf("the embedded method identity src/engine/method/method.sha256 (run scripts/method-digest.py and commit the file): %w", err)
+	}
 
 	schemas, err := slice.LoadSchemasFS(api.ContractFiles())
 	if err != nil {
@@ -204,7 +215,7 @@ func setupWith(getenv func(string) string, d durableLinks) (http.Handler, func()
 	if err != nil {
 		return nil, nil, fmt.Errorf("the run store in ENGINE_STORE_DIR: %w", err)
 	}
-	svc, err := slices.New(slices.Config{
+	svc, err := newSlices(slices.Config{
 		Schemas: schemas,
 		Analyst: analyst.NewHTTP(env["AP_ANALYST_URL"], env["AP_ANALYST_TOKEN"], digest),
 		Diff:    contracts.NewDiff(),
@@ -212,7 +223,8 @@ func setupWith(getenv func(string) string, d durableLinks) (http.Handler, func()
 		Pattern: pattern,
 		Records: st,
 		// Runner errors in full, for the operator; no token is ever logged.
-		Log: slog.New(slog.NewJSONHandler(os.Stderr, nil)),
+		Log:    slog.New(slog.NewJSONHandler(os.Stderr, nil)),
+		Method: id,
 	})
 	if err != nil {
 		st.Close()
@@ -251,7 +263,7 @@ func setupWith(getenv func(string) string, d durableLinks) (http.Handler, func()
 	}
 	if d.Serve != nil {
 		stop, err := d.Serve(&durable.Activities{Worker: cfg.StepWorker, Checker: cfg.StepChecker, History: cfg.History,
-			Results: rec.Results(), Artifacts: st, Events: rec})
+			Results: rec.Results(), Artifacts: st, Events: rec, Method: id})
 		if err != nil {
 			cancel()
 			return nil, nil, errors.Join(err, st.Close())

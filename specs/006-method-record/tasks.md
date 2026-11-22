@@ -75,7 +75,7 @@ engine (FR-001, FR-002, FR-010; research R1, R2).
 **Independent Test**: `test_method_digest.py`, `test_method_identity_current.py` and `method_test.go`
 pass; `--check` fails on a stale file and passes after the script runs.
 
-- [ ] T002 [P] Test author: new `scripts/tests/test_method_digest.py` for
+- [X] T002 [P] Test author: new `scripts/tests/test_method_digest.py` for
   `scripts/method-digest.py` on a throwaway fixture Git repository (never the real tree), per
   [contracts/method-declaration.md](contracts/method-declaration.md): the identity is the SHA-256
   of the manifest (recomputed independently in the test from the rules); a second run changes
@@ -92,23 +92,23 @@ pass; `--check` fails on a stale file and passes after the script runs.
   bad declaration (invalid JSON, unknown key, missing key, empty list, duplicate entry, a non-string
   entry, an `include` glob that matches nothing, a pin not in `images.lock`), for a symbolic link
   among the selected files, and outside a Git work tree
-- [ ] T003 [P] Test author: new `scripts/tests/test_method_identity_current.py`: runs
+- [X] T003 [P] Test author: new `scripts/tests/test_method_identity_current.py`: runs
   `python3 scripts/method-digest.py --check` on the repository itself and fails, quoting the
   script's output, unless it exits 0 (research R2); its planted counterpart is T002's stale-file
   case, and the test names it in its docstring; it reports the identity it examined
-- [ ] T004 [P] Test author: new `src/engine/method/method_test.go`: `Parse` accepts exactly 64
+- [X] T004 [P] Test author: new `src/engine/method/method_test.go`: `Parse` accepts exactly 64
   lowercase hex digits, trims one trailing newline, and rejects empty, 63 or 65 digits, upper case,
   a non-hex character, inner or leading space, two newlines, each error naming what was found;
   `Current()` returns the parsed embedded identity (equal to `Parse` of the file's bytes)
-- [ ] T005 Code author: `scripts/method-digest.py` (T002); `src/engine/method/method.go`
+- [X] T005 Code author: `scripts/method-digest.py` (T002); `src/engine/method/method.go`
   (`//go:embed method.sha256`; `ID`, `Parse`, `Current`; T004); `src/engine/method/method.sha256`
   written by the script and committed (owner `Approved-by:` for the script); T002 to T004 pass
-- [ ] T006 [P] Test author: new `src/engine/cmd/engine/method_start_test.go`: the engine's setup
+- [X] T006 [P] Test author: new `src/engine/cmd/engine/method_start_test.go`: the engine's setup
   fails, naming `src/engine/method/method.sha256` and `scripts/method-digest.py`, when the identity
   it is given does not parse, and gives the durable activities and the slice service the identity
   it was given (production builds no non-durable machine; its `Config.Method` is judged by T009) (through a setup seam the brief names, e.g. the identity as a
   setup parameter, `method.Current()` by default)
-- [ ] T007 Code author: `src/engine/cmd/engine/setup.go` takes the identity (T006); T006 passes
+- [X] T007 Code author: `src/engine/cmd/engine/setup.go` takes the identity (T006); T006 passes
 - [ ] T008 Commit T001 to T007; push (owner go-ahead; say which jobs run) and fix until CI is
   green; record the run in research
 
