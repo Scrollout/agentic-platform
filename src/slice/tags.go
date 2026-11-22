@@ -125,6 +125,49 @@ func ExampleScenarios(text string) (map[string]string, error) {
 	return out, nil
 }
 
+// ExampleRule is an example's ID and the rule it sits under.
+type ExampleRule struct{ Example, Rule string }
+
+// ExampleRules gives each example ID of Gherkin examples with the rule it sits under: each E-<n>
+// a scenario under a "Rule: R-<n>" block carries as an @E-<n> tag, in document order, each once
+// (an ID carried twice keeps its first rule). Unlike ExampleScenarios, scenarios outside such a
+// block are not listed. Empty text gives none. An error means the text is not Gherkin.
+func ExampleRules(text string) ([]ExampleRule, error) {
+	if strings.TrimSpace(text) == "" {
+		return nil, nil
+	}
+	gd, err := gherkin.ParseGherkinDocument(strings.NewReader(text), (&messages.Incrementing{}).NewId)
+	if err != nil {
+		return nil, err
+	}
+	if gd.Feature == nil {
+		return nil, nil
+	}
+	var out []ExampleRule
+	seen := map[string]bool{}
+	for _, fc := range gd.Feature.Children {
+		if fc.Rule == nil {
+			continue
+		}
+		rule := strings.TrimSpace(fc.Rule.Name)
+		if !ruleTag.MatchString("@" + rule) {
+			continue
+		}
+		for _, rc := range fc.Rule.Children {
+			if rc.Scenario == nil {
+				continue
+			}
+			for _, t := range rc.Scenario.Tags {
+				if m := exampleTag.FindStringSubmatch(t.Name); m != nil && !seen[m[1]] {
+					seen[m[1]] = true
+					out = append(out, ExampleRule{Example: m[1], Rule: rule})
+				}
+			}
+		}
+	}
+	return out, nil
+}
+
 func scenarioDigest(sc *messages.Scenario, rule string) string {
 	h := sha256.New()
 	w := func(v ...string) {

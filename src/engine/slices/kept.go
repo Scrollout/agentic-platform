@@ -3,12 +3,10 @@ package slices
 import (
 	"bytes"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 
-	gherkin "github.com/cucumber/gherkin/go/v42"
-	messages "github.com/cucumber/messages/go/v34"
+	"github.com/agentic-platform/slice"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -44,15 +42,15 @@ func keptFaults(current Proposal, revised Slice) []string {
 		}
 	}
 
-	if was, ok := exampleRules(current.Examples); ok {
-		if now, ok := exampleRules(revised.Examples); ok {
+	if was, err := slice.ExampleRules(current.Examples); err == nil {
+		if now, err := slice.ExampleRules(revised.Examples); err == nil {
 			for _, e := range was {
-				i := slices.IndexFunc(now, func(n exampleRule) bool { return n.example == e.example })
+				i := slices.IndexFunc(now, func(n slice.ExampleRule) bool { return n.Example == e.Example })
 				switch {
 				case i < 0:
-					drop(e.example)
-				case now[i].rule != e.rule:
-					out = append(out, fmt.Sprintf("%s was under %s and is now under %s", e.example, e.rule, now[i].rule))
+					drop(e.Example)
+				case now[i].Rule != e.Rule:
+					out = append(out, fmt.Sprintf("%s was under %s and is now under %s", e.Example, e.Rule, now[i].Rule))
 				}
 			}
 		}
@@ -86,50 +84,6 @@ func uniqueIDs[T any](v []T, key func(T) string) []string {
 		out = append(out, key(x))
 	}
 	return out
-}
-
-// exampleRule is an example's ID and the rule whose "Rule:" block it sits under.
-type exampleRule struct{ example, rule string }
-
-// blockRule matches the name of a "Rule:" block that names a rule.
-var blockRule = regexp.MustCompile(`^R-[0-9]+$`)
-
-// exampleTagRe matches an example's tag.
-var exampleTagRe = regexp.MustCompile(`^@(E-[0-9]+)$`)
-
-// exampleRules returns each E-<n> that a scenario under a "Rule: R-<n>" block of Gherkin examples
-// carries as an @E-<n> tag, with that rule, in document order; an ID carried twice keeps its
-// first rule. It reports false when the text is not Gherkin.
-func exampleRules(text string) ([]exampleRule, bool) {
-	if strings.TrimSpace(text) == "" {
-		return nil, true
-	}
-	gd, err := gherkin.ParseGherkinDocument(strings.NewReader(text), (&messages.Incrementing{}).NewId)
-	if err != nil {
-		return nil, false
-	}
-	if gd.Feature == nil {
-		return nil, true
-	}
-	var out []exampleRule
-	for _, fc := range gd.Feature.Children {
-		if fc.Rule == nil || !blockRule.MatchString(strings.TrimSpace(fc.Rule.Name)) {
-			continue
-		}
-		rule := strings.TrimSpace(fc.Rule.Name)
-		for _, rc := range fc.Rule.Children {
-			if rc.Scenario == nil {
-				continue
-			}
-			for _, t := range rc.Scenario.Tags {
-				m := exampleTagRe.FindStringSubmatch(t.Name)
-				if m != nil && !slices.ContainsFunc(out, func(e exampleRule) bool { return e.example == m[1] }) {
-					out = append(out, exampleRule{example: m[1], rule: rule})
-				}
-			}
-		}
-	}
-	return out, true
 }
 
 // operationIDs returns the operationId of each operation under the paths and webhooks of an

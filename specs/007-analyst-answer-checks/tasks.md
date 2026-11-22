@@ -164,17 +164,17 @@ again, then fails and changes nothing (FR-003, FR-004, FR-005, FR-010; research 
   `src/engine/slices/service.go` `propose` adds them after `unusable`'s faults when the input has
   a current proposal. T008 and T009 pass; `slices_retry2_test.go`, `slices_retry_links_test.go`
   and the other existing tests stay green
-- [ ] T021 [US2] Contract (research R2, design gap; committed alone): `src/slice/README.md` gains,
+- [X] T021 [US2] Contract (research R2, design gap; committed alone): `src/slice/README.md` gains,
   beside `ExampleScenarios`: "`ExampleRules(text)` gives each example ID of Gherkin examples
   with the rule it sits under." and then its limits: each `E-<n>` a scenario under a
   `Rule: R-<n>` block carries as an `@E-<n>` tag, in document order, each once (an ID carried
   twice keeps its first rule); unlike `ExampleScenarios`, scenarios outside such a block are not
   listed; empty text gives none; an error means the text is not Gherkin
-- [ ] T022 [US2] Test author (not T023's author): new `src/slice/example_rules_test.go` for
+- [X] T022 [US2] Test author (not T023's author): new `src/slice/example_rules_test.go` for
   `ExampleRules` as T021 states (order, first rule kept, scenarios outside a `Rule: R-<n>` block
   or under a block not named `R-<n>` left out, several `@E` tags on one scenario, empty and blank
   text, not Gherkin); seen failing before T023
-- [ ] T023 [US2] Code author: `src/slice/tags.go` `ExampleRules`, reusing its tag patterns
+- [X] T023 [US2] Code author: `src/slice/tags.go` `ExampleRules`, reusing its tag patterns
   (T022 passes); `src/engine/slices/kept.go` uses it, no longer imports the Gherkin parser and
   drops its own rule-block and example-tag patterns; no test file is edited; T008, T009 and every existing test pass;
   `go-arch-lint` passes
