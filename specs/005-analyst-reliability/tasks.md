@@ -166,7 +166,7 @@ every trial passed, and refuse a `.` or `..` segment.
 
 ## Phase 5: Polish
 
-- [ ] T019 Docs: `docs/log.md` (implementation), the problem space (N-013 state and spec),
+- [X] T019 (SC-002: no eval job failed a trial during the feature → backlog T193) Docs: `docs/log.md` (implementation), the problem space (N-013 state and spec),
   any concept the shipped behaviour contradicts; `python3 scripts/okf.py check` reports OK; SC-002:
   name the eval job whose failed trial left an artifact, or, if none failed during the feature,
   file a backlog task to check the first one
