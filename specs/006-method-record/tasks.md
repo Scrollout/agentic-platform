@@ -220,13 +220,15 @@ slice views.
 **Independent Test**: `listRunEvents` of a run shows `method` on every event that carries a reuse key, conforming to
 `run-event.schema.json`.
 
-- [ ] T017 [P] [US3] Test author: new `src/engine/api/run_events_method_test.go`: after a run
+- [X] T017 [P] [US3] Test author: new `src/engine/api/run_events_method_test.go`: after a run
   under identity A, `listRunEvents` returns `method` A on every `AttemptMade`, `StepAccepted`,
   `ResultReused` and open-round `StepRejected` and on no other kind, each event conforming to
   `run-event.schema.json`; an event read back from a run record written before feature 006 has no
   `method` and still conforms; two engines given the same identity record the same `method`
-- [ ] T018 [US3] Code author: whatever T017 needs in `src/engine/api/runs.go` (the view and the
-  record read back); T017 passes
+- [X] T018 [US3] Code author: whatever T017 needs in `src/engine/api/runs.go` (the view and the
+  record read back); T017 passes. Nothing needed: the generated run-event type carries `method`
+  and `contractEvent` keeps it; T017 passed at once and failed with a planted omission of
+  `AttemptMade`'s method (3 of its 4 tests)
 - [ ] T019 [US3] Commit; push (owner go-ahead) and fix until CI is green; fresh review of US3;
   `/speckit-converge` for US3
 
