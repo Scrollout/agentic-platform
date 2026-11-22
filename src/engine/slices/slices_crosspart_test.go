@@ -5,6 +5,8 @@ package slices_test
 
 import (
 	"context"
+	"errors"
+	"reflect"
 	stdslices "slices"
 	"strings"
 	"testing"
@@ -131,7 +133,10 @@ func TestDroppingARuleTheContractNamesWithdrawsTheContractApproval(t *testing.T)
 	}
 }
 
-func TestAnAnswerThatRevisesAPartWithdrawsApprovalsOfPartsItNowBreaks(t *testing.T) {
+// An answer whose revision drops G-2 of the current proposal is refused after the pattern's
+// limits.attempts (owner-approved change of this test, 007 research R5 (a), 2026-11-22): the slice
+// stays as it was, so no approval is withdrawn by a revision, because none is stored.
+func TestAnAnswerWhoseRevisionDropsAGoalIsRefusedAndLeavesTheSliceUnchanged(t *testing.T) {
 	ctx := context.Background()
 	first := qProposal(t, slices.QuestionDraft{About: "contract/listNotes", Text: "Which paths?"})
 	revised := notesProposal(t)
@@ -149,27 +154,32 @@ func TestAnAnswerThatRevisesAPartWithdrawsApprovalsOfPartsItNowBreaks(t *testing
 			t.Fatalf("approve %s: %v", p.part, err)
 		}
 	}
-	got, err := s.Answer(ctx, sl.ID, []slices.Answer{{Question: "Q-1", Text: "all of them"}})
+	before, err := s.Get(sl.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(failedChecks(got, "rules")) == 0 {
-		t.Fatalf("setup: R-2 names the dropped G-2, so the rules part must fail: %+v", got.Checks)
+	callsBefore := a.calls
+	_, err = s.Answer(ctx, sl.ID, []slices.Answer{{Question: "Q-1", Text: "all of them"}})
+	var e *slices.Error
+	if !errors.As(err, &e) || e.Code != "OperationFailed" {
+		t.Fatalf("error %v, want *slices.Error with code OperationFailed", err)
 	}
-	if _, ok := approval(got, slices.PartRules); ok {
-		t.Errorf("the revision broke the rules part; its approval must be withdrawn")
+	if !strings.Contains(e.Detail, "the revision drops G-2 of the current proposal") {
+		t.Errorf("detail %q does not say the revision drops G-2 of the current proposal", e.Detail)
 	}
-	crossAssertSound(t, s, got)
-
-	got = crossApproveRest(t, s, got)
-	crossAssertSound(t, s, got)
-
-	r, err := s.Create(ctx, "Let me keep notes.")
+	if n := a.calls - callsBefore; n != 3 {
+		t.Errorf("analyst called %d times for the revision, want 3 (limits.attempts)", n)
+	}
+	after, err := s.Get(sl.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Reused || r.Slice.ID == sl.ID {
-		t.Errorf("an unsound slice must not be offered for reuse: reused=%v id=%s", r.Reused, r.Slice.ID)
+	if !reflect.DeepEqual(before.Parts, after.Parts) || !reflect.DeepEqual(before.Approvals, after.Approvals) ||
+		!reflect.DeepEqual(before.Questions, after.Questions) || !reflect.DeepEqual(before.History, after.History) {
+		t.Errorf("the refused answer changed the slice:\nbefore %+v\nafter  %+v", before, after)
+	}
+	if _, ok := approval(after, slices.PartRules); !ok {
+		t.Errorf("the rules approval must stay: nothing was revised")
 	}
 }
 
