@@ -23,6 +23,10 @@ Every case runs 3 times (`Trials`; `EVAL_TRIALS` sets another k). A case passes 
 passes when the container exits 0 and every grader passes. The same graders judge every case, so an
 injected instruction can never switch a check off.
 
+A revision case runs through the platform's `Answer` with its retry (up to the catalogue pattern's
+`limits.attempts`), as in production: the graded answer is the last attempt's, the trial fails when
+`Answer` fails, and the report gives each trial's `attempts`.
+
 A flaky case is quarantined, never retried until it passes (constitution, Fix the cause): its
 `Quarantine` field names an open task in `specs/backlog.md`. It still runs and is reported, marked
 quarantined, but does not count towards the suite's result;
@@ -105,4 +109,5 @@ Exit status is non-zero when any case fails pass^3, or when the key is missing.
 bad proposals, each of which must fail the grader it targets (`bad-*.json`), plus output-extraction
 cases. `run.sh stub` runs the harness itself against a stub gateway on the internal network that
 answers with a canned Anthropic streaming response (`testdata/stub-agent.yaml`, a minimal agent that is
-not the analyst): a good proposal must pass 3 of 3, a bad one must fail 3 of 3.
+not the analyst): a good proposal must pass 3 of 3, a bad one must fail 3 of 3 (a bad revision after every attempt
+the retry allows).

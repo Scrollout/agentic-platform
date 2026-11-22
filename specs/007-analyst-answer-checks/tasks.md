@@ -192,7 +192,7 @@ research R3).
 **Independent Test**: the stub run proves the planted cases; one live analyst run passes every
 case pass^3, none quarantined.
 
-- [ ] T012 [US3] Test author (owner-approved changes T002 (b)-(d)): `src/tests/evals/analyst/revision_evals_test.go`
+- [X] T012 [US3] Test author (owner-approved changes T002 (b)-(d)): `src/tests/evals/analyst/revision_evals_test.go`
   `runRevision`: per trial a service built with a new helper analyst in `revision.go` that
   replays the earlier proposal on `Create` and hands each `Answer` call to a `dockerAnalyst`,
   then `Answer` with the case's answers; the graded output is the last

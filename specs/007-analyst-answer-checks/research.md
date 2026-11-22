@@ -166,3 +166,10 @@ US1 fresh review (Sonnet, read-only worktree at 79731d4, judging run 45065044569
 finding; suggestions and untested cases in tasks T019 (open) and T020 (closed). `/speckit-converge`
 for US1: FR-001 and FR-002 are built (`proposal.go`, `propose`, `http.go`) and tested; nothing
 appended beyond T019.
+
+T012 stub run (`run.sh stub`, owner go-ahead, host, 2026-11-22): 16 s in all (before T012: not
+measured); `TestHarnessStubRevision`: `good-revised` passes with 1 attempt per trial,
+`bad-revised-dropped-rules` and `bad-revised-repeated-key` fail every trial with 3 attempts and
+`OperationFailed` naming the lost IDs and the repeated key (4.5 s each). The first stub run had
+failed the old "agent container failed" check, which the refusal now trips; the owner-approved
+test change requires the refusal there instead.

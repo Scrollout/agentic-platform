@@ -2,9 +2,9 @@
 
 package analyst
 
-// T155: the live revision cases. Each trial is one analyst call with the user message the engine
-// builds for the case (GradeRevision's input from RevisionInput), with no retry, graded by
-// GradeRevision; a case passes only when all k trials pass (pass^k). The test's name starts
+// T155: the live revision cases. Each trial runs through the platform's Create and Answer with
+// its retry (the first attempt's message is the one the engine builds for the case, as
+// RevisionInput returns it), the attempts reported, and is graded by GradeRevision; a case passes only when all k trials pass (pass^k). The test's name starts
 // with TestAnalystEvals so that `run.sh live` (-run 'TestAnalystEvals') runs it after the
 // description cases, and its stub test's with TestHarnessStub so that `run.sh stub` runs it.
 
@@ -16,14 +16,29 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	engine "github.com/agentic-platform/engine/slices"
 )
 
-// runRevision runs every revision case l.trials times, one analyst call per trial. Outputs, and the
-// message each case sends, go to dir.
+// revisionAnalyst returns the earlier proposal on Create (no current proposal) and hands every
+// call of Answer, each attempt of its retry, to next.
+type revisionAnalyst struct {
+	earlier engine.Proposal
+	next    engine.Analyst
+}
+
+func (a *revisionAnalyst) Propose(ctx context.Context, in engine.AnalystInput) (engine.Proposal, error) {
+	if in.Current == nil {
+		return a.earlier, nil
+	}
+	return a.next.Propose(ctx, in)
+}
+
+// runRevision runs every revision case l.trials times, each trial through Create and Answer with
+// the platform's retry. Outputs, and the message each case's first attempt sends, go to dir.
 func (l *lab) runRevision(cases []RevisionCase, agentDir, agentFile, dir string) []CaseReport {
 	g := l.grader()
 	must(l.t, os.MkdirAll(dir, 0o755))
@@ -31,19 +46,32 @@ func (l *lab) runRevision(cases []RevisionCase, agentDir, agentFile, dir string)
 	for _, c := range cases {
 		in, err := g.RevisionInput(context.Background(), c)
 		must(l.t, err)
+		earlier, err := EarlierProposal()
+		must(l.t, err)
 		msg := engine.AnalystMessage(in)
 		must(l.t, os.WriteFile(filepath.Join(dir, c.Name+".message.txt"), []byte(msg), 0o644))
 		cr := CaseReport{Name: c.Name, Adversarial: c.Adversarial, Attack: c.Attack, Passed: true, Quarantine: c.Quarantine}
 		for i := 1; i <= l.trials; i++ {
 			start := time.Now()
-			out, events, usage, stderr, err := l.analyst(agentDir, agentFile, msg)
-			tr := Trial{N: i, Attempts: 1, Duration: time.Since(start).Round(time.Millisecond).String(), Usage: usage}
+			da := &dockerAnalyst{l: l, agentDir: agentDir, agentFile: agentFile}
+			svc, err := engine.New(engine.Config{Schemas: g.Schemas, Analyst: &revisionAnalyst{earlier: earlier, next: da},
+				Diff: revisionNoDiff{}, Pattern: g.Pattern})
+			must(l.t, err)
+			var answerErr error
+			res, err := svc.Create(context.Background(), RevisionDescription)
 			if err != nil {
-				tr.ExitErr = err.Error()
-				tr.Stderr = tail(string(stderr), 600)
+				answerErr = fmt.Errorf("the engine did not store the earlier proposal: %w", err)
+			} else {
+				_, answerErr = svc.Answer(context.Background(), res.Slice.ID, c.Answers)
+			}
+			out, events := da.last, da.events
+			tr := Trial{N: i, Attempts: da.calls, Duration: time.Since(start).Round(time.Millisecond).String(), Usage: da.usage}
+			if answerErr != nil {
+				tr.ExitErr = answerErr.Error()
+				tr.Stderr = tail(string(da.lastStderr), 600)
 			}
 			tr.Results = GradeRevision(g, in, out)
-			tr.Passed = err == nil && Passed(tr.Results)
+			tr.Passed = answerErr == nil && Passed(tr.Results)
 			must(l.t, os.WriteFile(filepath.Join(dir, fmt.Sprintf("%s.trial%d.out", c.Name, i)), out, 0o644))
 			must(l.t, os.WriteFile(filepath.Join(dir, fmt.Sprintf("%s.trial%d.ndjson", c.Name, i)), events, 0o644))
 			cr.Passed = cr.Passed && tr.Passed
@@ -124,9 +152,17 @@ func TestHarnessStubRevision(t *testing.T) {
 	dir, err := filepath.Abs("testdata")
 	must(t, err)
 	for _, c := range []struct {
-		fixture string
-		want    bool
-	}{{"good-revised", true}, {"bad-revised-dropped-rules", false}} {
+		fixture  string
+		want     bool
+		attempts int
+		fault    string // part of the refusal Answer gives after the last attempt
+	}{
+		{"good-revised", true, 1, ""},
+		// 3 is limits.attempts of src/catalogue/api-feature-go/pattern.yaml: a bad revision is
+		// asked for again until the last attempt.
+		{"bad-revised-dropped-rules", false, 3, "the revision drops R-1 of the current proposal"},
+		{"bad-revised-repeated-key", false, 3, `the answer holds the key "examples" twice at "/"`},
+	} {
 		t.Run(c.fixture, func(t *testing.T) {
 			b, err := os.ReadFile(filepath.Join(dir, "revision", c.fixture+".json"))
 			must(t, err)
@@ -139,8 +175,16 @@ func TestHarnessStubRevision(t *testing.T) {
 				t.Fatalf("case passed=%v, want %v", reps[0].Passed, c.want)
 			}
 			for _, tr := range reps[0].Trials {
-				if tr.ExitErr != "" {
-					t.Fatalf("the agent container failed: %s %s", tr.ExitErr, tr.Stderr)
+				switch {
+				case c.want && tr.ExitErr != "":
+					t.Fatalf("trial %d: the good revision was refused: %s %s", tr.N, tr.ExitErr, tr.Stderr)
+				case !c.want && !strings.HasPrefix(tr.ExitErr, "OperationFailed: "):
+					t.Fatalf("trial %d: want the platform's refusal (OperationFailed), got %q %s", tr.N, tr.ExitErr, tr.Stderr)
+				case !c.want && !strings.Contains(tr.ExitErr, c.fault):
+					t.Fatalf("trial %d: the refusal lacks %q: %s", tr.N, c.fault, tr.ExitErr)
+				}
+				if tr.Attempts != c.attempts {
+					t.Fatalf("trial %d: %d attempts, want %d", tr.N, tr.Attempts, c.attempts)
 				}
 				if len(tr.Results) != 11 {
 					t.Fatalf("trial %d: want 11 graders, got %d", tr.N, len(tr.Results))

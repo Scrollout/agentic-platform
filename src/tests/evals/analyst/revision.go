@@ -5,9 +5,10 @@ package analyst
 // proposal (testdata/revision/earlier-notes.json). The analyst's user message is built by the
 // engine itself: the earlier proposal goes through slices.Service.Create, the answers through
 // slices.Service.Answer, and the AnalystInput that Answer hands its analyst is captured, so the
-// message is slices.AnalystMessage of exactly what production would send. Each trial is then one
-// analyst call with that message (no retry), graded by every grader of Grade plus the revision
-// graders below. Nothing here edits an existing file of the suite.
+// message is slices.AnalystMessage of exactly what production would send. Each trial is then
+// the same Create and Answer through the platform's retry (revisionAnalyst hands every call of
+// Answer to a dockerAnalyst), graded on the last attempt's answer by every grader of Grade plus
+// the revision graders below. Nothing here edits an existing file of the suite.
 
 import (
 	"context"

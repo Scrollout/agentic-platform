@@ -10,7 +10,7 @@ package analyst
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/agentic-platform/engine/slices"
@@ -48,8 +48,12 @@ func (a *dockerAnalyst) Propose(_ context.Context, in slices.AnalystInput) (slic
 	if err != nil {
 		return slices.Proposal{}, err
 	}
-	var p slices.Proposal
-	if err := json.Unmarshal(doc, &p); err != nil {
+	p, err := slices.ParseProposal(doc)
+	if err != nil {
+		var fault *slices.AnswerFault
+		if errors.As(err, &fault) {
+			return slices.Proposal{}, err
+		}
 		return slices.Proposal{}, fmt.Errorf("the output is not a proposal: %v", err)
 	}
 	return p, nil
