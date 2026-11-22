@@ -271,10 +271,19 @@ slice views.
   also covers the method identity: feature 006, ADR 0080", `docs/log.md` (implementation), the
   problem space (N-050, N-053 state and the T136 sentence), `specs/backlog.md` T136 and T144
   checked with "closed: feature 006"; `python3 scripts/okf.py check` reports OK
-- [ ] T022 Final fresh review of the whole feature (rules above) and `/speckit-converge`; findings
+- [X] T022 Final fresh review of the whole feature (rules above) and `/speckit-converge`; findings
   fixed or recorded as tasks
 - [ ] T023 Before the owner's merge: read the branch's `evals-current` output (no suite expected
-  pending: no prompt, model or agent definition changes); CI green on the last commit
+  pending: no prompt, model or agent definition changes); CI green on the last commit. Correction
+  (T008): the selector marks the `analyst` and `steps` suites pending, as the contract schemas
+  they read changed; a paid eval run is due before the merge (owner: in a new session)
+- [ ] T033 Final review finding F-S1 (fresh Sonnet review at 5adb80d, suggestion): right after an
+  upgrade, `List` re-checks every stale slice one after another, each up to the checks' own time
+  limits, before it answers; slow with many slices, not wrong. Non-blocking
+- [X] T034 Final review findings F-S2 (the reuse offer on a failed re-check: already T029) and F-S3
+  (wording: one long line in `src/engine/README.md`; the log's plan entry already names
+  `method.json`) closed: no new work. Final review (T022): no blocking finding; converge for the
+  whole feature found no gap beyond the recorded tasks
 
 ---
 
