@@ -157,7 +157,8 @@ paths:
       x-operation-name: Agentic.Engine/slices/read
       summary: Get a slice
       description: Returns the slice with its goals, terms, rules, examples, contract, questions, part
-        hashes, approvals, check results and history.
+        hashes, approvals, check results and history. Check results produced under another method
+        are run again first (`checks_method`).
       security:
       - clientToken: []
       - pageToken: []

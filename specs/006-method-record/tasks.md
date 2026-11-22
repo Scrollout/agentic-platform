@@ -53,7 +53,7 @@ checks), US3 (the record readable through the views).
 
 ## Phase 1: Setup (contract first)
 
-- [ ] T001 Contract (committed alone): `src/engine/method/README.md` (the contract of
+- [X] T001 Contract (committed alone): `src/engine/method/README.md` (the contract of
   [contracts/method-declaration.md](contracts/method-declaration.md): what it does, the
   declaration's rules, the identity's computation, the command table, the Go side) and
   `src/engine/method/method.json` (the declaration as there); the draft then links to them;

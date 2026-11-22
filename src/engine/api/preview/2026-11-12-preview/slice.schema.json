@@ -152,6 +152,10 @@
         "$ref": "slice-defs.schema.json#/$defs/check_result"
       }
     },
+    "checks_method": {
+      "$ref": "slice-defs.schema.json#/$defs/hash",
+      "description": "The method identity the slice's checks were produced under. The platform runs a slice's checks again before it shows them when they were produced under another method (feature 006). Present when every check of the slice ran under the engine's method; absent while a check could not run (the next read checks again) and on records written before feature 006."
+    },
     "history": {
       "type": "array",
       "minItems": 1,

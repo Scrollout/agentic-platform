@@ -1,0 +1,15 @@
+{
+  "include": [
+    "src/catalogue/*", "src/agents/*",
+    "src/engine/*", "src/check/*", "src/slice/*", "src/retry/*",
+    "src/go.work", "src/.dockerignore",
+    "src/deploy/Dockerfile.engine", "src/deploy/Dockerfile.check", "src/deploy/Dockerfile.project",
+    "src/deploy/Dockerfile.agent", "src/deploy/Dockerfile.lint", "src/deploy/lint/*",
+    "scripts/tools/package.json", "scripts/tools/package-lock.json"
+  ],
+  "exclude": [
+    "README.md", "*/README.md", "*_test.go", "*/testdata/*",
+    "src/engine/method/method.sha256"
+  ],
+  "pins": ["docker-agent", "golang", "alpine", "alpine-git", "node", "oapi-codegen"]
+}

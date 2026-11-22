@@ -98,6 +98,10 @@
     "reuse_key": {
       "$ref": "slice-defs.schema.json#/$defs/hash"
     },
+    "method": {
+      "$ref": "slice-defs.schema.json#/$defs/hash",
+      "description": "The method identity the step was judged under, which its reuse_key covers (feature 006). Present on the events that carry a reuse_key (AttemptMade, StepAccepted, ResultReused, and the StepRejected that leaves a review round open) recorded since feature 006 with a successful reuse lookup; absent on earlier events and on every other kind."
+    },
     "usage": {
       "type": "object",
       "additionalProperties": false,

@@ -53,6 +53,7 @@ components:
   contracts: { in: contracts }
   durable: { in: durable }
   machine: { in: machine }
+  method: { in: method }
   procedures: { in: procedures }
   slices: { in: slices }
   steps: { in: steps }
@@ -65,7 +66,7 @@ deps:
     # api_test runs the real run workflow in Temporal's testsuite). go-arch-lint cannot tell test
     # files from code, so api's code must not use them: api defines the ports durable implements
     # (data model). Owner-approved 2026-11-19.
-    mayDependOn: [api, api-gen, durable, machine, slices, store]
+    mayDependOn: [api, api-gen, durable, machine, method, slices, store]
     canUse: [jsonschema, retry-module, slice-module, temporal, temporal-testsuite, yaml]
   api-gen:
     canUse: [oapi-runtime]
@@ -82,24 +83,24 @@ deps:
     # not only wiring; moving it into a package is follow-up T097.
     # durable: the engine starts its Temporal worker and client (T018). temporal and
     # temporal-testsuite for the durable fake's tests only (T019, owner-approved 2026-11-19).
-    mayDependOn: [analyst, api, canonical, contracts, durable, machine, slices, steps, store]
+    mayDependOn: [analyst, api, canonical, contracts, durable, machine, method, slices, steps, store]
     canUse: [slice-module, temporal, temporal-testsuite, yaml]
   contracts:
     mayDependOn: [contracts, slices]
     canUse: [kin-openapi, oasdiff]
   durable:
     # api for the retry rule of the engine contract (api.RetryRule); api defines the ports durable implements.
-    mayDependOn: [api, machine, store]
+    mayDependOn: [api, machine, method, store]
     canUse: [retry-module, temporal]
   machine:
     # durable, retry-module, temporal, temporal-testsuite and yaml for the run workflow's tests (T012).
-    mayDependOn: [durable, machine]
+    mayDependOn: [durable, machine, method]
     canUse: [jsonschema, retry-module, temporal, temporal-testsuite, yaml]
   procedures:
     mayDependOn: [canonical, checks, procedures]
     canUse: [modfile]
   slices:
-    mayDependOn: [canonical, checks, slices]
+    mayDependOn: [canonical, checks, method, slices]
     canUse: [jsonschema, slice-module, yaml]
   steps:
     # checksvc is a named exception (D40 F1): steps reads only checksvc.APIVersion() and
