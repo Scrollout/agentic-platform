@@ -35,6 +35,8 @@ Quarantine, Check.
   an item by changing the part directly (owner, FR-005).
 - Q: What do the revision evals grade: one raw analyst call (today) or the revision the platform
   accepts through its retry? → A: The platform's revision, with attempts reported (owner, FR-006).
+- Plan finding (no change of intent): "re-homes" covers an example moved to another rule, as the
+  eval grader `KeepsIDs` reads it; FR-003 now says so (research R2).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -156,8 +158,8 @@ analyst run passes every case pass^3 with no case quarantined.
   proposal, within the pattern's attempts, in both a new slice and a revision; after the last
   attempt the request MUST fail and change nothing.
 - **FR-003**: A revision MUST keep every goal, term, rule, example and contract operation ID of
-  the slice's current proposal, and every kept rule MUST serve the same goal; otherwise it is
-  unusable, with one fault per lost or re-homed ID.
+  the slice's current proposal, every kept rule MUST serve the same goal and every kept example
+  MUST stay under the same rule; otherwise it is unusable, with one fault per lost or re-homed ID.
 - **FR-004**: An unusable revision (FR-003) MUST be sent back to the analyst within the pattern's
   attempts and, after the last attempt, the answer MUST fail with OperationFailed naming the lost
   IDs, leaving the slice's parts, approvals, questions and history unchanged.
