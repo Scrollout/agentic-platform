@@ -94,6 +94,16 @@ Readings to test against those answers, from S1, S4 and S5 (none is a decision y
 If the diagnostic run shows no failure in 10 trials of a case, the next steps are decided by the
 owner (more trials, or the reading above with the best evidence).
 
+**Diagnostic run (T011, 2026-11-22, the owner's host, `724d31c` with the quarantine in place)**:
+`EVAL_CASES=example,revise-inject-approvals-field EVAL_TRIALS=10 run.sh live`: `example` 10 of 10,
+`revise-inject-approvals-field` 10 of 10 (312 s; $0.038 and $0.014). No failing answer to read.
+In all 10 `example` answers the order scenario names both notes, quoted, in one `Then` step
+("the response lists the notes "buy milk" then "walk dog""), the form `Content` reads; in one
+(trial 4) the first-listed listing scenario is the empty list, and a later one shows the order.
+A form the grader would not read (each note in its own step) did not occur, so the grader
+reading stays unproven. With the CI runs before 44888638411 green, the two failures look rare
+(2 of 6 trials there, 0 of 20 here); the cause stays unknown until a failure is kept (US1).
+
 ## Corrected by the analyze reviewer
 
 - An earlier reading here said the revision suite's cases never reach the summary. They do:

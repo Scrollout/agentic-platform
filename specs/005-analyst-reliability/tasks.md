@@ -135,7 +135,7 @@ every trial passed, and refuse a `.` or `..` segment.
 
 **Independent Test**: T016's 10-trial run passes 10 of 10 per case.
 
-- [ ] T011 [US2] [US3] Diagnostic run (owner go-ahead, about $0.20, about 6 minutes), on the host:
+- [X] T011 [US2] [US3] Diagnostic run (owner go-ahead, about $0.20, about 6 minutes), on the host:
   `EVAL_CASES=example,revise-inject-approvals-field EVAL_TRIALS=10 sh
   src/tests/evals/analyst/run.sh live`; keep the report folder outside the repository
 - [ ] T012 [US2] [US3] Read every failed trial's answer and events; record in research R4, per
