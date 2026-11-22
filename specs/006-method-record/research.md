@@ -244,3 +244,7 @@ terminal client do not change it, and a change to a check does (SC-002).
   depends on `method` (arch file); the committed test `method_start_test.go` compares the string
   (owner-approved change). `machine`, `durable` and `api` keep `method.ID`; no eval suite reads
   them.
+- **CI**: T008 green in run 45037014176 at 21dcc6b (Phase 2, its fixes I1 and I2, and US1),
+  after runs 45032308393 (arch, I1) and 45033385634 (py-tests, I2) failed. US1's fresh review
+  (Sonnet, read-only, worktree at 21dcc6b): no blocking finding, three suggestions (T024 open,
+  T025 and T026 closed); `/speckit-converge` for US1 found no gap.

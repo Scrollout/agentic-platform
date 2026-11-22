@@ -109,7 +109,7 @@ pass; `--check` fails on a stale file and passes after the script runs.
   it was given (production builds no non-durable machine; its `Config.Method` is judged by T009) (through a setup seam the brief names, e.g. the identity as a
   setup parameter, `method.Current()` by default)
 - [X] T007 Code author: `src/engine/cmd/engine/setup.go` takes the identity (T006); T006 passes
-- [ ] T008 Commit T001 to T007; push (owner go-ahead; say which jobs run) and fix until CI is
+- [X] T008 Commit T001 to T007; push (owner go-ahead; say which jobs run) and fix until CI is
   green; record the run in research
 
 **Checkpoint**: every engine build carries a true method identity.
@@ -152,8 +152,20 @@ under B.
   `workflow.go` (the lookup's `Key`, `Inputs` and `Method` taken whenever its `Key` is not empty;
   no activity call, order or condition changes); T009 and T010 pass, every existing test of
   `machine` and `durable` passes unchanged, and the recorded histories replay
-- [ ] T012 [US1] Commit; push (owner go-ahead) and fix until CI is green; fresh review of US1
+- [X] T012 [US1] Commit; push (owner go-ahead) and fix until CI is green; fresh review of US1
   (rules above); findings fixed or recorded as tasks; `/speckit-converge` for US1
+
+- [ ] T024 [US1] Review finding US1-S1 (fresh Sonnet review at 21dcc6b, suggestion): a selected
+  file or the identity file that cannot be read (permission, vanished, a folder) makes
+  `scripts/method-digest.py` exit 1 with a traceback, which `--check` cannot tell from a stale
+  identity; refuse it with exit 2 like a bad declaration (contract line, a new planted test,
+  then the code). Non-blocking; outside the MVP unless the owner pulls it in
+- [X] T025 [US1] Review finding US1-S2 (suggestion: no test that an include glob matching only
+  excluded files is accepted) closed: covered by `test_method_digest.py`
+  `test_a_changed_declaration_changes_it` (its `docs/*` include matches only excluded files after
+  the change, and the run must succeed)
+- [X] T026 [US1] Review finding US1-S3 (suggestion: a local `--check` counts untracked, not
+  ignored files) closed: the contract's rule (research R1, S8), what a Docker build of `src/` sees
 
 **Checkpoint**: after an upgrade no step is reused from the old method.
 
