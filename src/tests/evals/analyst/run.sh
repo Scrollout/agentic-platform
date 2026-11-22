@@ -2,9 +2,10 @@
 # Explicit entry point of the analyst evals (T025). Never run by scripts/check.sh's go test.
 #   sh src/tests/evals/analyst/run.sh graders   graders against hand-written proposals; no model, no Docker
 #   sh src/tests/evals/analyst/run.sh stub      the harness against a stub gateway; Docker, no key, no cost
-#   sh src/tests/evals/analyst/run.sh live      the real suite: every case 3 times through the gateway; COSTS MONEY
+#   sh src/tests/evals/analyst/run.sh live      the real suite: every case k times (default 3) through the gateway; COSTS MONEY
 # `live` fails loudly (exit 2) when the key file is missing; it never skips. Env: EVAL_KEY_FILE,
-# EVAL_CASES (comma list), EVAL_REPORT_DIR, EVAL_RUN_FLAGS, EVAL_TRIAL_TIMEOUT (README.md).
+# EVAL_CASES (comma list of either suite's cases), EVAL_TRIALS (k, 1 to 20), EVAL_REPORT_DIR,
+# EVAL_RUN_FLAGS, EVAL_TRIAL_TIMEOUT (README.md).
 set -eu
 cd "$(dirname "$0")/../.."   # src/tests
 mode=${1:-}

@@ -109,7 +109,7 @@ every trial passed, and refuse a `.` or `..` segment.
 
 **Purpose**: one live run of the two cases, with 10 trials each (research R3).
 
-- [ ] T008 [P] Test author (FR-010): new `src/tests/evals/analyst/inputs_test.go` (no build tag, no
+- [X] T008 [P] Test author (FR-010): new `src/tests/evals/analyst/inputs_test.go` (no build tag, no
   Docker) for two functions in a new `inputs.go`: `Selection(env string) (cases []Case,
   revisions []RevisionCase, err error)`: empty `env` gives every case of both suites; a
   comma list (spaces around a name trimmed, duplicates collapsed) gives the named cases of each
@@ -117,7 +117,7 @@ every trial passed, and refuse a `.` or `..` segment.
   it; and `TrialCount(env string) (int, error)`: empty gives `Trials` (3); a value matching
   `^[1-9][0-9]?$` and at most 20 is k (`1` and `20` pass); anything else (`0`, `21`, `-1`, `+5`,
   `010`, a leading space, `1e1`, `3.5`, `x`) is an error
-- [ ] T009 Harness author, a test author other than T008's (approval T001b; the harness is test
+- [X] T009 Harness author, a test author other than T008's (approval T001b; the harness is test
   code, so no code author touches it): `src/tests/evals/analyst/inputs.go` (T008);
   `harness_evals_test.go` and `revision_evals_test.go` use `Selection(os.Getenv("EVAL_CASES"))`
   and `TrialCount(os.Getenv("EVAL_TRIALS"))`, fail before any trial on an error, skip a test
@@ -125,7 +125,7 @@ every trial passed, and refuse a `.` or `..` segment.
   the cases' trial counts, so `quarantine_print_evals_test.go` is unchanged; `README.md` documents `EVAL_TRIALS` and the
   cross-suite `EVAL_CASES` and the limit (`run.sh live`'s 60 minutes fit the full suite only up to
   k of about 4); `run.sh graders` and `run.sh stub` pass
-- [ ] T010 Commit T008 and T009; they are pushed with T017 unless the owner wants CI first
+- [X] T010 Commit T008 and T009; they are pushed with T017 unless the owner wants CI first
 
 ---
 

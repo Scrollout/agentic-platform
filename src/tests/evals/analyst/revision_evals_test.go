@@ -4,7 +4,7 @@ package analyst
 
 // T155: the live revision cases. Each trial is one analyst call with the user message the engine
 // builds for the case (GradeRevision's input from RevisionInput), with no retry, graded by
-// GradeRevision; a case passes only when all Trials trials pass (pass^k). The test's name starts
+// GradeRevision; a case passes only when all k trials pass (pass^k). The test's name starts
 // with TestAnalystEvals so that `run.sh live` (-run 'TestAnalystEvals') runs it after the
 // description cases, and its stub test's with TestHarnessStub so that `run.sh stub` runs it.
 
@@ -16,14 +16,13 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	engine "github.com/agentic-platform/engine/slices"
 )
 
-// runRevision runs every revision case Trials times, one analyst call per trial. Outputs, and the
+// runRevision runs every revision case l.trials times, one analyst call per trial. Outputs, and the
 // message each case sends, go to dir.
 func (l *lab) runRevision(cases []RevisionCase, agentDir, agentFile, dir string) []CaseReport {
 	g := l.grader()
@@ -35,7 +34,7 @@ func (l *lab) runRevision(cases []RevisionCase, agentDir, agentFile, dir string)
 		msg := engine.AnalystMessage(in)
 		must(l.t, os.WriteFile(filepath.Join(dir, c.Name+".message.txt"), []byte(msg), 0o644))
 		cr := CaseReport{Name: c.Name, Adversarial: c.Adversarial, Attack: c.Attack, Passed: true, Quarantine: c.Quarantine}
-		for i := 1; i <= Trials; i++ {
+		for i := 1; i <= l.trials; i++ {
 			start := time.Now()
 			out, events, usage, stderr, err := l.analyst(agentDir, agentFile, msg)
 			tr := Trial{N: i, Attempts: 1, Duration: time.Since(start).Round(time.Millisecond).String(), Usage: usage}
@@ -86,40 +85,28 @@ func mergeReport(t *testing.T, dir string, reps []CaseReport) {
 	must(t, os.WriteFile(p, j, 0o644))
 }
 
-// revisionSelection is the revision cases EVAL_CASES names (all when it is unset).
-func revisionSelection() []RevisionCase {
-	cases := RevisionCases()
-	only := os.Getenv("EVAL_CASES")
-	if only == "" {
-		return cases
-	}
-	want := map[string]bool{}
-	for _, n := range strings.Split(only, ",") {
-		want[strings.TrimSpace(n)] = true
-	}
-	var sel []RevisionCase
-	for _, c := range cases {
-		if want[c.Name] {
-			sel = append(sel, c)
-		}
-	}
-	return sel
-}
-
-// TestAnalystEvalsRevision is the live revision suite (T155): every revision case Trials times
-// through the real gateway.
+// TestAnalystEvalsRevision is the live revision suite (T155): every revision case EVAL_CASES
+// names (default all) k times (EVAL_TRIALS, default Trials) through the real gateway.
 func TestAnalystEvalsRevision(t *testing.T) {
+	_, cases, err := Selection(os.Getenv("EVAL_CASES"))
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	k, err := TrialCount(os.Getenv("EVAL_TRIALS"))
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
 	key := keyFile(t) // fails loudly, never skips
 	root := repoRoot(t)
 	agentFile := filepath.Join(root, "src", "agents", "analyst.yaml")
 	if _, err := os.Stat(agentFile); err != nil {
 		t.Fatalf("the analyst agent definition is missing: %v", err)
 	}
-	cases := revisionSelection()
 	if len(cases) == 0 {
 		t.Skipf("EVAL_CASES %q names no revision case", os.Getenv("EVAL_CASES"))
 	}
 	l := newLab(t)
+	l.trials = k
 	l.gateway(key)
 	dir := reportDir(l)
 	sub := filepath.Join(dir, "revision")
@@ -127,7 +114,7 @@ func TestAnalystEvalsRevision(t *testing.T) {
 	ok := print(t, reps, sub)
 	mergeReport(t, dir, reps)
 	if !ok {
-		t.Fatal("the analyst failed at least one revision case (pass^3 needs all trials to pass)")
+		t.Fatalf("the analyst failed at least one revision case (pass^%d needs all trials to pass)", k)
 	}
 }
 

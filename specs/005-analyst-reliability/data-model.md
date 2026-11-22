@@ -9,7 +9,7 @@ One per eval job, at `EVAL_REPORT_DIR` (in CI `${{ github.workspace }}-eval-repo
 
 | Item | Meaning |
 |------|---------|
-| `report.json` | Every case of the job (the analyst job: both suites, merged by `mergeReport`): `name`, `passed`, `quarantined_by` (absent when counted), `trials[]` with `n`, `passed`, `results[]` |
+| `report.json` | Every case of the job (the analyst job: both suites, merged by `mergeReport`): `case` (its name), `passed`, `quarantined_by` (absent when counted), `trials[]` with `trial` (its number), `passed`, `results[]` |
 | `revision/` | The revision suite's trial files and its own `report.json` (the same cases as merged above) |
 | `<case>.trial<n>.out`, `.ndjson` | Each trial's answer and raw events |
 

@@ -94,6 +94,8 @@ type lab struct {
 	net    string
 	label  string
 	report string
+	// trials is k of pass^k for this run: how many times run and runRevision run each case.
+	trials int
 }
 
 func newLab(t testing.TB) *lab {
@@ -102,7 +104,7 @@ func newLab(t testing.TB) *lab {
 	if id == "" {
 		id = fmt.Sprintf("%d-%d", time.Now().Unix(), os.Getpid())
 	}
-	l := &lab{t: t, root: repoRoot(t), id: id, net: "apeval-" + id + "-net", label: "ap.eval.run=" + id}
+	l := &lab{t: t, root: repoRoot(t), id: id, net: "apeval-" + id + "-net", label: "ap.eval.run=" + id, trials: Trials}
 	if _, _, err := docker(context.Background(), nil, "version"); err != nil {
 		t.Fatalf("docker is not usable: %v", err)
 	}
@@ -293,14 +295,14 @@ func (l *lab) grader() *Grader {
 	return &Grader{Schemas: s, Pattern: p}
 }
 
-// run runs every case Trials times in order and returns the reports. Outputs go to dir.
+// run runs every case l.trials times in order and returns the reports. Outputs go to dir.
 func (l *lab) run(cases []Case, agentDir, agentFile, dir string) []CaseReport {
 	g := l.grader()
 	must(l.t, os.MkdirAll(dir, 0o755))
 	var reps []CaseReport
 	for _, c := range cases {
 		cr := CaseReport{Name: c.Name, Adversarial: c.Adversarial, Attack: c.Attack, Passed: true, Quarantine: c.Quarantine}
-		for i := 1; i <= Trials; i++ {
+		for i := 1; i <= l.trials; i++ {
 			start := time.Now()
 			out, events, usage, stderr, attempts, err := l.analystWithRetry(agentDir, agentFile, c.Description)
 			tr := Trial{N: i, Attempts: attempts, Duration: time.Since(start).Round(time.Millisecond).String(), Usage: usage}
@@ -333,7 +335,7 @@ func tail(s string, n int) string {
 func print(t testing.TB, reps []CaseReport, dir string) bool {
 	all := true
 	var b strings.Builder
-	fmt.Fprintf(&b, "\nanalyst evals: pass^%d per case\n", Trials)
+	fmt.Fprintf(&b, "\nanalyst evals: pass^%d per case\n", passK(reps))
 	for _, c := range reps {
 		kind := "functional"
 		if c.Adversarial {
@@ -362,6 +364,19 @@ func print(t testing.TB, reps []CaseReport, dir string) bool {
 	_ = os.WriteFile(filepath.Join(dir, "report.json"), j, 0o644)
 	t.Logf("report and raw outputs in %s", dir)
 	return all
+}
+
+// passK is the k of pass^k the reports were run with: the largest trial count of any case, or
+// Trials when no case has a trial.
+func passK(reps []CaseReport) int {
+	k := 0
+	for _, c := range reps {
+		k = max(k, len(c.Trials))
+	}
+	if k == 0 {
+		return Trials
+	}
+	return k
 }
 
 func verdict(b bool) string {
@@ -406,36 +421,32 @@ func keyFile(t *testing.T) string {
 	return abs
 }
 
-// TestAnalystEvals is the live suite (T025): every case Trials times through the real gateway.
+// TestAnalystEvals is the live suite (T025): every case EVAL_CASES names (default all) k times
+// (EVAL_TRIALS, default Trials) through the real gateway.
 func TestAnalystEvals(t *testing.T) {
+	cases, _, err := Selection(os.Getenv("EVAL_CASES"))
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	k, err := TrialCount(os.Getenv("EVAL_TRIALS"))
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
 	key := keyFile(t) // fails loudly, never skips
 	root := repoRoot(t)
 	agentFile := filepath.Join(root, "src", "agents", "analyst.yaml")
 	if _, err := os.Stat(agentFile); err != nil {
 		t.Fatalf("the analyst agent definition is missing: %v", err)
 	}
-	cases := Cases()
-	if only := os.Getenv("EVAL_CASES"); only != "" {
-		want := map[string]bool{}
-		for _, n := range strings.Split(only, ",") {
-			want[strings.TrimSpace(n)] = true
-		}
-		var sel []Case
-		for _, c := range cases {
-			if want[c.Name] {
-				sel = append(sel, c)
-			}
-		}
-		if len(sel) != len(want) {
-			t.Fatalf("EVAL_CASES %q names a case that does not exist", only)
-		}
-		cases = sel
+	if len(cases) == 0 {
+		t.Skipf("EVAL_CASES %q names no description case", os.Getenv("EVAL_CASES"))
 	}
 	l := newLab(t)
+	l.trials = k
 	l.gateway(key)
 	dir := reportDir(l)
 	if !print(t, l.run(cases, filepath.Dir(agentFile), "analyst.yaml", dir), dir) {
-		t.Fatal("the analyst failed at least one case (pass^3 needs all trials to pass)")
+		t.Fatalf("the analyst failed at least one case (pass^%d needs all trials to pass)", k)
 	}
 }
 
