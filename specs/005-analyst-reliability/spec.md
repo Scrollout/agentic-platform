@@ -36,6 +36,10 @@ keeps its outputs for 7 days).
   cases in one live run of only those cases (about $0.20), then one full analyst run with every
   case pass^3 (owner, SC-001). Noted by the analyze reviewer: 10 of 10 still passes a case that
   succeeds 90% of the time about a third of the time; the owner's bar stands.
+- Q: The diagnostic run (10 trials each) showed no failure, so there is no answer to diagnose
+  (FR-004) and nothing to fix (FR-005). Remove the quarantine without a fix? → A: Yes: FR-007's
+  "after the fix" holds with no fix; SC-001's 10 of 10 per case is met by that run, and a later
+  failure keeps its answer (US1) for a new task (owner, research R4).
 
 ## User Scenarios & Testing *(mandatory)*
 

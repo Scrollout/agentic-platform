@@ -194,3 +194,15 @@ every trial passed, and refuse a `.` or `..` segment.
 
 US1 first: it is small, needs no model, and makes every later failure readable. Then the harness
 inputs and one diagnostic run; the fixes follow the answers, not the guesses in research R4.
+
+## Findings of the final fresh review (T020, at 0a85192)
+
+- F1 (no block): T018's full run not yet recorded → T018.
+- F2 (no block): removing the quarantine without a fix was recorded in tasks and research only →
+  spec clarification added (owner's decision of 2026-11-22).
+- F3 (nit): a duplicate assertion in the open-task check's fixture test → closed: harmless, and an
+  existing test changes only with the owner's approval.
+- F4 (low): `scripts/ci-evals-summary.py` prints `pass^3` whatever k → backlog T192 (CI never sets
+  `EVAL_TRIALS`).
+- F5 (info): the failed-trials script exits 1 on an unwritable `$GITHUB_OUTPUT` → closed: the
+  step's failure makes `failure()` true, so the outputs are still kept (ADR 0078).
