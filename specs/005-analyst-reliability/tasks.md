@@ -98,7 +98,7 @@ every trial passed, and refuse a `.` or `..` segment.
   T002 to T004 and `scripts/tests/test_workflows*.py` pass
 - [X] T006 (CI run 45007221855 at 1976485 green, 26 of 26 jobs) [US1] Push (owner go-ahead; say which jobs run) and fix until CI is green; record the
   run in research
-- [ ] T007 [US1] Fresh review of US1 (rules above); findings fixed or recorded as tasks; then
+- [X] T007 (folded into T020's final fresh review, which covered US1: no blocking finding) [US1] Fresh review of US1 (rules above); findings fixed or recorded as tasks; then
   `/speckit-converge` for US1
 
 **Checkpoint**: a failed eval trial in CI leaves a readable artifact.
@@ -156,8 +156,8 @@ every trial passed, and refuse a `.` or `..` segment.
   `scripts/tests/test_eval_quarantine_open_task.py` still passes
 - [X] T016 (closed: SC-001's first part was met by T011, 10 of 10 each; the quarantine changes only counting, not the analyst; owner 2026-11-22) [US2] [US3] Evidence run (owner go-ahead, about $0.20), as T011: both cases 10 of 10
   (SC-001, first part); record in research. A failure: back to T012 with the new answer
-- [ ] T017 [US2] [US3] Commit T013 to T016; push (owner go-ahead) and fix until CI is green
-- [ ] T018 [US2] [US3] Full analyst run (owner go-ahead): `gh workflow run evals.yml --ref
+- [X] T017 (0a85192 pushed; CI run 45009410355 green 26/26) [US2] [US3] Commit T013 to T016; push (owner go-ahead) and fix until CI is green
+- [X] T018 (evals run 45012234940: all 21 analyst cases pass^3, none quarantined; the branch was added to the environment `dev` with the owner's OK, removed before the merge) [US2] [US3] Full analyst run (owner go-ahead): `gh workflow run evals.yml --ref
   005-analyst-reliability` (the analyst suite is chosen because its inputs changed since the last
   green evals run; check the `Choose eval suites` matrix); every analyst and revision case pass^3, none quarantined (SC-001,
   SC-003, FR-008); record the run and its cost in research; a failure: back to T012
@@ -197,7 +197,7 @@ inputs and one diagnostic run; the fixes follow the answers, not the guesses in 
 
 ## Findings of the final fresh review (T020, at 0a85192)
 
-- F1 (no block): T018's full run not yet recorded → T018.
+- F1 (no block): T018's full run not yet recorded → done in T018.
 - F2 (no block): removing the quarantine without a fix was recorded in tasks and research only →
   spec clarification added (owner's decision of 2026-11-22).
 - F3 (nit): a duplicate assertion in the open-task check's fixture test → closed: harmless, and an
