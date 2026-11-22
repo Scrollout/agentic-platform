@@ -253,3 +253,6 @@ terminal client do not change it, and a change to a check does (SC-002).
   45019168813) and 1.90 s with the method in the key (21dcc6b, check run 45037014176), one
   sample each on different runners, so no speed-up is claimed: no slower, within 1 s. US2's
   re-check is not on a run's path.
+- **CI**: US2 green in run 45039750716 (092f2b5); the B1 fix, US3 and the polish docs green in
+  run 45042675337 (43c600e), 26 of 26 jobs. US2 review round 2 closed B1; US3's review found no
+  blocking finding.

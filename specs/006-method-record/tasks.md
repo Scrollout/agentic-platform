@@ -205,7 +205,7 @@ before the answer; read under A it is as stored.
   `service.go` (the service's identity; the re-check before every read of a slice, outside the
   lock, under the slice's `changing` mutex, as research R4 "How" says; `find` keeps its contract), `checks.go` (whether each check ran); `src/engine/api/slices.go`
   (the view); T013 and T014 pass, and every existing test of `slices` and `api` passes unchanged
-- [ ] T016 [US2] Commit; push (owner go-ahead) and fix until CI is green; fresh review of US2;
+- [X] T016 [US2] Commit; push (owner go-ahead) and fix until CI is green; fresh review of US2;
   findings fixed or recorded; `/speckit-converge` for US2
 
 - [X] T027 [US2] Review finding US2-B1 (fresh Sonnet review at 092f2b5, BLOCKING, research R4
@@ -246,7 +246,7 @@ slice views.
   record read back); T017 passes. Nothing needed: the generated run-event type carries `method`
   and `contractEvent` keeps it; T017 passed at once and failed with a planted omission of
   `AttemptMade`'s method (3 of its 4 tests)
-- [ ] T019 [US3] Commit; push (owner go-ahead) and fix until CI is green; fresh review of US3;
+- [X] T019 [US3] Commit; push (owner go-ahead) and fix until CI is green; fresh review of US3;
   `/speckit-converge` for US3
 
 - [ ] T031 [US3] Review findings US3-S1, S2, S4, S5 (fresh Sonnet review at 43c600e, suggestions):
