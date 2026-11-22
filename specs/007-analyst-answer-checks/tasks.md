@@ -215,7 +215,7 @@ case pass^3, none quarantined.
   and the suite's `README.md` say the revision cases run through the platform's retry. `go vet
   -tags evals ./evals/analyst/` passes; `run.sh stub` with the owner's go-ahead, timed (research
   R3 cost); commit with `Tests-approved-by:`
-- [ ] T013 [US3] Push (owner go-ahead); live analyst evals dispatch (paid, owner go-ahead; the
+- [X] T013 [US3] Push (owner go-ahead); live analyst evals dispatch (paid, owner go-ahead; the
   branch added to environment `dev`'s branch policies first); record the run, each revision
   case's attempts and the cost in research; SC-003: every analyst and revision case pass^3, none
   quarantined. A failure keeps its outputs (ADR 0078) and becomes a backlog task; the owner
@@ -231,7 +231,7 @@ case pass^3, none quarantined.
   refusals, ADR 0081), `docs/log.md`, the [problem space](../../docs/overview/problem-space.md)
   state of N-013 and N-051; ADR 0081 and 0082 checked against what shipped;
   `python3 scripts/okf.py check` reports `OK`
-- [ ] T016 SC-004: record in research that an answer usable on the first attempt makes one
+- [X] T016 SC-004: record in research that an answer usable on the first attempt makes one
   analyst call (T004, T008 and the live run's attempts)
 - [ ] T017 Final fresh review of the whole feature (rules above) and `/speckit-converge`; findings
   fixed or recorded as tasks; FR-009: `git diff main -- src/agents/ src/engine/api/preview/2026-11-12-preview/slice-proposal.schema.json`

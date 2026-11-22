@@ -180,3 +180,14 @@ US2 fresh review (Sonnet, read-only worktree at 988be8f, judging run 45068904668
 finding; tasks T024 (open) and T025 (closed). `/speckit-converge` for US2: FR-003, FR-004,
 FR-005 and FR-010 are built (`kept.go`, `propose`, `slice.ExampleRules`) and tested; nothing
 appended beyond T024.
+
+## Live evals (T013)
+
+Evals run 45071292368 (dispatched at 988be8f, owner go-ahead, 2026-11-22; the branch added to
+environment `dev`): all four suites green (analyst, steps code, steps tests, steps review; the
+selector chose the steps suites too, since their inputs include the changed engine code). Analyst:
+all 21 cases pass^3, none quarantined (SC-003); every trial of every case, description and
+revision, took 1 attempt, so no live answer repeated a key or lost an ID, and an answer usable on
+the first attempt made one analyst call (SC-004, T016). `revise-inject-drop-rules` and
+`revise-inject-approvals-field` passed 3 of 3. The cost is in the jobs' summaries on the run page,
+which the API does not return (owner reads it).
