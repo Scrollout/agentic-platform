@@ -25,6 +25,16 @@ Accepted result, Method.
 FR-018 (record), FR-019 (reuse), and its research D8 (run records and reuse); Constitution
 Principle XX ("record the method, inputs, model, and rule versions").
 
+## Clarifications
+
+### Session 2026-11-22
+
+- Q: Is the method compared as a whole, or per step with only the parts that judge it? → A: As a
+  whole (owner): any change to the method re-runs every step and re-checks every slice
+  (Assumptions).
+- Found while planning (research R1): the engine's code is taken whole, not package by package,
+  so a change to any of its non-test code changes the method identity; FR-001 and FR-002 say so.
+
 ## User Scenarios & Testing *(mandatory)*
 
 The user is the developer who builds slices with the platform, and the project owner who
@@ -123,8 +133,8 @@ name the same one.
   ends or is resumed; a resumed run after an upgrade judges its remaining steps under the new
   method and does not reuse results from the old one.
 - A slice loaded under a new method whose checks cannot run (for example a check's service is
-  down) is shown with no current check results, never with its old ones, and cannot be built
-  until its checks run.
+  down) is shown with that check failed and the reason it could not run, never with its old
+  results, and cannot be built while it fails, as for any check that could not run today.
 - The pattern's declared version may still be changed by hand; a method change without a version
   change must still be detected.
 
@@ -134,9 +144,11 @@ name the same one.
 
 - **FR-001**: The platform MUST give its method one identity that covers every part that can
   change what is produced or accepted: the pattern declaration, the template, the step
-  definitions and their agents, the checks, the fixed procedures and the pinned agent runtime.
+  definitions and their agents, the checks, the fixed procedures, the engine code that runs and
+  judges the steps, and the pinned images and agent runtime they run on.
 - **FR-002**: The method identity MUST be the same for every build of the same source and MUST
-  differ when any part named in FR-001 differs; parts outside FR-001 MUST NOT change it.
+  differ when any part named in FR-001 differs. Documentation, the terminal client, the page,
+  tests and evals, and the pins of services that judge nothing MUST NOT change it.
 - **FR-003**: A step's accepted or open result MUST be reused only when it was produced under the
   current method identity, besides the conditions that apply today (same step, inputs, agent
   definition, model and review round).
@@ -180,8 +192,8 @@ name the same one.
 
 ## Assumptions
 
-- The method is compared as a whole: a change to any part of it makes every result judged under
-  the old method run again, even for a step that part does not touch. This trades some repeated
+- The method is compared as a whole (owner, 2026-11-22): a change to any part of it makes every
+  result judged under the old method run again, even for a step that part does not touch. This trades some repeated
   model calls after an upgrade for one simple, sound rule; finer reuse can come later.
 - The model id and the agent definition digest stay in the reuse rule as they are; the method
   identity is added to them.
