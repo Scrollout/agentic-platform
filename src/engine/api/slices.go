@@ -595,6 +595,10 @@ func sliceView(sl slices.Slice, artifactCount int) gen.Slice {
 		Goals: make([]gen.Goal, len(sl.Goals)), Terms: make([]gen.Term, len(sl.Terms)), Rules: make([]gen.Rule, len(sl.Rules)),
 		Questions: make([]gen.Question, len(sl.Questions)), RuleText: map[string]string{}}
 	v.Parts.Goals, v.Parts.Rules, v.Parts.Contract = sl.Parts.Goals, sl.Parts.Rules, sl.Parts.Contract
+	if sl.ChecksMethod != "" {
+		m := sl.ChecksMethod
+		v.ChecksMethod = &m
+	}
 	for i, g := range sl.Goals {
 		v.Goals[i] = gen.Goal{Id: g.ID, Text: g.Text}
 	}

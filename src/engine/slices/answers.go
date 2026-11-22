@@ -26,6 +26,9 @@ import (
 // The analyst runs without the lock. When the slice changed meanwhile, the revision is dropped:
 // QuestionNotOpen when one of the questions is no longer open, else OperationFailed.
 func (s *Service) Answer(ctx context.Context, id string, answers []Answer) (Slice, error) {
+	if err := s.current(ctx, id); err != nil {
+		return Slice{}, err
+	}
 	s.mu.Lock()
 	r, err := s.find(id)
 	if err != nil {
@@ -66,7 +69,7 @@ func (s *Service) Answer(ctx context.Context, id string, answers []Answer) (Slic
 		qs = append(qs, Question{ID: "Q-" + strconv.FormatUint(uint64(next), 10), About: q.About, Text: q.Text,
 			Options: slices.Clone(q.Options)})
 	}
-	sl.ID, sl.Questions, sl.History = cur.ID, qs, cur.History
+	sl.ID, sl.Questions, sl.History, sl.ChecksMethod = cur.ID, qs, cur.History, cur.ChecksMethod
 	rec := &record{slice: sl, baseline: base.baseline, compat: base.compat, lint: base.lint}
 	rec.dropped, rec.examplesBase = dropExamples(base.dropped, base.examplesBase, sl.Examples)
 	if err := setParts(&rec.slice); err != nil {
@@ -111,6 +114,9 @@ func (s *Service) Answer(ctx context.Context, id string, answers []Answer) (Slic
 
 // CheckAnswers refuses exactly as Answer would before it calls the analyst, and changes nothing.
 func (s *Service) CheckAnswers(id string, answers []Answer) error {
+	if err := s.current(context.Background(), id); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	r, err := s.find(id)

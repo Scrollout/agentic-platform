@@ -166,7 +166,7 @@ under B.
 **Independent Test**: the new tests below: a slice stored under A and read under B is re-checked
 before the answer; read under A it is as stored.
 
-- [ ] T013 [P] [US2] Test author: new `src/engine/slices/checks_method_test.go`: a slice service
+- [X] T013 [P] [US2] Test author: new `src/engine/slices/checks_method_test.go`: a slice service
   given identity B over a store holding a slice whose record has `checks_method` A (or none): `Get`,
   every operation that reads the slice (`Approve`, `Buildable`, `ReplaceGoals`, `Answer`,
   `ApprovedParts`, `CheckApprove`), `List`, and `Create` with the description of an approved stale
@@ -184,12 +184,12 @@ before the answer; read under A it is as stored.
   once; an `Approve` or `Answer` that lands during a re-check (between its start and its store) is
   kept, and the slice's results are current afterwards (research R4 "How"); a service without an
   identity re-checks nothing
-- [ ] T014 [P] [US2] Test author: new `src/engine/api/slices_checks_method_test.go`: `getSlice`
+- [X] T014 [P] [US2] Test author: new `src/engine/api/slices_checks_method_test.go`: `getSlice`
   answers `checks_method` (the engine's identity) when every check ran and none while one could
   not run, and the answer conforms to `slice.schema.json`; `listSlices`' summaries show the state
   that follows the re-check; `startRun` on a slice re-checked under a new method whose check now
   fails is refused as for any failing check
-- [ ] T015 [US2] Code author: `src/engine/slices/persist.go` (`checks_method` in the record),
+- [X] T015 [US2] Code author: `src/engine/slices/persist.go` (`checks_method` in the record),
   `service.go` (the service's identity; the re-check before every read of a slice, outside the
   lock, under the slice's `changing` mutex, as research R4 "How" says; `find` keeps its contract), `checks.go` (whether each check ran); `src/engine/api/slices.go`
   (the view); T013 and T014 pass, and every existing test of `slices` and `api` passes unchanged

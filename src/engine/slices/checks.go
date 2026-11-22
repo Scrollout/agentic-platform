@@ -216,12 +216,22 @@ func endsInFile(p string) bool {
 // compatibility runs oasdiff's comparison of the contract with base ("" before any contract of
 // the slice was approved). Each error-level finding fails the check and names the change; a
 // comparison that cannot run fails it too.
+// compatibilityRan is compatibility, and whether the comparison ran.
+func (s *Service) compatibilityRan(ctx context.Context, base, contract string) ([]Check, bool) {
+	findings, err := s.diff.Diff(ctx, base, contract)
+	return s.compatibilityOf(base, findings, err), err == nil
+}
+
 func (s *Service) compatibility(ctx context.Context, base, contract string) []Check {
+	findings, err := s.diff.Diff(ctx, base, contract)
+	return s.compatibilityOf(base, findings, err)
+}
+
+func (s *Service) compatibilityOf(base string, findings []ContractFinding, err error) []Check {
 	against := "the previously approved contract"
 	if base == "" {
 		against = "an empty document"
 	}
-	findings, err := s.diff.Diff(ctx, base, contract)
 	if err != nil {
 		s.log.Error("the contract comparison could not run", "check", CheckContractCompatibility, "error", err.Error())
 		return []Check{{Part: string(PartContract), Check: CheckContractCompatibility,
@@ -245,15 +255,22 @@ func (s *Service) compatibility(ctx context.Context, base, contract string) []Ch
 // and names its rule; warnings and info do not fail it; a lint that cannot run fails it too, and
 // so does no lint configured (fail closed, as a missing pattern does).
 func (s *Service) lintContract(ctx context.Context, contract string) []Check {
+	cs, _ := s.lintContractRan(ctx, contract)
+	return cs
+}
+
+// lintContractRan is lintContract, and whether the lint ran; no lint configured gives a result
+// that running again cannot change, so it counts as run.
+func (s *Service) lintContractRan(ctx context.Context, contract string) ([]Check, bool) {
 	if s.lint == nil {
 		return []Check{{Part: string(PartContract), Check: CheckContractLint,
-			Reason: "no lint is configured, so the contract is not shown to follow OpenAPI's rules"}}
+			Reason: "no lint is configured, so the contract is not shown to follow OpenAPI's rules"}}, true
 	}
 	findings, err := s.lint.Lint(ctx, contract)
 	if err != nil {
 		s.log.Error("the contract lint could not run", "check", CheckContractLint, "error", err.Error())
 		return []Check{{Part: string(PartContract), Check: CheckContractLint,
-			Reason: "the lint could not run, so the contract is not shown to follow OpenAPI's rules"}}
+			Reason: "the lint could not run, so the contract is not shown to follow OpenAPI's rules"}}, false
 	}
 	var out []Check
 	for _, f := range findings {
@@ -266,7 +283,7 @@ func (s *Service) lintContract(ctx context.Context, contract string) []Check {
 		out = []Check{{Part: string(PartContract), Check: CheckContractLint, Passed: true,
 			Reason: "no lint error under OpenAPI's standard rules"}}
 	}
-	return out
+	return out, true
 }
 
 // LintContract judges a contract as the ContractLint check judges a slice's (lintContract): it

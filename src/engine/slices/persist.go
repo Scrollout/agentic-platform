@@ -50,6 +50,9 @@ type (
 		// ExamplesBase is the slice's last examples that parsed; a record without it takes the
 		// examples it holds.
 		ExamplesBase *string `json:"examples_base,omitempty"`
+		// ChecksMethod is the method identity every check ran under (feature 006); a record
+		// without it, or with another, is checked again before it is shown.
+		ChecksMethod string `json:"checks_method,omitempty"`
 	}
 	diskSlice struct {
 		ID          string         `json:"id"`
@@ -140,7 +143,7 @@ func fromDiskChecks(cs []diskCheck) []Check {
 func encodeRecord(r *record) ([]byte, error) {
 	sl := clone(r.slice)
 	d := diskRecord{Format: recordFormat, Baseline: r.baseline, Compat: toDiskChecks(r.compat), Lint: toDiskChecks(r.lint),
-		Dropped: maps.Clone(r.dropped), ExamplesBase: &r.examplesBase,
+		Dropped: maps.Clone(r.dropped), ExamplesBase: &r.examplesBase, ChecksMethod: sl.ChecksMethod,
 		Slice: diskSlice{ID: sl.ID, Description: sl.Description, State: sl.State, Goals: sl.Goals, Terms: sl.Terms,
 			Rules: sl.Rules, Examples: sl.Examples, Contract: sl.Contract, Checks: toDiskChecks(sl.Checks),
 			Parts: diskParts{Goals: sl.Parts.Goals, Rules: sl.Parts.Rules, Contract: sl.Parts.Contract}}}
@@ -239,6 +242,12 @@ func (s *Service) decodeRecord(id string, b []byte) (*record, error) {
 		if !exampleID.MatchString(e) || !scenarioDigest.MatchString(digest) {
 			return nil, fmt.Errorf("dropped example ID %q", e)
 		}
+	}
+	if d.ChecksMethod != "" { // the contract's hash rule (slice.schema.json checks_method)
+		if _, err := s.schemas.ParseHash(d.ChecksMethod); err != nil {
+			return nil, fmt.Errorf("checks_method: %w", err)
+		}
+		sl.ChecksMethod = d.ChecksMethod
 	}
 	return &record{slice: sl, baseline: d.Baseline, compat: fromDiskChecks(d.Compat), lint: fromDiskChecks(d.Lint),
 		dropped: d.Dropped, examplesBase: base}, nil

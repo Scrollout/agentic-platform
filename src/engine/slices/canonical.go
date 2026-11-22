@@ -1,6 +1,7 @@
 package slices
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/agentic-platform/engine/canonical"
@@ -55,6 +56,9 @@ func contractHash(contract string) (string, error) {
 // JSON, whose SHA-256 is the hash its approval stores. A part not approved at its current content
 // is NotApproved, so what it returns is always what the developer approved.
 func (s *Service) ApprovedParts(id string) (map[string][]byte, error) {
+	if err := s.current(context.Background(), id); err != nil {
+		return nil, err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	r, err := s.find(id)

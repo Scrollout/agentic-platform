@@ -211,6 +211,10 @@ type Slice struct {
 	Approvals                                  []Approval // only those that hold
 	Checks                                     []Check
 	History                                    []HistoryEntry
+	// ChecksMethod is the method identity (hex) every check of the slice ran under; "" while a
+	// check could not run, or for a record written before feature 006. A service under another
+	// method runs the checks again before it shows them (ADR 0080).
+	ChecksMethod string
 	// ArtifactCount is the number of distinct artifacts stored for the slice's runs. The service
 	// does not keep runs; whoever serves the slice fills it from the run store.
 	ArtifactCount int `json:"artifact_count"`

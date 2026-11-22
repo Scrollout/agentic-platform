@@ -33,6 +33,9 @@ type Service struct {
 	now   func() time.Time
 	log   *slog.Logger
 
+	// method is the method identity the service's checks run under; zero re-checks nothing.
+	method string
+
 	mu   sync.Mutex
 	last int // the number of the last slice ID given out; IDs are never reused
 	// reserved holds the IDs Reserve gave out that no slice holds yet; CreateAs takes one.
@@ -91,7 +94,7 @@ func New(cfg Config) (*Service, error) {
 	}
 	s := &Service{schemas: cfg.Schemas, analyst: cfg.Analyst, diff: cfg.Diff, lint: cfg.Lint, pattern: cfg.Pattern,
 		attempts: attemptsOf(cfg.Pattern), steps: stepsOf(cfg.Pattern), now: now, log: log, reserved: map[string]bool{}, unsaved: map[string]bool{}, slices: map[string]*record{}, changing: map[string]*sync.Mutex{},
-		records: cfg.Records}
+		records: cfg.Records, method: cfg.Method}
 	if s.records != nil {
 		if err := s.load(); err != nil {
 			return nil, err
@@ -262,7 +265,7 @@ func (s *Service) build(ctx context.Context, description string) (Result, *recor
 	if strings.TrimSpace(description) == "" {
 		return Result{}, nil, &Error{Code: "NarrowDescription", Detail: "the description is empty; describe one use case"}
 	}
-	if sl, ok := s.approvedFor(description); ok {
+	if sl, ok := s.approvedFor(ctx, description); ok {
 		return Result{Slice: sl, Reused: true}, nil, nil
 	}
 
@@ -401,7 +404,18 @@ func (s *Service) unusable(sl *Slice, questions []QuestionDraft) (faults, links 
 }
 
 // approvedFor returns the approved slice of exactly this description, if there is one.
-func (s *Service) approvedFor(description string) (Slice, bool) {
+func (s *Service) approvedFor(ctx context.Context, description string) (Slice, bool) {
+	s.mu.Lock()
+	var same []string
+	for id, r := range s.slices {
+		if r.slice.Description == description {
+			same = append(same, id)
+		}
+	}
+	s.mu.Unlock()
+	for _, id := range same {
+		_ = s.current(ctx, id) // a slice deleted meanwhile is simply not offered
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, r := range s.slices {
@@ -414,6 +428,9 @@ func (s *Service) approvedFor(description string) (Slice, bool) {
 
 // Get returns a slice, or NotFound.
 func (s *Service) Get(id string) (Slice, error) {
+	if err := s.current(context.Background(), id); err != nil {
+		return Slice{}, err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	r, err := s.find(id)
@@ -425,6 +442,15 @@ func (s *Service) Get(id string) (Slice, error) {
 
 // List returns every slice, newest first (by the number of its ID).
 func (s *Service) List() []Slice {
+	s.mu.Lock()
+	ids := make([]string, 0, len(s.slices))
+	for id := range s.slices {
+		ids = append(ids, id)
+	}
+	s.mu.Unlock()
+	for _, id := range ids {
+		_ = s.current(context.Background(), id) // a slice deleted meanwhile is not listed
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := make([]Slice, 0, len(s.slices))
@@ -476,16 +502,15 @@ func (s *Service) ReplaceContract(ctx context.Context, id, contract string) (Sli
 // when the baseline changed meanwhile do they run again, at most maxRechecks times, then the
 // change ends with OperationFailed. The change is stored under the lock before it is reported.
 func (s *Service) replace(ctx context.Context, id string, part Part, set func(*Slice)) (Slice, error) {
+	if err := s.current(ctx, id); err != nil {
+		return Slice{}, err
+	}
 	s.mu.Lock()
 	if _, err := s.find(id); err != nil {
 		s.mu.Unlock()
 		return Slice{}, err
 	}
-	m := s.changing[id]
-	if m == nil {
-		m = &sync.Mutex{}
-		s.changing[id] = m
-	}
+	m := s.changingLocked(id)
 	s.mu.Unlock()
 	m.Lock()
 	defer m.Unlock()
@@ -519,12 +544,15 @@ func (s *Service) replace(ctx context.Context, id string, part Part, set func(*S
 			runs++
 			ran = &contractRun{baseline: next.baseline, contract: next.slice.Contract}
 			s.mu.Unlock()
-			ran.compat = s.compatibility(ctx, ran.baseline, ran.contract)
-			ran.lint = s.lintContract(ctx, ran.contract)
+			var compatRan, lintRan bool
+			ran.compat, compatRan = s.compatibilityRan(ctx, ran.baseline, ran.contract)
+			ran.lint, lintRan = s.lintContractRan(ctx, ran.contract)
+			ran.all = compatRan && lintRan
 			continue
 		}
 		if part == PartContract {
 			next.compat, next.lint = ran.compat, ran.lint
+			next.slice.ChecksMethod = s.methodIf(ran.all)
 		}
 		res, err := s.apply(r, next, part)
 		s.mu.Unlock()
@@ -540,6 +568,7 @@ const maxRechecks = 3
 type contractRun struct {
 	baseline, contract string
 	compat, lint       []Check
+	all                bool // both ran
 }
 
 // apply finishes a change of part from r to next, whose compatibility and lint results are
@@ -566,6 +595,9 @@ func (s *Service) apply(r, next *record, part Part) (Slice, error) {
 // the part gives ContradictionOpen; a failing check gives PartFailsChecks, or PatternDoesNotFit
 // for a contract whose only failures are pattern conditions, each listing the failures.
 func (s *Service) Approve(ctx context.Context, id string, part Part, contentHash string) (Slice, error) {
+	if err := s.current(ctx, id); err != nil {
+		return Slice{}, err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	r, err := s.approvable(id, part, contentHash)
@@ -596,6 +628,9 @@ func (s *Service) Approve(ctx context.Context, id string, part Part, contentHash
 
 // CheckApprove refuses exactly as Approve would, and approves nothing.
 func (s *Service) CheckApprove(id string, part Part, contentHash string) error {
+	if err := s.current(context.Background(), id); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	_, err := s.approvable(id, part, contentHash)
@@ -649,6 +684,9 @@ func (s *Service) approvable(id string, part Part, contentHash string) (*record,
 // PatternDoesNotFit listing the failing pattern conditions, then NotApproved while a part holds
 // no approval at its current hash or any check fails.
 func (s *Service) Buildable(id string) error {
+	if err := s.current(context.Background(), id); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	r, err := s.find(id)
@@ -735,8 +773,10 @@ func (s *Service) recheck(ctx context.Context, r *record, contractChanged bool) 
 		return err
 	}
 	if contractChanged {
-		r.compat = s.compatibility(ctx, r.baseline, r.slice.Contract)
-		r.lint = s.lintContract(ctx, r.slice.Contract)
+		var compatRan, lintRan bool
+		r.compat, compatRan = s.compatibilityRan(ctx, r.baseline, r.slice.Contract)
+		r.lint, lintRan = s.lintContractRan(ctx, r.slice.Contract)
+		r.slice.ChecksMethod = s.methodIf(compatRan && lintRan)
 	}
 	r.slice.Checks = append(append(cs, r.compat...), r.lint...)
 	return nil
