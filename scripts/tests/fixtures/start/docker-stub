@@ -38,6 +38,8 @@ derived from the input; with `sha256sum`, prints STUB_CERT_SHA256 and "  -".)
 STUB_CERT_SHA256    the fingerprint the sha256sum call prints (default hashlib.sha256(b"ap-cert").hexdigest())
 STUB_COMPOSE_UP_FAIL  a message; a `compose` call with `up` among its arguments prints it on stderr and
                     exits 1 (for "address already in use"); other calls are unaffected
+STUB_ENGINE_STOPPED  when "1", `docker ps ...` prints nothing and exits 0 (no engine container is running,
+                    as after a reboot); otherwise it prints one fake container id line (the engine runs)
 """
 import hashlib, json, os, re, sys
 argv = sys.argv[1:]
@@ -134,6 +136,10 @@ if "run" in argv and "cli" in argv and "STUB_EXIT_CLI" in os.environ:
 
 # --- answers added for ap start / ap up --listen; a non-zero STUB_EXIT wins over all of them ---
 if code == 0:
+    if argv[:1] == ["ps"]:
+        if os.environ.get("STUB_ENGINE_STOPPED") != "1":
+            print("0123456789ab")
+        sys.exit(0)
     if argv[:1] == ["info"]:
         fmt = opt(["--format", "-f"]) or ""
         if "Runtimes" in fmt:

@@ -737,7 +737,7 @@ cmd_up() {
 
   if [ -n "$old_tokens" ]; then
     tokens=$old_tokens
-    say "the platform's session is already started; keeping its tokens"
+    say "keeping the session's tokens"
   else
     # A new session: fresh tokens, one per kind of caller (research D12) and one per service the
     # engine calls (contract-lint, the analyst, the check service, the project worker; research
@@ -939,8 +939,15 @@ cmd_start() {
   check_remote
   resolve_override
   check_session
+  # Started: a session and its engine running. A session file outlives its containers (a reboot,
+  # stopped containers), so the file alone does not say the platform runs (backlog T166).
   started=''
-  if [ -e "$sess" ] || [ -L "$sess" ]; then started=1; fi
+  if [ -e "$sess" ] || [ -L "$sess" ]; then
+    engine=$(docker ps -q --filter "label=com.docker.compose.project=$compose_project" \
+      --filter label=com.docker.compose.service=engine --filter status=running) ||
+      die 1 "cannot ask Docker whether the platform's engine is running; see the messages above"
+    [ -z "$engine" ] || started=1
+  fi
 
   if [ -n "$check" ]; then
     [ -z "$make_proj" ] || tell "would make the projects folder $proj"

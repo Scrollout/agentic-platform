@@ -197,7 +197,10 @@ What `start` does, in this order:
 4. Runs `up` with the resolved key file, projects folder and remote options, and exits with its
    code. `up` verifies every image and starts the platform, as before.
 5. Prints, on standard error, `start: started` or `start: already started; nothing changed`,
-   then the run page's address (or, with remote access, `up`'s remote lines).
+   then the run page's address (or, with remote access, `up`'s remote lines). The platform is
+   already started when it has a session and its engine is running; a session whose containers
+   stopped (after a reboot, for example) is started again and prints `start: started`. When
+   Docker cannot say whether the engine runs, `start` exits 1.
 
 `start --check` does steps 1 and 2, makes the builds of step 3 that decide what changed (no image's
 reproducible build when its quick build settles it, ADR 0064), and prints, changing no
