@@ -148,3 +148,7 @@ Reproduced with Go 1.26.11 (scratch module, not committed):
   faults is unchanged. The cross-part test's change (expect the refusal, the slice unchanged) is
   put to the owner before its brief (Engineering Principle "Existing tests change only with the
   owner's approval"), as are the eval files of R3.
+- **Owner answers (T002, 2026-11-22)**: (a) the cross-part test expects the refusal: approved;
+  (b) `runRevision` through `Service.Answer` and the stub test's fixtures and attempts: approved;
+  (c) `dockerAnalyst` parses with `ParseProposal` and (d) `revision.go`'s helper analyst and
+  header and the suite's README: approved. Each commit carries `Tests-approved-by:`.

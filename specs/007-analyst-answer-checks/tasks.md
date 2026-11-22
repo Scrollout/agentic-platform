@@ -51,7 +51,8 @@ starts after US1's code is committed.
   F3 the retry message with no previous proposal), 4 MEDIUM, 3 LOW, fixed at their source (spec
   Clarifications, research R1-R3, data model). Round 2 (fresh Sonnet, at f213664): all fixed; 0
   CRITICAL, 0 HIGH, N1 MEDIUM and N2 LOW (the contract draft lacked the goal exception and the
-  quoting) fixed in wording. Gate passed.
+  quoting) fixed in wording. Round 3 (fresh Sonnet, at fb51519): both fixed, no finding. Gate
+  passed.
 
 ---
 
@@ -67,7 +68,7 @@ starts after US1's code is committed.
   `src/engine/api/preview/2026-11-12-preview/openapi.yaml` gain the sentences there;
   `scripts/generate.sh` regenerates and `scripts/generate.sh --check` passes; the draft then
   links to the authoritative copies
-- [ ] T002 Ask the owner, one direct question per change, quoting it (research R3, R5): (a)
+- [X] T002 Ask the owner, one direct question per change, quoting it (research R3, R5): (a)
   `src/engine/slices/slices_crosspart_test.go`
   `TestAnAnswerThatRevisesAPartWithdrawsApprovalsOfPartsItNowBreaks` expects the refusal
   (`OperationFailed` naming G-2, the slice's parts, approvals, questions and history unchanged)
