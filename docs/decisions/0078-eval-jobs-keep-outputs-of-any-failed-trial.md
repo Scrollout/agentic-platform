@@ -39,7 +39,8 @@ Sources: [Feature 005 research, R1 and R2](../../specs/005-analyst-reliability/r
 # Decision
 
 - An eval job uploads its report folder, kept 7 days, when the job failed or any trial in any of
-  its reports failed, a quarantined case's included, or a report cannot be read.
+  its reports failed, a quarantined case's included, or a report cannot be read: the upload's
+  condition is `(failure() || <any trial failed>) && <the scan passed>`.
 - A job with no failed trial uploads nothing.
 - The credential scan runs first, as in ADR 0050; on a match nothing is uploaded and the job
   fails.

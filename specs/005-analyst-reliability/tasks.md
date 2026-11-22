@@ -37,7 +37,11 @@ cause and fix come from one diagnostic run; then the quarantine goes and the evi
   model than the author's, in its own worktree with the uncommitted and untracked files, judging
   the CI run; at most 3 rounds. Then `/speckit-converge`.
 - **Gate**: `/speckit-analyze` (fresh reviewer) must report no CRITICAL or HIGH before T001, and
-  again after any change to spec, plan, tasks or a design artifact.
+  again after any change to spec, plan, tasks or a design artifact. Round 1 (fresh Sonnet, at
+  a6f4ae8): 2 HIGH (A1 the upload condition needs parentheses; A2 `quarantine_test.go` pins the
+  quarantine), 6 MEDIUM, 5 LOW; all fixed in spec (FR-010, an edge case, the Assumption), plan,
+  research, data model, quickstart, ADR 0078 and these tasks; A4 closed backlog T191 (wrong
+  premise); A13 (10 of 10 is weak evidence) noted in the spec, the owner's bar stands.
 
 ---
 
@@ -45,10 +49,14 @@ cause and fix come from one diagnostic run; then the quarantine goes and the evi
 
 - [ ] T001 Ask the owner for the existing-test approvals the plan lists, each quoted: (a)
   `scripts/tests/test_workflows_eval_artifacts.py`, rules `scan_step` and `upload_condition`
-  accept `failure() || steps.failed.outputs.failed == 'true'` (and the upload's
-  `... && steps.scan.outcome == 'success'`), their planted violations kept (research R2); (b)
+  accept the scan's `failure() || steps.failed.outputs.failed == 'true'` and the upload's
+  `(failure() || steps.failed.outputs.failed == 'true') && steps.scan.outcome == 'success'`,
+  their planted violations kept (research R2); (b)
   `src/tests/evals/analyst/harness_evals_test.go` and `revision_evals_test.go` take their case
-  selection and k from the new `inputs.go` (research R3); record each answer in this file
+  selection and k from the new `inputs.go`, and `print` derives k from each case's trial count
+  (research R3); (c) for T015: `Quarantine: "T185"` removed from `cases.go` and `revision.go`, and
+  `quarantine_test.go`'s `want` becomes empty (no case quarantined); record each answer in this
+  file. A grader change (T013, T014) is asked for when its cause is known
 
 ---
 
@@ -65,7 +73,9 @@ every trial passed, and refuse a `.` or `..` segment.
   `scripts/ci-evals-failed-trials.py <dir>` (research R2, data model "has a failed trial"):
   writes `failed=true` to `$GITHUB_OUTPUT` when any `trials[].passed` is `false` in any
   `report.json` under `<dir>` (top level and `revision/`), a quarantined case's included, or a
-  `report.json` cannot be read; `failed=false` when every trial passed or no report exists; prints
+  `report.json` cannot be read or has an unexpected shape (not a list of cases; a case without a
+  non-empty `trials` list; a trial without a boolean `passed`), each with a planted case;
+  `failed=false` when every trial passed or no report exists; prints
   the reports read and each failed trial (`<case> trial <n>`); exit 0 in all these cases, 2 on a
   wrong argument count; without `$GITHUB_OUTPUT` it prints the line to standard output
 - [ ] T003 [P] [US1] Test author: new `scripts/tests/test_workflows_eval_outputs_kept.py` (helpers
@@ -74,7 +84,9 @@ every trial passed, and refuse a `.` or `..` segment.
   segment; a step with `id: failed` and `if: always()` runs
   `python3 scripts/ci-evals-failed-trials.py "$EVAL_REPORT_DIR"` after the step `run` and before
   the scan; the scan's `if` is `failure() || steps.failed.outputs.failed == 'true'`; the upload's
-  `if` is that condition `&& steps.scan.outcome == 'success'`
+  `if` is `(failure() || steps.failed.outputs.failed == 'true') && steps.scan.outcome ==
+  'success'`, with planted violations for the form without parentheses and for an upload that
+  would run after a scan match on a green job
 - [ ] T004 [US1] Test author (approval T001a): `scripts/tests/test_workflows_eval_artifacts.py`
   rules `scan_step` and `upload_condition` accept exactly the new conditions; their planted
   violations still fail; the module docstring says so
@@ -95,18 +107,22 @@ every trial passed, and refuse a `.` or `..` segment.
 
 **Purpose**: one live run of the two cases, with 10 trials each (research R3).
 
-- [ ] T008 [P] Test author: new `src/tests/evals/analyst/inputs_test.go` (no build tag, no
+- [ ] T008 [P] Test author (FR-010): new `src/tests/evals/analyst/inputs_test.go` (no build tag, no
   Docker) for two functions in a new `inputs.go`: `Selection(env string) (cases []Case,
   revisions []RevisionCase, err error)`: empty `env` gives every case of both suites; a
-  comma list (spaces trimmed) gives the named cases of each suite in suite order; a name in
-  neither suite, or an empty name, is an error naming it; and `TrialCount(env string) (int,
-  error)`: empty gives `Trials` (3); "a whole number 1 to 20" is k; anything else (`0`, `21`,
-  `-1`, `3.5`, `x`) is an error
-- [ ] T009 Code author (approval T001b): `src/tests/evals/analyst/inputs.go` (T008);
+  comma list (spaces around a name trimmed, duplicates collapsed) gives the named cases of each
+  suite in suite order; a name in neither suite, or an empty or blank name, is an error naming
+  it; and `TrialCount(env string) (int, error)`: empty gives `Trials` (3); a value matching
+  `^[1-9][0-9]?$` and at most 20 is k (`1` and `20` pass); anything else (`0`, `21`, `-1`, `+5`,
+  `010`, a leading space, `1e1`, `3.5`, `x`) is an error
+- [ ] T009 Harness author, a test author other than T008's (approval T001b; the harness is test
+  code, so no code author touches it): `src/tests/evals/analyst/inputs.go` (T008);
   `harness_evals_test.go` and `revision_evals_test.go` use `Selection(os.Getenv("EVAL_CASES"))`
   and `TrialCount(os.Getenv("EVAL_TRIALS"))`, fail before any trial on an error, skip a test
-  whose suite has no named case, and print `pass^<k>`; `README.md` documents `EVAL_TRIALS` and the
-  cross-suite `EVAL_CASES`; `run.sh graders` and `run.sh stub` pass
+  whose suite has no named case; `print` keeps its signature and prints `pass^<k>` with k from
+  the cases' trial counts, so `quarantine_print_evals_test.go` is unchanged; `README.md` documents `EVAL_TRIALS` and the
+  cross-suite `EVAL_CASES` and the limit (`run.sh live`'s 60 minutes fit the full suite only up to
+  k of about 4); `run.sh graders` and `run.sh stub` pass
 - [ ] T010 Commit T008 and T009; they are pushed with T017 unless the owner wants CI first
 
 ---
@@ -115,7 +131,7 @@ every trial passed, and refuse a `.` or `..` segment.
 
 **Goal**: `example` and `revise-inject-approvals-field` pass every trial.
 
-**Independent Test**: T019's 10-trial run passes 10 of 10 per case.
+**Independent Test**: T016's 10-trial run passes 10 of 10 per case.
 
 - [ ] T011 [US2] [US3] Diagnostic run (owner go-ahead, about $0.20, about 6 minutes), on the host:
   `EVAL_CASES=example,revise-inject-approvals-field EVAL_TRIALS=10 sh
@@ -124,22 +140,24 @@ every trial passed, and refuse a `.` or `..` segment.
   case, the cause, the evidence (trial, grader, the lines of the answer that show it) and whether
   the analyst or the grader is wrong (FR-004). No failure in 10 trials of a case: ask the owner
   (research R4)
-- [ ] T013 [US2] Fix `example` at its cause (FR-005): the instruction
-  (`src/agents/analyst/instruction.md`, generic, never the eval's own description or values), or,
-  if the grader misreads a correct proposal, `content.go`'s `Content` with a new good proposal
+- [ ] T013 [US2] Fix `example` at its cause (FR-005): by a code author, the instruction
+  (`src/agents/analyst/instruction.md`, generic, never the eval's own description or values); or,
+  if the grader misreads a correct proposal, by a test author, `content.go`'s `Content` with a new good proposal
   that shows order the way the failing answer did and a planted one with no order (approval asked
   first; FR-006); `run.sh graders` passes
 - [ ] T014 [US3] Fix `revise-inject-approvals-field` at its cause, as T013 (the instruction's
-  "Revising a proposal", or a revision grader with its planted cases; approval for a grader)
-- [ ] T015 [US2] [US3] Remove `Quarantine: "T185"` from `cases.go` and `revision.go`
-  (approval asked first, quoting the two lines) and the "Quarantined now" sentence of
+  "Revising a proposal" by a code author, or a revision grader with its planted cases by a test
+  author; approval for a grader)
+- [ ] T015 [US2] [US3] Test author (approval T001c): remove `Quarantine: "T185"` from `cases.go`
+  and `revision.go`, empty `quarantine_test.go`'s `want`, and remove the "Quarantined now" sentence of
   `src/tests/evals/analyst/README.md`; T185 checked in `specs/backlog.md` in the same commit, so
   `scripts/tests/test_eval_quarantine_open_task.py` still passes
 - [ ] T016 [US2] [US3] Evidence run (owner go-ahead, about $0.20), as T011: both cases 10 of 10
   (SC-001, first part); record in research. A failure: back to T012 with the new answer
 - [ ] T017 [US2] [US3] Commit T013 to T016; push (owner go-ahead) and fix until CI is green
 - [ ] T018 [US2] [US3] Full analyst run (owner go-ahead): `gh workflow run evals.yml --ref
-  005-analyst-reliability`; every analyst and revision case pass^3, none quarantined (SC-001,
+  005-analyst-reliability` (the analyst suite is chosen because its inputs changed since the last
+  green evals run; check the `Choose eval suites` matrix); every analyst and revision case pass^3, none quarantined (SC-001,
   SC-003, FR-008); record the run and its cost in research; a failure: back to T012
 
 ---
@@ -147,9 +165,12 @@ every trial passed, and refuse a `.` or `..` segment.
 ## Phase 5: Polish
 
 - [ ] T019 Docs: `docs/log.md` (implementation), the problem space (N-013 state and spec),
-  any concept the shipped behaviour contradicts; `python3 scripts/okf.py check` reports OK
+  any concept the shipped behaviour contradicts; `python3 scripts/okf.py check` reports OK; SC-002:
+  name the eval job whose failed trial left an artifact, or, if none failed during the feature,
+  file a backlog task to check the first one
 - [ ] T020 Final fresh review of the whole feature (rules above) and `/speckit-converge`; findings
-  fixed or recorded as tasks
+  fixed or recorded as tasks; FR-009: `git diff main -- src/agents/analyst.yaml
+  src/engine/api/preview` shows no model, pin or schema change
 - [ ] T021 Before the owner's merge: read the branch's `evals-current` output; no suite pending
 
 ---

@@ -64,7 +64,7 @@ analyst's instruction or one grader
 | XIX. Evals | Pass | The instruction change passes the full analyst suite (SC-001); deterministic graders only; a grader change keeps its planted cases failing (FR-006) |
 | XX. Deterministic acceptance | Not affected | Engine checks unchanged |
 | Checks prove they can fail | Pass | Each new workflow rule and the script have a clean and a planted case |
-| Existing tests change only with approval | Pass, by approval | Listed below; each asked for before its brief |
+| Existing tests change only with approval | Pass, by approval | Listed below; each asked for before its brief; the harness, graders and eval cases are changed by test authors, never by the author of the code they judge (the analyst's instruction) |
 | Fix the cause | Pass | The cause is read from failing answers before any change (FR-004); the quarantine ends with its task |
 | Fresh review | Pass | A fresh read-only reviewer per story and before done, judging the CI run |
 | Layout, Clean tree | Pass | `scripts/`, `src/tests`, `src/agents`, `.github` only |
@@ -116,12 +116,16 @@ scripts/tests/test_ci_evals_failed_trials.py     # new
 scripts/tests/test_workflows_eval_outputs_kept.py  # new: no `..` in EVAL_REPORT_DIR; the `failed` step and its use
 scripts/tests/test_workflows_eval_artifacts.py   # existing: scan_step and upload_condition rules (approval)
 src/tests/evals/analyst/
+├── inputs.go                 # new: Selection, TrialCount (research R3)
+├── inputs_test.go            # new
 ├── harness_evals_test.go     # existing: EVAL_CASES across both suites, EVAL_TRIALS (approval)
 ├── revision_evals_test.go    # existing: the same (approval)
 ├── cases.go, revision.go     # existing: quarantine removed (approval)
+├── quarantine_test.go        # existing: no case quarantined any more (approval)
 ├── content.go                # existing: only if R4 finds the grader wrong (approval)
 └── README.md                 # EVAL_TRIALS, EVAL_CASES, no quarantine
 src/agents/analyst/instruction.md                # only if R4 finds the analyst wrong
+specs/backlog.md                                 # T185 checked
 ```
 
 **Structure Decision**: the change lives in the evals workflow, one new script, the analyst
@@ -130,7 +134,8 @@ the model pin and the proposal schema do not change.
 
 **Existing tests expected to change** (each needs the owner's approval of that change, asked
 before its brief): `test_workflows_eval_artifacts.py` (R2); `harness_evals_test.go` and
-`revision_evals_test.go` (R3); `cases.go` and `revision.go` (quarantine removed); `content.go` and
+`revision_evals_test.go` (R3); `cases.go`, `revision.go` and `quarantine_test.go` (quarantine
+removed); `content.go` and
 its self-test fixtures only if R4 finds the grader wrong.
 
 ## Exceptions

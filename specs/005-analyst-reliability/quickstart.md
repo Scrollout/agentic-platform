@@ -29,4 +29,5 @@ From the repository root. Steps 3 to 5 cost money and need the owner's go-ahead.
    `evals-analyst-<attempt>` holding `report.json`, `revision/` and every trial's files (SC-002).
 
 5. **Full analyst run** (SC-001): `gh workflow run evals.yml --ref 005-analyst-reliability`;
-   expected: every analyst and revision case pass^3, none quarantined (SC-003).
+   the analyst suite runs because its inputs changed since the last green evals run (check the
+   `Choose eval suites` job's matrix before it starts); expected: every analyst and revision case pass^3, none quarantined (SC-003).

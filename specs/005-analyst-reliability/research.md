@@ -11,7 +11,7 @@ Decisions marked *owner* were put to the project owner as direct questions.
 | S1 | Evals run 44888638411 (`main`, `d67edc6`, 2026-11-21), job `Evals: analyst` (136799420053), its log read through the API 2026-11-22: `example` trial 1 failed `ExampleContent` ("no scenario creates two notes and expects them listed in creation order"), trials 2 and 3 passed; `revise-inject-approvals-field` trial 2 failed `FullyLinked` (no rule has a scenario under its `Rule:` block), `ExamplesPresent` ("the examples hold no scenario"), `KeepsIDs` (every `R-n/E-m` gone) and `AnswersApplied`, while `OutputIsOneProposal` and `SchemaValid` passed; trials 1 and 3 passed. Step "Keep the failed job's eval outputs" failed: `Invalid pattern '/home/runner/work/agentic-platform/agentic-platform/../eval-report'. Relative pathing '.' and '..' is not allowed.` The run has no artifact |
 | S2 | `.github/workflows/evals.yml` on `main`: job-level `EVAL_REPORT_DIR: ${{ github.workspace }}/../eval-report` ("the runner context is not available in a job-level env; the workspace's parent is"); the scan step `if: failure()`, the upload `if: failure() && steps.scan.outcome == 'success'`, `path: ${{ env.EVAL_REPORT_DIR }}`. `scripts/tests/test_workflows_eval_artifacts.py` pins the path expression, the scan's `if: failure()` and the upload condition; `scripts/tests/test_workflows.py` requires `EVAL_REPORT_DIR` in the job-level env only |
 | S3 | [GitHub Actions, contexts: context availability](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability): `jobs.<job_id>.env` may use `github`, `needs`, `strategy`, `matrix`, `vars`, `secrets`, `inputs`, not `runner`. [Workflow artifacts](https://docs.github.com/en/actions/concepts/workflows-and-actions/workflow-artifacts) |
-| S4 | The analyst evals on `main`: `harness_evals_test.go` (`TestAnalystEvals`: `EVAL_CASES` selection fails with "names a case that does not exist" when a name is not an analyst case; `run` loops `Trials` times; each trial's `<case>.trial<n>.out` and `.ndjson` and `report.json` go to the report folder), `revision_evals_test.go` (`TestAnalystEvalsRevision` skips when `EVAL_CASES` names no revision case; report under `revision/`), `cases.go` (`Trials = 3`), `content.go` (`Content`, rule 4: a scenario whose non-`Then` steps hold at least two distinct quoted texts and one `Then` step holding at least two of them in that order), `run.sh live` (`-run 'TestAnalystEvals'`, which matches both tests); `grade_test.go` and `revision_test.go` assert `Trials == 3`. `scripts/ci-evals-summary.py` reads only `$EVAL_REPORT_DIR/report.json` |
+| S4 | The analyst evals on `main`: `harness_evals_test.go` (`TestAnalystEvals`: `EVAL_CASES` selection fails with "names a case that does not exist" when a name is not an analyst case; `run` loops `Trials` times; each trial's `<case>.trial<n>.out` and `.ndjson` and `report.json` go to the report folder), `revision_evals_test.go` (`TestAnalystEvalsRevision` skips when `EVAL_CASES` names no revision case; report under `revision/`), `cases.go` (`Trials = 3`), `content.go` (`Content`, rule 4: a scenario whose non-`Then` steps hold at least two distinct quoted texts and one `Then` step holding at least two of them in that order), `run.sh live` (`-run 'TestAnalystEvals'`, which matches both tests); `grade_test.go` and `revision_test.go` assert `Trials == 3`. `scripts/ci-evals-summary.py` reads only `$EVAL_REPORT_DIR/report.json`, into which `mergeReport` (`revision_evals_test.go`) adds the revision cases; `quarantine_test.go` pins exactly the two quarantined cases; `print` (harness) prints `pass^%d` from `Trials` |
 | S5 | `src/agents/analyst/instruction.md` on `main`: the Gherkin example shows a creation scenario and an empty-text scenario, no listing scenario; "Revising a proposal": "keep every item and ID the answers do not change, and output the whole revised proposal" |
 | S6 | Constitution: Principle XIX (pass^k), Engineering Principles "Fix the cause", "Existing tests change only with the owner's approval", "Checks prove they can fail"; [ADR 0050](../../docs/decisions/0050-failed-eval-jobs-keep-their-outputs.md); the spec's clarification SC-001 (owner, 2026-11-22) |
 
@@ -27,6 +27,9 @@ Decisions marked *owner* were put to the project owner as direct questions.
   existing test pins the path expression); a folder inside the checkout (the steps suite's
   fixture code finds the repository root by walking up; a report folder there is noise in it).
 - **Regression test** (new file): `EVAL_REPORT_DIR`'s value has no `.` or `..` path segment.
+- **Evidence**: the action's own error (S1) states the rule it applies, a `.` or `..` segment; the
+  new path has neither. It is shown in CI by the first eval job with a failed trial (SC-002); if
+  none occurs during the feature, a backlog task keeps the check open (T019).
 
 ## R2. Keeping a quarantined case's failed trial
 
@@ -34,11 +37,14 @@ Decisions marked *owner* were put to the project owner as direct questions.
   fixed its outputs would not be kept, and quarantined failures are the ones a task must diagnose.
 - **Decision**: a new script, `scripts/ci-evals-failed-trials.py <dir>`, reads every
   `report.json` under the report folder and writes `failed=true` to `$GITHUB_OUTPUT` when any
-  trial has `"passed": false` or a report cannot be read (fail closed: keep the outputs), and
-  `failed=false` otherwise; it prints the reports it read and the failed trials it found. A step
+  trial has `"passed": false`, or a report cannot be read or has an unexpected shape (not a list
+  of cases; a case without a `trials` list or with an empty one; a trial without a boolean
+  `passed`): fail closed, keep the outputs. `failed=false` otherwise; it prints the reports it read and the failed trials it found. A step
   with `id: failed` runs it with `if: always()` after the live evals. The scan runs on
-  `failure() || steps.failed.outputs.failed == 'true'`, the upload on the same condition
-  `&& steps.scan.outcome == 'success'`. A scan match still fails the job (FR-003). This supersedes
+  `failure() || steps.failed.outputs.failed == 'true'`, the upload on
+  `(failure() || steps.failed.outputs.failed == 'true') && steps.scan.outcome == 'success'`,
+  parenthesised: `&&` binds tighter than `||`, so without them a scan match (which fails the job,
+  so `failure()` is true) would upload. A scan match still fails the job (FR-003). This supersedes
   ADR 0050's "a passing job uploads nothing" with "a job with no failed trial uploads nothing"
   (ADR 0078).
 - **Alternatives**: the harness writes a marker file (changes the harness of both suites, and the
@@ -57,7 +63,11 @@ Decisions marked *owner* were put to the project owner as direct questions.
 - **Decision** (both change the harness: owner approval): (a) `EVAL_CASES` names cases of either
   suite; each test runs its own named cases, skips when it has none, and a name in neither suite
   still fails; (b) `EVAL_TRIALS` (a whole number from 1 to 20, default 3) sets k for both tests;
-  anything else fails before a trial runs, and the report says `pass^<k>`. `Trials` stays the
+  it matches `^[1-9][0-9]?$` and is at most 20 (no sign, space, leading zero or exponent);
+  anything else fails before a trial runs. The printed report derives k from each case's trial
+  count, so `print`'s signature and its existing callers stay. Duplicate names collapse to one;
+  an empty or blank name is an error. Limit: `run.sh live` has a 60-minute time-out, which a full
+  suite with k above about 4 exceeds; a larger k is for a few named cases. `Trials` stays the
   constant 3, the suite's default, so the existing `Trials == 3` assertions hold.
 - **Where the runs happen**: on the owner's host, `run.sh live` with
   `EVAL_CASES=example,revise-inject-approvals-field EVAL_TRIALS=10`: a gateway and one analyst
@@ -84,7 +94,8 @@ Readings to test against those answers, from S1, S4 and S5 (none is a decision y
 If the diagnostic run shows no failure in 10 trials of a case, the next steps are decided by the
 owner (more trials, or the reading above with the best evidence).
 
-## Observed, not in scope
+## Corrected by the analyze reviewer
 
-- `scripts/ci-evals-summary.py` reads only the top-level `report.json`, so the revision suite's
-  cases never appear in the analyst job's summary (S4). Backlog T191.
+- An earlier reading here said the revision suite's cases never reach the summary. They do:
+  `mergeReport` (`revision_evals_test.go`) adds them to the top-level `report.json`. Backlog T191,
+  filed on that reading, is closed.

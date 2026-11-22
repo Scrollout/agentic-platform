@@ -34,7 +34,8 @@ keeps its outputs for 7 days).
   job has kept its outputs since that step was added.
 - Q: How much evidence before the quarantine is removed? → A: 10 of 10 trials of each of the two
   cases in one live run of only those cases (about $0.20), then one full analyst run with every
-  case pass^3 (owner, SC-001).
+  case pass^3 (owner, SC-001). Noted by the analyze reviewer: 10 of 10 still passes a case that
+  succeeds 90% of the time about a third of the time; the owner's bar stands.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -119,6 +120,8 @@ trial of the live runs SC-001 names.
   example a cut-off or malformed answer); the fix follows what the answer shows (Fix the cause).
 - A trial that fails for a reason outside the analyst (gateway, provider error, time-out) is
   reported as such and is not evidence about the analyst.
+- A 10-trial run may show no failure of a case: there is then no answer to diagnose, and the owner
+  decides the next step (more trials, or a fix from the best evidence) before the quarantine goes.
 - The keep-outputs step must not keep a folder that holds a credential pattern, whatever the
   job's result.
 
@@ -141,6 +144,9 @@ trial of the live runs SC-001 names.
 - **FR-008**: Every other analyst and revision case MUST still pass pass^3 in the same live runs.
 - **FR-009**: The analyst's model, its pinned version and the proposal schema MUST NOT change in
   this feature.
+- **FR-010**: One live run of the analyst evals MUST be able to run named cases of both analyst
+  suites together and k trials per case for a whole number k from 1 to 20 (default 3); a name in
+  neither suite, or any other k, MUST fail the run before any trial.
 
 ### Key Entities
 
@@ -162,8 +168,9 @@ trial of the live runs SC-001 names.
 
 ## Assumptions
 
-- A live run costs money and runs only with the owner's go-ahead; a run of only the two cases is
-  possible through the existing case selection.
+- A live run costs money and runs only with the owner's go-ahead. A run of only the two cases, or
+  with 10 trials, is not possible today (one case of each analyst suite cannot be named together,
+  and k is fixed at 3), hence FR-010.
 - The quarantine mechanism itself (a quarantined case runs, is reported, does not count) stays as
   it is.
 - The analyst's prompt is versioned and reviewed like code (Principle XIII); a change to it is
