@@ -114,3 +114,13 @@ These terms come from the Feature 005 specification.
 | Quarantine | The state of a flaky eval case that names an open backlog task: it still runs and is reported, but its result does not count until the task closes it. |
 
 Sources: [Feature 005 specification](../../specs/005-analyst-reliability/spec.md).
+
+# Feature 007 terms
+
+These terms come from the Feature 007 specification.
+
+| Term | Meaning |
+|------|---------|
+| Revision | The analyst's new proposal for a slice after the developer answers its questions; when accepted, it replaces the slice's parts. |
+
+Sources: [Feature 007 specification](../../specs/007-analyst-answer-checks/spec.md).

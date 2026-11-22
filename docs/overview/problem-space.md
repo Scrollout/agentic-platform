@@ -68,7 +68,7 @@ service is still to do.
 | N-010 | Define an agent (instructions, model, tools, collaborators) and keep every version of it | undecided | [Docker Agent](/references/docker-agent.md) | | todo |
 | N-011 | Run agents against more than one model provider, and switch providers without redefining the agent | undecided | [Docker Agent](/references/docker-agent.md) | | todo |
 | N-012 | Package an agent and share it with others | undecided | [Docker Agent](/references/docker-agent.md) | | todo |
-| N-013 | Know that a changed agent still behaves as expected before it is released | yes | [Docker Agent](/references/docker-agent.md) | [004](../../specs/004-edge-case-graders/spec.md), [005](../../specs/005-analyst-reliability/spec.md) | done |
+| N-013 | Know that a changed agent still behaves as expected before it is released | yes | [Docker Agent](/references/docker-agent.md) | [004](../../specs/004-edge-case-graders/spec.md), [005](../../specs/005-analyst-reliability/spec.md), [007](../../specs/007-analyst-answer-checks/spec.md) | done |
 
 # Sessions
 
@@ -107,7 +107,7 @@ Constitution Principle XX makes them binding for the product.
 | ID | Need | In scope | Prior art | Spec | State |
 |----|------|----------|-----------|------|-------|
 | N-050 | Applying the same method to the same input gives the same accepted result | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | in progress |
-| N-051 | A result is accepted only when it passes checks that do not depend on a model's judgement | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | done |
+| N-051 | A result is accepted only when it passes checks that do not depend on a model's judgement | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [007](../../specs/007-analyst-answer-checks/spec.md) | done |
 | N-052 | A proven solution is captured once and reused, without the model generating it again | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | in progress |
 | N-053 | Every result can be traced to the method, inputs, model and rules that produced it, and reproduced from them | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | in progress |
 | N-054 | How much results vary from run to run is measured and shown | undecided | | | todo |
