@@ -115,7 +115,8 @@ name the same one.
 **Acceptance Scenarios**:
 
 1. **Given** a finished run, **When** its record is read, **Then** every step outcome that
-   carries a reuse key names the method identity it was judged under, with the pattern's id and declared version.
+   carries a reuse key names the method identity it was judged under, with the pattern's id and
+   declared version (but a step whose reuse lookup failed, FR-004).
 2. **Given** two installations built from the same source, **When** each runs, **Then** both
    name the same method identity.
 3. **Given** two platform versions that differ in any part of the method, **When** each runs,
@@ -160,7 +161,8 @@ name the same one.
   definition, model and review round).
 - **FR-004**: Every step outcome in a run record that carries a reuse key (an attempt made, a
   step accepted, a result reused, a review round left open) MUST name the method identity its key
-  covers, besides the pattern's id and declared version.
+  covers, besides the pattern's id and declared version. Limit: a step whose reuse lookup failed
+  keeps a key without a method and names none; its result is never reused (research R3).
 - **FR-005**: A slice's stored check results MUST name the method identity that produced them.
 - **FR-006**: When a slice is loaded and its check results name a different method identity, or
   none, the platform MUST run its checks again and keep the new results before showing them; it
@@ -193,7 +195,8 @@ name the same one.
   as before (same count as today).
 - **SC-002**: Two builds of the same source give the same method identity, and a change to a part
   outside the method (documentation, the terminal client) leaves it unchanged.
-- **SC-003**: 100% of the step outcomes that carry a reuse key in a run record, and of the slices
+- **SC-003**: 100% of the step outcomes that carry a reuse key in a run record (but those whose
+  reuse lookup failed, FR-004), and of the slices
   the platform shows with every check run, name a method identity.
 - **SC-004**: A run that reuses every step takes no longer than today, within 1 second.
 

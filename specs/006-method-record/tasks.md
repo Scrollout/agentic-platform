@@ -45,7 +45,8 @@ checks), US3 (the record readable through the views).
 - **Gate**: `/speckit-analyze` (fresh reviewer) must report no CRITICAL or HIGH before T001, and
   again after any change to spec, plan, tasks or a design artifact. Round 1 (fresh Sonnet, at
   4fd7522): 3 CRITICAL, 6 HIGH, 6 MEDIUM, 4 LOW, fixed at their source (research, "Analyze round
-  1"; the owner chose the committed identity for F2 and F3).
+  1"; the owner chose the committed identity for F2 and F3). Round 2 (fresh Sonnet, at b58ef1e):
+  0 CRITICAL, 1 HIGH (N1), 3 MEDIUM, 2 LOW, fixed (research, "Analyze round 2").
 
 ---
 
@@ -59,7 +60,7 @@ checks), US3 (the record readable through the views).
   `checks_method` in `src/engine/api/preview/2026-11-12-preview/`, worded as
   [contracts/engine-api-additions.md](contracts/engine-api-additions.md) (draft then a link);
   `src/engine/.go-arch-lint.yml` gains the component `method` (`src/engine/method`, no
-  dependencies) and `method` in `mayDependOn` of `cmd-engine`, `machine`, `durable` and `slices`
+  dependencies) and `method` in `mayDependOn` of `cmd-engine`, `api`, `machine`, `durable` and `slices`
   (owner `Approved-by:`); `scripts/generate.sh` regenerates the API code, and
   `scripts/generate.sh --check` passes
 
@@ -70,7 +71,7 @@ checks), US3 (the record readable through the views).
 **Purpose**: one identity, derived from the declaration, committed, checked and embedded in the
 engine (FR-001, FR-002, FR-010; research R1, R2).
 
-**Independent Test**: `test_method_digest.py`, `test_check_method_step.py` and `method_test.go`
+**Independent Test**: `test_method_digest.py`, `test_method_identity_current.py` and `method_test.go`
 pass; `--check` fails on a stale file and passes after the script runs.
 
 - [ ] T002 [P] Test author: new `scripts/tests/test_method_digest.py` for
@@ -90,24 +91,21 @@ pass; `--check` fails on a stale file and passes after the script runs.
   bad declaration (invalid JSON, unknown key, missing key, empty list, duplicate entry, a non-string
   entry, an `include` glob that matches nothing, a pin not in `images.lock`), for a symbolic link
   among the selected files, and outside a Git work tree
-- [ ] T003 [P] Test author: new `scripts/tests/test_check_method_step.py`: `scripts/check.sh
-  --only go` in a copy of the repository (the way the existing check.sh tests copy it, their
-  helpers unchanged) with a stale `src/engine/method/method.sha256` fails, printing the script's
-  message, before any Go command runs (a stub on `PATH` records Docker and Go calls: none); with
-  the current identity it gets past the method check (the stub then stops the run); clean and
-  planted cases
+- [ ] T003 [P] Test author: new `scripts/tests/test_method_identity_current.py`: runs
+  `python3 scripts/method-digest.py --check` on the repository itself and fails, quoting the
+  script's output, unless it exits 0 (research R2); its planted counterpart is T002's stale-file
+  case, and the test names it in its docstring; it reports the identity it examined
 - [ ] T004 [P] Test author: new `src/engine/method/method_test.go`: `Parse` accepts exactly 64
   lowercase hex digits, trims one trailing newline, and rejects empty, 63 or 65 digits, upper case,
   a non-hex character, inner or leading space, two newlines, each error naming what was found;
   `Current()` returns the parsed embedded identity (equal to `Parse` of the file's bytes)
 - [ ] T005 Code author: `scripts/method-digest.py` (T002); `src/engine/method/method.go`
   (`//go:embed method.sha256`; `ID`, `Parse`, `Current`; T004); `src/engine/method/method.sha256`
-  written by the script; `scripts/check.sh`'s Go step (`go_checks`) runs
-  `python3 scripts/method-digest.py --check` first (T003; owner `Approved-by:`); T002 to T004 pass
+  written by the script and committed (owner `Approved-by:` for the script); T002 to T004 pass
 - [ ] T006 [P] Test author: new `src/engine/cmd/engine/method_start_test.go`: the engine's setup
   fails, naming `src/engine/method/method.sha256` and `scripts/method-digest.py`, when the identity
-  it is given does not parse, and gives the run machine, the durable activities and the slice
-  service the identity it was given (through a setup seam the brief names, e.g. the identity as a
+  it is given does not parse, and gives the durable activities and the slice service the identity
+  it was given (production builds no non-durable machine; its `Config.Method` is judged by T009) (through a setup seam the brief names, e.g. the identity as a
   setup parameter, `method.Current()` by default)
 - [ ] T007 Code author: `src/engine/cmd/engine/setup.go` takes the identity (T006); T006 passes
 - [ ] T008 Commit T001 to T007; push (owner go-ahead; say which jobs run) and fix until CI is
@@ -188,8 +186,8 @@ before the answer; read under A it is as stored.
   that follows the re-check; `startRun` on a slice re-checked under a new method whose check now
   fails is refused as for any failing check
 - [ ] T015 [US2] Code author: `src/engine/slices/persist.go` (`checks_method` in the record),
-  `service.go` (the service's identity; the re-check in `find`, `List` and `approvedFor`, outside
-  the lock as `replace` does), `checks.go` (whether each check ran); `src/engine/api/slices.go`
+  `service.go` (the service's identity; the re-check before every read of a slice, outside the
+  lock, under the slice's `changing` mutex, as research R4 "How" says; `find` keeps its contract), `checks.go` (whether each check ran); `src/engine/api/slices.go`
   (the view); T013 and T014 pass, and every existing test of `slices` and `api` passes unchanged
 - [ ] T016 [US2] Commit; push (owner go-ahead) and fix until CI is green; fresh review of US2;
   findings fixed or recorded; `/speckit-converge` for US2

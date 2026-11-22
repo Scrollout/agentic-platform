@@ -64,7 +64,8 @@ No time, folder, host or file mode enters it.
 | `scripts/method-digest.py --list` | writes nothing; prints the manifest | 0; 2 as above |
 
 Run twice, the first call changes nothing the second time (Principle XVII). The identity file is
-committed; `scripts/check.sh`'s Go step runs `--check` (research R2).
+committed; `scripts/tests/test_method_identity_current.py` runs `--check` in the test command
+(research R2).
 
 ## The Go side: package `src/engine/method`
 

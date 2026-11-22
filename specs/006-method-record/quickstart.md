@@ -18,8 +18,8 @@ git checkout src/engine/README.md
 
 `python3 scripts/testrun.py scripts/tests/test_method_digest.py` proves the same on a fixture
 repository, with planted violations (a glob that matches nothing, an unknown pin, an unknown key);
-`scripts/tests/test_check_method_step.py` proves that `scripts/check.sh --only go` fails on a
-stale identity before any Go command runs.
+`scripts/tests/test_method_identity_current.py` fails the test command while the committed
+identity is stale.
 
 ## Reuse under the method (US1, SC-001)
 

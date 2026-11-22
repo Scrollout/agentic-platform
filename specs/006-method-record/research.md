@@ -74,17 +74,19 @@ the code on `main` (`e4348bf`), a reproduced experiment, or a cited document. De
   `src/engine/method/method.sha256`, and checked, not generated at build time. One converging
   script, `scripts/method-digest.py`, computes it from the declaration and writes the file when it
   differs; run again it changes nothing; `--check` changes nothing and exits 1 naming the stored and
-  the computed identity when they differ or the file is missing. `scripts/check.sh`'s Go step runs
-  `--check` first among its drift checks, so the CI run of a commit whose identity is stale fails
-  (FR-010); after changing a method file the author runs the script and commits the new value with
+  the computed identity when they differ or the file is missing. A new test of the `py-tests`
+  step, `scripts/tests/test_method_identity_current.py`, runs `--check` on the repository itself,
+  so the CI run of a commit whose identity is stale fails (FR-010); `py_tests` runs on every
+  change outside `specs/`, `.specify/` and `.claude/` (`.github/check-jobs.yaml`); after changing a method file the author runs the script and commits the new value with
   the change. The Go package `src/engine/method` embeds the file (`//go:embed method.sha256`) and
   parses it into a `method.ID` that rejects anything but 64 lowercase hex digits; the engine refuses
-  to start without a valid one. `src/deploy/build.sh` and `check.sh --prepare` do not change.
+  to start without a valid one. `scripts/check.sh` and `src/deploy/build.sh` do not change.
 - **Rationale**: Principle XVII "Derive the rest": the identity is derived from its declaration
   and checked against it, never kept by hand. Committed, it is present for every Go build, vet and
   lint on every path (CI jobs, the pre-commit hook's `go vet`, image builds, a developer's
-  `go test`) with no new step in any of them, and the existing tests of `check.sh --prepare` and
-  `build.sh`, which copy trees without the script or without `.git`, stand (analyze F2, F3). It is
+  `go test`) with no new step in any of them, and the existing tests of `check.sh` and `build.sh`, which copy
+  trees without the script or without `.git`, stand (analyze F2, F3; round 2 N1: a step in
+  `check.sh`'s `go_checks` would break `test_test_reports.py` and `test_inline_schema.py`). It is
   a 65-byte value, not code; committing it is recorded as an exception to the Clean tree rule
   (plan, Exceptions). A separate script, rather than a step of `scripts/generate.sh`, keeps
   generate.sh to its one job, and leaves generate.sh's own tests as they are.
@@ -142,7 +144,15 @@ the code on `main` (`e4348bf`), a reproduced experiment, or a cited document. De
   limits, as `replace` does, applies the approval rule as after any check (S4), and stores the
   record with `checks_method` set before it answers, unless the record changed meanwhile (then it
   checks again). A stale approved slice is offered by `Create` only once re-checked and still
-  approved. A check that could not run is a failed check with its reason, as today, and leaves
+  approved. How: each public entry that reads a slice (`Get`, `List`, `Create`, and every
+  operation through `find`) first calls a step that, under the lock, collects the stale records it
+  will read, then, without the lock, re-checks each under that slice's `changing` mutex (the one
+  `replace` holds, so a re-check and a change of one slice never interleave) with
+  `context.Background()` and the checks' own time limits, and, under the lock again, stores the
+  result when the record is still the one it checked; when a change replaced the record meanwhile,
+  that change ran its checks under the current method itself (every check run sets
+  `checks_method`), so nothing repeats. `find` keeps its contract (the caller holds the lock). A
+  check that could not run is a failed check with its reason, as today, and leaves
   `checks_method` unset, so the next read checks again (analyze F12). A store write that fails
   leaves the record stale: the answer shows the new results, and the next read checks again. The
   slice view (`getSlice`) gains `checks_method`; the list returns summaries, whose state follows
@@ -166,7 +176,7 @@ the code on `main` (`e4348bf`), a reproduced experiment, or a cited document. De
   `check.sh --prepare` and `build.sh` breaks their tests) → R2: committed and checked (owner).
 - F4 (the template's generator and the lint tools missing) → R1: `oapi-codegen` pin and
   `scripts/tools/` lock files; the `oasdiff` pin left out with its reason. F5 (no test for the
-  check step) → tasks T005a. F6 (the arch lint's component map) → plan and T001. F7 (the workflow
+  check step) → tasks T003. F6 (the arch lint's component map) → plan and T001. F7 (the workflow
   test helpers live in `machine`) → T010 moved. F8 (re-check under the lock, no context) and F9
   (`Create`'s `approvedFor`) → R4.
 - F10 (`listSlices` returns summaries) → R4, contract, T014. F11 (which events carry `method`) →
@@ -177,6 +187,18 @@ the code on `main` (`e4348bf`), a reproduced experiment, or a cited document. De
   `generate.sh`, `.dockerignore`) → R1. F18 (no case for a pin left out) → T002. F19 (status
   words) → closed: "Draft" is the spec template's status, and `status: draft` with `decision:
   accepted` is every ADR's front matter in this knowledge bundle.
+
+## Analyze round 2 (fresh Sonnet, at b58ef1e)
+
+0 CRITICAL, 1 HIGH, 3 MEDIUM, 2 LOW; round 1: 18 closed, F6 partly (N2). Fixed at the source:
+
+- N1 (HIGH: the identity check in `check.sh`'s `go_checks` breaks two existing tests that copy
+  `check.sh` without the script) → R2: a new test in the `py-tests` step checks the real tree;
+  `check.sh` does not change.
+- N2 (`api`'s tests take a `method.ID`) → `api` among the arch lint's `method` consumers (T001).
+- N3 (how a re-check runs outside the lock) → R4 "How".
+- N4 (FR-004 and SC-003 missed the failed-lookup limit) → spec.
+- N5 (a task reference) → fixed. N6 (production builds no `machine.Machine`) → T006.
 
 ## E1. The identity is reproducible and selective (2026-11-22)
 

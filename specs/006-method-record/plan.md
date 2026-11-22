@@ -39,9 +39,9 @@ identity is computed in well under a second (E1: 0.04 s)
 **Constraints**: the activity calls of the durable run workflow and their order do not change
 and their conditions (the recorded histories must replay); keys and events without a method are
 unchanged byte for byte, and the workflow keeps its own key when the lookup returns none, so
-existing tests that compute them stand; `scripts/check.sh`, the new script and
-`src/engine/.go-arch-lint.yml` carry the owner's `Approved-by:`; `src/deploy/build.sh` and
-`check.sh --prepare` do not change
+existing tests that compute them stand; the new script, its tests and
+`src/engine/.go-arch-lint.yml` carry the owner's `Approved-by:`; `scripts/check.sh` and
+`src/deploy/build.sh` do not change
 
 **Scale/Scope**: one declaration, one script, one Go package, the reuse key, four event kinds,
 the slice record and view, two contract schemas
@@ -66,7 +66,7 @@ the slice record and view, two contract schemas
 | XIII. Supply chain | Pass | The pins the method names are those of `images.lock`; a pin change changes the identity |
 | XIV. Safe defaults | Pass | An unknown or missing method means not reused and checked again (fail closed); the engine does not start without a valid identity |
 | XV. Compatible APIs | Pass | Two optional properties, additive in the preview version |
-| XVI. Human control | Pass | `scripts/check.sh`, the new script and `src/engine/.go-arch-lint.yml` carry the owner's `Approved-by:` |
+| XVI. Human control | Pass | The new script, its tests and `src/engine/.go-arch-lint.yml` carry the owner's `Approved-by:` |
 | XVII. Declare, derive, converge | Pass | One declaration; the identity is derived and checked (`--check` in the test command), never kept by hand; the script converges |
 | XVIII. Abstractions say what | Pass | One script, one package (`method.Current`), named for what they give |
 | XIX. Evals | Not affected | No prompt, model, tool, policy or agent logic changes; the step evals' inputs are unchanged |
@@ -77,7 +77,7 @@ the slice record and view, two contract schemas
 | Fresh review | Pass | A fresh read-only reviewer per story and before done, judging the CI run |
 | Layout | Pass | New files in `src/engine/method/` and `scripts/` |
 | Clean tree | Exception | The derived `method.sha256` is committed (owner, 2026-11-22; Exceptions) |
-| Arch lint | Pass | `src/engine/.go-arch-lint.yml` gains the `method` component (no dependencies) and `method` in `mayDependOn` of every component that takes a `method.ID` (`cmd-engine`, and `machine`, `durable`, `slices` where their configuration takes the type), in T001 |
+| Arch lint | Pass | `src/engine/.go-arch-lint.yml` gains the `method` component (no dependencies) and `method` in `mayDependOn` of every component that takes a `method.ID` (`cmd-engine`, `api`, `machine`, `durable`, `slices`), in T001 |
 
 ## Decisions
 
@@ -126,8 +126,7 @@ src/engine/method/
 src/engine/.go-arch-lint.yml              # the `method` component
 scripts/method-digest.py                  # new (research R2)
 scripts/tests/test_method_digest.py       # new
-scripts/tests/test_check_method_step.py   # new: check.sh's Go step fails on a stale identity
-scripts/check.sh                          # the Go step runs `method-digest.py --check` first
+scripts/tests/test_method_identity_current.py  # new: --check on the repository itself (py-tests)
 src/engine/api/preview/2026-11-12-preview/run-event.schema.json   # `method`
 src/engine/api/preview/2026-11-12-preview/slice.schema.json       # `checks_method`
 src/engine/machine/reuse.go               # KeyParts.Method
@@ -144,8 +143,8 @@ declares.
 
 **Existing tests expected to change**: none. Keys and events without a method are unchanged, the
 harness's fake lookup returns no key so the workflow keeps its own (research R3), slice services
-built without a method see every stored record as current (R4), and `build.sh` and
-`check.sh --prepare` do not change (R2).
+built without a method see every stored record as current (R4), and `check.sh` and `build.sh` do
+not change (R2).
 
 ## Exceptions
 
