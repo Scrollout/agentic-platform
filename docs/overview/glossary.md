@@ -26,6 +26,9 @@ sources:
   - id: spec-004
     resource: ../../specs/004-edge-case-graders/spec.md
     title: Feature 004 specification, Key Entities
+  - id: spec-006
+    resource: ../../specs/006-method-record/spec.md
+    title: Feature 006 specification, Key Entities
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-18T09:00:00Z }
 ---
 
@@ -114,6 +117,17 @@ These terms come from the Feature 005 specification.
 | Quarantine | The state of a flaky eval case that names an open backlog task: it still runs and is reported, but its result does not count until the task closes it. |
 
 Sources: [Feature 005 specification](../../specs/005-analyst-reliability/spec.md).
+
+# Feature 006 terms
+
+These terms come from the Feature 006 specification.
+
+| Term | Meaning |
+|------|---------|
+| Method | The parts of the platform that decide what a step produces and whether it is accepted: the pattern declaration, the template, the step definitions and their agents, the checks, the fixed procedures and the pinned agent runtime. One identity names it. |
+| Accepted result | A step's output that passed its checks, or a review round left with blocking findings open, kept and reused for the same input under the same method. |
+
+Sources: [Feature 006 specification](../../specs/006-method-record/spec.md).
 
 # Feature 007 terms
 
