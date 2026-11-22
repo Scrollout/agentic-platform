@@ -125,7 +125,8 @@ trial of the live runs SC-001 names.
 - A trial that fails for a reason outside the analyst (gateway, provider error, time-out) is
   reported as such and is not evidence about the analyst.
 - A 10-trial run may show no failure of a case: there is then no answer to diagnose, and the owner
-  decides the next step (more trials, or a fix from the best evidence) before the quarantine goes.
+  decides the next step (more trials, a fix from the best evidence, or removing the quarantine
+  with no change) before the quarantine goes.
 - The keep-outputs step must not keep a folder that holds a credential pattern, whatever the
   job's result.
 
@@ -137,13 +138,13 @@ trial of the live runs SC-001 names.
   report folder as one artifact for 7 days, after the credential scan passes.
 - **FR-002**: An eval job with no failed trial MUST keep nothing.
 - **FR-003**: When the credential scan finds a match, nothing MUST be kept and the job MUST fail.
-- **FR-004**: The cause of each of the two failures MUST be decided from a kept failing answer
+- **FR-004**: Unless no trial of either case fails in the diagnostic run (Clarifications), the cause of each of the two failures MUST be decided from a kept failing answer
   (US1) or from a reproduction of the case, and recorded in the plan's research before any fix.
-- **FR-005**: The fix MUST change whichever of the analyst (its instruction, within the current
+- **FR-005**: A fix, when a cause is found, MUST change whichever of the analyst (its instruction, within the current
   model and schema) or the grader the cause shows to be wrong, never weaken a grader that is right.
 - **FR-006**: A grader change MUST keep its planted bad proposal failing and its good proposal
   passing, and needs the owner's approval of that change.
-- **FR-007**: After the fix, the quarantine of `example` and `revise-inject-approvals-field` MUST be
+- **FR-007**: After the fix, or with no fix when the diagnostic run shows no failure (Clarifications), the quarantine of `example` and `revise-inject-approvals-field` MUST be
   removed (an eval change, with the owner's approval), so both count again; T185 is then closed.
 - **FR-008**: Every other analyst and revision case MUST still pass pass^3 in the same live runs.
 - **FR-009**: The analyst's model, its pinned version and the proposal schema MUST NOT change in
@@ -163,9 +164,10 @@ trial of the live runs SC-001 names.
 
 ### Measurable Outcomes
 
-- **SC-001**: With the quarantine removed, `example` and `revise-inject-approvals-field` each pass
-  10 of 10 trials in one live run of only those two cases, and then every analyst and revision
-  case, these two included, passes pass^3 in one full analyst run.
+- **SC-001**: `example` and `revise-inject-approvals-field` each pass 10 of 10 trials in one live
+  run of only those two cases (whether they are quarantined then changes only how they are counted,
+  not what the analyst does), and then, with the quarantine removed, every analyst and revision
+  case passes pass^3 in one full analyst run.
 - **SC-002**: A failed eval job in CI keeps its report folder: proven by the workflow's rules on
   planted reports, and shown by the first eval job with a failed trial after the change.
 - **SC-003**: No analyst case is quarantined at the end of the feature.

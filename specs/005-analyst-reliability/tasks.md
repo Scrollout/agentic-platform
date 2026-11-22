@@ -43,7 +43,10 @@ cause and fix come from one diagnostic run; then the quarantine goes and the evi
   research, data model, quickstart, ADR 0078 and these tasks; A4 closed backlog T191 (wrong
   premise); A13 (10 of 10 is weak evidence) noted in the spec, the owner's bar stands. Round 2
   (fresh Sonnet, at e7fb76c, the fixed lines only): all 13 closed, 0 CRITICAL/HIGH; one LOW (the
-  dependency line omitted T015) fixed. Gate passed.
+  dependency line omitted T015) fixed. Gate passed. Round 3 (fresh Sonnet, at 53049b2, the
+  changes since b7cbb56): 0 CRITICAL/HIGH; A1-A3 MEDIUM (SC-001 and FR-004/005/007 worded for no
+  failure, T007 basis) and A4-A6 LOW fixed; A7 noted (the flakiness is rare, not fixed; US1 and
+  T193 watch it).
 
 ---
 
@@ -98,7 +101,7 @@ every trial passed, and refuse a `.` or `..` segment.
   T002 to T004 and `scripts/tests/test_workflows*.py` pass
 - [X] T006 (CI run 45007221855 at 1976485 green, 26 of 26 jobs) [US1] Push (owner go-ahead; say which jobs run) and fix until CI is green; record the
   run in research
-- [X] T007 (folded into T020's final fresh review, which covered US1: no blocking finding) [US1] Fresh review of US1 (rules above); findings fixed or recorded as tasks; then
+- [X] T007 (folded into T020's final fresh review at 0a85192, which covered US1: no blocking finding; no US1 file changed after 0a85192) [US1] Fresh review of US1 (rules above); findings fixed or recorded as tasks; then
   `/speckit-converge` for US1
 
 **Checkpoint**: a failed eval trial in CI leaves a readable artifact.
@@ -170,10 +173,11 @@ every trial passed, and refuse a `.` or `..` segment.
   any concept the shipped behaviour contradicts; `python3 scripts/okf.py check` reports OK; SC-002:
   name the eval job whose failed trial left an artifact, or, if none failed during the feature,
   file a backlog task to check the first one
-- [ ] T020 Final fresh review of the whole feature (rules above) and `/speckit-converge`; findings
+- [X] T020 (review at 0a85192, no blocking finding; converge clean; FR-009: no change under src/agents or src/engine) Final fresh review of the whole feature (rules above) and `/speckit-converge`; findings
   fixed or recorded as tasks; FR-009: `git diff main -- src/agents/analyst.yaml
   src/engine/api/preview` shows no model, pin or schema change
-- [ ] T021 Before the owner's merge: read the branch's `evals-current` output; no suite pending
+- [ ] T021 Before the owner's merge: remove `005-analyst-reliability` from the environment `dev`'s
+  deployment branches; read the branch's `evals-current` output; no suite pending
 
 ---
 
@@ -201,7 +205,7 @@ inputs and one diagnostic run; the fixes follow the answers, not the guesses in 
 - F2 (no block): removing the quarantine without a fix was recorded in tasks and research only →
   spec clarification added (owner's decision of 2026-11-22).
 - F3 (nit): a duplicate assertion in the open-task check's fixture test → closed: harmless, and an
-  existing test changes only with the owner's approval.
+  existing test changes only with the owner's approval (Engineering Principles, ADR 0029).
 - F4 (low): `scripts/ci-evals-summary.py` prints `pass^3` whatever k → backlog T192 (CI never sets
   `EVAL_TRIALS`).
 - F5 (info): the failed-trials script exits 1 on an unwritable `$GITHUB_OUTPUT` → closed: the

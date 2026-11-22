@@ -74,8 +74,8 @@ Decisions marked *owner* were put to the project owner as direct questions.
   container at a time, about 20 trials of 10 to 25 s (S1), about $0.20, outputs in the local
   report folder. Each such run needs the owner's go-ahead. The CI evals workflow gets no new
   input; the full analyst run of SC-001 is its ordinary dispatch.
-- **Runs**: the first (diagnostic) run before any fix; the second (SC-001's 10 of 10) after it,
-  with the quarantine already removed in the working tree.
+- **Runs**: the first (diagnostic) run before any fix; the second (SC-001's 10 of 10) after it.
+  With no failure in the first, it also stood as SC-001's 10 of 10 (owner, 2026-11-22).
 
 ## R4. The fix
 
@@ -106,7 +106,8 @@ reading stays unproven.
 **Full analyst run (T018)**: evals run 45012234940 (`0a85192`, 2026-11-22, GitHub-hosted, the
 analyst suite only): every one of the 15 description cases and 6 revision cases pass^3, none
 quarantined; the job took 15 min 49 s; the failed-trials step found none, so nothing was kept
-(ADR 0078). Its cost is on the run page's job summary. With the CI runs before 44888638411 green, the two failures look rare
+(ADR 0078). Its cost is not recorded here: the job summary that shows it is not readable through
+the API. With the CI runs before 44888638411 green, the two failures look rare
 (2 of 6 trials there, 0 of 20 here); the cause stays unknown until a failure is kept (US1).
 
 ## Corrected by the analyze reviewer
