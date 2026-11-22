@@ -220,7 +220,16 @@ case pass^3, none quarantined.
   case's attempts and the cost in research; SC-003: every analyst and revision case pass^3, none
   quarantined. A failure keeps its outputs (ADR 0078) and becomes a backlog task; the owner
   decides the next step
-- [ ] T014 [US3] Fresh review of US3; `/speckit-converge` for US3
+- [X] T014 [US3] Fresh review of US3; `/speckit-converge` for US3
+- [ ] T026 [US3] Review findings US3-S1 to S4 and untested cases (fresh Sonnet review at 988be8f,
+  suggestions, not blocking; each change to an existing eval file needs the owner's approval):
+  S1 an overlong header line in `revision_evals_test.go`; S2 `revision.go`'s header still says
+  nothing in it edits an existing file of the suite; S3 a refused trial keeps only the last
+  attempt's stderr; S4 events of several attempts are joined without checking each ends in a line
+  break; untested in the harness: a revision accepted on attempt 2 or 3, `Answer` or `Create`
+  failing before any analyst call, a container error mid-retry, usage summed over several calls
+- [X] T027 [US3] Review finding US3-S5 closed: the stub's one canned answer cannot show what the
+  retry sends; the engine's tests (T004, T008) prove `Previous` and `Errors`. closed: covered
 
 ---
 

@@ -191,3 +191,8 @@ revision, took 1 attempt, so no live answer repeated a key or lost an ID, and an
 the first attempt made one analyst call (SC-004, T016). `revise-inject-drop-rules` and
 `revise-inject-approvals-field` passed 3 of 3. The cost is in the jobs' summaries on the run page,
 which the API does not return (owner reads it).
+
+US3 fresh review (Sonnet, read-only worktree at 988be8f, judging CI run 45068904668, the stub run
+and evals run 45071292368): no blocking finding; tasks T026 (open) and T027 (closed).
+`/speckit-converge` for US3: FR-006, FR-007 and SC-003 are met; FR-008's quarantine exists only on
+branch 006 (R4, T018); nothing appended beyond T026.
