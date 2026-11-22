@@ -71,7 +71,7 @@ folder for 7 days; the folder's path is one the upload accepts.
 for a planted failed counted trial and a planted failed quarantined trial, keep nothing when
 every trial passed, and refuse a `.` or `..` segment.
 
-- [ ] T002 [P] [US1] Test author: new `scripts/tests/test_ci_evals_failed_trials.py` for
+- [X] T002 [P] [US1] Test author: new `scripts/tests/test_ci_evals_failed_trials.py` for
   `scripts/ci-evals-failed-trials.py <dir>` (research R2, data model "has a failed trial"):
   writes `failed=true` to `$GITHUB_OUTPUT` when any `trials[].passed` is `false` in any
   `report.json` under `<dir>` (top level and `revision/`), a quarantined case's included, or a
@@ -80,7 +80,7 @@ every trial passed, and refuse a `.` or `..` segment.
   `failed=false` when every trial passed or no report exists; prints
   the reports read and each failed trial (`<case> trial <n>`); exit 0 in all these cases, 2 on a
   wrong argument count; without `$GITHUB_OUTPUT` it prints the line to standard output
-- [ ] T003 [P] [US1] Test author: new `scripts/tests/test_workflows_eval_outputs_kept.py` (helpers
+- [X] T003 [P] [US1] Test author: new `scripts/tests/test_workflows_eval_outputs_kept.py` (helpers
   of `test_workflows.py` imported unchanged), each rule with a test on the real files and a
   planted violation: `EVAL_REPORT_DIR`'s value in `evals.yml`'s job env has no `.` or `..` path
   segment; a step with `id: failed` and `if: always()` runs
@@ -89,10 +89,10 @@ every trial passed, and refuse a `.` or `..` segment.
   `if` is `(failure() || steps.failed.outputs.failed == 'true') && steps.scan.outcome ==
   'success'`, with planted violations for the form without parentheses and for an upload that
   would run after a scan match on a green job
-- [ ] T004 [US1] Test author (approval T001a): `scripts/tests/test_workflows_eval_artifacts.py`
+- [X] T004 (owner also approved the fixtures SCAN_STEP, UPLOAD_STEP and two quote-form tests moving to the new conditions, 2026-11-22) [US1] Test author (approval T001a): `scripts/tests/test_workflows_eval_artifacts.py`
   rules `scan_step` and `upload_condition` accept exactly the new conditions; their planted
   violations still fail; the module docstring says so
-- [ ] T005 [US1] Code author: `scripts/ci-evals-failed-trials.py` (T002) and
+- [X] T005 [US1] Code author: `scripts/ci-evals-failed-trials.py` (T002) and
   `.github/workflows/evals.yml`: `EVAL_REPORT_DIR: ${{ github.workspace }}-eval-report` (research
   R1), the `failed` step, the scan and upload conditions (T003, T004); its comments cite ADR 0078;
   T002 to T004 and `scripts/tests/test_workflows*.py` pass

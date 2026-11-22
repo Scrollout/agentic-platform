@@ -13,11 +13,14 @@ it valid):
   name `evals-...` built from matrix.suite, matrix.cases and github.run_attempt;
 - upload_last: the upload is the evals job's last step, and the scan step comes after the step
   that runs the live evals (id `run`) and before the upload;
-- scan_step: a step with an `id` and `if: failure()` runs `scripts/secret-scan.sh` on
-  $EVAL_REPORT_DIR; it holds no copy of the patterns, and nothing hides its exit
+- scan_step: a step with an `id` and `if: failure() || steps.failed.outputs.failed == 'true'`
+  (feature 005, ADR 0078; the `${{ }}` form and either quote pass) runs `scripts/secret-scan.sh`
+  on $EVAL_REPORT_DIR; it holds no copy of the patterns, and nothing hides its exit
   (continue-on-error, `|| true`, `|| :`, `set +e`);
-- upload_condition: the upload's `if` is `failure() && steps.<scan id>.outcome == 'success'`
-  (the `${{ }}` form and either quote pass), so nothing is uploaded when the scan matched.
+- upload_condition: the upload's `if` is `(failure() || steps.failed.outputs.failed == 'true') &&
+  steps.<scan id>.outcome == 'success'` (the `${{ }}` form and either quote pass; the parentheses
+  are required, since `&&` binds tighter than `||`), so nothing is uploaded when the scan
+  matched.
 
 The scan's one home (interface chosen for T122): `scripts/secret-scan.sh [DIR]`.
 - With DIR it scans every file under DIR, recursively, binary files included, for the patterns
@@ -53,7 +56,7 @@ SCAN_CALL = re.compile(r"(?:^|[\s;&|(])(?:\./)?scripts/secret-scan\.sh\s+\"?\$\{
 COPY = re.compile(r"sk-ant|ghp_")
 SWALLOW = re.compile(r"\|\|\s*(?:true|:)(?:\s|$|;|\))|\bset\s+\+e\b")
 PATH_EXPR = re.compile(r"\s*\$\{\{\s*env\.EVAL_REPORT_DIR\s*\}\}\s*")
-FAILURE = re.compile(r"\s*(?:\$\{\{\s*failure\(\)\s*\}\}|failure\(\))\s*")
+SCAN_IF = re.compile(r"failure\(\)\s*\|\|\s*steps\.failed\.outputs\.failed\s*==\s*(['\"])true\1")
 KEY = "sk-" + "ant-" + "api03-" + "Q" * 24 + "_x-9"
 GH_KEY = "gh" + "p_" + "Z9" * 18
 
@@ -168,8 +171,9 @@ def judge_scan_step(root):
     run = str(sc.get("run", ""))
     if not sc.get("id"):
         v.append("the scan step has no id")
-    if not FAILURE.fullmatch(str(sc.get("if", ""))):
-        v.append(f"the scan step's if is {sc.get('if')!r}, not failure()")
+    if not SCAN_IF.fullmatch(strip_expr(sc.get("if", ""))):
+        v.append(f"the scan step's if is {sc.get('if')!r}, not "
+                 "failure() || steps.failed.outputs.failed == 'true'")
     if not any(SCAN_CALL.search(l) for l in run.splitlines()):
         v.append("the scan step does not run scripts/secret-scan.sh on $EVAL_REPORT_DIR")
     if COPY.search(run) or COPY.search(str(sc.get("env", ""))):
@@ -187,12 +191,13 @@ def judge_upload_condition(root):
     sid = steps[s].get("id") if s >= 0 else None
     if not sid:
         return v + ["no scan step with an id before the upload"]
-    want = re.compile(r"failure\(\)\s*&&\s*steps\." + re.escape(str(sid))
-                      + r"\.outcome\s*==\s*(['\"])success\1")
+    want = re.compile(r"\(\s*failure\(\)\s*\|\|\s*steps\.failed\.outputs\.failed\s*==\s*(['\"])true\1\s*\)"
+                      r"\s*&&\s*steps\." + re.escape(str(sid))
+                      + r"\.outcome\s*==\s*(['\"])success\2")
     cond = strip_expr(st.get("if", ""))
     if not want.fullmatch(cond):
-        v.append(f"the upload's if is {st.get('if')!r}, not failure() && "
-                 f"steps.{sid}.outcome == 'success'")
+        v.append(f"the upload's if is {st.get('if')!r}, not (failure() || "
+                 f"steps.failed.outputs.failed == 'true') && steps.{sid}.outcome == 'success'")
     return v
 
 
@@ -216,11 +221,15 @@ def judge_one_home(check_sh_text):
 # ---------------------------------------------------------------- planted tree
 
 CHECKOUT = {"uses": f"actions/checkout@{HASH}", "with": {"persist-credentials": False}}
-SCAN_STEP = lambda: {"id": "scan", "name": "Scan the report for secrets", "if": "failure()",
-                     "run": "scripts/secret-scan.sh \"$EVAL_REPORT_DIR\""}
+def SCAN_STEP():
+    return {"id": "scan", "name": "Scan the report for secrets",
+            "if": "failure() || steps.failed.outputs.failed == 'true'",
+            "run": "scripts/secret-scan.sh \"$EVAL_REPORT_DIR\""}
+
+
 UPLOAD_STEP = lambda: {
     "name": "Keep the failed job's outputs", "uses": PIN,
-    "if": "failure() && steps.scan.outcome == 'success'",
+    "if": "(failure() || steps.failed.outputs.failed == 'true') && steps.scan.outcome == 'success'",
     "with": {"name": "evals-${{ matrix.suite }}${{ matrix.cases && format('-{0}', matrix.cases) "
                      "|| '' }}-${{ github.run_attempt }}",
              "path": "${{ env.EVAL_REPORT_DIR }}", "retention-days": 7,
@@ -285,8 +294,9 @@ class BaselineTest(unittest.TestCase):
 
     def test_expression_and_quote_forms_pass(self):
         def m(d):
-            up(d)["if"] = "${{ failure() && steps.scan.outcome == \"success\" }}"
-            sc(d)["if"] = "${{ failure() }}"
+            up(d)["if"] = ("${{ (failure() || steps.failed.outputs.failed == \"true\") "
+                           "&& steps.scan.outcome == \"success\" }}")
+            sc(d)["if"] = "${{ failure() || steps.failed.outputs.failed == \"true\" }}"
             sc(d)["run"] = "./scripts/secret-scan.sh ${EVAL_REPORT_DIR}"
             up(d)["with"]["retention-days"] = "7"
         root = planted(self, m)
@@ -400,7 +410,11 @@ class ScanStepTest(unittest.TestCase):
         self.assertTrue(judge_scan_step(planted(self, m)))
 
     def test_planted_other_conditions_fail(self):
-        for cond in (None, "always()", "success()", "failure() || cancelled()"):
+        for cond in (None, "always()", "success()", "failure() || cancelled()", "failure()",
+                     "${{ failure() }}", "steps.failed.outputs.failed == 'true'",
+                     "failure() && steps.failed.outputs.failed == 'true'",
+                     "failure() || steps.failed.outputs.failed == 'false'",
+                     "failure() || steps.run.outputs.failed == 'true'"):
             with self.subTest(cond):
                 def m(d, cond=cond):
                     if cond is None:
@@ -439,6 +453,11 @@ class UploadConditionTest(unittest.TestCase):
 
     def test_planted_conditions_without_the_outcome_fail(self):
         for cond in (None, "failure()", "${{ failure() }}", "always()",
+                     "failure() && steps.scan.outcome == 'success'",
+                     "failure() || steps.failed.outputs.failed == 'true' && steps.scan.outcome == 'success'",
+                     "failure() || steps.failed.outputs.failed == 'true'",
+                     "(failure() || steps.failed.outputs.failed == 'true') || steps.scan.outcome == 'success'",
+                     "steps.failed.outputs.failed == 'true' && steps.scan.outcome == 'success'",
                      "always() && steps.scan.outcome == 'success'",
                      "failure() && steps.run.outcome == 'success'",
                      "failure() && steps.scan.outcome != 'success'",
@@ -456,7 +475,8 @@ class UploadConditionTest(unittest.TestCase):
     def test_condition_follows_the_scan_id(self):
         def m(d):
             sc(d)["id"] = "secrets"
-            up(d)["if"] = "failure() && steps.secrets.outcome == 'success'"
+            up(d)["if"] = ("(failure() || steps.failed.outputs.failed == 'true') "
+                           "&& steps.secrets.outcome == 'success'")
         self.assertEqual(judge_upload_condition(planted(self, m)), [])
 
 

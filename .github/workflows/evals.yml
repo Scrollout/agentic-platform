@@ -89,8 +89,9 @@ jobs:
     timeout-minutes: 300
     environment: dev
     env:
-      # The runner context is not available in a job-level env; the workspace's parent is.
-      EVAL_REPORT_DIR: ${{ github.workspace }}/../eval-report
+      # The sibling of the checkout (research R1): the runner context is not available in a
+      # job-level env, and the path has no `.` or `..` segment, which upload-artifact refuses.
+      EVAL_REPORT_DIR: ${{ github.workspace }}-eval-report
     strategy:
       fail-fast: false
       # The steps suite once per step agent (T109): its 60 trials ran one after another (about an
@@ -132,14 +133,22 @@ jobs:
       - name: Remove the key file
         if: always()
         run: rm -f "$RUNNER_TEMP/anthropic_api_key"
-      # A failed job keeps its outputs for 7 days (research D46, ADR 0050, T122): the report folder
-      # is scanned for credential patterns first, and uploaded only when the scan finds none.
+      # Whether any trial failed, a quarantined case's included, which leaves the job green
+      # (research R2, ADR 0078); an unreadable report counts as a failed trial.
+      - id: failed
+        name: Find failed trials
+        if: always()
+        run: python3 scripts/ci-evals-failed-trials.py "$EVAL_REPORT_DIR"
+      # A job keeps its outputs for 7 days when it failed or any trial failed, a quarantined case's
+      # included (research D46, ADR 0050, ADR 0078, T122): the report folder is scanned for
+      # credential patterns first, and uploaded only when the scan finds none. The parentheses
+      # matter: a scan match fails the job, so failure() alone would upload.
       - id: scan
         name: Scan the eval outputs for credentials
-        if: failure()
+        if: failure() || steps.failed.outputs.failed == 'true'
         run: scripts/secret-scan.sh "$EVAL_REPORT_DIR"
       - name: Keep the failed job's eval outputs
-        if: failure() && steps.scan.outcome == 'success'
+        if: (failure() || steps.failed.outputs.failed == 'true') && steps.scan.outcome == 'success'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: evals-${{ matrix.suite }}${{ matrix.cases && format('-{0}', matrix.cases) || '' }}-${{ github.run_attempt }}
