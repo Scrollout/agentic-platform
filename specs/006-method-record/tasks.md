@@ -249,6 +249,16 @@ slice views.
 - [ ] T019 [US3] Commit; push (owner go-ahead) and fix until CI is green; fresh review of US3;
   `/speckit-converge` for US3
 
+- [ ] T031 [US3] Review findings US3-S1, S2, S4, S5 (fresh Sonnet review at 43c600e, suggestions):
+  the run-events tests could also check that A and B differ in the two-engine test, that an
+  event's `method` is the one its `reuse_key` covers at the API level, a ResultReused of an
+  accepted (not open) step in isolation, and one durable run's `listRunEvents` showing `method`
+  end to end (acceptance or a durable test with the real run record). Non-blocking
+- [X] T032 [US3] Review findings US3-S3, S6, S7 closed: S3 (schema checked on the decoded event,
+  not the raw body) is how the existing run-event tests validate; S6 the log's plan entry now
+  names `method.json`; S7 N-050 and N-053 are `done` on the shipped behaviour, and the feature's
+  remaining tasks are review, evals and the merge, none a gap in those needs
+
 ---
 
 ## Phase 6: Polish

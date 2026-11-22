@@ -250,5 +250,6 @@ terminal client do not change it, and a change to a check does (SC-002).
   T025 and T026 closed); `/speckit-converge` for US1 found no gap.
 - **SC-004 (T020)**: a fully reused run (the end-to-end job's replay RUN-2, RunStarted to
   RunCompleted, five steps reused) took 2.63 s on `e4348bf` (`main`'s code; check run
-  45019168813) and 1.90 s with the method in the key (21dcc6b, check run 45037014176): no
-  slower, within 1 s.
+  45019168813) and 1.90 s with the method in the key (21dcc6b, check run 45037014176), one
+  sample each on different runners, so no speed-up is claimed: no slower, within 1 s. US2's
+  re-check is not on a run's path.
