@@ -226,7 +226,7 @@ case pass^3, none quarantined.
 
 ## Phase 5: Polish
 
-- [ ] T015 Docs in the same change as the behaviour: the [architecture
+- [X] T015 Docs in the same change as the behaviour: the [architecture
   overview](../../docs/architecture/overview.md) (the analyst service's proposals: the two
   refusals, ADR 0081), `docs/log.md`, the [problem space](../../docs/overview/problem-space.md)
   state of N-013 and N-051; ADR 0081 and 0082 checked against what shipped;

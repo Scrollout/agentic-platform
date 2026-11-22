@@ -88,7 +88,10 @@ Shipped by Story 1:
   pattern fit, [oasdiff](/components/oasdiff.md) compatibility, lint). It serves the contract-first
   engine API.
 - **Analyst service**: [Docker Agent](/components/docker-agent.md) running `serve api` on the
-  analyst agent; the engine calls it for each proposal (research D27).
+  analyst agent; the engine calls it for each proposal (research D27). The engine reads each answer
+  itself and refuses one that repeats a key, and a revision that drops or moves an item of the
+  current proposal, asking the analyst again within the pattern's attempts
+  ([ADR 0081](/decisions/0081-platform-refuses-ambiguous-answers-and-revisions-that-lose-items.md)).
 - **Contract-lint service**: a small [Spectral](/components/spectral.md) server that lints a slice's
   contract; only the engine reaches it (research D28).
 - **Model gateway**: [nginx](/components/nginx.md), the only container with egress and the only one
