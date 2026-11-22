@@ -151,6 +151,7 @@ type ReuseLookup struct {
 type Reused struct {
 	Key       string   // the key looked up
 	Inputs    []string // the inputs it covers (the step's, then the findings' and lines' hash)
+	Method    string   // the method identity the key covers; empty when it covers none (feature 006)
 	Found     bool
 	Artifacts []string
 	Run       string // the run that accepted it, or left the round open

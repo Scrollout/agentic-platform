@@ -269,16 +269,17 @@ func (r *run) step(s machine.Step, round int, open []Finding, changed []machine.
 	if err != nil {
 		return WorkerResult{}, rejected, err
 	}
-	if key == "" && a.Key != "" { // the key that covers the open findings' text
-		keyInputs, key = a.Inputs, a.Key
+	method := ""
+	if a.Key != "" { // the lookup's key: it covers the open findings' text and the method (feature 006)
+		keyInputs, key, method = a.Inputs, a.Key, a.Method
 	}
 	found := a.Found && len(a.Artifacts) == len(s.Outputs)
 	if found && a.Open && s.Reviews() { // a review round left open in an earlier run (research D36)
-		return r.reuseOpenRound(s, round, keyInputs, key, a)
+		return r.reuseOpenRound(s, round, keyInputs, key, method, a)
 	}
 	if found && !a.Open {
 		e := &EventRecord{Event: machine.Event{Kind: "ResultReused", Step: s.Name, Round: round, Worker: s.Worker,
-			Pattern: r.ref, Inputs: keyInputs, Artifacts: a.Artifacts, ReuseKey: key, Refs: r.in.Refs,
+			Pattern: r.ref, Inputs: keyInputs, Artifacts: a.Artifacts, ReuseKey: key, Method: method, Refs: r.in.Refs,
 			ChangedLines: slices.Clone(a.Lines)}, Files: slices.Clone(a.Files)}
 		if isAgent(s) {
 			e.Event.AgentDigest, e.Event.Model = s.AgentDigest, r.in.Model
@@ -307,7 +308,7 @@ func (r *run) step(s machine.Step, round int, open []Finding, changed []machine.
 		if err := r.restore(s, n, round); err != nil {
 			return WorkerResult{}, rejected, err
 		}
-		res, v, why, err := r.attempt(s, attemptOf{n, round, open, changed, inputs, keyInputs, key})
+		res, v, why, err := r.attempt(s, attemptOf{n, round, open, changed, inputs, keyInputs, key, method})
 		if errors.Is(err, errRepeat) {
 			continue
 		}
@@ -336,7 +337,7 @@ func (r *run) step(s machine.Step, round int, open []Finding, changed []machine.
 // reuseOpenRound records a review round left open in an earlier run as reused (research D36): its
 // kept findings, in order, then a ResultReused with open_round and the kept NoBlockingFindingOpen
 // result. Nothing runs and the round is not accepted.
-func (r *run) reuseOpenRound(s machine.Step, round int, keyInputs []string, key string, a Reused) (WorkerResult, verdict, error) {
+func (r *run) reuseOpenRound(s machine.Step, round int, keyInputs []string, key, method string, a Reused) (WorkerResult, verdict, error) {
 	for _, f := range a.Findings {
 		if err := r.record(&EventRecord{Event: machine.Event{Kind: "FindingRecorded", Step: s.Name, Round: round,
 			Refs: []string{f.Rule}}, Finding: &f}); err != nil {
@@ -344,7 +345,7 @@ func (r *run) reuseOpenRound(s machine.Step, round int, keyInputs []string, key 
 		}
 	}
 	e := &EventRecord{Event: machine.Event{Kind: "ResultReused", Step: s.Name, Round: round, OpenRound: true, Worker: s.Worker,
-		Pattern: r.ref, Inputs: keyInputs, Artifacts: slices.Clone(a.Artifacts), ReuseKey: key, Refs: r.in.Refs,
+		Pattern: r.ref, Inputs: keyInputs, Artifacts: slices.Clone(a.Artifacts), ReuseKey: key, Method: method, Refs: r.in.Refs,
 		Detail: openDetail(round)}, Files: slices.Clone(a.Files)}
 	if a.Check != nil {
 		c := *a.Check
@@ -411,6 +412,7 @@ type attemptOf struct {
 	changed           []machine.Line
 	inputs, keyInputs []string
 	key               string
+	method            string // the method identity key covers; empty when it covers none
 }
 
 // attempt runs one attempt and its checks and records them. The reason says why it was not
@@ -477,7 +479,7 @@ func (r *run) attempt(s machine.Step, at attemptOf) (WorkerResult, verdict, stri
 	if isAgent(s) {
 		made.AgentDigest = s.AgentDigest
 	}
-	made.Inputs, made.Artifacts, made.ReuseKey = at.keyInputs, artifacts, at.key
+	made.Inputs, made.Artifacts, made.ReuseKey, made.Method = at.keyInputs, artifacts, at.key, at.method
 	if err := r.record(&EventRecord{Event: made}); err != nil {
 		return res, rejected, "", err
 	}
@@ -561,7 +563,7 @@ func (r *run) attempt(s machine.Step, at attemptOf) (WorkerResult, verdict, stri
 		why := openDetail(at.round)
 		rej := base
 		rej.Kind, rej.Detail, rej.OpenRound = "StepRejected", why, true
-		rej.ReuseKey, rej.Artifacts = at.key, slices.Clone(artifacts)
+		rej.ReuseKey, rej.Method, rej.Artifacts = at.key, at.method, slices.Clone(artifacts)
 		rec := &EventRecord{Event: rej}
 		// A review that writes witnesses: the open round's files are committed like an accepted
 		// step's, so the fix and the next round start from them.

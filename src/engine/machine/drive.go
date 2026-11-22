@@ -186,7 +186,7 @@ func (x *driver) stepKey(s Step, round int, inputs []string, open []Finding, cha
 		round = 0
 	}
 	return in, ReuseKey(KeyParts{PatternVersion: x.r.Pattern, Step: s.Name, Inputs: in,
-		AgentDigest: s.AgentDigest, Model: model, Round: round})
+		AgentDigest: s.AgentDigest, Model: model, Round: round, Method: x.m.cfg.Method.String()})
 }
 
 // artifacts copies the run's artifacts by name.
@@ -247,7 +247,7 @@ func (x *driver) step(ctx context.Context, s Step, round int, open []Finding, ch
 	}
 	if found && !a.Open {
 		e := Event{Kind: "ResultReused", Step: s.Name, Round: round, Worker: s.Worker, Pattern: x.r.Pattern,
-			Inputs: keyInputs, Artifacts: a.Artifacts, ReuseKey: key, Refs: x.r.refs, ChangedLines: slices.Clone(a.Lines),
+			Inputs: keyInputs, Artifacts: a.Artifacts, ReuseKey: key, Method: x.m.cfg.Method.String(), Refs: x.r.refs, ChangedLines: slices.Clone(a.Lines),
 			Files: slices.Clone(a.Files)}
 		if isAgent(s) {
 			e.AgentDigest, e.Model = s.AgentDigest, x.m.cfg.Model
@@ -319,7 +319,7 @@ func (x *driver) reuseOpenRound(s Step, round int, keyInputs []string, key strin
 		}
 	}
 	e := Event{Kind: "ResultReused", Step: s.Name, Round: round, OpenRound: true, Worker: s.Worker, Pattern: x.r.Pattern,
-		Inputs: keyInputs, Artifacts: slices.Clone(a.Artifacts), ReuseKey: key, Refs: x.r.refs, Detail: openDetail(round),
+		Inputs: keyInputs, Artifacts: slices.Clone(a.Artifacts), ReuseKey: key, Method: x.m.cfg.Method.String(), Refs: x.r.refs, Detail: openDetail(round),
 		Files: slices.Clone(a.Files)}
 	if a.Check != nil {
 		c := *a.Check
@@ -418,7 +418,7 @@ func (x *driver) attempt(ctx context.Context, s Step, at attemptOf) (Result, ver
 	if isAgent(s) {
 		made.AgentDigest = s.AgentDigest
 	}
-	made.Inputs, made.Artifacts, made.ReuseKey = at.keyInputs, artifacts, at.key
+	made.Inputs, made.Artifacts, made.ReuseKey, made.Method = at.keyInputs, artifacts, at.key, x.m.cfg.Method.String()
 	if err := x.record(made); err != nil {
 		return res, rejected, "", err
 	}
@@ -488,7 +488,7 @@ func (x *driver) attempt(ctx context.Context, s Step, at attemptOf) (Result, ver
 		why := openDetail(at.round)
 		rej := base
 		rej.Kind, rej.Detail, rej.OpenRound = "StepRejected", why, true
-		rej.ReuseKey, rej.Artifacts = at.key, slices.Clone(artifacts)
+		rej.ReuseKey, rej.Method, rej.Artifacts = at.key, x.m.cfg.Method.String(), slices.Clone(artifacts)
 		// A review that writes witnesses (data-model, "A review round"): the open round's files
 		// are committed like an accepted step's, so the fix and the next round start from them.
 		kept := slices.Clone(x.r.before) // a review that writes nothing leaves the files it started from

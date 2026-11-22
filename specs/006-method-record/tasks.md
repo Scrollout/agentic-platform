@@ -125,7 +125,7 @@ the engine at each lookup.
 B, nor when it was recorded without a method; a run resumed under B looks up its remaining steps
 under B.
 
-- [ ] T009 [P] [US1] Test author: new `src/engine/machine/reuse_method_test.go`: `KeyParts.Method`
+- [X] T009 [P] [US1] Test author: new `src/engine/machine/reuse_method_test.go`: `KeyParts.Method`
   changes the key; an empty `Method` gives exactly the key without it (the key of today); a key
   with a method differs from every key without one for the same other parts, round or not; with
   `Config.Method` A, the non-durable machine reuses a result accepted under A (`ResultReused`, no
@@ -133,7 +133,7 @@ under B.
   every `AttemptMade`, `StepAccepted`, open-round `StepRejected` and `ResultReused` carries
   `method` A, and its `reuse_key` equals `ReuseKey` of its own fields; no other event kind carries
   `method`
-- [ ] T010 [P] [US1] Test author: new `src/engine/machine/workflow_reuse_method_test.go` (package
+- [X] T010 [P] [US1] Test author: new `src/engine/machine/workflow_reuse_method_test.go` (package
   `machine_test`, beside the existing workflow tests; their helpers `newWF`, `wfRegister`,
   `wfValidate` used unchanged; a lookup registered with the real `durable.Activities` and an
   in-memory result store): with `Activities.Method` A, `LookupReuse` computes the key itself from
@@ -145,7 +145,7 @@ under B.
   later events name B, the earlier ones A; a lookup that fails leaves the step's method-less key
   and no `method` on its events, and its result is not reused by a later lookup under A; with
   `Activities.Method` empty every key is today's
-- [ ] T011 [US1] Code author: `src/engine/machine/reuse.go` (`KeyParts.Method`, written after the
+- [X] T011 [US1] Code author: `src/engine/machine/reuse.go` (`KeyParts.Method`, written after the
   round only when not empty), `machine.go` (`Event.Method` `json:"method,omitempty"`,
   `Config.Method`), `drive.go`; `src/engine/durable/durable.go`, `activities.go`
   (`Activities.Method`; `Reused.Method`; the key from the parts with the method when it is set),

@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/agentic-platform/engine/method"
 	"github.com/agentic-platform/retry"
 )
 
@@ -262,7 +263,10 @@ type Event struct {
 	Inputs      []string `json:"inputs,omitempty"`
 	Artifacts   []string `json:"artifacts,omitempty"`
 	ReuseKey    string   `json:"reuse_key,omitempty"`
-	Usage       *Usage   `json:"usage,omitempty"`
+	// Method is the method identity the step was judged under, which ReuseKey covers (feature
+	// 006); set on the events that carry a reuse key computed with one, empty otherwise.
+	Method string `json:"method,omitempty"`
+	Usage  *Usage `json:"usage,omitempty"`
 	// ChangedLines, on StepAccepted or ResultReused, are the lines the accepted result reports changing (a fix);
 	// the next review round is given them, also after a restart.
 	ChangedLines []Line      `json:"changed_lines,omitempty"`
@@ -377,6 +381,8 @@ type Config struct {
 	Events  Events
 	Results *Results
 	Model   string
+	// Method is the method identity the reuse key covers (feature 006); zero covers none.
+	Method  method.ID
 	History History
 	Retry   retry.Rule
 	Sleep   func(ctx context.Context, d time.Duration) error

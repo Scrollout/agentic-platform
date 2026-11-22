@@ -174,6 +174,9 @@ func (a *Activities) CommitStep(ctx context.Context, r machine.CommitRequest) (R
 // LookupReuse finds the result kept under a reuse key, its findings stored by hash.
 func (a *Activities) LookupReuse(_ context.Context, l ReuseLookup) (Reused, error) {
 	inputs, key := l.Parts.Inputs, l.Key
+	if !a.Method.IsZero() { // the engine's method, not the one the run started under (feature 006)
+		l.Parts.Method, key = a.Method.String(), ""
+	}
 	if key == "" {
 		open, err := a.findings(l.Open)
 		if err != nil {
@@ -184,17 +187,17 @@ func (a *Activities) LookupReuse(_ context.Context, l ReuseLookup) (Reused, erro
 		inputs, _ = machine.KeyOf(l.Parts, nil, l.Changed)
 	}
 	if a.Results == nil {
-		return Reused{Key: key, Inputs: inputs}, nil
+		return Reused{Key: key, Inputs: inputs, Method: l.Parts.Method}, nil
 	}
 	k, ok := a.Results.Get(key)
 	if !ok {
-		return Reused{Key: key, Inputs: inputs}, nil
+		return Reused{Key: key, Inputs: inputs, Method: l.Parts.Method}, nil
 	}
 	fs, err := a.store(l.Slice, k.Findings)
 	if err != nil {
 		return Reused{}, failed("ReuseFailed", err)
 	}
-	return Reused{Key: key, Inputs: inputs, Found: true, Artifacts: k.Artifacts, Run: k.Run, Lines: k.Lines, Files: k.Files, Open: k.Open,
+	return Reused{Key: key, Inputs: inputs, Method: l.Parts.Method, Found: true, Artifacts: k.Artifacts, Run: k.Run, Lines: k.Lines, Files: k.Files, Open: k.Open,
 		Findings: fs, Check: k.Check}, nil
 }
 

@@ -19,6 +19,9 @@ type KeyParts struct {
 	// Round is the review round a review step's key covers (research D36); 0 for every other
 	// step, which gives the key it had before the round was covered.
 	Round int
+	// Method is the method identity the step is judged under (feature 006, ADR 0080); empty gives
+	// the key it had before the method was covered.
+	Method string
 }
 
 // ReuseKey is the SHA-256 (lowercase hex) of the key's parts, each framed by its length and the
@@ -37,6 +40,10 @@ func ReuseKey(p KeyParts) string {
 	if p.Round != 0 { // after the counted inputs, so a key without a round is unchanged
 		field("round")
 		field(strconv.Itoa(p.Round))
+	}
+	if p.Method != "" { // last, so a key without a method is unchanged
+		field("method")
+		field(p.Method)
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
