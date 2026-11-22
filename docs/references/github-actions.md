@@ -1,7 +1,7 @@
 ---
 type: Reference
 title: GitHub Actions
-description: What GitHub Actions gives a public repository on standard hosted runners (cost, machine size, concurrency, job time) and how secrets reach workflows (forks, environments), as checked on 2026-11-16.
+description: What GitHub Actions gives a public repository on standard hosted runners (cost, machine size, concurrency, job time), how secrets reach workflows (forks, environments), and two limits of job environments and artifact paths, as checked on 2026-11-16 and 2026-11-22.
 resource: https://docs.github.com/en/actions
 tags: [references, ci, github, security]
 status: draft
@@ -31,6 +31,12 @@ sources:
   - id: secret-types
     resource: https://docs.github.com/en/code-security/reference/secret-security/secret-types
     title: Understanding GitHub secret types
+  - id: contexts
+    resource: https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability
+    title: Contexts, context availability
+  - id: artifact-run
+    resource: https://github.com/Scrollout/agentic-platform/actions/runs/44888638411
+    title: Evals run 44888638411, the upload step's error
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-16T12:00:00Z }
 ---
 
@@ -58,3 +64,12 @@ Sources: [Billing and usage](https://docs.github.com/en/actions/concepts/billing
   Environments can require reviewers before a job that uses them runs.
 
 Sources: [Using secrets in GitHub Actions](https://docs.github.com/actions/security-guides/encrypted-secrets); [Secret types](https://docs.github.com/en/code-security/reference/secret-security/secret-types).
+
+# Job environments and artifact paths
+
+- A job-level `env` may use the `github`, `needs`, `strategy`, `matrix`, `vars`, `secrets` and
+  `inputs` contexts, not `runner`; `runner.temp` is available only inside steps.
+- `actions/upload-artifact` refuses a `path` holding a `.` or `..` segment ("Relative pathing '.'
+  and '..' is not allowed"), as seen on 2026-11-22 with v7.0.2.
+
+Sources: [Contexts, context availability](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability); [Evals run 44888638411](https://github.com/Scrollout/agentic-platform/actions/runs/44888638411).
