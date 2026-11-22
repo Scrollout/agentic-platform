@@ -208,6 +208,23 @@ before the answer; read under A it is as stored.
 - [ ] T016 [US2] Commit; push (owner go-ahead) and fix until CI is green; fresh review of US2;
   findings fixed or recorded; `/speckit-converge` for US2
 
+- [X] T027 [US2] Review finding US2-B1 (fresh Sonnet review at 092f2b5, BLOCKING, research R4
+  "How"): `current` runs the re-check's compatibility and lint under the caller's context, so a
+  cancelled Approve, Answer, Replace or Create withdraws approvals as if a check had failed; run
+  them with `context.Background()` and the checks' own time limits. Test author: new
+  `src/engine/slices/checks_method_ctx_test.go`; then the code
+- [ ] T028 [US2] Review finding US2-S1 (suggestion): when the contract or baseline changes
+  `maxRechecks` times during a re-check, `current` returns and the read shows the old results
+  for that one read (still marked stale); could answer `OperationFailed` as `replace` does.
+  Non-blocking; outside the MVP unless the owner pulls it in
+- [ ] T029 [US2] Review finding US2-S2 (suggestion): `approvedFor` ignores `current`'s error, so a
+  slice whose re-check failed with an error could be offered on its old results; offer only a
+  slice whose `ChecksMethod` is the service's. Non-blocking; outside the MVP unless the owner
+  pulls it in
+- [ ] T030 [US2] Review finding US2-S3 (suggestion): tests left uncovered: `maxRechecks`
+  exhaustion, a malformed stored `checks_method` refused on load, Delete during a re-check, a
+  slice deleted between List's snapshot and its re-check. Non-blocking
+
 **Checkpoint**: no slice shows check results of another method.
 
 ---

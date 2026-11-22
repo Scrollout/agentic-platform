@@ -26,7 +26,7 @@ import (
 // The analyst runs without the lock. When the slice changed meanwhile, the revision is dropped:
 // QuestionNotOpen when one of the questions is no longer open, else OperationFailed.
 func (s *Service) Answer(ctx context.Context, id string, answers []Answer) (Slice, error) {
-	if err := s.current(ctx, id); err != nil {
+	if err := s.current(id); err != nil {
 		return Slice{}, err
 	}
 	s.mu.Lock()
@@ -114,7 +114,7 @@ func (s *Service) Answer(ctx context.Context, id string, answers []Answer) (Slic
 
 // CheckAnswers refuses exactly as Answer would before it calls the analyst, and changes nothing.
 func (s *Service) CheckAnswers(id string, answers []Answer) error {
-	if err := s.current(context.Background(), id); err != nil {
+	if err := s.current(id); err != nil {
 		return err
 	}
 	s.mu.Lock()

@@ -265,7 +265,7 @@ func (s *Service) build(ctx context.Context, description string) (Result, *recor
 	if strings.TrimSpace(description) == "" {
 		return Result{}, nil, &Error{Code: "NarrowDescription", Detail: "the description is empty; describe one use case"}
 	}
-	if sl, ok := s.approvedFor(ctx, description); ok {
+	if sl, ok := s.approvedFor(description); ok {
 		return Result{Slice: sl, Reused: true}, nil, nil
 	}
 
@@ -404,7 +404,7 @@ func (s *Service) unusable(sl *Slice, questions []QuestionDraft) (faults, links 
 }
 
 // approvedFor returns the approved slice of exactly this description, if there is one.
-func (s *Service) approvedFor(ctx context.Context, description string) (Slice, bool) {
+func (s *Service) approvedFor(description string) (Slice, bool) {
 	s.mu.Lock()
 	var same []string
 	for id, r := range s.slices {
@@ -414,7 +414,7 @@ func (s *Service) approvedFor(ctx context.Context, description string) (Slice, b
 	}
 	s.mu.Unlock()
 	for _, id := range same {
-		_ = s.current(ctx, id) // a slice deleted meanwhile is simply not offered
+		_ = s.current(id) // a slice deleted meanwhile is simply not offered
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -428,7 +428,7 @@ func (s *Service) approvedFor(ctx context.Context, description string) (Slice, b
 
 // Get returns a slice, or NotFound.
 func (s *Service) Get(id string) (Slice, error) {
-	if err := s.current(context.Background(), id); err != nil {
+	if err := s.current(id); err != nil {
 		return Slice{}, err
 	}
 	s.mu.Lock()
@@ -449,7 +449,7 @@ func (s *Service) List() []Slice {
 	}
 	s.mu.Unlock()
 	for _, id := range ids {
-		_ = s.current(context.Background(), id) // a slice deleted meanwhile is not listed
+		_ = s.current(id) // a slice deleted meanwhile is not listed
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -502,7 +502,7 @@ func (s *Service) ReplaceContract(ctx context.Context, id, contract string) (Sli
 // when the baseline changed meanwhile do they run again, at most maxRechecks times, then the
 // change ends with OperationFailed. The change is stored under the lock before it is reported.
 func (s *Service) replace(ctx context.Context, id string, part Part, set func(*Slice)) (Slice, error) {
-	if err := s.current(ctx, id); err != nil {
+	if err := s.current(id); err != nil {
 		return Slice{}, err
 	}
 	s.mu.Lock()
@@ -595,7 +595,7 @@ func (s *Service) apply(r, next *record, part Part) (Slice, error) {
 // the part gives ContradictionOpen; a failing check gives PartFailsChecks, or PatternDoesNotFit
 // for a contract whose only failures are pattern conditions, each listing the failures.
 func (s *Service) Approve(ctx context.Context, id string, part Part, contentHash string) (Slice, error) {
-	if err := s.current(ctx, id); err != nil {
+	if err := s.current(id); err != nil {
 		return Slice{}, err
 	}
 	s.mu.Lock()
@@ -628,7 +628,7 @@ func (s *Service) Approve(ctx context.Context, id string, part Part, contentHash
 
 // CheckApprove refuses exactly as Approve would, and approves nothing.
 func (s *Service) CheckApprove(id string, part Part, contentHash string) error {
-	if err := s.current(context.Background(), id); err != nil {
+	if err := s.current(id); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -684,7 +684,7 @@ func (s *Service) approvable(id string, part Part, contentHash string) (*record,
 // PatternDoesNotFit listing the failing pattern conditions, then NotApproved while a part holds
 // no approval at its current hash or any check fails.
 func (s *Service) Buildable(id string) error {
-	if err := s.current(context.Background(), id); err != nil {
+	if err := s.current(id); err != nil {
 		return err
 	}
 	s.mu.Lock()

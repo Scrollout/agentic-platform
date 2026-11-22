@@ -35,8 +35,11 @@ func (s *Service) changingLocked(id string) *sync.Mutex {
 // s.mu, under the slice's changing mutex, so a slow check holds up no other slice and two reads
 // check once; an approval or answer that lands meanwhile is kept, and the checks run again when
 // the contract or its baseline changed meanwhile, at most maxRechecks times. A service without a
-// method re-checks nothing. NotFound and InvalidRequest are find's.
-func (s *Service) current(ctx context.Context, id string) error {
+// method re-checks nothing. The checks run with context.Background() and their own time limits,
+// never the caller's context, so a cancelled request does not fail them (research R4 "How").
+// NotFound and InvalidRequest are find's.
+func (s *Service) current(id string) error {
+	ctx := context.Background()
 	if s.method == "" {
 		return nil
 	}
