@@ -176,7 +176,7 @@ every trial passed, and refuse a `.` or `..` segment.
 - [X] T020 (review at 0a85192, no blocking finding; converge clean; FR-009: no change under src/agents or src/engine) Final fresh review of the whole feature (rules above) and `/speckit-converge`; findings
   fixed or recorded as tasks; FR-009: `git diff main -- src/agents/analyst.yaml
   src/engine/api/preview` shows no model, pin or schema change
-- [ ] T021 Before the owner's merge: remove `005-analyst-reliability` from the environment `dev`'s
+- [X] T021 (CI run 45014143383 at d3e3c30 green; `evals-current`: base 0a85192, no suite pending; `dev` allows only `main` again) Before the owner's merge: remove `005-analyst-reliability` from the environment `dev`'s
   deployment branches; read the branch's `evals-current` output; no suite pending
 
 ---
