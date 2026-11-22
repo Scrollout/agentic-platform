@@ -161,6 +161,8 @@ Reproduced with Go 1.26.11 (scratch module, not committed):
 | Task | Commit | Run | Result |
 |------|--------|-----|--------|
 | T007 (US1) | 79731d4 | 45065044569 | green |
+| T011 (US2) | 92556c8 | 45067768028 | go-arch-lint failed (`kept.go` imported the Gherkin parser); cancelled when superseded |
+| T011 (US2 fix, T012) | 988be8f | 45068904668 | green |
 
 US1 fresh review (Sonnet, read-only worktree at 79731d4, judging run 45065044569): no blocking
 finding; suggestions and untested cases in tasks T019 (open) and T020 (closed). `/speckit-converge`
@@ -173,3 +175,8 @@ measured); `TestHarnessStubRevision`: `good-revised` passes with 1 attempt per t
 `OperationFailed` naming the lost IDs and the repeated key (4.5 s each). The first stub run had
 failed the old "agent container failed" check, which the refusal now trips; the owner-approved
 test change requires the refusal there instead.
+
+US2 fresh review (Sonnet, read-only worktree at 988be8f, judging run 45068904668): no blocking
+finding; tasks T024 (open) and T025 (closed). `/speckit-converge` for US2: FR-003, FR-004,
+FR-005 and FR-010 are built (`kept.go`, `propose`, `slice.ExampleRules`) and tested; nothing
+appended beyond T024.

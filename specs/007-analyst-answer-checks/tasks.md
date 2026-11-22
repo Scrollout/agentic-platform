@@ -178,8 +178,17 @@ again, then fails and changes nothing (FR-003, FR-004, FR-005, FR-010; research 
   (T022 passes); `src/engine/slices/kept.go` uses it, no longer imports the Gherkin parser and
   drops its own rule-block and example-tag patterns; no test file is edited; T008, T009 and every existing test pass;
   `go-arch-lint` passes
-- [ ] T011 [US2] Commit; push (owner go-ahead) and fix until CI is green; record the run in
+- [X] T011 [US2] Commit; push (owner go-ahead) and fix until CI is green; record the run in
   research; fresh review of US2; `/speckit-converge` for US2
+
+- [ ] T024 [US2] Review findings US2-S1, S2 and untested cases (fresh Sonnet review at 988be8f,
+  suggestions, not blocking): S1 `kept.go` reads the contract's operation IDs itself beside
+  `slice.Trace`'s `contractLinks` (one owner: a `slice.OperationIDs`); S2 an overlong line in
+  `propose`'s doc comment; untested through `keptFaults`: operations under `webhooks`, the YAML
+  alias path, a Scenario Outline, odd `Rule:` spacing, a re-homed rule with a dropped goal, a
+  duplicate rule ID in the current proposal, an example moved from outside a Rule block under one
+- [X] T025 [US2] Review finding US2-S3 closed: a kept example under a dropped rule gives both
+  faults, as data-model "Faults" and the `rule` subtest say. closed: by design
 
 ---
 
