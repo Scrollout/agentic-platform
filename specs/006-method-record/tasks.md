@@ -236,7 +236,7 @@ slice views.
 
 ## Phase 6: Polish
 
-- [ ] T020 SC-004: from the CI run's acceptance job, record in research a fully reused run's time
+- [X] T020 SC-004: from the CI run's acceptance job, record in research a fully reused run's time
   before (`main`) and after; within 1 s
 - [X] T021 Docs in the same change as the behaviour: the [architecture
   overview](../../docs/architecture/overview.md)'s reuse key (method identity, ADR 0079 and 0080),

@@ -248,3 +248,7 @@ terminal client do not change it, and a change to a check does (SC-002).
   after runs 45032308393 (arch, I1) and 45033385634 (py-tests, I2) failed. US1's fresh review
   (Sonnet, read-only, worktree at 21dcc6b): no blocking finding, three suggestions (T024 open,
   T025 and T026 closed); `/speckit-converge` for US1 found no gap.
+- **SC-004 (T020)**: a fully reused run (the end-to-end job's replay RUN-2, RunStarted to
+  RunCompleted, five steps reused) took 2.63 s on `e4348bf` (`main`'s code; check run
+  45019168813) and 1.90 s with the method in the key (21dcc6b, check run 45037014176): no
+  slower, within 1 s.
