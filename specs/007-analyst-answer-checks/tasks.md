@@ -159,21 +159,24 @@ again, then fails and changes nothing (FR-003, FR-004, FR-005, FR-010; research 
 - [X] T009 [US2] Test author (owner-approved change T002 (a)): `src/engine/slices/slices_crosspart_test.go`
   `TestAnAnswerThatRevisesAPartWithdrawsApprovalsOfPartsItNowBreaks` expects the refusal as
   approved; commit with `Tests-approved-by:`
-- [X] T010 [US2] Code author: new `src/engine/slices/kept.go` (the kept IDs of a proposal, as
+- [X] T010 [US2] (its `kept.go` broke the arch lint; T023 reworks it) Code author: new `src/engine/slices/kept.go` (the kept IDs of a proposal, as
   [data-model.md](data-model.md) "Kept IDs", and the faults of a revision against them);
   `src/engine/slices/service.go` `propose` adds them after `unusable`'s faults when the input has
   a current proposal. T008 and T009 pass; `slices_retry2_test.go`, `slices_retry_links_test.go`
   and the other existing tests stay green
-- [ ] T021 [US2] Contract (design gap from CI run 45067768028, arch lint: `slices` may not import
-  the Gherkin parser; research R2): `src/slice/README.md` gains `ExampleRules(text)`: "returns
-  each `E-<n>` that a scenario under a `Rule: R-<n>` block carries as an `@E-<n>` tag, with that
-  rule, in document order, each once (an ID carried twice keeps its first rule); scenarios outside
-  such a block are not listed; empty text gives none; an error means the text is not Gherkin"
-- [ ] T022 [P] [US2] Test author: new `src/slice/example_rules_test.go` for `ExampleRules` as T021
-  states (order, first rule kept, scenarios outside a `Rule: R-<n>` block or under a block not
-  named `R-<n>` left out, several `@E` tags on one scenario, empty and blank text, not Gherkin)
-- [ ] T023 [US2] Code author: `src/slice/tags.go` `ExampleRules` (T022 passes); `src/engine/slices/kept.go`
-  uses it and no longer imports the Gherkin parser; T008, T009 and every existing test pass;
+- [ ] T021 [US2] Contract (research R2, design gap; committed alone): `src/slice/README.md` gains,
+  beside `ExampleScenarios`: "`ExampleRules(text)` gives each example ID of Gherkin examples
+  with the rule it sits under." and then its limits: each `E-<n>` a scenario under a
+  `Rule: R-<n>` block carries as an `@E-<n>` tag, in document order, each once (an ID carried
+  twice keeps its first rule); unlike `ExampleScenarios`, scenarios outside such a block are not
+  listed; empty text gives none; an error means the text is not Gherkin
+- [ ] T022 [US2] Test author (not T023's author): new `src/slice/example_rules_test.go` for
+  `ExampleRules` as T021 states (order, first rule kept, scenarios outside a `Rule: R-<n>` block
+  or under a block not named `R-<n>` left out, several `@E` tags on one scenario, empty and blank
+  text, not Gherkin); seen failing before T023
+- [ ] T023 [US2] Code author: `src/slice/tags.go` `ExampleRules`, reusing its tag patterns
+  (T022 passes); `src/engine/slices/kept.go` uses it, no longer imports the Gherkin parser and
+  drops its own rule-block and example-tag patterns; no test file is edited; T008, T009 and every existing test pass;
   `go-arch-lint` passes
 - [ ] T011 [US2] Commit; push (owner go-ahead) and fix until CI is green; record the run in
   research; fresh review of US2; `/speckit-converge` for US2
@@ -237,6 +240,7 @@ case pass^3, none quarantined.
 - T001 before everything; T002 before T009 and T012.
 - US1 (T003-T007) before US2's code (T010): both change `Service.propose`.
 - US3's T012 needs T006 (`ParseProposal`) and T010 (the live cases rely on the kept-IDs refusal).
+- T021 before T022 before T023 before T011 (T023 fixes T010's `kept.go`).
 - T013 after T012 and US2 pushed; T015-T018 after T014.
 
 ## Parallel examples

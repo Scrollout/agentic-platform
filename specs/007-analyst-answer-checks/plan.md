@@ -19,12 +19,12 @@ The analyst's prompt, model and schema do not change.
 **Language/Version**: Go 1.26 (the engine and the evals harness, as feature 001)
 
 **Primary Dependencies**: none added; `encoding/json` (`Decoder.Token`), `go.yaml.in/yaml/v3` and
-the Gherkin parser already used by `slice`
+the Gherkin parser, used only inside `slice` (`slice.ExampleRules`, research R2)
 
 **Storage**: none changed; a refused revision stores nothing
 
-**Testing**: Go tests in `src/engine/slices` and `src/engine/analyst` (new files by separate
-authors); the analyst evals' stub run (`run.sh stub`) and one live analyst run; CI's check run of
+**Testing**: Go tests in `src/engine/slices`, `src/engine/analyst` and `src/slice` (new files by
+separate authors); the analyst evals' stub run (`run.sh stub`) and one live analyst run; CI's check run of
 the pushed commit as the full test command
 
 **Target Platform**: the local platform (Compose), as feature 001
@@ -119,6 +119,7 @@ specs/007-analyst-answer-checks/
 src/engine/slices/proposal.go        # new: ParseProposal, AnswerFault (R1)
 src/engine/slices/kept.go            # new: the IDs a revision must keep (R2)
 src/slice/tags.go, src/slice/README.md   # ExampleRules: each example ID with its rule (R2)
+src/slice/example_rules_test.go          # new
 src/engine/slices/service.go         # propose: AnswerFault and lost IDs as faults
 src/engine/analyst/http.go           # Propose parses with slices.ParseProposal
 src/engine/README.md                 # Slices: the two refusals (contract)
@@ -133,6 +134,8 @@ src/engine/slices/slices_crosspart_test.go       # the refusal replaces the with
 
 **Structure Decision**: both rules belong to the slices service, which owns what a proposal is
 and when it is usable; the analyst client and the evals harness only call its parse function.
+The `slice` module owns reading the Gherkin examples, so the example IDs with their rules come
+from `slice.ExampleRules`.
 
 **Existing tests expected to change** (each put to the owner first): `slices_crosspart_test.go`
 (R5); `revision_evals_test.go`, `retry_evals_test.go`, `revision.go` (a helper analyst and its
