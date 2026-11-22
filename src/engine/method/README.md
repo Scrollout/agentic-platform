@@ -68,6 +68,9 @@ gives the same identity.
 
 ## The command: `scripts/method-digest.py`
 
+It works on the Git work tree of the current directory: it reads `src/engine/method/method.json`
+and `src/deploy/images.lock` there and writes that tree's `src/engine/method/method.sha256`.
+
 | Call | Does | Exit |
 |------|------|------|
 | `scripts/method-digest.py` | writes the identity and a newline to `src/engine/method/method.sha256` when that file differs; prints `method: <identity> (<n> files, <m> pins)` and `written` or `unchanged` | 0; 2 on a bad declaration or outside a Git work tree |
@@ -84,11 +87,13 @@ whose identity is stale fails.
 
 ## The Go side
 
-- `method.ID`: a method identity, 64 lowercase hex digits; it holds only valid values.
+- `method.ID`: a method identity; it holds only a valid one. `String()` gives its 64 lowercase
+  hex digits. The zero `ID` means no identity: `String()` gives `""` and `IsZero()` is true.
 - `method.Parse(s string) (ID, error)`: accepts exactly 64 lowercase hex digits after one trailing
   newline is trimmed; anything else (empty, too short or long, upper case, a non-hex character, a
-  space, a second newline) is an error naming what was found.
-- `method.Current() ID`: the identity embedded from `method.sha256`, parsed once.
+  space, a second newline) is an error naming what was found, with the zero `ID`.
+- `method.Current() (ID, error)`: the identity embedded from `method.sha256`, parsed once; the
+  same as `Parse` of that file's bytes.
 - The engine's start fails, naming `src/engine/method/method.sha256` and
   `scripts/method-digest.py`, when the embedded identity does not parse.
 
