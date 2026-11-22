@@ -31,7 +31,7 @@ A flaky case is quarantined, never retried until it passes (constitution, Fix th
 `Quarantine` field names an open task in `specs/backlog.md`. It still runs and is reported, marked
 quarantined, but does not count towards the suite's result;
 `scripts/tests/test_eval_quarantine_open_task.py` requires every quarantine to name an open task,
-so it ends with its task. Quarantined now: `revise-inject-approvals-field` (T195).
+so it ends with its task. No case is quarantined now.
 
 | Grader | Rule |
 |--------|------|
