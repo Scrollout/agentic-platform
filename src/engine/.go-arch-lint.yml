@@ -92,6 +92,9 @@ deps:
     # api for the retry rule of the engine contract (api.RetryRule); api defines the ports durable implements.
     mayDependOn: [api, machine, method, store]
     canUse: [retry-module, temporal]
+  method:
+    # itself only: its external test package (method_test) imports it.
+    mayDependOn: [method]
   machine:
     # durable, retry-module, temporal, temporal-testsuite and yaml for the run workflow's tests (T012).
     mayDependOn: [durable, machine, method]

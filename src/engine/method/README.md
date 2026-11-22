@@ -97,4 +97,4 @@ whose identity is stale fails.
 - The engine's start fails, naming `src/engine/method/method.sha256` and
   `scripts/method-digest.py`, when the embedded identity does not parse.
 
-The package depends on no other component.
+The package depends on no other component (the arch file lets only its own tests import it).
