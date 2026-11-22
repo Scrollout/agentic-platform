@@ -5,7 +5,6 @@ package analyst
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -39,9 +38,10 @@ func NewHTTP(baseURL, token, digest string) *HTTP {
 var _ slices.Analyst = (*HTTP)(nil)
 
 // Propose sends slices.AnalystMessage(in) to a new session and returns the last structured answer
-// as the proposal, with the model the service reports and the client's digest. It fails unless
-// the stream ends with stream_stopped and reason normal, without an error event. It never retries:
-// slices.Service decides whether to ask again. The session is deleted however the call ends.
+// as the proposal, read by slices.ParseProposal (an answer that repeats a key gives an error
+// wrapping its *slices.AnswerFault), with the model the service reports and the client's digest.
+// It fails unless the stream ends with stream_stopped and reason normal, without an error event.
+// It never retries: slices.Service decides whether to ask again. The session is deleted however the call ends.
 func (a *HTTP) Propose(ctx context.Context, in slices.AnalystInput) (slices.Proposal, error) {
 	ctx, cancel := context.WithTimeout(ctx, callTimeout)
 	defer cancel()
@@ -49,9 +49,9 @@ func (a *HTTP) Propose(ctx context.Context, in slices.AnalystInput) (slices.Prop
 	if err != nil {
 		return slices.Proposal{}, fmt.Errorf("analyst: %w", err)
 	}
-	var p slices.Proposal
-	if err := json.Unmarshal([]byte(ans.Content), &p); err != nil {
-		return slices.Proposal{}, fmt.Errorf("analyst: the answer is not a proposal: %v", err)
+	p, err := slices.ParseProposal([]byte(ans.Content))
+	if err != nil {
+		return slices.Proposal{}, fmt.Errorf("analyst: the answer is not a proposal: %w", err)
 	}
 	p.Model, p.AgentDigest = ans.Model, a.digest
 	return p, nil

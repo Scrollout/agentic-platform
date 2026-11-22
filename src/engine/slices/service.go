@@ -287,9 +287,10 @@ func (s *Service) build(ctx context.Context, description string) (Result, *recor
 // propose asks the analyst for a proposal from base (a description, and when revising the
 // current proposal and the questions) and builds the slice from it; asked is the number of
 // questions the slice already has, which count against the limit with the new ones. An unusable
-// proposal is sent back with its faults until one is usable or s.attempts calls were made; it
-// returns the number of calls made. An analyst error, a description of several use cases and too
-// many questions are returned at once, not retried.
+// proposal is sent back with its faults until one is usable or s.attempts calls were made; an
+// unusable answer (an analyst error wrapping *AnswerFault) is asked again with its reason as the
+// fault and no previous proposal. It returns the number of calls made. Any other analyst error, a
+// description of several use cases and too many questions are returned at once, not retried.
 func (s *Service) propose(ctx context.Context, base AnalystInput, asked int) (Proposal, Slice, int, error) {
 	description := base.Description
 	in := base
@@ -297,6 +298,16 @@ func (s *Service) propose(ctx context.Context, base AnalystInput, asked int) (Pr
 		p, err := s.analyst.Propose(ctx, in)
 		if errors.Is(err, ErrMultipleUseCases) {
 			return Proposal{}, Slice{}, 0, &Error{Code: "NarrowDescription", Detail: "the description covers more than one use case; describe one"}
+		}
+		var fault *AnswerFault
+		if errors.As(err, &fault) {
+			if attempt >= s.attempts {
+				return Proposal{}, Slice{}, 0, &Error{Code: "OperationFailed", Detail: fmt.Sprintf(
+					"the analyst's proposal was unusable after %d attempts (limits.attempts): %s", attempt, fault.Reason)}
+			}
+			in = base
+			in.Previous, in.Errors = nil, []string{fault.Reason}
+			continue
 		}
 		if err != nil {
 			return Proposal{}, Slice{}, 0, fmt.Errorf("slices: the analyst failed: %w", err)

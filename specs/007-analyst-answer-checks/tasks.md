@@ -88,7 +88,7 @@ FR-002; research R1).
 **Independent Test**: T003-T005 pass; with a stub analyst whose first answer repeats `examples`
 and whose second is good, `Answer` yields the second with `attempts` 2.
 
-- [ ] T003 [P] [US1] Test author: new `src/engine/slices/proposal_test.go` for
+- [X] T003 [P] [US1] Test author: new `src/engine/slices/proposal_test.go` for
   `ParseProposal(answer []byte) (Proposal, error)`: a key repeated at the top level (`examples`),
   in a goal, in a rule, in a question and in a nested object of a question, each gives an error
   that `errors.As` reads as `*AnswerFault` whose reason is `the answer holds the key "<key>"
@@ -100,7 +100,7 @@ and whose second is good, `Answer` yields the second with `attempts` 2.
   and the same key written plainly (`"ab"`) count as one key, as do keys that differ only in
   letter case (`examples`, `Examples`); a key or pointer holding a line break or longer than 64
   characters appears in the reason quoted (`%q`, no raw line break) and cut to 64 characters
-- [ ] T004 [P] [US1] Test author: new `src/engine/slices/answer_fault_retry_test.go`, with stub
+- [X] T004 [P] [US1] Test author: new `src/engine/slices/answer_fault_retry_test.go`, with stub
   analysts returning an error that wraps `*AnswerFault`: on `Create` and on `Answer`, a fault then
   a good proposal is accepted with `attempts` 2 in the `proposed`/`revised` history entry, the
   second call's `AnalystInput.Errors` holds the fault's reason and `Previous` is nil (on `Answer`
@@ -108,10 +108,10 @@ and whose second is good, `Answer` yields the second with `attempts` 2.
   `OperationFailed` naming the key, `Create` stores nothing and `Answer` leaves the slice's
   parts, approvals, questions and history unchanged; an analyst error that is not an
   `*AnswerFault` is still returned at once, not retried
-- [ ] T005 [P] [US1] Test author: new `src/engine/analyst/http_repeated_key_test.go`: with the
+- [X] T005 [P] [US1] Test author: new `src/engine/analyst/http_repeated_key_test.go`: with the
   test server `http_test.go` uses, an answer whose content repeats a key makes `Propose` return
   an error wrapping `*slices.AnswerFault`; the session is still deleted
-- [ ] T006 [US1] Code author: new `src/engine/slices/proposal.go` (`AnswerFault`, `ParseProposal`:
+- [X] T006 [US1] Code author: new `src/engine/slices/proposal.go` (`AnswerFault`, `ParseProposal`:
   a walk over `encoding/json`'s `Decoder.Token` keeping the keys of each open object, then the
   decode as today); `src/engine/slices/service.go` `propose` treats an error wrapping
   `*AnswerFault` as an unusable answer (its reason a fault, the next input with no `Previous`);
