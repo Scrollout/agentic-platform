@@ -124,7 +124,7 @@ src/engine/README.md                 # Slices: the two refusals (contract)
 src/engine/api/preview/2026-11-12-preview/openapi.yaml   # createSlice, answerQuestions descriptions
 src/tests/evals/analyst/revision_evals_test.go   # runRevision through Service.Answer (approval)
 src/tests/evals/analyst/retry_evals_test.go      # dockerAnalyst parses with ParseProposal (approval)
-src/tests/evals/analyst/revision.go              # header: retry (approval)
+src/tests/evals/analyst/revision.go              # header: retry; analyst replaying Create, docker on Answer (approval)
 src/tests/evals/analyst/testdata/revision/bad-revised-repeated-key.json   # new planted answer
 src/tests/evals/analyst/README.md                # the revision cases run through the platform
 src/engine/slices/slices_crosspart_test.go       # the refusal replaces the withdrawal (approval, R5)
@@ -134,7 +134,8 @@ src/engine/slices/slices_crosspart_test.go       # the refusal replaces the with
 and when it is usable; the analyst client and the evals harness only call its parse function.
 
 **Existing tests expected to change** (each put to the owner first): `slices_crosspart_test.go`
-(R5); `revision_evals_test.go`, `retry_evals_test.go`, `revision.go` and the suite's README (R3).
+(R5); `revision_evals_test.go`, `retry_evals_test.go`, `revision.go` (a helper analyst and its
+header) and the suite's README (R3).
 
 ## Exceptions
 

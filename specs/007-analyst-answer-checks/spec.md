@@ -35,6 +35,9 @@ Quarantine, Check.
   an item by changing the part directly (owner, FR-005).
 - Q: What do the revision evals grade: one raw analyst call (today) or the revision the platform
   accepts through its retry? → A: The platform's revision, with attempts reported (owner, FR-006).
+- Analyze round 1 (no change of intent): keys equal but for letter case are one key, since Go's
+  decoder matches them so (FR-001); a kept rule whose current goal is gone is not held to it; the
+  stub eval cases prove the refusal, the engine's tests the accepted retry (US3).
 - Plan finding (no change of intent): "re-homes" covers an example moved to another rule, as the
   eval grader `KeepsIDs` reads it; FR-003 now says so (research R2).
 
@@ -121,11 +124,14 @@ analyst run passes every case pass^3 with no case quarantined.
 
 **Acceptance Scenarios**:
 
-1. **Given** the stub analyst answers first with a repeated key, then with a good revision,
-   **When** the case runs, **Then** it passes and reports two attempts.
-2. **Given** the stub analyst first drops kept IDs, then keeps them, **When** the case runs,
-   **Then** it passes and reports two attempts.
-3. **Given** the live analyst, **When** the full analyst suite runs, **Then** every case passes
+1. **Given** the stub analyst answers every attempt with a repeated key, **When** the case
+   runs, **Then** every trial fails after the pattern's attempts, each refused and asked again.
+2. **Given** the stub analyst drops kept IDs on every attempt, **When** the case runs, **Then**
+   every trial fails after the pattern's attempts in the same way.
+3. **Given** the stub analyst gives a good revision, **When** the case runs, **Then** every trial
+   passes with one attempt. (That a refused answer followed by a good one is accepted is proven
+   by the engine's tests, US1 and US2.)
+4. **Given** the live analyst, **When** the full analyst suite runs, **Then** every case passes
    pass^3, none quarantined.
 
 ---
@@ -145,6 +151,10 @@ analyst run passes every case pass^3 with no case quarantined.
   (FR-005).
 - The analyst may rename an item's text, merge wording or re-order items; only IDs and a rule's
   goal are checked.
+- Keys that differ only in letter case (`examples`, `Examples`) are the same key, since the
+  platform reads keys that way.
+- A kept rule whose goal the current proposal no longer has (the developer removed the goal
+  directly) keeps its ID, but its goal is not checked, so the analyst may repair the link.
 - The lost IDs are named in the fault the analyst gets, never the answer text (the developer's
   text is not echoed back as an instruction).
 
@@ -152,8 +162,9 @@ analyst run passes every case pass^3 with no case quarantined.
 
 ### Functional Requirements
 
-- **FR-001**: An analyst answer that holds the same object key twice anywhere in its structure
-  MUST be refused as not a proposal, with a fault naming the key and where it repeats.
+- **FR-001**: An analyst answer that holds the same object key twice anywhere in its structure,
+  keys compared without regard to letter case (as the platform reads them), MUST be refused as
+  not a proposal, with a fault naming the key and where it repeats.
 - **FR-002**: A refused answer (FR-001) MUST be sent back to the analyst like any unusable
   proposal, within the pattern's attempts, in both a new slice and a revision; after the last
   attempt the request MUST fail and change nothing.
@@ -170,8 +181,8 @@ analyst run passes every case pass^3 with no case quarantined.
   report the number of attempts each trial took (changes existing eval test files: the owner's
   approval of that change is recorded with it).
 - **FR-007**: The analyst evals MUST gain a case for each fixed failure: an answer with a repeated
-  key and a revision that drops kept IDs, each proven refused and asked again (eval changes need
-  the owner's approval).
+  key and a revision that drops kept IDs, each proven refused and asked again up to the pattern's
+  attempts (eval changes need the owner's approval).
 - **FR-008**: The quarantine of `revise-inject-approvals-field` (T195) MUST be removed once
   FR-001..FR-007 hold, and T195 and T196 closed.
 - **FR-009**: The analyst's model, its pinned version, its instruction and the proposal schema

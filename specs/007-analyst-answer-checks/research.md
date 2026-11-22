@@ -43,6 +43,12 @@ Reproduced with Go 1.26.11 (scratch module, not committed):
   reason, and after the last attempt the request fails with `OperationFailed` naming it, as for
   any unusable proposal (S2). An answer that is not JSON stays an analyst error, as today (the
   spec covers repeated keys only).
+- **Analyze round 1**: keys are compared without regard to letter case, since `json.Unmarshal`
+  matches struct fields so and `examples`/`Examples` would resolve silently too; the key and
+  pointer in a fault are quoted (`%q`) and cut to 64 characters, since they are model text; the
+  analyst's message with `Previous` nil already reads "Previous proposal: null" then the errors
+  (`message.go`, pinned by `TestAnalystMessageRetryWithErrorsOnlyPinsNullPrevious`), which says
+  truly that no proposal could be read, so `message.go` does not change.
 - **Rationale**: model output is parsed, never trusted (S11); RFC 7493 forbids repeated names and
   RFC 8259 calls their handling unpredictable (S7). Refusing in the one parse function gives the
   rule one owner, used by production and by the evals alike. Sending no `Previous` avoids
@@ -75,7 +81,9 @@ Reproduced with Go 1.26.11 (scratch module, not committed):
   their lists, examples from the `@E-<n>` tags under `Rule:` blocks (`slice.ExampleScenarios`'s
   parser), operations from the contract's `operationId`s. When the current examples or contract
   do not parse (a developer may store such a part, FR-007 of feature 001), their IDs are not
-  known and are not checked. The rule is the service's alone; the eval grader `KeepsIDs` (S9)
+  known and are not checked. A kept rule whose goal the current proposal lacks (the developer
+  removed the goal directly) keeps its ID but not that goal, so the analyst may repair the
+  broken link (analyze round 1). The rule is the service's alone; the eval grader `KeepsIDs` (S9)
   judges the analyst independently and stays as it is.
 - **Spec alignment**: S9 keeps an example under its rule, and FR-003 says "re-homes"; the spec's
   FR-003 now names a kept example under the same rule explicitly (plan finding, recorded in the
@@ -89,8 +97,9 @@ Reproduced with Go 1.26.11 (scratch module, not committed):
 ## R3. What the revision evals grade
 
 - **Decision** (*owner*, FR-006): each revision trial goes through `slices.Service.Answer` with
-  the real catalogue pattern: the service is created from the fixed earlier proposal (as
-  `RevisionInput` does today), then `Answer` calls a `dockerAnalyst`, so an unusable revision is
+  the real catalogue pattern: the service is created from the fixed earlier proposal by an
+  analyst that replays it on `Create` and hands every `Answer` call to a `dockerAnalyst` (a new
+  helper beside `replayAnalyst` in `revision.go`; `RevisionInput` stays for the message file), so an unusable revision is
   sent back as in production. What is graded is the last attempt's answer, with `GradeRevision`
   against the input of the first attempt; the trial fails when `Answer` fails or a grader fails;
   `Trial.Attempts` is the number of analyst calls of `Answer`. `dockerAnalyst` parses with

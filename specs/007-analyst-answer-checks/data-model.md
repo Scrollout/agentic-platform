@@ -10,8 +10,10 @@ extracted JSON).
 
 - Parsed only by `slices.ParseProposal` into a `Proposal` (research R1).
 - Refused, as an `AnswerFault`, when an object at any depth holds a key twice, whatever the
-  values. The fault names the key and the JSON Pointer of the object (`/` for the top level,
-  `/rules/1` for the second rule).
+  values, keys compared without regard to letter case (`strings.EqualFold`: Go's decoder matches
+  struct fields so). The fault names the key and the JSON Pointer of the object (`/` for the top
+  level, `/rules/1` for the second rule); both are model text, so each is quoted with Go's `%q`
+  (no raw line break reaches the message) and cut to 64 characters.
 - Not JSON, not one object, or trailing data: an error as today, not an `AnswerFault`.
 - A repeat inside a string value (Gherkin or YAML text) is not a repeated key.
 
@@ -28,6 +30,8 @@ Read from the slice's current proposal (`AnalystInput.Current`) when the analyst
 | Example | `@E-<n>` tag of a scenario under a `Rule: R-<n>` block of `examples` | the same `@E-<n>` under the same rule |
 | Operation | `operationId` of each operation in `contract` | the same `operationId` |
 
+- A kept rule whose goal is not among the current proposal's goals keeps its ID; its goal is not
+  checked.
 - When the current `examples` or `contract` does not parse, its IDs are not known and not
   checked.
 - New IDs are allowed.
@@ -42,7 +46,10 @@ Read from the slice's current proposal (`AnalystInput.Current`) when the analyst
 | Re-homed example | `<E-n> was under <R-a> and is now under <R-b>` |
 
 Each fault names keys and IDs only (FR-010). A refused answer is sent back with no `Previous`;
-a refused revision with its proposal as `Previous`, as any unusable proposal.
+the message then reads "Previous proposal: null" followed by the fault, as `AnalystMessage`
+already does and `TestAnalystMessageRetryWithErrorsOnlyPinsNullPrevious` pins (no message
+change). A refused revision is sent back with its proposal as `Previous`, as any unusable
+proposal.
 
 ## State
 

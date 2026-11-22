@@ -46,7 +46,10 @@ starts after US1's code is committed.
   another model than the author's, in its own worktree checked out at the branch commit with the
   uncommitted and untracked files, judging the CI run; at most 3 rounds. Then `/speckit-converge`.
 - **Gate**: `/speckit-analyze` (fresh reviewer) must report no CRITICAL or HIGH before T001, and
-  again after any change to spec, plan, tasks or a design artifact.
+  again after any change to spec, plan, tasks or a design artifact. Round 1 (fresh Sonnet, at
+  cd97fc0): 0 CRITICAL, 3 HIGH (F1 stub cases cannot show an accepted retry, F2 case-variant keys,
+  F3 the retry message with no previous proposal), 4 MEDIUM, 3 LOW, fixed at their source (spec
+  Clarifications, research R1-R3, data model).
 
 ---
 
@@ -55,7 +58,9 @@ starts after US1's code is committed.
 - [ ] T001 Contract (committed alone): `src/engine/README.md` section Slices gains the additions
   of [contracts/analyst-answer-rules.md](contracts/analyst-answer-rules.md) (`ParseProposal`,
   `AnswerFault`, the kept-IDs rule of `Answer`; the sentence "such as rules naming a removed goal"
-  about withdrawals after `Answer` is reworded, since a revision now keeps every ID); the
+  about withdrawals after `Answer` is reworded, since a revision now keeps every ID; "An analyst
+  error, `NarrowDescription` and `TooManyQuestions` are returned, not retried" gains the
+  `AnswerFault` exception); the
   `createSlice` and `answerQuestions` descriptions in
   `src/engine/api/preview/2026-11-12-preview/openapi.yaml` gain the sentences there;
   `scripts/generate.sh` regenerates and `scripts/generate.sh --check` passes; the draft then
@@ -88,8 +93,10 @@ and whose second is good, `Answer` yields the second with `attempts` 2.
   twice is still refused; `examples:` twice inside the Gherkin string is not a repeated key; the
   same key in two different objects is not a repeat; an answer that is not JSON, an array, or
   one object followed by more data gives an error that is not an `*AnswerFault`; a good answer
-  gives the same `Proposal` as `json.Unmarshal`; a key that needs JSON escaping (`"ab"` and
-  `"ab"`) counts as the same key
+  gives the same `Proposal` as `json.Unmarshal`; a key written with a JSON escape (`"a\u0062"`)
+  and the same key written plainly (`"ab"`) count as one key, as do keys that differ only in
+  letter case (`examples`, `Examples`); a key or pointer holding a line break or longer than 64
+  characters appears in the reason quoted (`%q`, no raw line break) and cut to 64 characters
 - [ ] T004 [P] [US1] Test author: new `src/engine/slices/answer_fault_retry_test.go`, with stub
   analysts returning an error that wraps `*AnswerFault`: on `Create` and on `Answer`, a fault then
   a good proposal is accepted with `attempts` 2 in the `proposed`/`revised` history entry, the
@@ -105,7 +112,8 @@ and whose second is good, `Answer` yields the second with `attempts` 2.
   a walk over `encoding/json`'s `Decoder.Token` keeping the keys of each open object, then the
   decode as today); `src/engine/slices/service.go` `propose` treats an error wrapping
   `*AnswerFault` as an unusable answer (its reason a fault, the next input with no `Previous`);
-  `src/engine/analyst/http.go` parses with `slices.ParseProposal`. T003-T005 pass and the
+  `src/engine/analyst/http.go` parses with `slices.ParseProposal` and wraps its error with `%w`
+  so `errors.As` finds the `*AnswerFault`; `message.go` does not change (data model, Faults). T003-T005 pass and the
   packages' existing tests stay green
 - [ ] T007 [US1] Commit (code and tests in separate commits); push (owner go-ahead; say which jobs
   run) and fix until CI is green; record the run in research; fresh review of US1;
@@ -131,7 +139,8 @@ again, then fails and changes nothing (FR-003, FR-004, FR-005, FR-010; research 
   every attempt gives `OperationFailed` naming the IDs and the slice's parts, approvals, questions
   (no answer recorded) and history unchanged; the faults never hold the answers' text; when the
   current examples or contract do not parse (stored through `ReplaceRules`/`ReplaceContract`),
-  their IDs are not checked; `Create` is not affected; a revision that is also unusable for an
+  their IDs are not checked; a kept rule whose goal the current proposal lacks (removed through
+  `ReplaceGoals`) may serve any goal in the revision; `Create` is not affected; a revision that is also unusable for an
   existing reason lists the existing faults first, then the ID faults
 - [ ] T009 [US2] Test author (owner-approved change T002 (a)): `src/engine/slices/slices_crosspart_test.go`
   `TestAnAnswerThatRevisesAPartWithdrawsApprovalsOfPartsItNowBreaks` expects the refusal as
@@ -156,8 +165,9 @@ research R3).
 case pass^3, none quarantined.
 
 - [ ] T012 [US3] Test author (owner-approved changes T002 (b)-(d)): `src/tests/evals/analyst/revision_evals_test.go`
-  `runRevision`: per trial a service from the earlier proposal (as `RevisionInput`), then
-  `Answer` with the case's answers through a `dockerAnalyst`; the graded output is the last
+  `runRevision`: per trial a service built with a new helper analyst in `revision.go` that
+  replays the earlier proposal on `Create` and hands each `Answer` call to a `dockerAnalyst`,
+  then `Answer` with the case's answers; the graded output is the last
   attempt's answer, `GradeRevision` against the first attempt's input, the trial failing when
   `Answer` fails (its error in the trial) or a grader fails, `Trial.Attempts` the analyst calls of
   `Answer`; `TestHarnessStubRevision` adds the new fixture
@@ -187,7 +197,8 @@ case pass^3, none quarantined.
 - [ ] T016 SC-004: record in research that an answer usable on the first attempt makes one
   analyst call (T004, T008 and the live run's attempts)
 - [ ] T017 Final fresh review of the whole feature (rules above) and `/speckit-converge`; findings
-  fixed or recorded as tasks
+  fixed or recorded as tasks; FR-009: `git diff main -- src/agents/ src/engine/api/preview/2026-11-12-preview/slice-proposal.schema.json`
+  shows no change
 - [ ] T018 Before the owner's merge: read the branch's `evals-current` output; then, after the
   merge (fast-forward, the owner's), on branch `006-method-record`: revert f757838 (the T195
   quarantine) with the owner's `Tests-approved-by:`, rebase on `main`, close T195 and T196 in
