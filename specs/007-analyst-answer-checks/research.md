@@ -201,3 +201,6 @@ Final fresh review (Sonnet, read-only worktree at a42e22e, judging CI run 450689
 988be8f holds all the code, and evals run 45071292368): no blocking finding and no new suggestion;
 FR-009 diff empty; every changed existing test carries `Tests-approved-by:`; `okf.py check` OK.
 `/speckit-converge` for the feature: nothing appended (open: T019, T024, T026, suggestions).
+
+T018 (before the merge): CI run 45081468666 at f415365 green; `evals-current` (`Agent evals up to
+date`): base 988be8f (evals run 45071292368), "nothing changed that an eval suite reads: no suite".
