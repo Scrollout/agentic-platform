@@ -2,6 +2,7 @@
 
 ## 2026-11-22
 
+* **Spec**: Feature 005 (backlog T185) specified: the analyst passes its quarantined cases `example` and `revise-inject-approvals-field` pass^3 again, and a failed eval job keeps its outputs, including a quarantined case's (the keep-outputs step has failed on its `..` path since it was added, against [ADR 0050](/decisions/0050-failed-eval-jobs-keep-their-outputs.md)); N-013 is `in progress` in the [problem space](/overview/problem-space.md); glossary term Quarantine.
 * **Implementation**: Feature 004 (backlog T180): the step agents' evals judge edge cases, not only the examples. Every code case is judged by `HeldOutTestsPass` (six held-out tests the agent never sees) and every tests case by `MutantsKilled` (eight hand-planted mutants, [ADR 0075](/decisions/0075-eval-mutants-planted-by-hand.md), built with a shared cache and run alone, [ADR 0077](/decisions/0077-variant-builds-share-a-cache-runs-stay-alone.md)); the evals summary shows `Held-out` and `Mutants killed` per trial and names what failed, and prints a report with no counts as before. Live runs 44933201919 and 44957174113: every steps case pass^3; grading adds about 25 s per code trial and 45 s per tests trial; CI's grader self-tests +2 min 46 s (SC-004, measured in CI, owner). Limits stated in `src/tests/evals/steps/README.md`.
 
 ## 2026-11-21

@@ -68,7 +68,7 @@ service is still to do.
 | N-010 | Define an agent (instructions, model, tools, collaborators) and keep every version of it | undecided | [Docker Agent](/references/docker-agent.md) | | todo |
 | N-011 | Run agents against more than one model provider, and switch providers without redefining the agent | undecided | [Docker Agent](/references/docker-agent.md) | | todo |
 | N-012 | Package an agent and share it with others | undecided | [Docker Agent](/references/docker-agent.md) | | todo |
-| N-013 | Know that a changed agent still behaves as expected before it is released | yes | [Docker Agent](/references/docker-agent.md) | [004](../../specs/004-edge-case-graders/spec.md) | done |
+| N-013 | Know that a changed agent still behaves as expected before it is released | yes | [Docker Agent](/references/docker-agent.md) | [004](../../specs/004-edge-case-graders/spec.md), [005](../../specs/005-analyst-reliability/spec.md) | in progress |
 
 # Sessions
 

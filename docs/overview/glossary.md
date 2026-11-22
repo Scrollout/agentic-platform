@@ -104,3 +104,13 @@ These terms come from the Feature 004 specification.
 | Mutant | A correct implementation with one planted bug; a set of tests kills it when they fail against it and pass against the correct one. |
 
 Sources: [Feature 004 specification](../../specs/004-edge-case-graders/spec.md).
+
+# Feature 005 terms
+
+These terms come from the Feature 005 specification.
+
+| Term | Meaning |
+|------|---------|
+| Quarantine | The state of a flaky eval case that names an open backlog task: it still runs and is reported, but its result does not count until the task closes it. |
+
+Sources: [Feature 005 specification](../../specs/005-analyst-reliability/spec.md).
