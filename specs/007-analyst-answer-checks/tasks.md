@@ -132,7 +132,7 @@ again, then fails and changes nothing (FR-003, FR-004, FR-005, FR-010; research 
 **Independent Test**: T008 passes; a stub revision that drops R-1 then keeps it is accepted with
 `attempts` 2; one that always drops R-1 fails naming R-1 with the slice unchanged.
 
-- [ ] T008 [P] [US2] Test author: new `src/engine/slices/kept_ids_test.go`, with stub analysts on
+- [X] T008 [P] [US2] Test author: new `src/engine/slices/kept_ids_test.go`, with stub analysts on
   `Answer` from the notes fixture (`testdata/proposal-notes.json`): a revision lacking a goal, a
   term, a rule, an example (`@E-<n>`) or an operation (`operationId`) is sent back with one fault
   per lost ID (`the revision drops <ID> of the current proposal`); a kept rule serving another
@@ -145,10 +145,10 @@ again, then fails and changes nothing (FR-003, FR-004, FR-005, FR-010; research 
   their IDs are not checked; a kept rule whose goal the current proposal lacks (removed through
   `ReplaceGoals`) may serve any goal in the revision; `Create` is not affected; a revision that is also unusable for an
   existing reason lists the existing faults first, then the ID faults
-- [ ] T009 [US2] Test author (owner-approved change T002 (a)): `src/engine/slices/slices_crosspart_test.go`
+- [X] T009 [US2] Test author (owner-approved change T002 (a)): `src/engine/slices/slices_crosspart_test.go`
   `TestAnAnswerThatRevisesAPartWithdrawsApprovalsOfPartsItNowBreaks` expects the refusal as
   approved; commit with `Tests-approved-by:`
-- [ ] T010 [US2] Code author: new `src/engine/slices/kept.go` (the kept IDs of a proposal, as
+- [X] T010 [US2] Code author: new `src/engine/slices/kept.go` (the kept IDs of a proposal, as
   [data-model.md](data-model.md) "Kept IDs", and the faults of a revision against them);
   `src/engine/slices/service.go` `propose` adds them after `unusable`'s faults when the input has
   a current proposal. T008 and T009 pass; `slices_retry2_test.go`, `slices_retry_links_test.go`

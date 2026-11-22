@@ -83,7 +83,9 @@ Reproduced with Go 1.26.11 (scratch module, not committed):
   do not parse (a developer may store such a part, FR-007 of feature 001), their IDs are not
   known and are not checked. A kept rule whose goal the current proposal lacks (the developer
   removed the goal directly) keeps its ID but not that goal, so the analyst may repair the
-  broken link (analyze round 1). The rule is the service's alone; the eval grader `KeepsIDs` (S9)
+  broken link (analyze round 1). When the revision's own examples or contract do not parse, that
+  part's IDs are not compared either: the attempt already has a syntax fault and is sent back
+  (T010). The rule is the service's alone; the eval grader `KeepsIDs` (S9)
   judges the analyst independently and stays as it is.
 - **Spec alignment**: S9 keeps an example under its rule, and FR-003 says "re-homes"; the spec's
   FR-003 now names a kept example under the same rule explicitly (plan finding, recorded in the
@@ -152,3 +154,9 @@ Reproduced with Go 1.26.11 (scratch module, not committed):
   (b) `runRevision` through `Service.Answer` and the stub test's fixtures and attempts: approved;
   (c) `dockerAnalyst` parses with `ParseProposal` and (d) `revision.go`'s helper analyst and
   header and the suite's README: approved. Each commit carries `Tests-approved-by:`.
+
+## CI runs
+
+| Task | Commit | Run | Result |
+|------|--------|-----|--------|
+| T007 (US1) | 79731d4 | 45065044569 | green |

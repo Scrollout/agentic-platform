@@ -286,8 +286,9 @@ func (s *Service) build(ctx context.Context, description string) (Result, *recor
 
 // propose asks the analyst for a proposal from base (a description, and when revising the
 // current proposal and the questions) and builds the slice from it; asked is the number of
-// questions the slice already has, which count against the limit with the new ones. An unusable
-// proposal is sent back with its faults until one is usable or s.attempts calls were made; an
+// questions the slice already has, which count against the limit with the new ones. A revision
+// that loses an item of the current proposal is unusable too (keptFaults), its faults after the
+// others. An unusable proposal is sent back with its faults until one is usable or s.attempts calls were made; an
 // unusable answer (an analyst error wrapping *AnswerFault) is asked again with its reason as the
 // fault and no previous proposal. It returns the number of calls made. Any other analyst error, a
 // description of several use cases and too many questions are returned at once, not retried.
@@ -326,19 +327,23 @@ func (s *Service) propose(ctx context.Context, base AnalystInput, asked int) (Pr
 		if err != nil {
 			return Proposal{}, Slice{}, 0, err
 		}
-		if len(faults) == 0 && len(links) == 0 {
+		var lost []string // faults too, sent after the links
+		if base.Current != nil {
+			lost = keptFaults(*base.Current, sl)
+		}
+		if len(faults) == 0 && len(links) == 0 && len(lost) == 0 {
 			return p, sl, attempt, nil
 		}
 		if attempt >= s.attempts {
-			if len(faults) == 0 { // only broken links: stored with its failed checks (research D48)
+			if len(faults) == 0 && len(lost) == 0 { // only broken links: stored with its failed checks (research D48)
 				return p, sl, attempt, nil
 			}
 			return Proposal{}, Slice{}, 0, &Error{Code: "OperationFailed", Detail: fmt.Sprintf(
-				"the analyst's proposal was unusable after %d attempts (limits.attempts): %s", attempt, strings.Join(faults, "; "))}
+				"the analyst's proposal was unusable after %d attempts (limits.attempts): %s", attempt, strings.Join(append(faults, lost...), "; "))}
 		}
 		prev := p
 		in = base
-		in.Previous, in.Errors = &prev, append(faults, links...)
+		in.Previous, in.Errors = &prev, append(append(faults, links...), lost...)
 	}
 }
 
