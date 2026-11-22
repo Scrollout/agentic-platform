@@ -238,7 +238,7 @@ slice views.
 
 - [ ] T020 SC-004: from the CI run's acceptance job, record in research a fully reused run's time
   before (`main`) and after; within 1 s
-- [ ] T021 Docs in the same change as the behaviour: the [architecture
+- [X] T021 Docs in the same change as the behaviour: the [architecture
   overview](../../docs/architecture/overview.md)'s reuse key (method identity, ADR 0079 and 0080),
   [feature 001 research D8](../001-prose-to-accepted-slice/research.md) gets a line "the reuse key
   also covers the method identity: feature 006, ADR 0080", `docs/log.md` (implementation), the

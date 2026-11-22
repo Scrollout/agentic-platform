@@ -118,6 +118,7 @@ fresh review round 1.
   of pattern version, step, input hashes, agent definition digest and model id, and for a review
   round also its round. An open review round's result is kept and reused like an accepted one
   (owner, 2026-11-15; D36).
+  The reuse key also covers the method identity: feature 006, ADR 0080.
 - **Rationale**: FR-018 to FR-020, SC-005, SC-006; agent output differs between runs while fixed
   inputs give identical generation (S3), so reuse is what makes a replay identical.
 - **Alternatives**: SQLite (not needed for one writer); a durable-execution engine (for hosting).

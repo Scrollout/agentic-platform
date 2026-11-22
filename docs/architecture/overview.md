@@ -134,6 +134,16 @@ Shipped by Story 2:
   accepted step's; a later run of the same input reuses it without running a check, so the fix
   and the later rounds are reused too, and resume after an open round goes straight to the fix
   ([ADR 0040](/decisions/0040-open-review-round-result-kept-and-reused.md); T088).
+  A result is reused, and a slice's check results are shown, only under the method that judged
+  them (feature 006): the method identity is the SHA-256 of a manifest of the files and pins
+  declared in `src/engine/method/method.json`, derived by `scripts/method-digest.py`, committed
+  and embedded in the engine, which refuses to start without a valid one
+  ([ADR 0079](/decisions/0079-method-identity-is-a-digest-of-declared-sources.md)). The reuse key
+  covers it, every step outcome event that carries a reuse key names it (`method`), a durable run
+  takes it from the engine at each lookup, so a run resumed after an upgrade judges its remaining
+  steps under the new method, and a slice whose checks ran under another method, or none, runs
+  them again before any read and stores `checks_method`
+  ([ADR 0080](/decisions/0080-results-reused-and-checks-kept-only-under-their-method.md)).
 
 Built for Story 2 (T053a, split into T053c to T053e, all done):
 

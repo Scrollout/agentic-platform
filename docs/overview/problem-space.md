@@ -32,10 +32,13 @@ set to `yes` by feature 002's spec on 2026-11-18 because constitution Principle 
 it, confirmed by the owner the same day, and N-013, set to `yes` by the owner on 2026-11-21 for
 feature 004 because Principle XIX already requires it.
 
+N-050 and N-053 are `done` with feature 006 (2026-11-22): a result is reused, and a slice's
+check results are kept, only under the method identity that judged them, and every step outcome
+that carries a reuse key names it.
+
 Feature 001's rows (2026-11-17): `done` where its acceptance tests and the planted suite pass in CI
 (check run 44157173351) and no open task records a gap; `in progress` where the MVP covers only
-part of the need: N-003 (one Go pattern), N-050 and N-053 (the reuse key and record do not yet
-name the checks' implementation, T136, specified by feature 006), N-052 (proposing a new pattern moved to a later feature)
+part of the need: N-003 (one Go pattern), N-052 (proposing a new pattern moved to a later feature)
 and N-055 (the platform applies the spec's rules, tests and reviews, not yet the docs and
 decisions).
 
@@ -106,10 +109,10 @@ Constitution Principle XX makes them binding for the product.
 
 | ID | Need | In scope | Prior art | Spec | State |
 |----|------|----------|-----------|------|-------|
-| N-050 | Applying the same method to the same input gives the same accepted result | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [006](../../specs/006-method-record/spec.md) | in progress |
+| N-050 | Applying the same method to the same input gives the same accepted result | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [006](../../specs/006-method-record/spec.md) | done |
 | N-051 | A result is accepted only when it passes checks that do not depend on a model's judgement | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [007](../../specs/007-analyst-answer-checks/spec.md) | done |
 | N-052 | A proven solution is captured once and reused, without the model generating it again | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | in progress |
-| N-053 | Every result can be traced to the method, inputs, model and rules that produced it, and reproduced from them | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [006](../../specs/006-method-record/spec.md) | in progress |
+| N-053 | Every result can be traced to the method, inputs, model and rules that produced it, and reproduced from them | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [006](../../specs/006-method-record/spec.md) | done |
 | N-054 | How much results vary from run to run is measured and shown | undecided | | | todo |
 | N-055 | The project's principles, docs, specs, decisions, validations, tests and reviews hold at every stage of the lifecycle | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | in progress |
 | N-056 | The author of a change cannot alter, skip or weaken the checks that judge it; only a recorded, independent decision can change a check | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | done |
