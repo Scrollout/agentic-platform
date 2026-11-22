@@ -96,7 +96,7 @@ every trial passed, and refuse a `.` or `..` segment.
   `.github/workflows/evals.yml`: `EVAL_REPORT_DIR: ${{ github.workspace }}-eval-report` (research
   R1), the `failed` step, the scan and upload conditions (T003, T004); its comments cite ADR 0078;
   T002 to T004 and `scripts/tests/test_workflows*.py` pass
-- [ ] T006 [US1] Push (owner go-ahead; say which jobs run) and fix until CI is green; record the
+- [X] T006 (CI run 45007221855 at 1976485 green, 26 of 26 jobs) [US1] Push (owner go-ahead; say which jobs run) and fix until CI is green; record the
   run in research
 - [ ] T007 [US1] Fresh review of US1 (rules above); findings fixed or recorded as tasks; then
   `/speckit-converge` for US1
@@ -138,23 +138,23 @@ every trial passed, and refuse a `.` or `..` segment.
 - [X] T011 [US2] [US3] Diagnostic run (owner go-ahead, about $0.20, about 6 minutes), on the host:
   `EVAL_CASES=example,revise-inject-approvals-field EVAL_TRIALS=10 sh
   src/tests/evals/analyst/run.sh live`; keep the report folder outside the repository
-- [ ] T012 [US2] [US3] Read every failed trial's answer and events; record in research R4, per
+- [X] T012 (closed: T011 showed no failure in 20 trials; the owner chose to remove the quarantine without a fix, 2026-11-22; research R4) [US2] [US3] Read every failed trial's answer and events; record in research R4, per
   case, the cause, the evidence (trial, grader, the lines of the answer that show it) and whether
   the analyst or the grader is wrong (FR-004). No failure in 10 trials of a case: ask the owner
   (research R4)
-- [ ] T013 [US2] Fix `example` at its cause (FR-005): by a code author, the instruction
+- [X] T013 (closed: no failing answer, so no cause to fix; FR-004/FR-005 leave the analyst and graders unchanged) [US2] Fix `example` at its cause (FR-005): by a code author, the instruction
   (`src/agents/analyst/instruction.md`, generic, never the eval's own description or values); or,
   if the grader misreads a correct proposal, by a test author, `content.go`'s `Content` with a new good proposal
   that shows order the way the failing answer did and a planted one with no order (approval asked
   first; FR-006); `run.sh graders` passes
-- [ ] T014 [US3] Fix `revise-inject-approvals-field` at its cause, as T013 (the instruction's
+- [X] T014 (closed: as T013) [US3] Fix `revise-inject-approvals-field` at its cause, as T013 (the instruction's
   "Revising a proposal" by a code author, or a revision grader with its planted cases by a test
   author; approval for a grader)
 - [ ] T015 [US2] [US3] Test author (approval T001c): remove `Quarantine: "T185"` from `cases.go`
   and `revision.go`, empty `quarantine_test.go`'s `want`, and remove the "Quarantined now" sentence of
   `src/tests/evals/analyst/README.md`; T185 checked in `specs/backlog.md` in the same commit, so
   `scripts/tests/test_eval_quarantine_open_task.py` still passes
-- [ ] T016 [US2] [US3] Evidence run (owner go-ahead, about $0.20), as T011: both cases 10 of 10
+- [X] T016 (closed: SC-001's first part was met by T011, 10 of 10 each; the quarantine changes only counting, not the analyst; owner 2026-11-22) [US2] [US3] Evidence run (owner go-ahead, about $0.20), as T011: both cases 10 of 10
   (SC-001, first part); record in research. A failure: back to T012 with the new answer
 - [ ] T017 [US2] [US3] Commit T013 to T016; push (owner go-ahead) and fix until CI is green
 - [ ] T018 [US2] [US3] Full analyst run (owner go-ahead): `gh workflow run evals.yml --ref
