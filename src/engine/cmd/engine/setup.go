@@ -224,7 +224,7 @@ func setupWith(getenv func(string) string, d durableLinks) (http.Handler, func()
 		Records: st,
 		// Runner errors in full, for the operator; no token is ever logged.
 		Log:    slog.New(slog.NewJSONHandler(os.Stderr, nil)),
-		Method: id,
+		Method: id.String(),
 	})
 	if err != nil {
 		st.Close()

@@ -8,7 +8,7 @@ package main
 //	var methodIdentity func() (method.ID, error) = method.Current // read once per setupWith
 //	var newSlices func(slices.Config) (*slices.Service, error) = slices.New // setupWith builds its slice service through it
 //
-// and the fields durable.Activities.Method and slices.Config.Method (both method.ID).
+// and the fields durable.Activities.Method (a method.ID) and slices.Config.Method (a string, the identity's hex).
 
 import (
 	"strings"
@@ -129,7 +129,7 @@ func TestStartGivesTheDurableActivitiesAndTheSliceServiceTheIdentity(t *testing.
 	if len(*cfgs) != 1 {
 		t.Fatalf("the slice service was built %d times, want 1", len(*cfgs))
 	}
-	if got := (*cfgs)[0].Method.String(); got != identityA {
+	if got := (*cfgs)[0].Method; got != identityA {
 		t.Errorf("slices.Config.Method = %q, want %q", got, identityA)
 	}
 }
@@ -154,7 +154,7 @@ func TestStartReadsTheIdentityAtEachStartAndKeepsNoneBetweenStarts(t *testing.T)
 		t.Fatalf("the slice service was built %d times, want 2", len(*cfgs))
 	}
 	for i, want := range []string{identityA, identityB} {
-		if got := (*cfgs)[i].Method.String(); got != want {
+		if got := (*cfgs)[i].Method; got != want {
 			t.Errorf("start %d: slices.Config.Method = %q, want %q", i+1, got, want)
 		}
 	}

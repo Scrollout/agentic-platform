@@ -103,7 +103,7 @@ deps:
     mayDependOn: [canonical, checks, procedures]
     canUse: [modfile]
   slices:
-    mayDependOn: [canonical, checks, method, slices]
+    mayDependOn: [canonical, checks, slices]
     canUse: [jsonschema, slice-module, yaml]
   steps:
     # checksvc is a named exception (D40 F1): steps reads only checksvc.APIVersion() and

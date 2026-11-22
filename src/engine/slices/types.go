@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/agentic-platform/engine/method"
 	"github.com/agentic-platform/slice"
 )
 
@@ -265,6 +264,8 @@ type Config struct {
 	// Log receives what the service keeps out of the slices, such as a runner's full error when
 	// oasdiff or the lint cannot run (a check reason only says it could not run). nil discards it.
 	Log *slog.Logger
-	// Method is the method identity the service's checks run under (feature 006).
-	Method method.ID
+	// Method is the method identity (64 lowercase hex digits, as method.ID.String gives it) the
+	// service's checks run under (feature 006); "" re-checks nothing. A plain string, so the
+	// slices, and what judges them, do not depend on the engine's embedded identity.
+	Method string
 }
