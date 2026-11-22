@@ -118,9 +118,20 @@ and whose second is good, `Answer` yields the second with `attempts` 2.
   `src/engine/analyst/http.go` parses with `slices.ParseProposal` and wraps its error with `%w`
   so `errors.As` finds the `*AnswerFault`; `message.go` does not change (data model, Faults). T003-T005 pass and the
   packages' existing tests stay green
-- [ ] T007 [US1] Commit (code and tests in separate commits); push (owner go-ahead; say which jobs
+- [X] T007 [US1] Commit (code and tests in separate commits); push (owner go-ahead; say which jobs
   run) and fix until CI is green; record the run in research; fresh review of US1;
   `/speckit-converge` for US1
+
+- [ ] T019 [US1] Review findings US1-S3 and untested cases U1-U8 (fresh Sonnet review at 79731d4,
+  suggestions, not blocking): tests for a fault followed by an unusable proposal and the reverse
+  (`Previous`/`Errors` after each), a fault with one attempt (no pattern), nested arrays
+  (`[[{"k":1,"k":2}]]`), the empty key, a fault wrapped twice, Unicode folds (U+212A against `k`,
+  `ſ` against `s`), a fault with `ErrMultipleUseCases`, invalid UTF-8 and leading whitespace;
+  new test files by a test author
+- [X] T020 [US1] Review findings US1-S1, S2, S4 closed: S1 (README says every `Analyst` parses
+  with `ParseProposal`; the evals' `dockerAnalyst` does in T012), S2 (`/` for the top level is
+  the data model's choice), S4 (a decode error after the walk stays a plain error: FR-001 covers
+  repeated keys only). closed: by design or by T012
 
 ---
 

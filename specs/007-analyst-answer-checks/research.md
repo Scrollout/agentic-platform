@@ -160,3 +160,8 @@ Reproduced with Go 1.26.11 (scratch module, not committed):
 | Task | Commit | Run | Result |
 |------|--------|-----|--------|
 | T007 (US1) | 79731d4 | 45065044569 | green |
+
+US1 fresh review (Sonnet, read-only worktree at 79731d4, judging run 45065044569): no blocking
+finding; suggestions and untested cases in tasks T019 (open) and T020 (closed). `/speckit-converge`
+for US1: FR-001 and FR-002 are built (`proposal.go`, `propose`, `http.go`) and tested; nothing
+appended beyond T019.
