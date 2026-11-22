@@ -50,9 +50,10 @@ and report for 7 days, whether the case counts or is quarantined.
 **Why this priority**: the cause of both failures is unknown because their answers were lost. Every
 later fix is a guess until a failing answer can be read.
 
-**Independent Test**: run the evals workflow's keep-outputs step on a report folder in the job's
-real location; the folder is kept as one artifact holding every file. A planted failure of a
-quarantined case is kept too.
+**Independent Test**: the workflow's rules, checked without running it, keep the report folder
+for a planted report with a failed counted trial and for one with only a quarantined failed
+trial, and keep nothing for a report with every trial passed; the folder's path has no `.` or `..`
+segment.
 
 **Acceptance Scenarios**:
 
@@ -155,8 +156,8 @@ trial of the live runs SC-001 names.
 - **SC-001**: With the quarantine removed, `example` and `revise-inject-approvals-field` each pass
   10 of 10 trials in one live run of only those two cases, and then every analyst and revision
   case, these two included, passes pass^3 in one full analyst run.
-- **SC-002**: A failed eval job in CI keeps its report folder: proven once by a planted failure, and
-  by every real failure from then on.
+- **SC-002**: A failed eval job in CI keeps its report folder: proven by the workflow's rules on
+  planted reports, and shown by the first eval job with a failed trial after the change.
 - **SC-003**: No analyst case is quarantined at the end of the feature.
 
 ## Assumptions
