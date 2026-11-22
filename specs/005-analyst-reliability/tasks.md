@@ -41,7 +41,9 @@ cause and fix come from one diagnostic run; then the quarantine goes and the evi
   a6f4ae8): 2 HIGH (A1 the upload condition needs parentheses; A2 `quarantine_test.go` pins the
   quarantine), 6 MEDIUM, 5 LOW; all fixed in spec (FR-010, an edge case, the Assumption), plan,
   research, data model, quickstart, ADR 0078 and these tasks; A4 closed backlog T191 (wrong
-  premise); A13 (10 of 10 is weak evidence) noted in the spec, the owner's bar stands.
+  premise); A13 (10 of 10 is weak evidence) noted in the spec, the owner's bar stands. Round 2
+  (fresh Sonnet, at e7fb76c, the fixed lines only): all 13 closed, 0 CRITICAL/HIGH; one LOW (the
+  dependency line omitted T015) fixed. Gate passed.
 
 ---
 
@@ -177,7 +179,7 @@ every trial passed, and refuse a `.` or `..` segment.
 
 ## Dependencies
 
-- T001 before T004 and T009. US1 (T002 to T007) and Phase 3 (T008 to T010) are independent.
+- T001 before T004, T009 and T015; a grader change in T013 or T014 waits for its own approval. US1 (T002 to T007) and Phase 3 (T008 to T010) are independent.
 - T011 needs T009; T012 needs T011; T013 and T014 need T012 and are independent of each other;
   T015 after T013 and T014; T016 after T015; T017 after T016; T018 after T017 and T006 (so a
   failure keeps its outputs).
