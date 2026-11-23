@@ -39,6 +39,9 @@ three trials), [ADR 0078](../../docs/decisions/0078-eval-jobs-keep-outputs-of-an
   run is the baseline? → A: the latest earlier kept run whose commit is in the current run's
   commit's history, on any branch, as the suite selection already chooses its base (owner;
   FR-006).
+- Found while planning: each agent's pinned model is a fact of the commit (its agent definition),
+  and reading it in the eval job would need a YAML reader there; the measurement names the commit
+  instead, which identifies the models, the method and every other input (FR-004).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -175,9 +178,9 @@ current passed trials and median cost, and which earlier run it compared with.
   MUST state how many trials the measure covers.
 - **FR-004**: Every eval run, passed or failed, MUST keep its measurements: per case and trial,
   whether it passed, its attempts, duration, tokens and cost, the case's quarantine, and per run
-  the suite, the cases selected, k, the commit, the branch, the run's identity and each agent's
-  pinned model. The kept measurements MUST NOT hold protected content (Principle XI) and MUST pass
-  the same credential scan as kept eval outputs.
+  the suite, the cases selected, k, the commit, the branch and the run's identity; the commit
+  names the agents' pinned models. The kept measurements MUST NOT hold protected content
+  (Principle XI) and MUST pass the same credential scan as kept eval outputs.
 - **FR-005**: Kept measurements MUST stay readable for at least 90 days, without running a trial
   again and without access to the model key.
 - **FR-006**: The summary MUST compare every case that ran with the latest earlier kept run of the
