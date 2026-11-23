@@ -182,7 +182,7 @@ rejects address, URL, port and credential literals and environment reads in the 
 `SetBasicAuth("a", "b")` and `os.Getenv("PORT")` in `cmd/` each fail; `gen.ListenAddress()`
 passes.
 
-- [ ] T008 [P] [US2] Test author: new `src/engine/checks/deployment_values_test.go`:
+- [x] T008 [P] [US2] Test author: new `src/engine/checks/deployment_values_test.go`:
   DeploymentValuesConfigured fails once per offence naming `<file>:<line>` and the kind, the
   reason ending `belongs in configuration: read it through gen/config.go`: addresses
   (`"http://x.example/a"`, `"grpc://h:1"`, `"10.0.0.1"`, `"1.2.3.4"`, `"::1"`, `":8080"`,
@@ -197,13 +197,14 @@ passes.
   (`os.Getenv`, `os.LookupEnv`, `os.Environ`, `os.ExpandEnv`, through an import alias); passes on
   the reference `main.go` with `gen.ListenAddress()`, saying how many files it examined; judges
   only the step's own `.go` files, not `_test.go`, `gen/` or `tests/`; fails closed on a file that
-  does not parse; a value longer than 64 characters is cut
-- [ ] T009 [P] [US2] Test author: new `src/engine/procedures/config_test.go` and new
+  does not parse; no reason holds the literal's text, however long (the contract; the 64-character
+  cut is DeclaredValuesNotRepeated's)
+- [x] T009 [P] [US2] Test author: new `src/engine/procedures/config_test.go` and new
   `src/engine/checksvc/deployment_values_test.go`: the generated project holds the template's
   `gen/config.go`, whose doc comment names `LISTEN_ADDRESS` and `:8080`; a program built from the
   project prints `gen.ListenAddress()` as `:8080` with the variable unset or empty and as its
   value when set; GenerationRepeatable still passes; runCheck serves `DeploymentValuesConfigured`
-- [ ] T010 [US2] Code author: `src/catalogue/api-feature-go/template/gen/config.go` as the
+- [x] T010 [US2] Code author: `src/catalogue/api-feature-go/template/gen/config.go` as the
   contract states; DeploymentValuesConfigured in `src/engine/checks/values.go`; its entry in
   `src/engine/checksvc/checks.go`; the check image's template stage picks the file up unchanged
   (`src/deploy/Dockerfile.check` copies the template folder); T008-T009 pass; every existing
@@ -350,7 +351,14 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
 
 ## Phase 6: Convergence
 
-- [ ] T028 [US2] Have T008's test author see every new DeploymentValuesConfigured test fail
+- [x] T028 [US2] Have T008's test author see every new DeploymentValuesConfigured test fail
   against the T001 stub of `src/engine/checks/values.go` (commit 8201ab3) before it is judged
   against the body T006 already wrote, and record that in the T008 commit; T010 then only adds
   what T008's tests show missing, per Constitution "Outside-in, test-first" (unrequested)
+- [x] T029 [US2] The commit hook refused T010's `template/gen/config.go` (a Go file in no module of
+  `src/go.work`). Owner (2026-11-23): teach `scripts/hooks/pre-commit` that a staged `.go` file
+  under `src/catalogue/*/template/` is judged by `gofmt -l` (vet: the procedure tests build it in
+  a generated project) and refused when unformatted; any other Go file in no module is refused as
+  before. New test file `scripts/tests/test_pre_commit_template_go.py` by a separate test author,
+  seen failing first (2206150, 9 of 13; its environment fix df57f7b owner-approved); then the hook
+  change (08a9def); then T010's commit (88374b1)
