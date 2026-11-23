@@ -39,6 +39,10 @@ the problems the [platform overview](../../docs/overview/platform.md) names).
 - Q: Do values stated only in the rules or their examples count as declared values? → A: No; only
   values the contract declares. Rule-stated values are behaviour the derived tests already pin; to
   have a value checked, the developer declares it in the contract (owner; FR-001).
+- Found while planning: the code step's entry point writes its listen address in the code today.
+  Q: May the code step's own code read environment variables itself? → A: No; configuration
+  enters only through the configuration the platform declares and documents in the delivered
+  project, with its defaults, so every value the service reads is documented (owner; FR-005).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -93,16 +97,17 @@ are kept.
 
 **Independent Test**: run the code step's checks on code whose entry point listens on `:8080`
 written in the code: the step is rejected, naming the file, the line and that a listen address
-belongs in configuration. The same code reading the address from configuration, with a stated
-default when it is unset, is accepted.
+belongs in configuration. The same code taking the address from the configuration the platform
+declares (with its documented default) is accepted.
 
 **Acceptance Scenarios**:
 
 1. **Given** code that writes a listen address, a port, a network address or URL of another
    service, or a credential into the code, **When** the code step's checks run, **Then** the step is
    rejected, naming the file, the line and the kind of value.
-2. **Given** code that reads each such value from configuration when it starts, **When** the checks
-   run, **Then** this check passes.
+2. **Given** code that takes each such value from the configuration the platform declares,
+   **When** the checks run, **Then** this check passes; code that reads the environment itself
+   is rejected.
 3. **Given** a delivered project, **When** the developer reads its documentation, **Then** it names
    every configuration value the service reads, with its default where it has one.
 
@@ -148,9 +153,9 @@ check's inputs are unchanged.
   generated code and comments are not.
 - Code that cannot be parsed: the check fails closed, as a check that cannot run (feature 001,
   FR-012).
-- A configuration value with a default written in the code (`PORT`, defaulting to `8080`): the
-  default is allowed when it is read through the configuration, and the documentation names it
-  (Story 2, scenario 3).
+- A configuration value with a default (the listen address, defaulting to `:8080`): the default
+  lives with the declared configuration the platform writes, never in the code step's code; the
+  code step's code reading the environment itself is rejected (FR-005).
 
 ## Requirements *(mandatory)*
 
@@ -160,15 +165,16 @@ check's inputs are unchanged.
   the approved contract declares as a limit, a bound, an allowed value or a default, except where
   FR-003 states a limit.
 - **FR-002**: The code step MUST be rejected when its writable code holds a listen address, a port,
-  a network address or URL, or a credential, other than a default read through configuration
-  (FR-005).
+  a network address or URL, or a credential, or reads the environment (FR-005).
 - **FR-003**: The literals `0`, `1`, `-1` and the empty text MUST NOT be judged as copies of a
   declared value; this is a stated limit of the check: a declared value that is one of them is not
   caught. Values stated only in the rules or their examples are not declared values.
 - **FR-004**: Each failure MUST name the file, the line, the value, and where it belongs: the
   contract location that declares it, or the configuration it belongs in.
 - **FR-005**: The delivered service MUST read every deployment value from configuration when it
-  starts, and its project MUST document each one with its default, if any.
+  starts, and its project MUST document each one with its default, if any. Configuration MUST
+  enter only through the configuration the platform declares in the delivered project; the code
+  step's own code MUST NOT read the environment.
 - **FR-006**: The platform MUST make every value FR-001 covers reachable from the generated code, so
   that code can take it from its declared home.
 - **FR-007**: The check MUST be declared in the pattern before a run starts, MUST NOT call a model,

@@ -12,10 +12,13 @@ sources:
   - id: oapi-readme
     resource: https://github.com/oapi-codegen/oapi-codegen
     title: oapi-codegen repository
+  - id: research-009
+    resource: ../../specs/009-no-hard-coded-values/research.md
+    title: Feature 009 research
   - id: adr-0004
     resource: /decisions/0004-contract-first-toolchain.md
     title: "ADR 0004: Contract-first toolchain"
-generated: { by: claude-code/claude-sonnet-5-5, at: 2026-11-13T12:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-23T20:00:00Z }
 ---
 
 # Responsibility
@@ -46,3 +49,12 @@ the few bundled schemas whose generated names would collide.
 # Operations
 
 Generated code is never committed or edited; `generate.sh --check` fails on drift.
+
+# Limits
+
+v2.8.2 generates a typed constant per enum value, with a `Valid()` method, but no constant for a
+length, range, size or `default` keyword, and no extension emits one. The catalogue pattern's
+generate procedure therefore writes `gen/declared.go` itself
+([ADR 0084](/decisions/0084-declared-values-live-in-generated-code-and-are-never-repeated.md)).
+
+Sources: [Feature 009 research, E1](../../specs/009-no-hard-coded-values/research.md).
