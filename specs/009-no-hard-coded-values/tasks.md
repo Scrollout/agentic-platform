@@ -78,7 +78,9 @@ on.
   source in cad9d44 (plan Exceptions and Constitution Check, structure, Layout; spec clarification,
   FR-007, US3 scenario 1; playbook; Dependencies; T029). Round 6 (fresh Sonnet, at cad9d44): all
   fixed but A1 (reflow on the next touch of the contract) and A2 (informational); N1-N3 LOW, N1 and
-  N2 fixed. Gate passed.
+  N2 fixed. Gate passed. Round 7 (fresh Sonnet, at 31bbc22, after US2): 0 CRITICAL, 0 HIGH; I1-I4
+MEDIUM fixed in 5432f24 (environment read is any use; T031-T033 ordered; trailers), A1-A3, C1 LOW.
+Round 8 (at 5432f24): all fixed; N1 LOW (the draft's limit) fixed, N2 LOW left. Gate passed.
 
 ---
 

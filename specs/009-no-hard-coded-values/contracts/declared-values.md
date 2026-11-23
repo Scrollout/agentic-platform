@@ -138,4 +138,5 @@ A literal argument may be literals joined by `+`. Passes: `examined <n> files: n
 credential or environment read`. Fails closed on a judged file that does not parse. Limits: a port
 written as a number, `":0"`, a credential under another name or call, and values built at run time
 are not recognised; `"1.2.3.4"` and `const tokenHeader = "X-Api-Key"` are judged as an address and
-a credential.
+a credential, and under a dot import of `os` a field, method, key or local named like one of the
+four functions as an environment read.
