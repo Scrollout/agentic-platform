@@ -244,7 +244,7 @@ out an unmerged branch's, this run's and an expired one; Q5 shows the comparison
   1 MB; today's are a few kilobytes); the comment above the failed-outputs scan now sits three
   steps from its upload
 - [ ] T016 [US3] Commit; push (owner go-ahead) and fix until CI is green; record the run
-- [ ] T017 [US3] Owner: raise the Scrollout organization's and this repository's artifact and log
+- [X] T017 [US3] (done 2026-11-23: the API answers `{"days":90,"maximum_allowed_days":90}`) Owner: raise the Scrollout organization's and this repository's artifact and log
   retention to 90 days (backlog T198); check `gh api
   repos/Scrollout/agentic-platform/actions/permissions/artifact-and-log-retention` answers
   `"days":90`, then close T198
