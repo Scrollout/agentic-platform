@@ -44,6 +44,23 @@ var checkByName = map[string]func(c *call) []checks.CheckResult{
 		}
 		return checks.ExamplesMatchApproval(c.dir, *rules.Examples)
 	},
+	"DeclaredValuesGenerated": func(c *call) []checks.CheckResult {
+		text, bad := c.approvedContract("DeclaredValuesGenerated")
+		if bad != nil {
+			return bad
+		}
+		return checks.DeclaredValuesGenerated(c.dir, text)
+	},
+	"DeclaredValuesNotRepeated": func(c *call) []checks.CheckResult {
+		text, bad := c.approvedContract("DeclaredValuesNotRepeated")
+		if bad != nil {
+			return bad
+		}
+		return checks.DeclaredValuesNotRepeated(c.dir, c.req.Step.Writable, text)
+	},
+	"DeploymentValuesConfigured": func(c *call) []checks.CheckResult {
+		return checks.DeploymentValuesConfigured(c.dir, c.req.Step.Writable)
+	},
 	"GenerationRepeatable": func(c *call) []checks.CheckResult { return checks.GenerationDrift(c.runner, c.dir) },
 	"GeneratedCodeBuilds":  func(c *call) []checks.CheckResult { return checks.GeneratedCodeBuilds(c.runner, c.dir) },
 	"TestsBuild":           func(c *call) []checks.CheckResult { return checks.TestsBuild(c.runner, c.dir) },
@@ -94,6 +111,18 @@ func (c *call) approved(part gen.ApprovedPartPart) gen.ApprovedPart {
 		}
 	}
 	return gen.ApprovedPart{}
+}
+
+// approvedContract is the contract text inside the approved contract part, whose content is the
+// canonical JSON {"contract": <text>}; a failing result for check when it holds none.
+func (c *call) approvedContract(check string) ([]byte, []checks.CheckResult) {
+	var part struct {
+		Contract *string `json:"contract"`
+	}
+	if err := json.Unmarshal(c.approved(gen.ApprovedPartPartContract).Content, &part); err != nil || part.Contract == nil {
+		return nil, []checks.CheckResult{{Part: "project", Check: check, Reason: "the approved contract part holds no contract text, so the approved contract cannot be read"}}
+	}
+	return []byte(*part.Contract), nil
 }
 
 // earlierWritable is the writable entries of the earlier step whose outputs hold output: all of

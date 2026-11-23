@@ -51,7 +51,8 @@ const generateDirective = "//go:generate oapi-codegen "
 // Generate is the generate procedure. From the contract output of contract-check (the framed form
 // of api/openapi.yaml) it produces the output generated-code: the template's files (go.mod, go.sum,
 // gen/), the code oapi-codegen generates into gen/ by the template's directive, gen/stub.go (a
-// server that answers every operation 501 Not Implemented), the seam internal/app/app.go (New
+// server that answers every operation 501 Not Implemented), gen/declared.go (the contract's
+// declared values as constants, checks.RenderDeclared), the seam internal/app/app.go (New
 // returning that stub, for the tests to serve) and vendor/ from `go mod vendor`, all
 // offline. It runs the whole generation twice in fresh folders and completes only when both give
 // the same bytes, go.mod and go.sum are the template's byte for byte (so the template's go.sum
@@ -197,6 +198,17 @@ func generateOnce(ctx context.Context, cfg GenerateConfig, contract []byte) ([]F
 		return nil, "the generated code in gen/ cannot be read for the stub: " + scrub([]byte(err.Error()), dir), nil
 	}
 	if err := os.WriteFile(filepath.Join(gen, "stub.go"), stub, 0o644); err != nil {
+		return nil, "", err
+	}
+	taken, err := checks.GenNames(gen)
+	if err != nil {
+		return nil, "the generated code in gen/ cannot be read for " + checks.DeclaredFile + ": " + scrub([]byte(err.Error()), dir), nil
+	}
+	values, err := checks.DeclaredValues(contract, taken)
+	if err != nil {
+		return nil, "the contract's declared values cannot be read: " + err.Error(), nil
+	}
+	if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(checks.DeclaredFile)), checks.RenderDeclared(values), 0o600); err != nil {
 		return nil, "", err
 	}
 	if err := writeSeam(dir, keep["go.mod"]); err != nil {
