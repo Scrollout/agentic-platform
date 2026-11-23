@@ -334,5 +334,9 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
 
 - MVP: US1 through T007 (the check exists and is proven, engine only).
 - US2 adds the deployment check; no step is judged by either until T014 names them in the pattern.
-- US3 switches them on in one push together with the renewed recordings, so the build path is
-  never red on the branch.
+- US3 switches them on in one push together with the renewed recordings.
+- The recorded-model jobs (acceptance, stop points, end-to-end, service tests with the recorded
+  model) are red on the branch from US1 until T015 (owner, 2026-11-23): generate's output now
+  holds `gen/declared.go`, so the tests step's request no longer matches its recording (CI run
+  45248260393 at 868e0f5). US1 and US2 are judged by the Go unit, contract, Python and other
+  jobs that do not replay a recording; T015 synthesises the recordings once.
