@@ -290,6 +290,29 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
 
 ---
 
+## US1 fresh review, round 1 (Sonnet, at 868e0f5)
+
+- [x] T022 [US1] F1 (blocking; check contract runCheck "the reason never quotes the literal";
+  README "Deployment values"): a judged or `gen/` file that does not parse gave a reason holding
+  go/parser's message, which quotes the offending token (a URL with a password). Fix: the reason
+  names `<file>:<line>:<column>` only, and `GenNames` names no host path (F2); regression test
+  `src/engine/checks/parse_reason_test.go` by a separate test author, seen failing at 868e0f5
+- [ ] T023 [US1] F3 (suggestion): the check service's host-path scrub rewrites a quoted value that
+  starts with `/` (`"/health"` shows as `"<host path>`); state it as a limit in the catalogue
+  README or print values so the scrub leaves them
+- [ ] T024 [US1] F4 (suggestion): an unquoted `default: 2020-01-01` is `!!timestamp`, so unjudged;
+  judge it as a string by its text or state it as a limit
+- [ ] T025 [US1] F5, F6 (suggestions): state as limits that an anchor under an `x-` key is never
+  found through its aliases, and that the walk continues into a non-scalar `default` or `const`
+  value (`default: {maxLength: 5}` declares 5); add a test for the second
+- [ ] T026 [US1] F7 (suggestion): an integer beyond Go's constant range in the contract passes the
+  number rule and would not build in `gen/declared.go` (GeneratedCodeBuilds catches it); mark such
+  a number unjudged
+- [x] T027 [US1] F8, F9, F10 closed: the pointers in a reason are bounded by the service's
+  `reasonMax`; `gen/declared.go`'s mode is not part of any output (files travel as content); a
+  symbolic link anywhere in the project fails DependenciesAllowed in every step, so a symlinked
+  folder cannot hide files from the checks. closed: no defect
+
 ## Dependencies
 
 - T001 → everything; T002 before T012, T013.

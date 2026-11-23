@@ -11,6 +11,7 @@ import (
 	"go/ast"
 	"go/constant"
 	"go/parser"
+	"go/scanner"
 	"go/token"
 	"io/fs"
 	"os"
@@ -243,7 +244,7 @@ func GenNames(genDir string) (map[string]bool, error) {
 		return names, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, errors.New("gen/ cannot be listed")
 	}
 	fset := token.NewFileSet()
 	for _, e := range entries {
@@ -251,9 +252,13 @@ func GenNames(genDir string) (map[string]bool, error) {
 		if e.IsDir() || !strings.HasSuffix(n, ".go") || strings.HasSuffix(n, "_test.go") || n == filepath.Base(DeclaredFile) {
 			continue
 		}
-		f, err := parser.ParseFile(fset, filepath.Join(genDir, n), nil, parser.SkipObjectResolution)
+		src, err := os.ReadFile(filepath.Join(genDir, n)) //nolint:gosec // a file of the project's gen/
 		if err != nil {
-			return nil, fmt.Errorf("gen/%s does not parse as Go: %w", n, err)
+			return nil, fmt.Errorf("gen/%s cannot be read", n)
+		}
+		f, err := parser.ParseFile(fset, "gen/"+n, src, parser.SkipObjectResolution)
+		if err != nil {
+			return nil, fmt.Errorf("%s does not parse as Go", parseErrorAt("gen/"+n, err))
 		}
 		for _, d := range f.Decls {
 			switch d := d.(type) {
@@ -356,7 +361,7 @@ func judgedGoFiles(check, project string, writable []string) (*token.FileSet, []
 	for _, p := range paths {
 		f, err := parser.ParseFile(fset, p, files[p], parser.SkipObjectResolution)
 		if err != nil {
-			bad = append(bad, fail(check, fmt.Sprintf("%s does not parse as Go, so it cannot be judged: %v", p, err)))
+			bad = append(bad, fail(check, parseErrorAt(p, err)+" does not parse as Go, so it cannot be judged"))
 			continue
 		}
 		parsed = append(parsed, f)
@@ -365,4 +370,14 @@ func judgedGoFiles(check, project string, writable []string) (*token.FileSet, []
 		return nil, nil, nil, bad
 	}
 	return fset, paths, parsed, nil
+}
+
+// parseErrorAt is where a Go file fails to parse, <file>:<line>:<column>, never the parser's
+// message, which quotes the offending token (model-written text that may hold a credential).
+func parseErrorAt(file string, err error) string {
+	var list scanner.ErrorList
+	if errors.As(err, &list) && len(list) > 0 {
+		return fmt.Sprintf("%s:%d:%d", file, list[0].Pos.Line, list[0].Pos.Column)
+	}
+	return file
 }
