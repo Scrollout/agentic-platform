@@ -179,10 +179,11 @@ A literal argument may be several literals joined by `+`. Limits: a port written
 recognised. Some literals that are not deployment values are rejected: `"1.2.3.4"` is judged an
 address, and `const tokenHeader = "X-Api-Key"` and a name such as `secretaryNote` a credential.
 
-Both code-step checks and DeclaredValuesGenerated read the approved contract the engine sends, not
-the project's `api/openapi.yaml`, and fail closed, naming what they could not read: an approved
-contract that is missing or does not parse, or a judged file that does not parse as Go. None of
-them runs the project's code.
+DeclaredValuesGenerated and DeclaredValuesNotRepeated read the approved contract the engine sends,
+not the project's `api/openapi.yaml`; DeploymentValuesConfigured does not use it. Each fails
+closed, naming what it could not read: the two declared-value checks an approved contract that is
+missing or does not parse, and all three a judged file that does not parse as Go. None of them
+runs the project's code.
 
 ## Dependencies
 
