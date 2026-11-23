@@ -109,7 +109,7 @@ FR-007, FR-008; research R1, R2, R7).
 `gen.DeclaredNewNoteTextMaxLength`; `len(t) > 200` in `internal/` fails naming the file, line,
 pointer and Go name; the constant passes.
 
-- [ ] T003 [P] [US1] Test author: new `src/engine/checks/declared_values_test.go`:
+- [x] T003 [P] [US1] Test author: new `src/engine/checks/declared_values_test.go`:
   `DeclaredValues` returns every scalar under the thirteen keywords and `enum` items at any depth
   with its JSON Pointer (`~0`, `~1` encoded, sequence items by index), in document order; none
   below `example`, `examples` or an `x-*` key (a property so named included); a keyword whose
@@ -141,20 +141,20 @@ pointer and Go name; the constant passes.
   with no declared value and on code using the constants, saying how many files, literals and
   values it examined; fails closed on a judged file that does not parse and on a missing or broken
   contract; a value longer than 64 characters is cut in the reason
-- [ ] T004 [P] [US1] Test author: new `src/engine/procedures/declared_test.go` (with the pinned
+- [x] T004 [P] [US1] Test author: new `src/engine/procedures/declared_test.go` (with the pinned
   oapi-codegen, `AP_OAPI_CODEGEN`, as the existing procedure tests): a contract with declared
   values gives `gen/declared.go` equal to `RenderDeclared` of its values, with the names of
   oapi-codegen's output, the stub and the template's files taken (a schema named so gets the next
   suffix); a contract with none gives the header and package only; two generations give the same
   bytes; the project builds; GenerationRepeatable and DeclaredValuesGenerated pass on the output;
   a contract the collector rejects refuses the step naming why
-- [ ] T005 [P] [US1] Test author: new `src/engine/checksvc/declared_values_test.go`: runCheck
+- [x] T005 [P] [US1] Test author: new `src/engine/checksvc/declared_values_test.go`: runCheck
   serves `DeclaredValuesGenerated` and `DeclaredValuesNotRepeated`, both judging against the text
   inside the `contract` entry of `approved` (its content is the canonical JSON `{"contract":
   "<text>"}`), not `api/openapi.yaml` in the folder (a folder contract declaring another value
   does not change the verdict); a request without the approved contract, or whose content is not
   that JSON, fails closed
-- [ ] T006 [US1] Code author: the bodies of `DeclaredValues`, `RenderDeclared` and
+- [x] T006 [US1] Code author: the bodies of `DeclaredValues`, `RenderDeclared` and
   DeclaredValuesGenerated in `src/engine/checks/declared.go`, DeclaredValuesNotRepeated in
   `src/engine/checks/values.go`, their entries in `src/engine/checksvc/checks.go` (unwrapping the
   approved contract's canonical JSON), and `gen/declared.go` in
