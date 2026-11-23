@@ -10,5 +10,5 @@ import (
 )
 
 func main() {
-	log.Fatal(http.ListenAndServe(":8080", gen.Handler(app.New())))
+	log.Fatal(http.ListenAndServe(gen.ListenAddress(), gen.Handler(app.New())))
 }
