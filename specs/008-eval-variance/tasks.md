@@ -160,13 +160,13 @@ tokens, output tokens and attempts, over the trials that carry them (FR-003, FR-
 **Independent Test**: T008 passes; quickstart Q1's fixture with trials of 10 s, 20 s and 60 s
 shows `10.0, 20.0, 60.0`.
 
-- [ ] T008 [US2] Test author: new `scripts/tests/test_ci_evals_trials_spread.py`: lowest, median
+- [X] T008 [US2] Test author: new `scripts/tests/test_ci_evals_trials_spread.py`: lowest, median
   and highest of seconds (one decimal), cost (four decimals), input tokens, output tokens and
   attempts (integers), as the contract's columns; the median of an even count is
   "the mean of the two middle values"; a measure some trials lack shows `(<n> of <m> trials)`; one
   that no trial carries shows `n/a`; a steps measurement (no attempts) shows `n/a` for attempts;
   one trial gives the same value three times; zero cost and zero tokens are numbers, not `n/a`
-- [ ] T009 [US2] Code author: the spread columns in `scripts/ci-evals-trials.py`. T008 passes,
+- [X] T009 [US2] Code author: the spread columns in `scripts/ci-evals-trials.py`. T008 passes,
   T003-T005 stay green
 - [ ] T010 [US2] Commit; push (owner go-ahead) and fix until CI is green; record the run; fresh
   review of US2; `/speckit-converge` for US2

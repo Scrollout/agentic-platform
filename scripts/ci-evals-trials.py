@@ -139,10 +139,14 @@ def read_measurement(path: str) -> dict:
     return m
 
 
-def number(value, digits: int) -> str:
+def number(value: Fraction, digits: int) -> str:
+    """value with `digits` decimals; with 0, an integer, or a half (an even-count median of
+    integers, which are at least 0) as <whole>.5, computed exactly."""
     if digits:
         return f"{float(value):.{digits}f}"
-    return str(round(Fraction(value)))
+    if value.denominator == 1:
+        return str(value.numerator)
+    return f"{value.numerator // 2}.5"
 
 
 def spread(trials: list, field: str, digits: int) -> str:
