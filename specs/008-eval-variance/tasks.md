@@ -168,8 +168,16 @@ shows `10.0, 20.0, 60.0`.
   one trial gives the same value three times; zero cost and zero tokens are numbers, not `n/a`
 - [X] T009 [US2] Code author: the spread columns in `scripts/ci-evals-trials.py`. T008 passes,
   T003-T005 stay green
-- [ ] T010 [US2] (CI 45153547320 green 26/26 at f8b5416) Commit; push (owner go-ahead) and fix until CI is green; record the run; fresh
+- [X] T010 [US2] (CI 45153547320 green 26/26 at f8b5416; review: no blocking, T025; converge US2 clean) Commit; push (owner go-ahead) and fix until CI is green; record the run; fresh
   review of US2; `/speckit-converge` for US2
+
+- [ ] T025 [US2] Review findings US2-R1 to R4 (fresh Sonnet review at f8b5416; suggestions, not
+  blocking): R1 an integer too large for a float in a measurement (`"seconds": 10**400`) makes
+  `math.isfinite` raise in `scripts/ci-evals-trials.py` `read_trial`, so only a stderr line is
+  written, not "could not be read" (with T023's same case in `ci-evals-measure.py`); R2 the
+  large-integer spread tests stay below 2^53 (add `[10**30, 10**30+1]`); R3 nothing pins an exact
+  median against a float mean; R4 `-0.0` seconds or cost is written `0.0`, not
+  `format(-0.0, ".1f")` (`-0.0`): state it in the contract or test it; tests by a test author
 
 ---
 
