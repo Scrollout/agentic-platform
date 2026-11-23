@@ -1,0 +1,88 @@
+openapi: 3.1.0
+info:
+  title: Notes
+  version: 1.0.0
+paths:
+  /notes:
+    post:
+      operationId: createNote
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            maximum: 100
+            default: 20
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewNote"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "400":
+          description: The note is not valid.
+components:
+  schemas:
+    NewNote:
+      type: object
+      required: [text]
+      x-internal:
+        maxLength: 11
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 280
+        priority:
+          type: integer
+          minimum: 0
+          maximum: 10
+          default: 5
+        ratio:
+          type: number
+          multipleOf: 0.5
+          exclusiveMinimum: .5
+          maximum: 2e2
+        kind:
+          type: string
+          enum: [plain, "rich"]
+          default: plain
+        region:
+          type: string
+          default: "200"
+        greeting:
+          type: string
+          default: "say \"hi\"\n"
+        flag:
+          type: boolean
+          default: true
+        count:
+          type: integer
+          maximum: 0x1F
+        code:
+          type: string
+          const: "A/B~C"
+        tags:
+          type: array
+          maxItems: 3
+          items:
+            type: string
+        default:
+          type: string
+          example:
+            maxLength: 9
+        x-note:
+          type: string
+          maxLength: 7
+    Note:
+      type: object
+      properties:
+        id:
+          type: string
