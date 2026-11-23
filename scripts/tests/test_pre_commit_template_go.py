@@ -12,9 +12,14 @@ the repository root with
 `python3 -m unittest discover -s scripts/tests -p 'test_pre_commit_template_go.py'`.
 Docker and the pinned Go image are prerequisites, as for the other hook tests.
 """
+import os
 import unittest
 
 import test_pre_commit as base
+
+# The hook's go vet runs offline from the user's module cache (XDG_CACHE_HOME), as in
+# test_pre_commit_quick.py; CloneCase's scratch HOME would leave it empty.
+REAL_CACHE = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
 
 GO_OK = "package gen\n\nfunc F() int {\n\treturn 1\n}\n"
 GO_UNFORMATTED = "package gen\n\nfunc   F( ) int {\n\treturn   1\n}\n"
@@ -25,6 +30,10 @@ T = "src/catalogue/api-feature-go/template/"
 
 
 class TemplateGoCase(base.CloneCase):
+    def setUp(self):
+        super().setUp()
+        self.env["XDG_CACHE_HOME"] = REAL_CACHE
+
     def refused(self, r, *named):
         out = self.out(r)
         self.assertNotEqual(r.returncode, 0, out)
@@ -57,7 +66,9 @@ class TemplateFormattingTest(TemplateGoCase):
         self.stage(T + "gen/b.go", GO_OK)
         self.stage(T + "deep/er/c.go", GO_UNFORMATTED)
         out = self.refused(self.run_hook(), "gen/a.go", "deep/er/c.go")
-        self.assertNotIn("gen/b.go", out)
+        self.assertIn(NOT_FORMATTED, out)
+        # the header lists every staged file; only the refusal list is judged
+        self.assertNotIn("gen/b.go", out.split(NOT_FORMATTED, 1)[1])
 
     # edge: a name with a space
     def test_an_unformatted_template_file_with_a_space_in_its_name_is_named(self):
