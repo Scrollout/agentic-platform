@@ -214,7 +214,7 @@ passes.
   `src/engine/checksvc/checks.go`; the check image's template stage picks the file up unchanged
   (`src/deploy/Dockerfile.check` copies the template folder); T008-T009 pass; every existing
   test stays green; `method.sha256` converged
-- [ ] T011 [US2] Commit (tests and code in separate commits); push (owner go-ahead); fix until CI
+- [x] T011 [US2] Commit (tests and code in separate commits); push (owner go-ahead); fix until CI
   is green but for the recorded-model jobs "Implementation strategy" names (owner, 2026-11-23); record the run in research; fresh review of US2; `/speckit-converge` for US2
 
 ---
