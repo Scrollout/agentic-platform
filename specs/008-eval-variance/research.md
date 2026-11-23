@@ -146,3 +146,28 @@ the code on `main` (`9d8d678`), a reproduced experiment, or a cited document. De
   workflow also scans the folder (S13) before uploading.
 - **Rationale**: grader reasons and stderr can quote model output (protected content, XI); an
   allowlist cannot leak a field added later to the report.
+
+## R6. Live runs (quickstart Q5, T018)
+
+Two dispatches of `evals.yml -f all=true` on this branch at 086720d, owner's go-ahead
+(2026-11-23):
+
+| Run | Result | Passed trials | Unstable cases | Trials' cost |
+|-----|--------|---------------|----------------|--------------|
+| 45163722619 | all four jobs green | 123 of 123 | none | $0.2368 |
+| 45170628365 | `analyst` failed, the three steps jobs green | 122 of 123 | `example` (2/3) | $0.2309 |
+
+- Each eval job of both runs uploaded `eval-measurements-<key>-1` (0.7 to 1.7 kB), expiring 90
+  days after the run (2027-02-21).
+- Run 2's config job chose run 1's measurement for every key (`EARLIER` names run 45163722619,
+  commit 086720d, for `analyst`, `steps-tests`, `steps-code` and `steps-review`): R3's limit is
+  settled, the config job's `GITHUB_TOKEN` with `actions: read` downloads another run's artifact.
+- Run 2's analyst trials section shows `example | 2/3 ⚠️ unstable` and, under `### Since run
+  45163722619 (086720d)`, `example | 3/3 → 2/3 📉 less reliable` (read from the measurements with
+  the same scripts, since the job summary has no API).
+- The new steps (trials, measurement scan, upload, warning) took 0 to 2 s per job, under SC-004's
+  60 s; run 2's config step took under 4 s.
+- The `example` failure (trial 2, `ExampleContent`: no scenario creates two notes and expects them
+  in creation order) is the variance backlog T185 saw, with no suite input changed by this
+  feature: backlog T199. Its kept outputs (`evals-analyst-1`, 7 days) hold `report.json`,
+  `revision/` and all 63 trials' files, which closes backlog T193.

@@ -256,7 +256,7 @@ out an unmerged branch's, this run's and an expired one; Q5 shows the comparison
   retention to 90 days (backlog T198); check `gh api
   repos/Scrollout/agentic-platform/actions/permissions/artifact-and-log-retention` answers
   `"days":90`, then close T198
-- [ ] T018 [US3] Quickstart Q5 (paid; owner go-ahead; add the branch to environment `dev`'s
+- [X] T018 [US3] (runs 45163722619 green, 45170628365 compared with it, `analyst` failed `example` 2/3: backlog T199; new steps 0-2 s; trials $0.24 per run; research R6) Quickstart Q5 (paid; owner go-ahead; add the branch to environment `dev`'s
   branch policies first): dispatch `evals.yml` with `-f all=true` twice; the request quotes the
   cost of the last all-suites run from its summary, twice; record in research both runs, that each
   job uploaded `eval-measurements-…` (90 days), that the second compared with the first (research
