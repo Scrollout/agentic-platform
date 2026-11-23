@@ -40,6 +40,7 @@ jobs:
       python: ${{ steps.pins.outputs.python }}
       go: ${{ steps.pins.outputs.go }}
       matrix: ${{ steps.select.outputs.matrix }}
+      earlier: ${{ steps.earlier.outputs.earlier }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -80,6 +81,21 @@ jobs:
           matrix=$(python3 scripts/ci-evals-select.py)
           echo "matrix=$matrix" >>"$GITHUB_OUTPUT"
           if [ "$matrix" = "[]" ]; then echo "No eval suite's inputs changed since the last green evals run; the evals job is skipped (all=true runs every suite)." >>"$GITHUB_STEP_SUMMARY"; fi
+      # Each suite's earlier measurement to compare with (research R3, ADR 0083): the newest kept
+      # measurement of another run whose commit is this one or an ancestor of it. The listing goes
+      # to a file, since 90 days of artifacts can outgrow an environment variable; never a gate,
+      # so a failure leaves `earlier` unset and the trials section says no earlier run was read.
+      - id: earlier
+        name: Find the earlier eval measurements
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MATRIX: ${{ steps.select.outputs.matrix }}
+          SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --jq '.artifacts[] | select(.name | startswith("eval-measurements-")) | {id, name, expired, created_at, run_id: .workflow_run.id, head_sha: .workflow_run.head_sha}' >"$RUNNER_TEMP/eval-artifacts.jsonl" || true
+          python3 scripts/ci-evals-earlier.py "$RUNNER_TEMP/eval-artifacts.jsonl"
 
   evals:
     name: "Evals: ${{ matrix.suite }}${{ matrix.cases && format(' {0}', matrix.cases) || '' }}"
@@ -139,6 +155,7 @@ jobs:
         env:
           SUITE: ${{ matrix.suite }}
           EVAL_CASES: ${{ matrix.cases }}
+          EARLIER: ${{ needs.config.outputs.earlier }}
         run: |
           python3 scripts/ci-evals-measure.py "$EVAL_REPORT_DIR/report.json" "$EVAL_MEASUREMENT_DIR/measurement.json"
           python3 scripts/ci-evals-trials.py "$EVAL_MEASUREMENT_DIR/measurement.json"
@@ -159,6 +176,31 @@ jobs:
         name: Scan the eval outputs for credentials
         if: failure() || steps.failed.outputs.failed == 'true'
         run: scripts/secret-scan.sh "$EVAL_REPORT_DIR"
+      # Every job keeps its measurement for 90 days, passed or failed, so later runs can compare
+      # with it (research R1, R2, ADR 0083): scanned first and uploaded only when the scan finds
+      # nothing; never a gate, so a match or an upload error leaves the job's result as it was and
+      # the next step says the measurement was not kept.
+      - id: measurement_scan
+        name: Scan the eval measurement for credentials
+        if: always()
+        continue-on-error: true
+        run: scripts/secret-scan.sh "$EVAL_MEASUREMENT_DIR"
+      - name: Keep the eval measurement
+        if: always() && steps.measurement_scan.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: eval-measurements-${{ matrix.suite }}${{ matrix.cases && format('-{0}', matrix.cases) || '' }}-${{ github.run_attempt }}
+          path: ${{ env.EVAL_MEASUREMENT_DIR }}
+          retention-days: 90
+          if-no-files-found: ignore
+      - name: Say the eval measurement was not kept
+        if: always() && steps.measurement_scan.outcome != 'success'
+        continue-on-error: true
+        run: |
+          msg="::warning::The eval measurement was not kept: its credential scan did not pass, so it was not uploaded"
+          echo "$msg"
+          echo "$msg" >>"$GITHUB_STEP_SUMMARY"
       - name: Keep the failed job's eval outputs
         if: (failure() || steps.failed.outputs.failed == 'true') && steps.scan.outcome == 'success'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

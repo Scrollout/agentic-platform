@@ -231,13 +231,18 @@ out an unmerged branch's, this run's and an expired one; Q5 shows the comparison
   `steps.select.outputs.matrix`, `SHA`, `RUN_ID: ${{ github.run_id }}`; the job declares the
   output `earlier`; the trials step's `env` has `EARLIER: ${{ needs.config.outputs.earlier }}`; no
   job's permissions change; each rule has a planted violation
-- [ ] T015 [US3] Code author: `scripts/ci-evals-earlier.py` (importing `scripts/ci_select.py`'s
+- [X] T015 [US3] Code author: `scripts/ci-evals-earlier.py` (importing `scripts/ci_select.py`'s
   `git` and `is_commit` and calling `git("merge-base", "--is-ancestor", head, sha)` itself, since
   the ancestor test is inline in `base_from_runs`; `ci_select.py` does not change), the comparison
   in `scripts/ci-evals-trials.py`, and in `.github/workflows/evals.yml` (`Approved-by:` after the
   owner confirms the diff) the config step and output, the
   measurement scan and upload, the trials step's `EARLIER`. T011-T014 pass; every
   `test_workflows*.py` and the earlier stories' tests stay green
+- [ ] T024 [US3] T015's open points (code author, not blocking): the "not kept" warning covers
+  only a scan that did not pass, not a failed upload (the action's log only); several earlier
+  measurements together could pass the 1 MB limit on the config job's output (each is capped at
+  1 MB; today's are a few kilobytes); the comment above the failed-outputs scan now sits three
+  steps from its upload
 - [ ] T016 [US3] Commit; push (owner go-ahead) and fix until CI is green; record the run
 - [ ] T017 [US3] Owner: raise the Scrollout organization's and this repository's artifact and log
   retention to 90 days (backlog T198); check `gh api

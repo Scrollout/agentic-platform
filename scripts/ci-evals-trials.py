@@ -61,6 +61,10 @@ import unicodedata
 from fractions import Fraction
 
 NO_EARLIER = "no earlier run could be read"
+NOT_READ = "the earlier run could not be read"
+NOTHING = "nothing to compare with"
+LESS = "📉 less reliable"
+HEX_DIGITS = "0123456789abcdef"
 K_DEFAULT = 3
 # The spread columns: header, trial field, digits after the point (0: an integer).
 SPREAD = (("Seconds", "seconds", 1), ("Cost $", "cost_usd", 4), ("Tokens in", "input_tokens", 0),
@@ -128,6 +132,11 @@ def read_measurement(path: str) -> dict:
             m = json.load(f)
     except (OSError, ValueError, RecursionError) as e:
         raise Unreadable(str(e)) from None
+    return check_measurement(m)
+
+
+def check_measurement(m) -> dict:
+    """m when its fields are of the types ci-evals-measure.py writes; Unreadable otherwise."""
     need(isinstance(m, dict), "not an object")
     for f in ("version", "run_id", "run_attempt"):
         need(type(m.get(f)) is int, f"{f} is not an integer")
@@ -149,14 +158,18 @@ def number(value: Fraction, digits: int) -> str:
     return f"{value.numerator // 2}.5"
 
 
+def median(values: list) -> Fraction:
+    """The median of sorted values: the mean of the two middle ones for an even count."""
+    mid = len(values) // 2
+    return values[mid] if len(values) % 2 else (values[mid - 1] + values[mid]) / 2
+
+
 def spread(trials: list, field: str, digits: int) -> str:
     """lowest, median, highest over the trials that carry the field."""
     values = sorted(Fraction(t[field]) for t in trials if field in t)
     if not values:
         return "n/a"
-    mid = len(values) // 2
-    median = values[mid] if len(values) % 2 else (values[mid - 1] + values[mid]) / 2
-    cell = ", ".join(number(v, digits) for v in (values[0], median, values[-1]))
+    cell = ", ".join(number(v, digits) for v in (values[0], median(values), values[-1]))
     if len(values) < len(trials):
         cell += f" ({len(values)} of {len(trials)} trials)"
     return cell
@@ -196,17 +209,64 @@ def trials_table(m: dict) -> list[str]:
     return lines
 
 
-def earlier_reason(key: str) -> str:
-    """Why there is no comparison: the entry's reason, or that no earlier run could be read.
-    The comparison itself (an entry with a measurement) comes with US3 (T015)."""
+def read_earlier(key: str) -> tuple[dict | None, str]:
+    """EARLIER's entry for key as (run_id, commit, measurement) when it can be read, else
+    (None, why there is no comparison)."""
     try:
         earlier = json.loads(os.environ.get("EARLIER") or "null")
     except (ValueError, RecursionError):
-        return NO_EARLIER
-    entry = earlier.get(key) if isinstance(earlier, dict) else None
-    if isinstance(entry, dict) and isinstance(entry.get("none"), str) and entry["none"].strip():
-        return text(entry["none"])
-    return NO_EARLIER
+        return None, NO_EARLIER
+    if not isinstance(earlier, dict) or key not in earlier:
+        return None, NO_EARLIER
+    entry = earlier[key]
+    if isinstance(entry, dict) and "none" in entry:
+        if isinstance(entry["none"], str) and entry["none"].strip():
+            return None, text(entry["none"])
+        return None, f"{NOT_READ}: its reason is not text"
+    try:
+        need(isinstance(entry, dict), "the entry is not an object")
+        run_id = entry.get("run_id")
+        need(type(run_id) is int and run_id > 0, "run_id is not a positive integer")
+        commit = entry.get("commit")
+        need(isinstance(commit, str) and len(commit) == 40 and all(c in HEX_DIGITS for c in commit),
+             "commit is not 40 lowercase hex characters")
+        need("measurement" in entry, "it has no measurement")
+        try:
+            m = check_measurement(entry["measurement"])
+        except Unreadable as e:
+            raise Unreadable(f"its measurement: {e}") from None
+    except Unreadable as e:
+        return None, f"{NOT_READ}: {text(str(e))}"
+    return {"run_id": run_id, "commit": commit, "measurement": m}, ""
+
+
+def median_cell(trials: list, field: str, digits: int) -> str:
+    values = sorted(Fraction(t[field]) for t in trials if field in t)
+    return number(median(values), digits) if values else "n/a"
+
+
+def comparison(m: dict, base: dict) -> list[str]:
+    first = {}
+    for c in base["measurement"]["measured_cases"]:
+        first.setdefault(c["case"], c)
+    header = ["Case", "Passed", "Median seconds", "Median cost $"]
+    lines = [f"### Since run {base['run_id']} ({base['commit'][:7]})", "",
+             "| " + " | ".join(header) + " |",
+             "|" + "|".join("-" * (len(h) + 2) for h in header) + "|"]
+    for c in m["measured_cases"]:
+        b = first.get(c["case"])
+        now, before = c["trials"], b["trials"] if b else []
+        if not now or not before:
+            lines.append(f"| {text(c['case'])} | {NOTHING} | | |")
+            continue
+        np_, bp = sum(t["passed"] for t in now), sum(t["passed"] for t in before)
+        cell = f"{bp}/{len(before)} → {np_}/{len(now)}"
+        if np_ * len(before) < bp * len(now):
+            cell += f" {LESS}"
+        meds = [f"{median_cell(before, f, d)} → {median_cell(now, f, d)}"
+                for f, d in (("seconds", 1), ("cost_usd", 4))]
+        lines.append("| " + " | ".join([text(c["case"]), cell] + meds) + " |")
+    return lines
 
 
 def section(path: str) -> str:
@@ -215,7 +275,11 @@ def section(path: str) -> str:
     except Unreadable as e:
         return f"## Trials\n\nThe measurement {text(path)} could not be read: {text(str(e))}\n"
     lines = trials_table(m)
-    lines += ["", f"### No earlier run to compare with: {earlier_reason(m['key'])}"]
+    base, why = read_earlier(m["key"])
+    if base is None:
+        lines += ["", f"### No earlier run to compare with: {why}"]
+    else:
+        lines += [""] + comparison(m, base)
     return "\n".join(lines) + "\n"
 
 
