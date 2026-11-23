@@ -11,9 +11,11 @@ docstring, as for the other CI helpers (`scripts/ci-evals-summary.py`). The fiel
   wrong and exits 0. Exit 2 only on a wrong number of arguments, with nothing written.
 - **No model, no network but `gh`**: `ci-evals-measure.py` and `ci-evals-trials.py` start no
   process; `ci-evals-earlier.py` starts only `git` and `gh`.
-- **Python**: the evals job runs them with the runner's system `python3` (`ci-runner`
+- **Python**: the evals job runs `ci-evals-measure.py` and `ci-evals-trials.py` with the
+  runner's system `python3` (`ci-runner`
   `ubuntu-26.04`, Python 3.14.4 by the [GitHub Actions reference](../../../docs/references/github-actions.md));
-  their tests run on `ci-python` (3.14.10) in the `py_tests` job; standard library only.
+  `ci-evals-earlier.py` runs in the config job on `ci-python` (3.14.10, its `setup-python`), as
+  do all their tests in the `py_tests` job; standard library only.
 - **Text it prints from data** (case and agent names, reasons): a `|` is written `\|` and a line
   break or control character becomes a space, so no value can break the table.
 
@@ -27,7 +29,8 @@ usage: python3 scripts/ci-evals-measure.py <report.json> <measurement.json>
 
 - Reads the report and `SUITE`, `EVAL_CASES`, `GITHUB_SHA`, `GITHUB_REF_NAME`, `GITHUB_RUN_ID`,
   `GITHUB_RUN_ATTEMPT`; writes `<measurement.json>` with only data-model.md's fields, by their
-  rules (a value that breaks a rule is written as the rule's fallback, never copied).
+  rules (a value that breaks a rule is written as the rule's fallback, never copied). It creates
+  the output file's folder when it does not exist.
 - A report that cannot be read, or is not a list, writes no file and prints why; a case or trial
   that is not an object is left out and counted in a printed line.
 
@@ -67,7 +70,8 @@ usage: python3 scripts/ci-evals-trials.py <measurement.json>
   `key`. An absent, empty or unreadable `EARLIER`, or one without the key, shows "no earlier run
   could be read". A baseline whose `run_id` is not a positive integer, whose `commit` is not 40
   lowercase hex characters, or whose measurement breaks data-model.md's rules is "could not be
-  read".
+  read"; a measurement holding the data model's fallbacks (`"?"`, `""`, `0`) keeps its rules and
+  is read.
 - Appends to `$GITHUB_STEP_SUMMARY`, or prints when it is unset or cannot be written, the
   section below; the same inputs always give the same text.
 

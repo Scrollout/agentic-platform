@@ -31,9 +31,10 @@ same scripts, so the stories run one after another.
   on 2026-11-23; that commit carries `Tests-approved-by: Marius Gologan (<date>)`. Any other
   existing test that turns out to need a change is stopped and asked for, quoting what changes
   and why. `scripts/ci-evals-summary.py` and its tests do not change (FR-009, T192 stays open).
-- **Protected paths**: a commit that changes `.github/workflows/evals.yml` carries the owner's
-  `Approved-by:` only after the owner has confirmed that diff, asked with the push; the trailer
-  names the date of that confirmation. No path an eval
+- **Protected paths**: for a change to `.github/workflows/evals.yml` the steps are, in order:
+  show the owner the diff with the push question, get the owner's confirmation, commit with
+  `Approved-by:` naming the date of that confirmation, then push. No commit carries the trailer
+  before the confirmation. No path an eval
   suite reads (`src/tests/evals/suites.yaml`) changes, so no push selects a paid suite.
 - **No dependency** is added; the scripts use the standard library and `gh`.
 - **Never a gate** (FR-007): every new workflow step carries `continue-on-error: true`; every
@@ -55,7 +56,10 @@ same scripts, so the stories run one after another.
   0 CRITICAL, 4 HIGH (I1 tokens shown as median only; F1 the measurement scan could fail the job;
   F2 the config step could fail the job; F3 uncaught errors and a 0/0 share), 8 MEDIUM, 9 LOW,
   fixed at their source (spec FR-001, FR-002, FR-004, FR-006, FR-007 and edge cases; research R2
-  to R4; data model fallbacks; contract; these rules and T003-T018).
+  to R4; data model fallbacks; contract; these rules and T003-T018). Round 2 (fresh Sonnet, at 04ca0f1):
+  all 4 HIGH fixed; 0 CRITICAL, 0 HIGH; N1, N2 MEDIUM (the scan's warning not in the summary; who
+  creates the measurement folder) and N3-N6 LOW fixed in wording (research R2, contract, quickstart,
+  these rules, T003, T013, T014).
 
 ---
 
@@ -92,15 +96,15 @@ unstable (FR-001, FR-002, FR-004's fields, FR-008, FR-009; research R4, R5).
   `output_tokens`, `cost_usd`, each absent when the report lacks it), and each value breaking its
   rule takes the data model's fallback: `commit` "40 lowercase hex characters (`""`)", `run_id` and
   `run_attempt` "a positive integer (`0`)" (unset, `abc`, `-1`), `suite`, `cases` and `agent`
-  "letters, digits and `-` only (`"?"`)", `case` "at most 200 characters (`"?"`)",
+  "letters, digits and `-` only (`"?"`)" (`cases` "may be empty", as the analyst's is), `case` "at most 200 characters (`"?"`)",
   `quarantined_by` "`^T[0-9]+$` (`"?"`, still quarantined)", `branch` "at most 255 characters, no
   control character (`""`)", tokens and attempts "an integer at least 0", `cost_usd` "a finite
   number at least 0" (`NaN`, `-1`, `"0.1"`, `true` give absent); a case or trial that is not an
   object, and `trials` that is not a list, are handled as the data model says; planted `stderr`, `exit_error`, `results[].reason`,
   `changed_files` and `attack` holding `sk-ant-` followed by 30 letters and answer text never
   appear in the file; "a missing or non-boolean value is `false`"; Go durations `850ms`, `12s`,
-  `1m2.5s`, `1h0m0s`, `1.234s` parse to seconds, an unparsable one leaves `seconds` absent; a
-  report that is not JSON, not a list, or missing, and an output path that cannot be written,
+  `1m2.5s`, `1h0m0s`, `1.234s` parse to seconds, an unparsable one leaves `seconds` absent; an
+  output file's folder that does not exist is created; a report that is not JSON, not a list, or missing, and an output path that cannot be written,
   write no file, print why and exit 0; wrong arguments exit 2; order of cases and trials kept; it
   runs with `PATH` holding no `gh` or `git` (it starts no process)
 - [ ] T004 [P] [US1] Test author: new `scripts/tests/test_ci_evals_trials.py` for
@@ -201,7 +205,8 @@ out an unmerged branch's, this run's and an expired one; Q5 shows the comparison
   not JSON or without the key gives "no earlier run could be read"; a baseline whose `run_id` is
   not a positive integer, whose `commit` is not 40 lowercase hex characters (a planted
   `<script>` or `|` in it), or whose measurement breaks the data model's rules is "could not be
-  read", never a crash; the same inputs give the same text; exit 0
+  read", never a crash, while a baseline holding the data model's fallbacks (`"?"`, `""`, `0`) is
+  read; the same inputs give the same text; exit 0
 - [ ] T014 [P] [US3] Test author: new `scripts/tests/test_workflows_eval_measurements.py` (clean
   and planted trees): the evals job's measurement upload uses the upload action's pinned digest,
   `retention-days: 90`, `path` the measurement folder, a name `eval-measurements-…` built from
@@ -210,7 +215,7 @@ out an unmerged branch's, this run's and an expired one; Q5 shows the comparison
   runs `scripts/secret-scan.sh "$EVAL_MEASUREMENT_DIR"`, after the failed-outputs scan; the
   upload's `if` is `always() && steps.<that id>.outcome == 'success'`; a step after it with
   `if: always() && steps.<that id>.outcome != 'success'` prints a `::warning::` that the
-  measurement was not kept; all come before the failed-outputs upload, which stays last; the
+  measurement was not kept and appends that line to `$GITHUB_STEP_SUMMARY`; all come before the failed-outputs upload, which stays last; the
   config job's step, after `select`, with `continue-on-error: true`, writes the listing to a file
   with `gh api --paginate` and the contract's `--jq` followed by `|| true`, then runs
   `scripts/ci-evals-earlier.py` on that file with `GH_TOKEN: ${{ github.token }}`, `MATRIX` from

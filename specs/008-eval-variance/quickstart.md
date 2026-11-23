@@ -1,7 +1,7 @@
 # Quickstart: Eval suites show how much their trials vary
 
 Validation scenarios for the [spec](spec.md). Q1 to Q4 are free and run locally or in the check
-run's `scripts` job; Q5 is a paid eval dispatch and needs the owner's go-ahead.
+run's `py_tests` job; Q5 is a paid eval dispatch and needs the owner's go-ahead.
 
 ## Prerequisites
 
@@ -17,7 +17,8 @@ python3 scripts/ci-evals-trials.py /tmp/m.json
 ```
 
 Expected: every case shows `passed/run`; only the case whose trials disagree is `unstable`; the
-lowest, median and highest seconds, cost and attempts match the fixture; a trial without usage
+lowest, median and highest seconds, cost, input and output tokens and attempts match the
+fixture; a trial without usage
 shows the count covered.
 
 ## Q2. The measurement holds nothing else (FR-004; SC-005)

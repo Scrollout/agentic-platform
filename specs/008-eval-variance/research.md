@@ -69,7 +69,8 @@ the code on `main` (`9d8d678`), a reproduced experiment, or a cited document. De
   `continue-on-error: true`, so a match (exit 1), a scan that cannot read (exit 2) or an upload
   error leaves the job's result as it was; the upload's `if` reads the scan's `outcome` (its result
   before `continue-on-error`), so nothing is uploaded after a match, and a following step prints a
-  warning that the measurement was not kept. The failed-outputs scan keeps failing the job on a
+  warning that the measurement was not kept and appends the same line to the job summary
+  (spec FR-007). The failed-outputs scan keeps failing the job on a
   match, as ADR 0078 says.
 - **Rationale**: S4's rules otherwise refuse any second upload. The baseline is fetched in the
   `config` job, which already holds `actions: read` (R3), so `judge_permissions` does not change.
