@@ -446,8 +446,8 @@ func TestStartRunIsRecordedBeforeItIsAcknowledged(t *testing.T) {
 	if v.ID != "RUN-1" || v.Slice != "S-1" || v.Project != "notes-app" || v.Operation != op.ID {
 		t.Errorf("run = %+v, want RUN-1 of S-1, project notes-app, operation %s", v, op.ID)
 	}
-	if v.Pattern != "api-feature-go@1.0.0" {
-		t.Errorf("pattern = %q, want api-feature-go@1.0.0 (the pattern the slice was checked against)", v.Pattern)
+	if v.Pattern != "api-feature-go@1.1.0" {
+		t.Errorf("pattern = %q, want api-feature-go@1.1.0 (the pattern the slice was checked against)", v.Pattern)
 	}
 	if v.Status != "running" || v.Outcome != nil || v.EndedAt != nil || v.ReplayOf != nil {
 		t.Errorf("a running run has no outcome, ended_at or replay_of: %+v", v)

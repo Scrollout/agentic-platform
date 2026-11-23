@@ -222,6 +222,56 @@ var patternCases = []pcase{
 			copyTree(t, filepath.Join("testdata", "witness", "review"), filepath.Join(dir, "review"))
 			return map[bool]string{true: "R-1"}[planted]
 		}},
+	// T012 (feature 009): the value checks. DeclaredValuesGenerated judges gen/declared.go of the
+	// generated project against the approved contract (which declares no value here).
+	{check: "DeclaredValuesGenerated", step: step("generate", genWritable, []string{"generated-code"}, nil, nil), oapi: true,
+		base: func(t *testing.T, dir string, _ bool) { copyTree(t, generatedProject(t), dir) },
+		change: func(t *testing.T, dir string, planted bool) string {
+			if planted {
+				appendTo(t, dir, "gen/declared.go", "\nconst Invented = 1\n")
+				return "gen/declared.go"
+			}
+			return ""
+		}},
+	// DeclaredValuesNotRepeated judges the code step's files against the APPROVED contract (in the
+	// request), here one declaring maxLength 200; other literals (0, 1, a string) are not judged.
+	{check: "DeclaredValuesNotRepeated", step: step("code", codeWritable, []string{"code"}, nil, nil),
+		base: func(t *testing.T, dir string, _ bool) {
+			copyTree(t, filepath.Join("testdata", "buildok"), dir)
+			write(t, dir, "api/openapi.yaml", []byte(dvContract("200")))
+			write(t, dir, "gen/declared.go", []byte(dvDeclared("200")))
+		},
+		mut: func(t *testing.T, dir string, b map[string]any) {
+			b["approved"] = approvedParts(dvContract("200"), approvedExamples(t))
+		},
+		change: func(t *testing.T, dir string, planted bool) string {
+			limit := "gen.DeclaredNewNoteTextMaxLength"
+			if planted {
+				limit = "200"
+			}
+			write(t, dir, "internal/note/note.go", []byte("package note\n\nimport \"example.com/p/gen\"\n\nvar _ = gen.Name\n\n"+
+				"// TooLong says whether text exceeds the limit.\nfunc TooLong(text string) bool {\n\tif text == \"\" || len(text) < 1 {\n\t\treturn false\n\t}\n"+
+				"\treturn len(text) > "+limit+"\n}\n"))
+			if planted {
+				return "internal/note/note.go"
+			}
+			return ""
+		}},
+	// DeploymentValuesConfigured: the service's listen address comes from gen/config.go.
+	{check: "DeploymentValuesConfigured", step: step("code", codeWritable, []string{"code"}, nil, nil),
+		base: fromTestdata("buildok"),
+		change: func(t *testing.T, dir string, planted bool) string {
+			listen := "gen.ListenAddress()"
+			if planted {
+				listen = "\":8080\""
+			}
+			write(t, dir, "cmd/notes/main.go", []byte("package main\n\nimport (\n\t\"net/http\"\n\n\t\"example.com/p/gen\"\n)\n\n"+
+				"func main() {\n\t_ = gen.Name\n\t_ = http.ListenAndServe("+listen+", nil)\n}\n"))
+			if planted {
+				return "cmd/notes/main.go"
+			}
+			return ""
+		}},
 }
 
 func TestEveryPatternCheckIsCovered(t *testing.T) {
