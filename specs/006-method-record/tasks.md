@@ -273,14 +273,17 @@ slice views.
   checked with "closed: feature 006"; `python3 scripts/okf.py check` reports OK
 - [X] T022 Final fresh review of the whole feature (rules above) and `/speckit-converge`; findings
   fixed or recorded as tasks
-- [ ] T023 Before the owner's merge: read the branch's `evals-current` output (no suite expected
+- [X] T023 Before the owner's merge: read the branch's `evals-current` output (no suite expected
   pending: no prompt, model or agent definition changes); CI green on the last commit. Correction
   (T008): the selector marks the `analyst` and `steps` suites pending, as the contract schemas
   they read changed; a paid eval run is due before the merge (owner: in a new session)
   Runs: 45047239704 (e38de01): steps green, analyst failed `revise-inject-approvals-field` (backlog
   T195, quarantined f757838, owner-approved); 45051980598 (f757838): steps green, analyst failed
   `revise-inject-drop-rules` trial 1 (backlog T196). Neither touches 006's code: open until T195/T196
-  or the owner decides
+  or the owner decides. 2026-11-23: T195 and T196 fixed by feature 007 (merged to `main`,
+  ff3d48b); the quarantine reverted (c810a37, owner-approved), 006 rebased on `main`, method
+  identity regenerated (15e4270); CI 45084111927 green 26/26; evals run 45133099441 (15e4270):
+  all four suites green
 - [ ] T033 Final review finding F-S1 (fresh Sonnet review at 5adb80d, suggestion): right after an
   upgrade, `List` re-checks every stale slice one after another, each up to the checks' own time
   limits, before it answers; slow with many slices, not wrong. Non-blocking
