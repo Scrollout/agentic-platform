@@ -392,3 +392,11 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
 - [x] T034 [US2] S5, S6 closed: two identical reasons for `SetBasicAuth("u", "p")` are two
   offences, as the contract states ("once per offence"); a local variable named `os` shadowing
   the import is a false positive too rare to judge. closed: no defect
+
+## US2 fresh review, round 2 (Sonnet, at c2e6f79): B1 fixed, no new blocking finding
+
+- [ ] T035 [US2] S-a, S-b (suggestions): the catalogue README and runCheck say "a call of
+  `os.Getenv` ..."; since T030 the check reports any use (a method value, an argument) and, under
+  a dot import of `os`, the bare names, declarations so named included (a struct field, a method,
+  a composite key, a local); reword to "a use" and state the dot-import declarations as a limit,
+  or skip declaration sites with a new test; with T031
