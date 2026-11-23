@@ -182,7 +182,7 @@ research R1 to R3).
 **Independent Test**: T011-T014 pass; quickstart Q3 picks the ancestor's measurement and leaves
 out an unmerged branch's, this run's and an expired one; Q5 shows the comparison live.
 
-- [ ] T011 [US3] Test author (owner-approved changes T002 (a), (b); commit with
+- [X] T011 [US3] Test author (owner-approved changes T002 (a), (b); commit with
   `Tests-approved-by:`): in `scripts/tests/test_workflows_eval_artifacts.py`, `the_upload` and
   `judge_only_evals_uploads` find the failed-outputs upload by its name (`evals-…`) and allow
   exactly one more upload step, in the evals job, whose name starts `eval-measurements-`; the
@@ -190,7 +190,7 @@ out an unmerged branch's, this run's and an expired one; Q5 shows the comparison
   any other name, fails"; in `scripts/tests/test_workflows_eval_outputs_kept.py`,
   `judge_upload_condition_failed_trial` finds that upload by name. Nothing else in either file
   changes; both stay green on today's workflow
-- [ ] T012 [P] [US3] Test author: new `scripts/tests/test_ci_evals_earlier.py` for
+- [X] T012 [P] [US3] Test author: new `scripts/tests/test_ci_evals_earlier.py` for
   `ci-evals-earlier.py <artifacts.jsonl>`, in a temporary git repository with a stub `gh` on
   `PATH` that serves zips: for each matrix key the newest (by `created_at`) unexpired artifact
   named `eval-measurements-<key>-<digits>` of another run whose `head_sha` is `SHA` or an ancestor
@@ -202,7 +202,7 @@ out an unmerged branch's, this run's and an expired one; Q5 shows the comparison
   a measurement that is not JSON, and a missing listing file give `none` naming it; `MATRIX` unset
   or not JSON gives `earlier={}`; one line `earlier=<JSON>` in `$GITHUB_OUTPUT`, printed when it is
   unset; it starts no process but `git` and `gh`; exit 0 in all these cases, 2 on arguments
-- [ ] T013 [P] [US3] Test author: new `scripts/tests/test_ci_evals_trials_compare.py`: with
+- [X] T013 [P] [US3] Test author: new `scripts/tests/test_ci_evals_trials_compare.py`: with
   `EARLIER` holding the measurement's key, the heading `### Since run <run_id> (<7-character
   commit>)`; per case in both, by `case`, `<p>/<n> → <p>/<n>`, median seconds and median cost
   `before → now`; `📉 less reliable` exactly when the current share of passed trials is lower
@@ -216,7 +216,7 @@ out an unmerged branch's, this run's and an expired one; Q5 shows the comparison
   `<script>` or `|` in it), or whose measurement breaks the data model's rules is "could not be
   read", never a crash, while a baseline holding the data model's fallbacks (`"?"`, `""`, `0`) is
   read; the same inputs give the same text; exit 0
-- [ ] T014 [P] [US3] Test author: new `scripts/tests/test_workflows_eval_measurements.py` (clean
+- [X] T014 [P] [US3] Test author: new `scripts/tests/test_workflows_eval_measurements.py` (clean
   and planted trees): the evals job's measurement upload uses the upload action's pinned digest,
   `retention-days: 90`, `path` the measurement folder, a name `eval-measurements-…` built from
   `matrix.suite`, `matrix.cases` and `github.run_attempt`, `if-no-files-found: ignore`,
