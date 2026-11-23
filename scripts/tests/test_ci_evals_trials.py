@@ -238,7 +238,7 @@ class TrialsTable(unittest.TestCase):
 
     def test_suite_line_with_different_trial_counts(self):
         r = self.run_cases([mcase("a", ts=trials(1)), mcase("b", ts=trials(4, 1))])
-        self.assertRegex(self.suite_line(r), r"^## Trials: 5 of 6 passed, 0 unstable cases?$")
+        self.assertEqual(self.suite_line(r), "## Trials: 5 of 6 passed, 1 unstable case")
 
     def test_suite_line_with_no_trials(self):
         r = self.run_cases([mcase("a", ts=[])])

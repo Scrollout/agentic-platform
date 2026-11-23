@@ -327,9 +327,9 @@ class TrialRules(Base):
     def test_usage_not_an_object_gives_no_usage_fields(self):
         for bad in (None, [], "x", 5, True, [{"input_tokens": 1}]):
             with self.subTest(usage=bad):
-                t = self.one_trial({"usage": bad})
+                t = self.one_trial({"passed": True, "usage": bad})
                 self.assertEqual(t, {"passed": True})
-        self.assertEqual(self.one_trial({"usage": {}}), {"passed": True})
+        self.assertEqual(self.one_trial({"passed": True, "usage": {}}), {"passed": True})
 
     def test_cost_finite_number_at_least_zero(self):
         for good, want in ((0, 0), (0.0, 0), (0.0123, 0.0123), (2, 2), (1e-9, 1e-9)):
@@ -378,7 +378,7 @@ class NeverCopied(Base):
 
     def test_a_credential_in_a_rule_breaking_value_is_not_copied(self):
         """A value that breaks its rule is replaced by the fallback, never copied."""
-        env = self.env(SUITE=KEY, EVAL_CASES=KEY, GITHUB_SHA=KEY, GITHUB_RUN_ID=KEY,
+        env = self.env(SUITE=KEY + "_", EVAL_CASES=KEY + "_", GITHUB_SHA=KEY, GITHUB_RUN_ID=KEY,
                        GITHUB_RUN_ATTEMPT=KEY, GITHUB_REF_NAME=KEY + "\n")
         rep = [{"case": KEY * 10, "agent": KEY + " x", "quarantined_by": KEY,
                 "trials": [{"passed": KEY, "duration": KEY, "attempts": KEY,
