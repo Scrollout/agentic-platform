@@ -32,7 +32,9 @@ is unset or the file cannot be written. The same inputs always give the same tex
   the cases that are not quarantined.
 - Spread: the lowest, the median (the mean of the two middle values for an even count) and the
   highest over the trials that carry the measure; "(<n> of <m> trials)" when some do not; n/a
-  when none does. Seconds with one decimal, cost with four, tokens and attempts as integers.
+  when none does. Seconds are written as Python's format(value, ".1f") and cost as
+  format(value, ".4f"); tokens and attempts as integers, except a median that falls between two
+  integers (an even count), written with one decimal (1.5).
 - Comparison: each case matched by name with the earlier measurement's first case of that name;
   "📉 less reliable" when now_passed × before_run < before_passed × now_run (no division); a
   median one side lacks is n/a (n/a → 14.0); a case with no trials on either side, or that the

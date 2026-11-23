@@ -105,4 +105,6 @@ usage: python3 scripts/ci-evals-trials.py <measurement.json>
   `now_passed × before_run < before_passed × now_run` (whole numbers, no division); a case with no
   trials now or none before says `nothing to compare with`; a median one side lacks is `n/a`
   (`n/a → 14.0`).
-- Numbers: seconds with one decimal, cost with four, tokens and attempts as integers.
+- Numbers: seconds as Python's `format(value, ".1f")`, cost as `format(value, ".4f")`; tokens and
+  attempts as integers, except a median between two integers (an even count), written with one
+  decimal (`1.5`).
