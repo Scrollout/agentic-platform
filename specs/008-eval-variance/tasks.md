@@ -288,7 +288,7 @@ out an unmerged branch's, this run's and an expired one; Q5 shows the comparison
   covers; `docs/log.md`; `python3 scripts/okf.py check` reports OK
 - [X] T021 (fresh Sonnet review at 99f5aa9, judging CI 45156838929 and 45178284052: no blocking, T027; converge for the feature clean) Final fresh review of the feature (judging the CI run of the last commit);
   `/speckit-converge`; every finding fixed or recorded as a task
-- [ ] T022 (`evals-current` of check run 45178284052 at 99f5aa9: base 086720d, no suite pending) Merge steps: `evals-current` names no pending suite on the branch's last check run;
+- [X] T022 (done 2026-11-23: merged by fast-forward at e1138c1, main CI 45189464452 green; `dev` policy removed; branch deleted) (`evals-current` of check run 45178284052 at 99f5aa9: base 086720d, no suite pending) Merge steps: `evals-current` names no pending suite on the branch's last check run;
   the owner merges by fast-forward; remove the branch from environment `dev`; delete the branch
   (ask)
 
