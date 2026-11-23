@@ -1,7 +1,7 @@
 ---
 type: Reference
 title: GitHub Actions
-description: What GitHub Actions gives a public repository on standard hosted runners (cost, machine size, concurrency, job time), how secrets reach workflows (forks, environments), and two limits of job environments and artifact paths, as checked on 2026-11-16 and 2026-11-22.
+description: What GitHub Actions gives a public repository on standard hosted runners (cost, machine size, concurrency, job time), how secrets reach workflows (forks, environments), two limits of job environments and artifact paths, and artifact and log retention, artifact listing and job output limits, as checked on 2026-11-16, 2026-11-22 and 2026-11-23.
 resource: https://docs.github.com/en/actions
 tags: [references, ci, github, security]
 status: draft
@@ -37,6 +37,21 @@ sources:
   - id: artifact-run
     resource: https://github.com/Scrollout/agentic-platform/actions/runs/44888638411
     title: Evals run 44888638411, the upload step's error
+  - id: retention
+    resource: https://docs.github.com/en/organizations/managing-organization-settings/configuring-the-retention-period-for-github-actions-artifacts-and-logs-in-your-organization
+    title: Configuring the retention period for artifacts and logs in an organization
+  - id: artifacts-api
+    resource: https://docs.github.com/en/rest/actions/artifacts
+    title: REST API, artifacts
+  - id: upload-artifact
+    resource: https://github.com/actions/upload-artifact
+    title: actions/upload-artifact README
+  - id: download-artifact
+    resource: https://github.com/actions/download-artifact
+    title: actions/download-artifact README
+  - id: workflow-syntax
+    resource: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions
+    title: Workflow syntax, jobs.<job_id>.outputs
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-16T12:00:00Z }
 ---
 
@@ -73,3 +88,22 @@ Sources: [Using secrets in GitHub Actions](https://docs.github.com/actions/secur
   and '..' is not allowed"), as seen on 2026-11-22 with v7.0.2.
 
 Sources: [Contexts, context availability](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability); [Evals run 44888638411](https://github.com/Scrollout/agentic-platform/actions/runs/44888638411).
+
+# Retention, artifacts and job outputs
+
+- Artifacts and logs are kept 90 days by default; a public repository may set 1 to 90 days, and a
+  repository's period cannot exceed its organization's or enterprise's limit. Since 2026-10-01 the
+  same period also applies to checks, workflow runs and commit statuses. A change applies only to
+  new objects.
+- This repository's period was 1 day on 2026-11-23, and 1 day was the most its organization
+  allowed (`actions/permissions/artifact-and-log-retention`), so an upload's `retention-days: 7`
+  was kept 1 day.
+- `actions/upload-artifact` takes `retention-days` from 1 to 90; artifact names are unique in a
+  run, and artifacts are immutable. Downloading another run's artifact needs a token with
+  `actions:read` on the repository.
+- The REST API lists a repository's artifacts (`per_page` at most 100) with `expired`,
+  `created_at` and `workflow_run` (`id`, `head_branch`, `head_sha`); a download answers 302 with a
+  zip URL that expires after 1 minute.
+- A job's outputs may hold at most 1 MB, and a workflow run's at most 50 MB.
+
+Sources: [Retention period in an organization](https://docs.github.com/en/organizations/managing-organization-settings/configuring-the-retention-period-for-github-actions-artifacts-and-logs-in-your-organization); [REST API, artifacts](https://docs.github.com/en/rest/actions/artifacts); [upload-artifact README](https://github.com/actions/upload-artifact); [download-artifact README](https://github.com/actions/download-artifact); [Workflow syntax](https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions).
