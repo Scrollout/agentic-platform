@@ -286,11 +286,18 @@ out an unmerged branch's, this run's and an expired one; Q5 shows the comparison
   measurements and where to read them, the 90-day retention); `docs/overview/problem-space.md`
   N-054 `in progress` (the developer's runs stay for a later feature) with a line on what 008
   covers; `docs/log.md`; `python3 scripts/okf.py check` reports OK
-- [ ] T021 Final fresh review of the feature (judging the CI run of the last commit);
+- [X] T021 (fresh Sonnet review at 99f5aa9, judging CI 45156838929 and 45178284052: no blocking, T027; converge for the feature clean) Final fresh review of the feature (judging the CI run of the last commit);
   `/speckit-converge`; every finding fixed or recorded as a task
-- [ ] T022 Merge steps: `evals-current` names no pending suite on the branch's last check run;
+- [ ] T022 (`evals-current` of check run 45178284052 at 99f5aa9: base 086720d, no suite pending) Merge steps: `evals-current` names no pending suite on the branch's last check run;
   the owner merges by fast-forward; remove the branch from environment `dev`; delete the branch
   (ask)
+
+- [ ] T027 Final review suggestions (fresh Sonnet review at 99f5aa9; not blocking): do T026 S1
+  first, since an `EARLIER` over 128 KiB loses the kept measurement too, not only the comparison
+  (the measure and trials scripts share one step); a name with a backslash before `|` (`a\|b`) is
+  written `a\\|b`, which GitHub renders `a|b` (cosmetic; T023's untested case); an upload of a
+  measurement folder that does not exist (no report) is shown only by the rules' tests and
+  `secret-scan.sh`'s "nothing to scan", not by a live run
 
 ---
 
