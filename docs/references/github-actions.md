@@ -97,7 +97,7 @@ Sources: [Contexts, context availability](https://docs.github.com/en/actions/ref
   new objects.
 - This repository's period was 1 day on 2026-11-23, and 1 day was the most its organization
   allowed (`actions/permissions/artifact-and-log-retention`), so an upload's `retention-days: 7`
-  was kept 1 day.
+  was kept 1 day. The owner raised both to 90 days the same day (feature 008 T017).
 - `actions/upload-artifact` takes `retention-days` from 1 to 90; artifact names are unique in a
   run, and artifacts are immutable. Downloading another run's artifact needs a token with
   `actions:read` on the repository.
