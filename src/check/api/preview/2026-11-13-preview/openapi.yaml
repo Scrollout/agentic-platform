@@ -254,6 +254,35 @@ paths:
         test (a top-level `Test*` function of a `_test.go` file under `tests/**` or `review/**`,
         with its package) has a `pass` event; one with no event, `fail` or `skip` fails the
         check, naming it; a project with no declared test fails it too.
+        DeclaredValuesGenerated, DeclaredValuesNotRepeated and DeploymentValuesConfigured judge
+        declared and deployment values as the catalogue README states them ("Declared values",
+        "Deployment values"); none runs the project's code, and each reads the approved contract
+        only as the `contract` text inside the content of the `contract` entry of `approved` (the
+        canonical JSON `{"contract": <text>}`), never `api/openapi.yaml` in the folder.
+        DeclaredValuesGenerated, `gen/declared.go` is byte for byte the file the generate procedure
+        renders from the approved contract's declared values; it passes with `gen/declared.go
+        equals the <n> declared values of the approved contract` and fails naming a missing or
+        differing file. DeclaredValuesNotRepeated judges every `.go` file the step's `writable`
+        matches, except `_test.go` files: each integer, floating-point and string literal (rune and
+        imaginary literals aside) that equals a declared number (by exact value; a literal under a
+        unary minus is negated, a parenthesised one is not) or a declared string (after unquoting,
+        byte for byte; a string never equals a number) fails, once per literal, with `<file>:<line>
+        repeats <value>, declared at <pointer>[, <pointer>...]: use gen.<Name>` (for an enum value:
+        `use the enum constant oapi-codegen generated for it in gen/api.gen.go, where it exists`),
+        ending `; if the literal does not stand for this value, write it another way`; the value
+        is quoted as Go's `%q` and cut to 64 characters. The literals `0`, `1`, `-1` and `""` (with
+        any spelling of the same value), import paths and struct tags are never judged. It passes
+        with `examined <n> files and <m> literals against <k> declared values: none repeated`.
+        DeploymentValuesConfigured judges the same files and fails, once per address, credential or
+        environment read, with `<file>:<line> holds <kind>: belongs in configuration: read it
+        through gen/config.go`; the reason never quotes the literal, since a URL can carry a
+        password. It passes with `examined <n> files: no address, credential or environment
+        read`. Each of the three fails closed, naming what it could not read: an approved contract
+        that is missing or does not parse as one YAML document without duplicate keys, a judged
+        file that does not parse as Go. Their limits (a value built from several literals or at
+        run time, a port written as a number, a credential under a name or call the check does not
+        know, a literal equal to a declared value that does not stand for it) are the catalogue
+        README's.
         FindingsCarryEvidence, every blocking finding names a rule `R-<n>`, a file the project holds
         as a regular file that a `writable` entry of the earlier step whose outputs hold `code`
         matches (the fix step, so the finding can be fixed), a line of at least 1, and a `witness` whose `file` is a ProjectPath in
@@ -432,15 +461,16 @@ paths:
         contract-check, whose `contract` output is the `contract` text of the `slice/contract`
         input and whose `examples` output is the `examples` text of the `slice/rules` input, each
         in UTF-8; and generate, whose `generated-code` output is the oapi-codegen server and types
-        generated from the `contract` input, a stub, `go.mod`, `go.sum` and the vendored
+        generated from the `contract` input, a stub, `gen/declared.go` (the contract's declared
+        values as Go constants, catalogue README "Declared values"), `go.mod`, `go.sum` and the vendored
         dependencies, resolved offline. With `completed` true the files matching the step's
         `writable` entries are exactly the returned files: each is written, replacing any file at
         its path, and every other file matching those entries is removed; no file outside them is
         touched, and a repeat of the same request leaves the same files. No write or removal
         follows a symbolic link: a path any part of which is a symbolic link answers 422
         UnreadableProject before anything is written. A procedure that runs to the end but cannot
-        produce its outputs (for example a contract that does not generate, or files larger than
-        `x-limits.procedure-output-max-bytes`) answers `completed: false` with a reason and no
+        produce its outputs (for example a contract that does not generate or whose declared
+        values cannot be read, or files larger than `x-limits.procedure-output-max-bytes`) answers `completed: false` with a reason and no
         outputs, and writes nothing. 404 UnknownProcedure when this deployment does not serve a
         procedure of that name (the check service serves none; a procedure worker only its step's);
         422 UnreadableProject as for readStepFiles; 422 InputHashMismatch when an input's content

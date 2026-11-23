@@ -73,7 +73,7 @@ on.
 
 ## Phase 1: Setup (contract first)
 
-- [ ] T001 Contract (committed alone): the runCheck description of
+- [x] T001 Contract (committed alone): the runCheck description of
   `src/check/api/preview/2026-11-13-preview/openapi.yaml` states DeclaredValuesGenerated,
   DeclaredValuesNotRepeated and DeploymentValuesConfigured as
   [contracts/declared-values.md](contracts/declared-values.md) does (judged files, what fails, the

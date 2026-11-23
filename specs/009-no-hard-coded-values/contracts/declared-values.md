@@ -1,9 +1,14 @@
 # Contract draft: declared values, configuration and the three checks
 
-Draft for the [plan](../plan.md). The authoritative copies live with their providers: the check
-contract (`src/check/api/preview/2026-11-13-preview/openapi.yaml`, runCheck description), the
-catalogue README (`src/catalogue/api-feature-go/README.md`), the template and the Go doc comments
-of `engine/checks`. Research R1, R2, R4 and R7 give the reasons.
+Draft for the [plan](../plan.md). The authoritative copies live with their providers (T001): the
+check contract
+([`openapi.yaml`](../../../src/check/api/preview/2026-11-13-preview/openapi.yaml), runCheck and
+runProcedure descriptions), the catalogue README
+([Declared values, Configuration, Deployment values](../../../src/catalogue/api-feature-go/README.md#declared-values)),
+the template's `gen/config.go` (T010) and the Go doc comments of
+[`checks/declared.go`](../../../src/engine/checks/declared.go) and
+[`checks/values.go`](../../../src/engine/checks/values.go). Where this draft and they differ, they
+win. Research R1, R2, R4 and R7 give the reasons.
 
 ## Go interface (package `engine/checks`)
 
