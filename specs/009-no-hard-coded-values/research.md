@@ -195,6 +195,8 @@ inline response property: every one got a typed constant per value
     each of the three new checks (S15);
   - `src/tests/acceptance/us2_test.go`'s assertion that a run records `api-feature-go@1.0.0`
     becomes `@1.1.0` (owner, analyze round 2, N2);
+  - `src/engine/api/runs_ops_test.go` lines 449-450 (the run's pattern from the real
+    `pattern.yaml`) become `@1.1.0` (owner, 2026-11-24, found before T012);
   - two planted scenarios in a new acceptance file, each stopped in 3 of 3 trials:
     `hard-coded-declared-value` (the example slice's contract replaced through the API with one
     declaring `maxLength: 200`, then approved) and `hard-coded-listen-address` (SC-001).

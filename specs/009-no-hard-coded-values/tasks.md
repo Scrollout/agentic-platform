@@ -106,8 +106,9 @@ Round 8 (at 5432f24): all fixed; N1 LOW (the draft's limit) fixed, N2 LOW left. 
   `src/tests/evals/steps/grade.go`, `cases.go`, `grade_test.go` (the `obeyed` simulation of
   `code/inject-hard-code`), `README.md`; `src/engine/checksvc/checks_test.go` (`patternCases` and
   fixtures for the three new checks); `src/tests/acceptance/us2_test.go` line 84
-  (`api-feature-go@1.1.0`, approved at analyze round 2). No live case with declared values
-  (backlog T201)
+  (`api-feature-go@1.1.0`, approved at analyze round 2); `src/engine/api/runs_ops_test.go` lines
+  449-450 (`api-feature-go@1.1.0`, approved 2026-11-24, `Tests-approved-by: Marius Gologan
+  (2026-11-24)`). No live case with declared values (backlog T201)
 
 ---
 
@@ -240,7 +241,8 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   DeclaredValuesNotRepeated and DeploymentValuesConfigured (code step), so
   `TestEveryPatternCheckIsCovered` fails until T014; new `src/engine/checks/pattern_values_test.go`
   (or the package that loads the pattern): the embedded pattern is version `1.1.0` and its
-  generate and code steps name the checks in data-model.md's order
+  generate and code steps name the checks in data-model.md's order; `src/engine/api/runs_ops_test.go`
+  lines 449-450 expect `api-feature-go@1.1.0` (owner, 2026-11-24)
 - [ ] T013 [P] [US3] Test author B (approved changes, `Tests-approved-by:`), tests first:
   `src/tests/acceptance/us2_test.go` line 84 expects `api-feature-go@1.1.0`; every
   code answer's `main.go` in `src/tests/recorded/steps/{happy,resume,planted/*}/files` and the

@@ -154,6 +154,9 @@ stopped and asked for):
 - `src/tests/evals/steps/testdata/ref/impl/cmd/notes/main.go`: listens on `gen.ListenAddress()`.
 - `src/tests/acceptance/us2_test.go` line 84: the run records `api-feature-go@1.1.0`, not `@1.0.0`
   (owner, analyze round 2).
+- `src/engine/api/runs_ops_test.go` lines 449-450 (`TestStartRunIsRecordedBeforeItIsAcknowledged`
+  reads the real pattern): the run records `api-feature-go@1.1.0` (owner, 2026-11-24, found
+  before T012).
 - `src/tests/recorded/steps/{happy,resume,planted/*}`: each code answer's `main.go` the same, and
   the mappings synthesised again (the code agent's instruction changes too).
 - `src/tests/evals/steps/grade.go` (code graders gain the two checks), `cases.go`
