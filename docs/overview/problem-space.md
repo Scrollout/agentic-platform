@@ -8,7 +8,7 @@ sources:
   - id: owner
     resource: https://claude.ai/code/session_01P2TmGw3MdjVyoyhGeQK7np
     title: Project owner's answers, 2026-11-11
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-21T15:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-23T19:00:00Z }
 ---
 
 # How to use these tables
@@ -124,7 +124,7 @@ Constitution Principle XX makes them binding for the product.
 | N-056 | The author of a change cannot alter, skip or weaken the checks that judge it; only a recorded, independent decision can change a check | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | done |
 | N-057 | A change stays within the files and areas its task allows; anything outside is rejected | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | done |
 | N-058 | Code depends only on what the design allows; a dependency across a forbidden boundary is rejected | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | done |
-| N-059 | Values that belong in data or configuration cannot be hard-coded | yes | | | todo |
+| N-059 | Values that belong in data or configuration cannot be hard-coded | yes | | [009](../../specs/009-no-hard-coded-values/spec.md) | specified |
 | N-060 | Work cannot be reported done until its checks pass | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | done |
 | N-061 | Work is reviewed by an agent or person that did not do it | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | done |
 | N-062 | Every change traces back to a need, spec or decision | undecided | | | todo |

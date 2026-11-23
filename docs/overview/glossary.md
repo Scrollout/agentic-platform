@@ -32,7 +32,7 @@ sources:
   - id: spec-008
     resource: ../../specs/008-eval-variance/spec.md
     title: Feature 008 specification, Key Entities
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-18T09:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-23T19:00:00Z }
 ---
 
 # Knowledge bundle terms
@@ -153,3 +153,15 @@ These terms come from the Feature 008 specification.
 | Eval measurement | What one eval run keeps about its cases and trials: the measures and what identifies the run, never protected content. |
 
 Sources: [Feature 008 specification](../../specs/008-eval-variance/spec.md).
+
+# Feature 009 terms
+
+These terms come from the Feature 009 specification.
+
+| Term | Meaning |
+|------|---------|
+| Declared value | A value the approved contract states, such as a limit, bound, allowed value or default, with the contract location that is its one home. |
+| Deployment value | A value that changes with where a service runs: a listen address or port, the address of a service it calls, or a credential. It is read from configuration when the service starts. |
+| Hard-coded value | A literal in a step's code that repeats a declared value, or a deployment value not read from configuration. |
+
+Sources: [Feature 009 specification](../../specs/009-no-hard-coded-values/spec.md).
