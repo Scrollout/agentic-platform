@@ -1,7 +1,10 @@
 # Contract draft: the eval measurement scripts
 
 Draft for the first consumer, the evals workflow. The authoritative copy is each script's
-docstring, as for the other CI helpers (`scripts/ci-evals-summary.py`). The fields are in
+docstring, as for the other CI helpers (`scripts/ci-evals-summary.py`): since T001,
+[`ci-evals-measure.py`](../../../scripts/ci-evals-measure.py),
+[`ci-evals-earlier.py`](../../../scripts/ci-evals-earlier.py) and
+[`ci-evals-trials.py`](../../../scripts/ci-evals-trials.py). The fields are in
 [data-model.md](../data-model.md).
 
 ## What every script promises

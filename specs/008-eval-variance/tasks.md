@@ -34,7 +34,8 @@ same scripts, so the stories run one after another.
 - **Protected paths**: for a change to `.github/workflows/evals.yml` the steps are, in order:
   show the owner the diff with the push question, get the owner's confirmation, commit with
   `Approved-by:` naming the date of that confirmation, then push. No commit carries the trailer
-  before the confirmation. No path an eval
+  before the confirmation. New and changed `scripts/ci-evals-*` files, also protected, carry
+  `Approved-by:` under the owner's standing approval (owner, 2026-11-23). No path an eval
   suite reads (`src/tests/evals/suites.yaml`) changes, so no push selects a paid suite.
 - **No dependency** is added; the scripts use the standard library and `gh`.
 - **Never a gate** (FR-007): every new workflow step carries `continue-on-error: true`; every
@@ -59,13 +60,14 @@ same scripts, so the stories run one after another.
   to R4; data model fallbacks; contract; these rules and T003-T018). Round 2 (fresh Sonnet, at 04ca0f1):
   all 4 HIGH fixed; 0 CRITICAL, 0 HIGH; N1, N2 MEDIUM (the scan's warning not in the summary; who
   creates the measurement folder) and N3-N6 LOW fixed in wording (research R2, contract, quickstart,
-  these rules, T003, T013, T014).
+  these rules, T003, T013, T014). Round 3 (fresh Sonnet, at 9f9020b): all six fixed, no
+  regression, no finding. Gate passed.
 
 ---
 
 ## Phase 1: Setup (contract first)
 
-- [ ] T001 Contract (committed alone): new `scripts/ci-evals-measure.py`,
+- [X] T001 Contract (committed alone): new `scripts/ci-evals-measure.py`,
   `scripts/ci-evals-earlier.py` and `scripts/ci-evals-trials.py`, each holding only its docstring
   from [contracts/eval-trials-scripts.md](contracts/eval-trials-scripts.md) (usage, inputs,
   outputs, the section's text, exit codes, the promises every script makes; the measurement's
