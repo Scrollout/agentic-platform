@@ -187,7 +187,8 @@ check's inputs are unchanged.
   limit); the reason then says to write it another way.
 - **FR-004**: Each failure MUST name the file, the line, and where the value belongs: for a declared
   value, the value and the contract location that declares it; for a deployment value, its kind
-  and the configuration it belongs in. A credential's text MUST NOT appear in a reason.
+  and the configuration it belongs in. A deployment value's text (which may hold a credential)
+  MUST NOT appear in a reason.
 - **FR-005**: The delivered service MUST read every deployment value from configuration when it
   starts, and its project MUST document each one with its default, if any. Configuration MUST
   enter only through the configuration the platform declares in the delivered project; the code
@@ -221,9 +222,10 @@ check's inputs are unchanged.
   a service address, a credential, an environment read) is stopped by its check in every planted
   case of the checks' tests, and a planted declared limit and a planted listen address are
   stopped on the build path in 3 out of 3 trials.
-- **SC-002**: 100% of the checks' failures name the file, the line and where the value belongs, with
-  the value for a declared value and the kind for a deployment value; no reason holds a
-  credential's text.
+- **SC-002**: 100% of the checks' failures that find a value name the file, the line and where the
+  value belongs, with the value for a declared value and the kind for a deployment value; no
+  reason holds a deployment value's text; a check that cannot read its input names what it could
+  not read.
 - **SC-003**: Code that takes every declared value from its home and every deployment value from
   configuration passes the check, on every fixture slice and in every passing eval case.
 - **SC-004**: The code agent's eval suite passes at the same pass^3 as before the check is added.

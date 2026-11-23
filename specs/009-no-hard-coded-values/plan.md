@@ -99,7 +99,7 @@ changes: the code step's checks read code a model wrote.
 | Element | S | T | R | I | D | E | OWASP mapping | Mitigation |
 |---------|---|---|---|---|---|---|---------------|------------|
 | DeclaredValuesNotRepeated, DeploymentValuesConfigured (read agent-written code) | | ✓ | | | ✓ | ✓ | LLM01 prompt injection; ASI01 agent goal hijack (an injected "hard-code it"); ASI02 tool misuse | The checks parse with `go/parser` and never run the code; their inputs (the approved contract from the request, the step's files) are bound like every check's; a file that does not parse fails; the check call's existing time limit bounds a huge file |
-| Check reasons sent back to the agent in the next attempt | | ✓ | | ✓ | | | LLM01 (a literal's text enters the model's context); LLM02 sensitive information disclosure | A declared value or address in a reason is quoted with `%q` and cut to 64 characters; a credential's text never appears in a reason (spec FR-004); the agent treats every message part as data (its instruction) |
+| Check reasons sent back to the agent in the next attempt | | ✓ | | ✓ | | | LLM01 (a literal's text enters the model's context); LLM02 sensitive information disclosure | A declared value in a reason is quoted with `%q` and cut to 64 characters; a deployment value's text never appears in a reason (spec FR-004); the agent treats every message part as data (its instruction) |
 | `gen/declared.go` (rendered from the contract the analyst model wrote) | | ✓ | | | | ✓ | LLM05 improper output handling (contract text becoming Go code) | Strings are written with `strconv.Quote`, pointers in comments with `%q`, names restricted to `[A-Za-z0-9_]`; the project must build (GeneratedCodeBuilds) |
 
 ## Project Structure
@@ -149,6 +149,8 @@ stopped and asked for):
   fixtures, for DeclaredValuesGenerated, DeclaredValuesNotRepeated and DeploymentValuesConfigured
   (`TestEveryPatternCheckIsCovered` requires one for every check the pattern names).
 - `src/tests/evals/steps/testdata/ref/impl/cmd/notes/main.go`: listens on `gen.ListenAddress()`.
+- `src/tests/acceptance/us2_test.go` line 84: the run records `api-feature-go@1.1.0`, not `@1.0.0`
+  (owner, analyze round 2).
 - `src/tests/recorded/steps/{happy,resume,planted/*}`: each code answer's `main.go` the same, and
   the mappings synthesised again (the code agent's instruction changes too).
 - `src/tests/evals/steps/grade.go` (code graders gain the two checks), `cases.go`

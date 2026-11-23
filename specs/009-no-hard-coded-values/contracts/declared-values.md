@@ -54,11 +54,12 @@ Input: the YAML text, parsed as the fit conditions parse it (one document, no du
   `example`, `examples` or `x-*` hides its whole subtree (a property so named included: a limit).
   Aliases and merge keys (`<<`) are not followed: a value under an anchor is found once, at the
   anchor.
-- Kind, by the node's resolved tag: `!!str` is a string; `!!int` and `!!float` are numbers, read
-  by `constant.MakeFromLiteral` from the text with a leading `+` removed and `0` put before a
-  leading `.`; a number that does not read so (`.inf`, `.nan`, `010`, `1_000`, a value outside
-  Go's constants) is `unjudged`; `!!bool` is `bool`, `!!null` is `null`. A quoted `"200"` is a
-  string.
+- Kind, by the node's resolved tag: `!!str` is a string; `!!bool` is `bool`, `!!null` is `null`.
+  An `!!int` or `!!float` is a number when its text, after removing a leading `+` and putting `0`
+  before a leading `.` (or `-.`), matches `^-?(0|[1-9][0-9]*)(\.[0-9]*)?([eE][-+]?[0-9]+)?$`; its
+  value is `constant.MakeFromLiteral` of that normalised text (as a float when it holds `.`, `e` or
+  `E`). Any other number text (`.inf`, `.nan`, `010`, `0x1F`, `0o17`, `1_000`) is `unjudged`. A
+  quoted `"200"` is a string.
 - The pointer encodes `~` as `~0` and `/` as `~1`; sequence items are their 0-based index.
 
 ## `gen/declared.go` (written by the generate procedure, `RenderDeclared`)
@@ -67,7 +68,8 @@ Input: the YAML text, parsed as the fit conditions parse it (one document, no du
   line, `package gen`.
 - Then, for each value with a `Name`, in document order: a blank line, `// <Name> is declared at
   <pointer written with %q>.`, and `const <Name> = <value>`, a string written with
-  `strconv.Quote`, a number as `constant.Value.ExactString()`.
+  `strconv.Quote`, a number as its normalised text (so `0.5` stays `0.5` and `2e2` stays `2e2`;
+  never `ExactString()`, which writes `1/10`).
 - `<Name>` is `Declared` followed by each pointer segment, after dropping the segments
   `components`, `schemas`, `properties`, `paths`, `content` and `schema`, decoded (`~1`, `~0`),
   with every character outside `[A-Za-z0-9]` removed and the character after each removed run and
@@ -105,20 +107,20 @@ string never equals a number. Never judged: `0`, `1`, `-1`, `""`, import paths, 
 
 - Fails, once per literal: `<file>:<line> repeats <value %q, cut to 64 characters>, declared at
   <pointer>[, <pointer>...]: use gen.<Name>` (an enum value: `use the enum constant oapi-codegen
-  generated for it in gen/api.gen.go`), ending `; if the literal does not stand for this value,
-  write it another way`.
+  generated for it in gen/api.gen.go, where it exists`), ending `; if the literal does not stand
+  for this value, write it another way`.
 - Passes: `examined <n> files and <m> literals against <k> declared values: none repeated`.
 - Fails closed: an approved contract that is missing or does not parse, a judged file that does
-  not parse.
+  not parse; such a result names what could not be read.
 - Limits: a value computed from several literals, a parenthesised negative, a declared boolean or
   unjudged number, and the four exempt values are not judged; a literal equal to a declared value
   that does not stand for it is rejected.
 
 ## Check `DeploymentValuesConfigured` (code step)
 
-Same judged files. Fails, once per offence, `<file>:<line> holds <kind>`, then for an address its
-value (`%q`, cut to 64 characters), never a credential's text, then `: belongs in configuration:
-read it through gen/config.go`:
+Same judged files. Fails, once per offence, `<file>:<line> holds <kind>: belongs in configuration:
+read it through gen/config.go`. The reason never quotes the literal (a URL can carry a password
+in its userinfo):
 
 | Kind | Found when |
 |------|------------|

@@ -68,11 +68,13 @@ inline response property: every one got a typed constant per value
   (E3). One collector in `engine/checks`, `DeclaredValues`, finds the values for the procedure,
   for the new generate-step check (R7) and for the code-step check (single owner).
 - **Scalars** (analyze F8): a value's kind comes from the YAML node's resolved tag. `!!str` is a
-  string, written with `strconv.Quote`. `!!int` and `!!float` are numbers, read as Go constants by
-  `go/constant.MakeFromLiteral` from the node's text after removing a leading `+` and putting `0`
-  before a leading `.`; a number that does not read so (`.inf`, `.nan`, a YAML 1.1 form such as
-  `010` or `1_000`, a value no Go constant of kind int or float holds) is recorded, gets no
-  constant and is never judged (a stated limit). `!!bool` and `!!null` are recorded, never
+  string, written with `strconv.Quote`. An `!!int` or `!!float` whose text, after removing a
+  leading `+` and putting `0` before a leading `.`, is a plain decimal (optional fraction and
+  exponent, no leading zero) is a number: its value is `go/constant.MakeFromLiteral` of that text
+  and `gen/declared.go` writes that text, never `ExactString()`, which writes `0.1` as `1/10`, an
+  integer division in Go (analyze round 2, N1, reproduced). Any other number text (`.inf`,
+  `.nan`, `010`, `0x1F`, `1_000`, which `MakeFromLiteral` would read with Go's meaning, not
+  YAML's: N4) is recorded, gets no constant and is never judged (a stated limit). `!!bool` and `!!null` are recorded, never
   judged. A quoted `"200"` is a string, never the number 200.
 - **Walk** (F9): document order, depth first, mapping keys in their written order; that order
   sorts the constants and decides which of two equal names gets `_2`. Aliases and merge keys
@@ -151,8 +153,8 @@ inline response property: every one got a typed constant per value
   - an **environment read**: a call of `os.Getenv`, `os.LookupEnv`, `os.Environ` or `os.ExpandEnv`
     through any import name of `os` (owner, R3).
 
-  Each failure names the file, the line and the kind, never the text of a credential (spec FR-004,
-  Principle XI); an address is quoted and cut to 64 characters. The reason ends `belongs in
+  Each failure names the file, the line and the kind, never the literal: a URL can carry a
+  password in its userinfo (spec FR-004, Principle XI; analyze round 2, N3). The reason ends `belongs in
   configuration: read it through gen/config.go`. Stated limits: a port written as a number, a
   credential under another name or in another call, and a value built at run time are not
   recognised.
@@ -189,6 +191,8 @@ inline response property: every one got a typed constant per value
     simulation in `grade_test.go` (S15);
   - `checksvc/checks_test.go`'s `patternCases` gain a clean and a planted case, with fixtures, for
     each of the three new checks (S15);
+  - `src/tests/acceptance/us2_test.go`'s assertion that a run records `api-feature-go@1.0.0`
+    becomes `@1.1.0` (owner, analyze round 2, N2);
   - two planted scenarios in a new acceptance file, each stopped in 3 of 3 trials:
     `hard-coded-declared-value` (the example slice's contract replaced through the API with one
     declaring `maxLength: 200`, then approved) and `hard-coded-listen-address` (SC-001).

@@ -34,7 +34,7 @@ documentation of its configuration (FR-005).
 
 Each is one `CheckResult` with `passed: false` and `part: project` (feature 001, as every step
 check): `check` is DeclaredValuesNotRepeated or DeploymentValuesConfigured, and `reason` names the
-file and line, the value (declared values) or the kind (deployment values; never a credential's text), and
+file and line, the value (declared values) or the kind (deployment values; never the literal's text), and
 where it belongs.
 A passing result states what was examined (FR-008).
 

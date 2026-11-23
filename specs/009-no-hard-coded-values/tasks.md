@@ -38,8 +38,8 @@ on.
 - **No dependency** is added; the standard library and `go.yaml.in/yaml/v3` only.
 - **Fail closed**: a check that cannot read the approved contract or a judged file fails, naming
   it; every passing result says what it examined (FR-008).
-- **Model text in reasons**: a declared value or address in a reason is written with `%q` and cut
-  to 64 characters; a credential's text never appears in a reason (spec FR-004; plan, Threat
+- **Model text in reasons**: a declared value in a reason is written with `%q` and cut to 64
+  characters; a deployment value's text never appears in a reason (spec FR-004; plan, Threat
   model).
 - **Test time**: locally only the packages a task touches (`go test ./checks/ ./procedures/
   ./checksvc/` in `src/engine`, `go test ./evals/steps/ -run Grade` in `src/tests`), each capped
@@ -61,7 +61,11 @@ on.
   interface), 11 MEDIUM, 7 LOW; the owner approved the named test changes, dropped the live
   declared-limit case (backlog T201) and kept collisions as a stated limit; fixed at their source
   (spec FR-002 to FR-004, FR-010, SC-001, SC-002, edge cases; research E3, R1, R2, R4 to R7;
-  contract; data model; plan; ADR 0086; these rules and tasks).
+  contract; data model; plan; ADR 0086; these rules and tasks). Round 2 (fresh Sonnet, at
+  bfa2f04): F1-F24 fixed but F2's residual; 3 HIGH (N1 floats rendered as `1/10`; N2
+  `us2_test.go` pins the pattern version, owner approved its change; N3 an address quoted with its
+  password), N4 MEDIUM (`010`, `1_000` read with Go's meaning), N5, N6 LOW; fixed at their source
+  (spec FR-004, SC-002; research R1, R4, R6; contract; plan; T002, T003, T008, T013).
 
 ---
 
@@ -86,7 +90,9 @@ on.
   `src/tests/recorded/steps/{happy,resume,planted/*}` and their synthesised mappings;
   `src/tests/evals/steps/grade.go`, `cases.go`, `grade_test.go` (the `obeyed` simulation of
   `code/inject-hard-code`), `README.md`; `src/engine/checksvc/checks_test.go` (`patternCases` and
-  fixtures for the three new checks). No live case with declared values (backlog T201)
+  fixtures for the three new checks); `src/tests/acceptance/us2_test.go` line 84
+  (`api-feature-go@1.1.0`, approved at analyze round 2). No live case with declared values
+  (backlog T201)
 
 ---
 
@@ -107,12 +113,13 @@ pointer and Go name; the constant passes.
   below `example`, `examples` or an `x-*` key (a property so named included); a keyword whose
   value is a mapping (a property named `default`) declares nothing; an anchor's value is found
   once and aliases and `<<` merge keys are not followed; kinds by tag: `"200"` is a string, `200`,
-  `+200`, `2e2`, `.5` numbers, `.inf`, `.nan`, `010`, `1_000` and a number beyond Go's constants
+  `+200`, `2e2`, `.5`, `-.5`, `0.01` numbers, `.inf`, `.nan`, `010`, `0x1F`, `0o17` and `1_000`
   `unjudged`, `true` `bool`, `null` `null`; text that does not parse, holds two documents or a
   duplicate key is an error. `RenderDeclared`: the header, blank line and `package gen`; per
   named value a blank line, the doc comment with the pointer as `%q` (a key holding a newline or
   `*/` stays inside the comment), `const <Name> = <value>` with strings by `strconv.Quote` and
-  numbers by `ExactString`; no enum item, bool, null or unjudged value gets a constant; with none,
+  numbers by their normalised text, and a program built with the file sees each constant equal to
+  the declared value (`maximum: 0.5`, `multipleOf: 0.01`, `minimum: -2.5`, `default: 2e2`); no enum item, bool, null or unjudged value gets a constant; with none,
   header and package only; the same values give the same bytes; the output parses as Go.
   DeclaredValuesGenerated: passes on a rendered file, fails on a missing, edited or stale file and
   on an approved contract that does not parse. Names: `/components/schemas/NewNote/properties/text/maxLength`
@@ -179,7 +186,7 @@ passes.
   `Header().Set("authorization", "Bearer x")`, `Add("X-Api-Key", "k")`, `"a"+"b"` as the value,
   `password := "p"`, `const apiToken = "t"`, a struct literal `{Secret: "s"}`, and, as stated limits the test pins,
   `const tokenHeader = "X-Api-Key"` and `secretaryNote := "x"`), and no reason holds the
-  credential's text; not credentials (a `Set` of another header, a value from a variable, an
+  literal's text (`"postgres://u:secret@db:5432/x"` fails without `secret` or the URL in it); not credentials (a `Set` of another header, a value from a variable, an
   empty literal); environment reads
   (`os.Getenv`, `os.LookupEnv`, `os.Environ`, `os.ExpandEnv`, through an import alias); passes on
   the reference `main.go` with `gen.ListenAddress()`, saying how many files it examined; judges
@@ -216,7 +223,8 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   `TestEveryPatternCheckIsCovered` fails until T014; new `src/engine/checks/pattern_values_test.go`
   (or the package that loads the pattern): the embedded pattern is version `1.1.0` and its
   generate and code steps name the checks in data-model.md's order
-- [ ] T013 [P] [US3] Test author B (approved changes, `Tests-approved-by:`), tests first: every
+- [ ] T013 [P] [US3] Test author B (approved changes, `Tests-approved-by:`), tests first:
+  `src/tests/acceptance/us2_test.go` line 84 expects `api-feature-go@1.1.0`; every
   code answer's `main.go` in `src/tests/recorded/steps/{happy,resume,planted/*}/files` and the
   evals' reference `testdata/ref/impl/cmd/notes/main.go` listen on `gen.ListenAddress()`; new
   step sets `planted/hard-coded-declared-value` (its code answer compares the text's length with
