@@ -92,6 +92,7 @@ jobs:
       # The sibling of the checkout (research R1): the runner context is not available in a
       # job-level env, and the path has no `.` or `..` segment, which upload-artifact refuses.
       EVAL_REPORT_DIR: ${{ github.workspace }}-eval-report
+      EVAL_MEASUREMENT_DIR: ${{ github.workspace }}-eval-measurement
     strategy:
       fail-fast: false
       # The steps suite once per step agent (T109): its 60 trials ran one after another (about an
@@ -130,6 +131,17 @@ jobs:
       - name: Summary of the evals
         if: always()
         run: python3 scripts/ci-evals-summary.py "$EVAL_REPORT_DIR/report.json"
+      # What each trial measured, without protected content, and how the trials varied
+      # (research R4, ADR 0083); never a gate, so it cannot change the job's result.
+      - name: Trials of the evals
+        if: always()
+        continue-on-error: true
+        env:
+          SUITE: ${{ matrix.suite }}
+          EVAL_CASES: ${{ matrix.cases }}
+        run: |
+          python3 scripts/ci-evals-measure.py "$EVAL_REPORT_DIR/report.json" "$EVAL_MEASUREMENT_DIR/measurement.json"
+          python3 scripts/ci-evals-trials.py "$EVAL_MEASUREMENT_DIR/measurement.json"
       - name: Remove the key file
         if: always()
         run: rm -f "$RUNNER_TEMP/anthropic_api_key"
