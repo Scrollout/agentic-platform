@@ -347,3 +347,10 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   holds `gen/declared.go`, so the tests step's request no longer matches its recording (CI run
   45248260393 at 868e0f5). US1 and US2 are judged by the Go unit, contract, Python and other
   jobs that do not replay a recording; T015 synthesises the recordings once.
+
+## Phase 6: Convergence
+
+- [ ] T028 [US2] Have T008's test author see every new DeploymentValuesConfigured test fail
+  against the T001 stub of `src/engine/checks/values.go` (commit 8201ab3) before it is judged
+  against the body T006 already wrote, and record that in the T008 commit; T010 then only adds
+  what T008's tests show missing, per Constitution "Outside-in, test-first" (unrequested)
