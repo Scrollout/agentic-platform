@@ -168,7 +168,7 @@ shows `10.0, 20.0, 60.0`.
   one trial gives the same value three times; zero cost and zero tokens are numbers, not `n/a`
 - [X] T009 [US2] Code author: the spread columns in `scripts/ci-evals-trials.py`. T008 passes,
   T003-T005 stay green
-- [ ] T010 [US2] Commit; push (owner go-ahead) and fix until CI is green; record the run; fresh
+- [ ] T010 [US2] (CI 45153547320 green 26/26 at f8b5416) Commit; push (owner go-ahead) and fix until CI is green; record the run; fresh
   review of US2; `/speckit-converge` for US2
 
 ---
