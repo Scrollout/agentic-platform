@@ -262,7 +262,21 @@ out an unmerged branch's, this run's and an expired one; Q5 shows the comparison
   job uploaded `eval-measurements-…` (90 days), that the second compared with the first (research
   R3's limit: the config job's token downloaded it), the new steps' seconds per job, which must be
   under 60 (SC-004; over it is a finding), and the trials' cost
-- [ ] T019 [US3] Fresh review of US3; `/speckit-converge` for US3
+- [X] T019 [US3] (review at 495e1de, judging CI 45156838929 and evals 45163722619, 45170628365: no blocking, T026; converge US3 clean) Fresh review of US3; `/speckit-converge` for US3
+
+- [ ] T026 [US3] Review findings US3-S1 to S5 and untested cases (fresh Sonnet review at 495e1de,
+  judging CI run 45156838929 and evals runs 45163722619, 45170628365; suggestions, not blocking):
+  S1 `EARLIER` reaches the trials step as one environment string, which Linux caps at 128 KiB
+  (`MAX_ARG_STRLEN`), below the 1 MB job output `scripts/ci-evals-earlier.py` sizes for
+  (`MAX_BYTES`); an earlier measurement near 200 kB, or about 75 suites, stops the step from
+  starting, so neither the measurement nor the section is written (the job stays green): cap the
+  whole `earlier` line near 100 kB and give the rest `none` (with T024's 1 MB point; today's
+  measurements are 0.7 to 1.7 kB); S2 the config step's `gh api --paginate` has no time limit,
+  unlike the downloads' `GH_TIMEOUT`; S3 a failed download of the newest candidate gives `none`,
+  not the next newest (as the contract says); S4 names from an earlier artifact may carry
+  Markdown or HTML (as T023); S5 a listing cut short by a failing `--paginate` is read as whole,
+  with no warning. Untested: a created_at tie in other timestamp formats (compared as strings), a
+  cancelled job, an `EARLIER` over 128 KiB through a real shell; tests by a test author
 
 ---
 
