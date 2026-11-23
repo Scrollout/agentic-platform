@@ -221,17 +221,24 @@ type offence struct {
 // deploymentOffences are f's deployment values in source order.
 func deploymentOffences(f *ast.File) []offence {
 	osNames := map[string]bool{}
+	dotOS := false
 	for _, imp := range f.Imports {
 		if p, _ := strconv.Unquote(imp.Path.Value); p == "os" {
 			name := "os"
 			if imp.Name != nil {
 				name = imp.Name.Name
 			}
-			if name != "_" && name != "." {
+			switch name {
+			case ".":
+				dotOS = true
+			case "_":
+			default:
 				osNames[name] = true
 			}
 		}
 	}
+	// selected are the identifiers that name a field or method after a dot, never a bare name.
+	selected := map[*ast.Ident]bool{}
 	handled := map[*ast.BasicLit]bool{}
 	var out []offence
 	// credential reports e as a credential when it is a non-empty literal (or literals joined by +).
@@ -249,13 +256,20 @@ func deploymentOffences(f *ast.File) []offence {
 	}
 	ast.Inspect(f, func(n ast.Node) bool {
 		switch n := n.(type) {
+		case *ast.SelectorExpr:
+			// Any use of an environment function of os, called or not, is an environment read.
+			selected[n.Sel] = true
+			if x, ok := n.X.(*ast.Ident); ok && osNames[x.Name] && envReads[n.Sel.Name] {
+				out = append(out, offence{n.Pos(), kindEnvRead})
+			}
+		case *ast.Ident:
+			if dotOS && !selected[n] && envReads[n.Name] {
+				out = append(out, offence{n.Pos(), kindEnvRead})
+			}
 		case *ast.CallExpr:
 			sel, ok := n.Fun.(*ast.SelectorExpr)
 			if !ok {
 				return true
-			}
-			if x, ok := sel.X.(*ast.Ident); ok && osNames[x.Name] && envReads[sel.Sel.Name] {
-				out = append(out, offence{n.Pos(), kindEnvRead})
 			}
 			switch sel.Sel.Name {
 			case "SetBasicAuth":

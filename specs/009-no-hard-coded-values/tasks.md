@@ -369,3 +369,26 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   playbook `docs/playbooks/protect-changes-locally.md` step 5 updated with it. New test file `scripts/tests/test_pre_commit_template_go.py` by a separate test author,
   seen failing first (2206150, 9 of 13; its environment fix df57f7b owner-approved); then the hook
   change (08a9def); then T010's commit (88374b1)
+
+## US2 fresh review, round 1 (Sonnet, at c6fe585)
+
+- [x] T030 [US2] B1 (blocking; README "Deployment values" and the check contract: an environment
+  read is "a call of `os.Getenv`, `os.LookupEnv`, `os.Environ` or `os.ExpandEnv`, through any
+  import name of `os`"; FR-005): a dot import of `os` (`Getenv("X")`), a method value
+  (`get := os.Getenv`) and a parenthesised callee (`(os.Getenv)("X")`) are not flagged. Fix: any
+  use of one of the four through an import name of `os`, and the bare names under a dot import,
+  is an environment read; regression test `src/engine/checks/deployment_env_forms_test.go` by a
+  separate test author, seen failing at c6fe585
+- [ ] T031 [US2] S1, S2 (suggestions): state as limits in the catalogue README and the runCheck
+  text the address forms not recognised (a bare host name, `//host`, surrounding spaces, a
+  non-ASCII host, an address joined with `+`) and the credential forms (a conversion such as
+  `[]byte("x")`, an index key `m["password"]`, a positional struct literal, a returned literal,
+  `url.UserPassword`), or recognise them through the spec and contract first
+- [ ] T032 [US2] S3 (suggestion): a `//line` directive in a judged file moves the line a reason
+  names; report unadjusted positions (`PositionFor(pos, false)`) with a new test
+- [ ] T033 [US2] S4 with analyze A1 (suggestion): reword and reflow runCheck's value-check
+  sentences ("DeclaredValuesGenerated and DeclaredValuesNotRepeated read the approved contract
+  only as ...; DeploymentValuesConfigured does not read it") on the next contract change
+- [x] T034 [US2] S5, S6 closed: two identical reasons for `SetBasicAuth("u", "p")` are two
+  offences, as the contract states ("once per offence"); a local variable named `os` shadowing
+  the import is a false positive too rare to judge. closed: no defect
