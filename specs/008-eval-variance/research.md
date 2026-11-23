@@ -60,9 +60,11 @@ the code on `main` (`9d8d678`), a reproduced experiment, or a cited document. De
   The measurement upload's own rules (pinned action, `retention-days: 90`, path, name, its `if`
   following its own scan, the scan running `secret-scan.sh` on the measurement folder) go in a new
   test file with clean and planted cases.
-- **Order in the evals job**: the measurement steps run after `failed` and after the failed-outputs
-  scan, and before the failed-outputs upload, which stays last (S4: the first `secret-scan.sh`
-  step must stay the failed-outputs scan, and that upload must be the last step).
+- **Order in the evals job**: the step that writes the measurement and the trials section runs
+  right after `Summary of the evals`, with `if: always()`; the measurement's scan and upload run
+  after the failed-outputs scan and before the failed-outputs upload, which stays last (S4: the
+  first `secret-scan.sh` step must stay the failed-outputs scan, and that upload must be the last
+  step).
 - **Rationale**: S4's rules otherwise refuse any second upload. The baseline is fetched in the
   `config` job, which already holds `actions: read` (R3), so `judge_permissions` does not change.
 
