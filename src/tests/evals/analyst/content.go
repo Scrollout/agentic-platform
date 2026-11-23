@@ -346,7 +346,8 @@ func (g *Grader) Content(out []byte) Result {
 		if has1 {
 			idOK = true
 		}
-		// 4. creation order
+		// 4. creation order: one Then step quotes the created texts in order, or the
+		// scenario's Then steps do, read together in step order (T199)
 		var created []string
 		for _, st := range s.steps {
 			if st.typ != "then" {
@@ -354,10 +355,16 @@ func (g *Grader) Content(out []byte) Result {
 			}
 		}
 		if len(created) >= 2 {
+			var listed []string
 			for _, t := range thens {
-				if inOrder(nonEmptyQuoted(t.text), created) {
+				q := nonEmptyQuoted(t.text)
+				if inOrder(q, created) {
 					orderOK = true
 				}
+				listed = append(listed, q...)
+			}
+			if inOrder(listed, created) {
+				orderOK = true
 			}
 		}
 	}
