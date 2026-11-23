@@ -267,7 +267,8 @@ paths:
         imaginary literals aside) that equals a declared number (by exact value; a literal under a
         unary minus is negated, a parenthesised one is not) or a declared string (after unquoting,
         byte for byte; a string never equals a number) fails, once per literal, with `<file>:<line>
-        repeats <value>, declared at <pointer>[, <pointer>...]: use gen.<Name>` (for an enum value:
+        repeats <value>, declared at #<pointer>[, #<pointer>...]: use gen.<Name>` (each JSON
+        Pointer written after `#`, so that it is not taken for a host path; for an enum value:
         `use the enum constant oapi-codegen generated for it in gen/api.gen.go, where it exists`),
         ending `; if the literal does not stand for this value, write it another way`; the value
         is quoted as Go's `%q` and cut to 64 characters. The literals `0`, `1`, `-1` and `""` (with

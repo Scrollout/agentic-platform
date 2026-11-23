@@ -111,7 +111,8 @@ of kind `number` and `string`: numbers by `constant.Compare` (a literal whose pa
 string never equals a number. Never judged: `0`, `1`, `-1`, `""`, import paths, struct tags.
 
 - Fails, once per literal: `<file>:<line> repeats <value %q, cut to 64 characters>, declared at
-  <pointer>[, <pointer>...]: use gen.<Name>` (an enum value: `use the enum constant oapi-codegen
+  #<pointer>[, #<pointer>...]: use gen.<Name>` (the pointer after `#`, since the check service
+  replaces text that looks like an absolute path) (an enum value: `use the enum constant oapi-codegen
   generated for it in gen/api.gen.go, where it exists`), ending `; if the literal does not stand
   for this value, write it another way`.
 - Passes: `examined <n> files and <m> literals against <k> declared values: none repeated`.

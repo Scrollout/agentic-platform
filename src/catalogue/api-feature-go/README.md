@@ -133,7 +133,7 @@ The checks:
   (`200`, `0xC8`, `2e2` and `200.0` are equal; a literal under a unary minus is negated), a string
   after unquoting, byte for byte (interpreted or raw); a string never equals a number. A literal
   that equals one fails, naming the file, the line, the value (as `%q`, cut to 64 characters),
-  every pointer that declares it and its constant, and ends by saying to write the literal another
+  every pointer that declares it (written after `#`, as `#/components/...`) and its constant, and ends by saying to write the literal another
   way if it does not stand for that value. A pass says how many files, literals and declared
   values it examined.
 
