@@ -9,7 +9,8 @@
 **Input**: Need N-054, "How much results vary from run to run is measured and shown" (owner chose it
 as the next work, 2026-11-23). Owner's scope answers the same day: the eval suites, not the
 developer's own runs; what varies is whether each trial passes and the effort each trial takes.
-Backlog task T192 (the summary prints `pass^3` whatever k a report's trials show) is part of it.
+Backlog task T192 (the existing summary prints `pass^3` whatever k a report's trials show) stays
+in the backlog (owner, Clarifications).
 
 **Serves needs** ([problem space](../../docs/overview/problem-space.md)): N-054 (how much results
 vary from run to run is measured and shown), for the platform's own agents in their eval suites;
@@ -21,6 +22,23 @@ Trial, Unstable case, Eval measurement.
 three trials), [ADR 0078](../../docs/decisions/0078-eval-jobs-keep-outputs-of-any-failed-trial.md)
 (a job with a failed trial keeps its outputs for 7 days), and Constitution Principle XIX
 ("Behaviour users rely on MUST be reported as pass^k over repeated trials").
+
+## Clarifications
+
+### Session 2026-11-23
+
+- Found while planning: this repository's artifact and log retention is 1 day, and 1 day is also
+  the most its organization allows, so the outputs ADR 0078 keeps "for 7 days" expire after 1 day.
+  Q: Where are measurements kept for 90 days? → A: as the eval run's own kept outputs; the owner
+  raises the organization's and the repository's retention to 90 days (Assumptions, Dependencies).
+- Q: T192 changes the existing summary, whose tests pin its output byte for byte: change those
+  tests? → A: No (owner): the existing summary stays as it is and T192 stays in the backlog; the
+  trials section this feature adds names pass^k with k from the report (FR-001).
+- Found while planning: eval runs are started on feature branches, which are then merged into the
+  default branch by fast-forward, so almost no run is on the default branch. Q: Which earlier
+  run is the baseline? → A: the latest earlier kept run whose commit is in the current run's
+  commit's history, on any branch, as the suite selection already chooses its base (owner;
+  FR-006).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -54,7 +72,8 @@ shows its count and its pass^k result, and only the 2-of-3 case is marked unstab
 3. **Given** a case whose every trial failed, **When** the summary is shown, **Then** it shows
    `0/k`, fails, and is not marked unstable.
 4. **Given** a report whose cases ran k trials each, for any k, **When** the summary is shown,
-   **Then** it names pass^k with that k, not a fixed 3 (T192).
+   **Then** the trials section names pass^k with that k, not a fixed 3; the existing summary
+   above it is unchanged.
 5. **Given** a quarantined case, **When** the summary is shown, **Then** it shows its count and
    whether it is unstable, and is still not counted, as today.
 6. **Given** a whole suite, **When** the summary is shown, **Then** it also states the suite's
@@ -93,8 +112,8 @@ usage is left out of that measure and counted as missing.
 ### User Story 3 - Each run is compared with the earlier runs of the same cases (Priority: P2)
 
 Every eval run keeps its measurements, and its summary shows, for every case, how its passed
-trials and its median effort changed since the latest earlier kept run of the same case on the
-default branch, so a slow drift in reliability or cost is seen without reading old runs by hand.
+trials and its median effort changed since the latest earlier kept run of the same case in this
+commit's history, so a slow drift in reliability or cost is seen without reading old runs by hand.
 
 **Why this priority**: one run with three trials says little; the change across runs is what shows
 that a case has become less reliable or more costly. It needs US1 and US2's measures first.
@@ -107,7 +126,8 @@ current passed trials and median cost, and which earlier run it compared with.
 
 1. **Given** an eval run, **When** it ends, whether it passed or failed, **Then** its
    measurements are kept, and can be read later without running any trial again.
-2. **Given** a kept earlier run of the same suite on the default branch, **When** a later run's
+2. **Given** a kept earlier run of the same suite whose commit is in the current commit's
+   history, **When** a later run's
    summary is shown, **Then** each case that ran in both shows its earlier and current passed
    trials, median duration and median cost, and the summary names the earlier run and its commit.
 3. **Given** a case whose share of passed trials is lower than in the earlier run, **When** the
@@ -127,8 +147,9 @@ current passed trials and median cost, and which earlier run it compared with.
   counts (`2/3` before, `5/5` now).
 - A trial stopped by its time limit counts as failed, as today, and its duration is the time it
   ran.
-- An earlier run on a branch other than the default one is not a baseline, so a feature branch's
-  experiments do not hide a drift on the default branch.
+- An earlier run whose commit is not in the current commit's history (an unmerged experiment on
+  another branch) is not a baseline, so it cannot hide a drift; a run on an earlier commit of the
+  same branch, or of a branch merged before, is.
 - The earlier run differs in commit, model or method: the comparison is still shown, and names the
   earlier run's commit so the maintainer can see what changed between them.
 - A report that cannot be read fails the job, as today; a kept earlier measurement that cannot be
@@ -141,7 +162,7 @@ current passed trials and median cost, and which earlier run it compared with.
 
 ### Functional Requirements
 
-- **FR-001**: The summary of every eval report MUST show, for every case, the number of its
+- **FR-001**: Every eval run's summary MUST gain a trials section that shows, for every case, the number of its
   trials that passed out of the number run, next to its pass^k result, with k taken from the
   report's trials.
 - **FR-002**: A case MUST be marked unstable when at least one of its trials passed and at least
@@ -160,7 +181,7 @@ current passed trials and median cost, and which earlier run it compared with.
 - **FR-005**: Kept measurements MUST stay readable for at least 90 days, without running a trial
   again and without access to the model key.
 - **FR-006**: The summary MUST compare every case that ran with the latest earlier kept run of the
-  same suite and case on the default branch: its earlier and current passed trials, median
+  same suite and case whose commit is in the current run's commit's history, on any branch: its earlier and current passed trials, median
   duration and median cost, naming the earlier run and its commit. A case whose share of passed
   trials fell MUST be marked as less reliable than before. A case with no earlier kept run MUST say
   so.
@@ -170,7 +191,8 @@ current passed trials and median cost, and which earlier run it compared with.
 - **FR-008**: The summary MUST be derived from the report and the kept earlier measurements alone,
   so the same inputs always give the same summary.
 - **FR-009**: A measure that no trial of a case carries MUST be shown as not available for that
-  case. Everything the summary shows today MUST stay shown.
+  case. The summary shown today MUST stay byte for byte as it is; the trials section and the
+  comparison follow it.
 
 ### Key Entities
 
@@ -190,7 +212,8 @@ current passed trials and median cost, and which earlier run it compared with.
   the report.
 - **SC-002**: Every case in a planted report whose trials disagree is marked unstable, and no case
   whose trials agree is.
-- **SC-003**: After two eval runs of the same suite on the default branch, the second run's summary
+- **SC-003**: After two eval runs of the same suite, the second on a descendant of the first's
+  commit, the second run's summary
   shows the change since the first for 100% of the cases that ran in both, and a case planted to
   pass fewer trials is marked less reliable.
 - **SC-004**: Measuring adds 0 trials and $0 of model cost to an eval run, and adds no more than 1
@@ -213,3 +236,6 @@ current passed trials and median cost, and which earlier run it compared with.
   its attempts. Neither suite's trials change.
 - 90 days lets a drift over several months of merges be seen; where and how the measurements are
   kept is decided in the plan's research.
+- Dependency: the owner raises the organization's and the repository's artifact and log retention
+  from 1 to 90 days (Clarifications); until then kept measurements expire after 1 day and US3
+  finds no baseline older than that.
