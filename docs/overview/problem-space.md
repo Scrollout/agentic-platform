@@ -44,6 +44,9 @@ decisions).
 
 N-054 (2026-11-23): `yes` by the owner for feature 008, which covers the platform's own eval
 suites; how the developer's own runs of a slice vary stays in scope for a later feature.
+`in progress` since feature 008's implementation (2026-11-23): every eval job shows each case's
+passed trials, its unstable mark and the spread of its effort, keeps its measurement 90 days and
+compares with the latest earlier run in its history (evals runs 45163722619, 45170628365).
 
 N-040 (2026-11-21): `done` by feature 002: its three stories pass in CI (check run 44886296672
 at aab7fcb) and in the regression evals (run 44809763108), the clean-machine measurement (T032)
@@ -116,7 +119,7 @@ Constitution Principle XX makes them binding for the product.
 | N-051 | A result is accepted only when it passes checks that do not depend on a model's judgement | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [007](../../specs/007-analyst-answer-checks/spec.md) | done |
 | N-052 | A proven solution is captured once and reused, without the model generating it again | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | in progress |
 | N-053 | Every result can be traced to the method, inputs, model and rules that produced it, and reproduced from them | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [006](../../specs/006-method-record/spec.md) | done |
-| N-054 | How much results vary from run to run is measured and shown | yes | | [008](../../specs/008-eval-variance/spec.md) | specified |
+| N-054 | How much results vary from run to run is measured and shown | yes | | [008](../../specs/008-eval-variance/spec.md) | in progress |
 | N-055 | The project's principles, docs, specs, decisions, validations, tests and reviews hold at every stage of the lifecycle | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | in progress |
 | N-056 | The author of a change cannot alter, skip or weaken the checks that judge it; only a recorded, independent decision can change a check | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | done |
 | N-057 | A change stays within the files and areas its task allows; anything outside is rejected | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | done |

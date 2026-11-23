@@ -100,7 +100,8 @@ Sources: [Contexts, context availability](https://docs.github.com/en/actions/ref
   was kept 1 day. The owner raised both to 90 days the same day (feature 008 T017).
 - `actions/upload-artifact` takes `retention-days` from 1 to 90; artifact names are unique in a
   run, and artifacts are immutable. Downloading another run's artifact needs a token with
-  `actions:read` on the repository.
+  `actions:read` on the repository; a workflow's own `GITHUB_TOKEN` with `actions: read` did so
+  (evals run 45170628365, 2026-11-23).
 - The REST API lists a repository's artifacts (`per_page` at most 100) with `expired`,
   `created_at` and `workflow_run` (`id`, `head_branch`, `head_sha`); a download answers 302 with a
   zip URL that expires after 1 minute.

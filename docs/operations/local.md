@@ -236,6 +236,14 @@ and `e2e.sh` are for CI, since the host is small and shared. The live evals run 
 owner starts them, `gh workflow run evals.yml --ref <branch>` (`-f all=true` for every suite),
 and each check run's `evals-current` job names the suites still pending; merge into `main` only
 when it names none, re-running it after the evals pass ([ADR 0048](/decisions/0048-evals-started-by-hand-and-gated-before-main.md)).
+Each eval job's summary ends with a trials section: per case its passed trials out of k, `⚠️
+unstable` when its trials disagree, and the lowest, median and highest seconds, cost, tokens and
+attempts; then the change since the latest earlier run of the same suite and cases whose commit
+is in this commit's history (`📉 less reliable` when fewer trials passed). The section never
+changes whether the job passes. Each job keeps its measurement, which holds no model text, as the
+artifact `eval-measurements-<suite>[-<cases>]-<attempt>` for 90 days, the repository's retention;
+read one with `gh run download <run id> -p 'eval-measurements-*'`
+([ADR 0083](/decisions/0083-eval-runs-keep-measurements-and-compare-with-their-history.md)).
 
 # Observability
 

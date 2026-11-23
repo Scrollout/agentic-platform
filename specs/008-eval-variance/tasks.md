@@ -282,7 +282,7 @@ out an unmerged branch's, this run's and an expired one; Q5 shows the comparison
 
 ## Phase 5: Polish & cross-cutting concerns
 
-- [ ] T020 Docs: `docs/operations/local.md` (the evals paragraph: the trials section, the kept
+- [X] T020 (local.md trials paragraph, N-054 `in progress`, log, github-actions reference: `GITHUB_TOKEN` download shown; okf OK) Docs: `docs/operations/local.md` (the evals paragraph: the trials section, the kept
   measurements and where to read them, the 90-day retention); `docs/overview/problem-space.md`
   N-054 `in progress` (the developer's runs stay for a later feature) with a line on what 008
   covers; `docs/log.md`; `python3 scripts/okf.py check` reports OK
