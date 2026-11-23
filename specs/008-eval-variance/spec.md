@@ -39,6 +39,10 @@ three trials), [ADR 0078](../../docs/decisions/0078-eval-jobs-keep-outputs-of-an
   run is the baseline? → A: the latest earlier kept run whose commit is in the current run's
   commit's history, on any branch, as the suite selection already chooses its base (owner;
   FR-006).
+- Analyze round 1 (fresh Sonnet, 29e6f1e): FR-007 holds whatever the new steps read or however
+  they end (a scan match drops the measurement, never fails the job); the baseline is one run per
+  suite and cases (FR-006); FR-004 lists every field kept; FR-001 names which k; FR-002 says
+  quarantined trials count in the suite's trials.
 - Found while planning: each agent's pinned model is a fact of the commit (its agent definition),
   and reading it in the eval job would need a YAML reader there; the measurement names the commit
   instead, which identifies the models, the method and every other input (FR-004).
@@ -129,14 +133,13 @@ current passed trials and median cost, and which earlier run it compared with.
 
 1. **Given** an eval run, **When** it ends, whether it passed or failed, **Then** its
    measurements are kept, and can be read later without running any trial again.
-2. **Given** a kept earlier run of the same suite whose commit is in the current commit's
-   history, **When** a later run's
-   summary is shown, **Then** each case that ran in both shows its earlier and current passed
+2. **Given** a kept earlier run of the same suite and cases whose commit is in the current
+   commit's history, **When** a later run's summary is shown, **Then** each case that ran in both shows its earlier and current passed
    trials, median duration and median cost, and the summary names the earlier run and its commit.
 3. **Given** a case whose share of passed trials is lower than in the earlier run, **When** the
    summary is shown, **Then** that case is marked as less reliable than before.
-4. **Given** no kept earlier run of a case (a new case, a renamed case, or no run in the kept
-   period), **When** the summary is shown, **Then** the case says there is nothing to compare with.
+4. **Given** a case the latest earlier run does not hold (a new or renamed case), or no kept
+   earlier run (none in the kept period), **When** the summary is shown, **Then** the case says there is nothing to compare with.
 5. **Given** kept measurements, **When** anyone reads them, **Then** they hold no answer, prompt,
    file, error output or other protected content, only the measures and what identifies the run.
 
@@ -160,37 +163,43 @@ current passed trials and median cost, and which earlier run it compared with.
 - Cost is Docker Agent's estimate from the price the agent declares, not the provider's bill; the
   summary says so as today.
 - The median of an even number of trials is the mean of the two middle values.
+- A re-run of a workflow run is not compared with its own earlier attempt; its baseline is an
+  earlier workflow run's.
+- The earlier run is the latest one of the same suite and cases; a case it lacks says there is
+  nothing to compare with, even when an older run holds it.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: Every eval run's summary MUST gain a trials section that shows, for every case, the number of its
-  trials that passed out of the number run, next to its pass^k result, with k taken from the
-  report's trials.
+- **FR-001**: Every eval run's summary MUST gain a trials section that shows, for every case,
+  the number of its trials that passed out of the number run, next to its pass^k result, with k
+  the largest number of trials any case of the report ran (3 when none ran a trial).
 - **FR-002**: A case MUST be marked unstable when at least one of its trials passed and at least
   one failed. The suite's summary MUST state its trials passed out of trials run and its number of
-  unstable counted cases. A quarantined case is measured and marked like any other and, as today,
-  not counted.
+  unstable counted cases; the trials passed and run include a quarantined case's. A quarantined
+  case is measured and marked like any other and, as today, not counted among the cases.
 - **FR-003**: The summary MUST show, for every case, the lowest, median and highest of its trials'
   duration, input tokens, output tokens and cost, and of its attempts where the suite counts
   attempts. A trial that does not carry a measure MUST be left out of that measure, and the case
   MUST state how many trials the measure covers.
-- **FR-004**: Every eval run, passed or failed, MUST keep its measurements: per case and trial,
-  whether it passed, its attempts, duration, tokens and cost, the case's quarantine, and per run
-  the suite, the cases selected, k, the commit, the branch and the run's identity; the commit
-  names the agents' pinned models. The kept measurements MUST NOT hold protected content
+- **FR-004**: Every eval run, passed or failed, MUST keep its measurements: per case its name,
+  agent and quarantine, and per trial whether it passed, its attempts, duration, tokens and cost;
+  per run a format version, the suite, the cases selected, the key that names the suite and cases,
+  the commit, the branch and the run's identity; the commit names the agents' pinned models. The kept measurements MUST NOT hold protected content
   (Principle XI) and MUST pass the same credential scan as kept eval outputs.
 - **FR-005**: Kept measurements MUST stay readable for at least 90 days, without running a trial
   again and without access to the model key.
-- **FR-006**: The summary MUST compare every case that ran with the latest earlier kept run of the
-  same suite and case whose commit is in the current run's commit's history, on any branch: its earlier and current passed trials, median
-  duration and median cost, naming the earlier run and its commit. A case whose share of passed
-  trials fell MUST be marked as less reliable than before. A case with no earlier kept run MUST say
-  so.
+- **FR-006**: The summary MUST compare every case that ran with the same case in the latest
+  earlier kept run of the same suite and cases whose commit is in the current run's commit's
+  history, on any branch: its earlier and current passed trials, median duration and median cost,
+  naming the earlier run and its commit. A case whose share of passed trials fell MUST be marked
+  as less reliable than before. A case that ran no trial, or that the earlier run does not hold,
+  or with no earlier kept run, MUST say there is nothing to compare with.
 - **FR-007**: Measuring, keeping and comparing MUST NOT change whether an eval job passes or
-  fails: pass^k over the counted cases stays the only gate. They MUST add no trial and no model
-  call.
+  fails, whatever they read and whether or not they succeed: pass^k over the counted cases stays
+  the only gate. A measurement the credential scan matches is not kept and the summary says so.
+  They MUST add no trial and no model call.
 - **FR-008**: The summary MUST be derived from the report and the kept earlier measurements alone,
   so the same inputs always give the same summary.
 - **FR-009**: A measure that no trial of a case carries MUST be shown as not available for that
