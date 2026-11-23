@@ -172,12 +172,14 @@ carry a password. A pass says how many files it examined. The forms it recognise
 |------|------------|
 | an address | a string literal that is a URL with a scheme and a host; an IP address; or `host:port` or `:port` whose port is a decimal number from 1 to 65535 and whose host is empty, `localhost`, an IP address or a name holding a letter |
 | a credential | a non-empty literal argument of `SetBasicAuth`; the second argument of `Set` or `Add` when the first is the literal `Authorization`, `Proxy-Authorization`, `Cookie` or `X-Api-Key` (any letter case); a literal assigned, declared or keyed to a name matching `(?i)passw(or)?d\|secret\|token\|api_?key\|credential\|private_?key` |
-| an environment read | a call of `os.Getenv`, `os.LookupEnv`, `os.Environ` or `os.ExpandEnv`, under any import name of `os` |
+| an environment read | any use of `os.Getenv`, `os.LookupEnv`, `os.Environ` or `os.ExpandEnv` (a call, a function value, an argument) under any import name of `os`, and of their bare names under a dot import of `os` |
 
 A literal argument may be several literals joined by `+`. Limits: a port written as a number,
 `":0"`, a credential under another name or in another call, and a value built at run time are not
 recognised. Some literals that are not deployment values are rejected: `"1.2.3.4"` is judged an
-address, and `const tokenHeader = "X-Api-Key"` and a name such as `secretaryNote` a credential.
+address, and `const tokenHeader = "X-Api-Key"` and a name such as `secretaryNote` a credential;
+under a dot import of `os`, a field, method, key or local named like one of the four functions is
+judged an environment read.
 
 DeclaredValuesGenerated and DeclaredValuesNotRepeated read the approved contract the engine sends,
 not the project's `api/openapi.yaml`; DeploymentValuesConfigured does not use it. Each fails

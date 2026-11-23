@@ -132,7 +132,7 @@ in its userinfo):
 |------|------------|
 | an address | a string literal that is a URL with a scheme and host; an IP address; or `host:port` / `:port` whose port is a decimal 1 to 65535 and whose host is empty, `localhost`, an IP address or a name holding a letter |
 | a credential | a non-empty literal argument of `SetBasicAuth`; the second argument of `Set`/`Add` whose first argument is the literal `Authorization`, `Proxy-Authorization`, `Cookie` or `X-Api-Key` (any case); a literal assigned, declared or keyed to a name matching `(?i)passw(or)?d\|secret\|token\|api_?key\|credential\|private_?key` |
-| an environment read | a call of `os.Getenv`, `os.LookupEnv`, `os.Environ` or `os.ExpandEnv`, through any import name of `os` |
+| an environment read | any use of `os.Getenv`, `os.LookupEnv`, `os.Environ` or `os.ExpandEnv` (a call, a function value, an argument), through any import name of `os`, and their bare names under a dot import |
 
 A literal argument may be literals joined by `+`. Passes: `examined <n> files: no address,
 credential or environment read`. Fails closed on a judged file that does not parse. Limits: a port

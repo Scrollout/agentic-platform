@@ -150,8 +150,10 @@ inline response property: every one got a typed constant per value
     declared or keyed to a name matching `(?i)passw(or)?d|secret|token|api_?key|credential|private_?key`
     (so `const tokenHeader = "X-Api-Key"` counts: a stated limit); an argument made only of
     literals joined by `+` counts as a literal;
-  - an **environment read**: a call of `os.Getenv`, `os.LookupEnv`, `os.Environ` or `os.ExpandEnv`
-    through any import name of `os` (owner, R3).
+  - an **environment read**: any use of `os.Getenv`, `os.LookupEnv`, `os.Environ` or `os.ExpandEnv`
+    (a call, a function value, an argument) through any import name of `os`, and their bare names
+    under a dot import (owner, R3; widened by the US2 review, T030, so that no form of reading the
+    environment passes, FR-005).
 
   Each failure names the file, the line and the kind, never the literal: a URL can carry a
   password in its userinfo (spec FR-004, Principle XI; analyze round 2, N3). The reason ends `belongs in

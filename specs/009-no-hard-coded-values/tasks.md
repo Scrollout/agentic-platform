@@ -35,6 +35,9 @@ on.
 - **Method identity**: every commit that changes a file `src/engine/method/method.json` lists
   (the engine, the check contract, the catalogue, the agents) runs `scripts/method-digest.py` and
   commits the converged `src/engine/method/method.sha256` with it.
+- **Trailers**: `Approved-by: Marius Gologan (2026-11-12)` is the owner's standing approval to
+  commit finished, tested work to protected paths (the commit hook's `Approved-by`); a check
+  change or an existing test's change carries its own dated approval (`Tests-approved-by:`).
 - **No dependency** is added; the standard library and `go.yaml.in/yaml/v3` only.
 - **Fail closed**: a check that cannot read the approved contract or a judged file fails, naming
   it; every passing result says what it examined (FR-008).
@@ -214,7 +217,8 @@ passes.
   `src/engine/checksvc/checks.go`; the check image's template stage picks the file up unchanged
   (`src/deploy/Dockerfile.check` copies the template folder); T008-T009 pass; every existing
   test stays green; `method.sha256` converged
-- [x] T011 [US2] Commit (tests and code in separate commits); push (owner go-ahead); fix until CI
+- [x] T011 [US2] Commit (tests and code in separate commits); push (owner go-ahead, given
+  2026-11-23 for 0f7795d and c2e6f79); fix until CI
   is green but for the recorded-model jobs "Implementation strategy" names (owner, 2026-11-23); record the run in research; fresh review of US2; `/speckit-converge` for US2
 
 ---
@@ -335,6 +339,7 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
 - T022 and T027 were done before T007's converge; T023-T026 before T019, each either state a limit
   (contract and README only) or change behaviour through the spec and contract first, with new
   test files only, never edits to T003's tests.
+- T031-T033 before T019, under the same rule as T023-T026; T031 and T033 in one contract commit.
 - T019 after T018; T020 after T019; T021 last.
 
 ## Parallel examples
@@ -385,18 +390,21 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   `[]byte("x")`, an index key `m["password"]`, a positional struct literal, a returned literal,
   `url.UserPassword`), or recognise them through the spec and contract first
 - [ ] T032 [US2] S3 (suggestion): a `//line` directive in a judged file moves the line a reason
-  names; report unadjusted positions (`PositionFor(pos, false)`) with a new test
+  names; state in the contract and README that the line is the file's own, then a new test file,
+  then report unadjusted positions (`PositionFor(pos, false)`)
 - [ ] T033 [US2] S4 with analyze A1 (suggestion): reword and reflow runCheck's value-check
   sentences ("DeclaredValuesGenerated and DeclaredValuesNotRepeated read the approved contract
-  only as ...; DeploymentValuesConfigured does not read it") on the next contract change
+  only as ...; DeploymentValuesConfigured does not read it") in T031's contract commit
 - [x] T034 [US2] S5, S6 closed: two identical reasons for `SetBasicAuth("u", "p")` are two
   offences, as the contract states ("once per offence"); a local variable named `os` shadowing
   the import is a false positive too rare to judge. closed: no defect
 
 ## US2 fresh review, round 2 (Sonnet, at c2e6f79): B1 fixed, no new blocking finding
 
-- [ ] T035 [US2] S-a, S-b (suggestions): the catalogue README and runCheck say "a call of
+- [x] T035 [US2] S-a, S-b (suggestions): the catalogue README and runCheck say "a call of
   `os.Getenv` ..."; since T030 the check reports any use (a method value, an argument) and, under
   a dot import of `os`, the bare names, declarations so named included (a struct field, a method,
   a composite key, a local); reword to "a use" and state the dot-import declarations as a limit,
-  or skip declaration sites with a new test; with T031
+  or skip declaration sites with a new test; with T031. Done (analyze round 7 I1): the README
+  table, its limits, the contract draft and research R3 say "any use" and state the limit; the
+  contract followed the code here (T030 widened what FR-005 already required), recorded in R3
