@@ -87,7 +87,7 @@ on.
   `not implemented` result or error; `scripts/generate.sh` refreshes the embedded contract
   copies; `scripts/method-digest.py` converges; the contract lint passes; the draft then links to
   the authoritative copies
-- [ ] T002 Owner approvals recorded (2026-11-23, research R6): the evals' reference
+- [x] T002 Owner approvals recorded (2026-11-23, research R6): the evals' reference
   `testdata/ref/impl/cmd/notes/main.go`; every code answer of
   `src/tests/recorded/steps/{happy,resume,planted/*}` and their synthesised mappings;
   `src/tests/evals/steps/grade.go`, `cases.go`, `grade_test.go` (the `obeyed` simulation of
