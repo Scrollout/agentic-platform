@@ -224,6 +224,7 @@ inline response property: every one got a typed constant per value
 | 868e0f5 (US1, T001-T006) | 45248260393 | Go unit tests and vet, contracts lint, API breaking changes, knowledge, markdown, layout, secrets, dependencies, module boundaries, gateway, evals-current green; the recorded-model planted jobs failed on a recording miss in the tests step (`gen/declared.go` in generate's output), expected until T015 (owner, 2026-11-23); run cancelled after the Go job |
 | 2b1aad3 (US1 review fix T022) | 45254495030 | Go unit tests and vet, Python script and hook tests and every static job green; the recorded-model jobs (planted, Story 2, end-to-end, service tests) failed only on the same recording miss; cancelled after the Go and Python jobs. US1 review converged in 2 rounds (F1 fixed, F3-F7 tasks) |
 | 0f7795d (US2, T008-T010, T029) | 45271161653 | Go unit tests and vet, Python script and hook tests (the new template-Go hook tests included) and every static job green; the recorded-model jobs (planted, Story 2, end-to-end, service tests) failed only on the recording miss at the tests step (`Request was not matched`), expected until T015; the stopped-run jobs cancelled after the Go job |
+| c2e6f79 (US2 review fix T030) | 45275603639 | Go unit tests and vet, Python script and hook tests and every static job green; each failed recorded-model job (planted, Story 2, end-to-end, service tests) logs only the recording miss, expected until T015; the stopped-run jobs cancelled |
 
 ## Threat-model input
 
