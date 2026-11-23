@@ -5,8 +5,11 @@ Workflow rules, each a judge_<rule>(root) over root/.github/workflows, with a te
 files and a planted violation in a temporary tree that is valid otherwise (a baseline test proves
 it valid):
 
-- only_evals_uploads: exactly one step in all workflows uses an upload-artifact action, and it is
-  in evals.yml's evals job;
+- only_evals_uploads: the only steps in all workflows that use an upload-artifact action are in
+  evals.yml's evals job: exactly one failed-outputs upload (`with.name` starts `evals-`) and at
+  most one measurements upload (`with.name` starts `eval-measurements-`, feature 008, research
+  R2); an upload with any other name, or without a name, fails. The other rules below judge the
+  failed-outputs upload, found by its name, not as the first upload;
 - upload_pinned: that step uses actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
   (v7.0.2);
 - upload_with: path `${{ env.EVAL_REPORT_DIR }}`, retention-days 7, if-no-files-found warn, and a
@@ -67,6 +70,23 @@ def strip_expr(cond):
     return (m.group(1) if m else c).strip()
 
 
+def is_upload(st):
+    return bool(UPLOAD.search(str(st.get("uses", ""))))
+
+
+def upload_name(st):
+    w = st.get("with")
+    return str(w.get("name")) if isinstance(w, dict) and w.get("name") is not None else ""
+
+
+def is_failed_outputs_upload(st):
+    return is_upload(st) and upload_name(st).startswith("evals-")
+
+
+def is_measurements_upload(st):
+    return is_upload(st) and upload_name(st).startswith("eval-measurements-")
+
+
 def upload_steps(wf):
     out = []
     for name, w in wf.items():
@@ -88,9 +108,10 @@ def the_upload(root):
     if v:
         return [], -1, None, v
     steps = evals_steps(wf)
-    ups = [i for i, st in enumerate(steps) if UPLOAD.search(str(st.get("uses", "")))]
+    ups = [i for i, st in enumerate(steps) if is_failed_outputs_upload(st)]
     if not ups:
-        return steps, -1, None, ["evals.yml's evals job has no upload-artifact step"]
+        return steps, -1, None, ["evals.yml's evals job has no failed-outputs upload "
+                                 "(an upload-artifact step named evals-...)"]
     return steps, ups[0], steps[ups[0]], []
 
 
@@ -110,10 +131,19 @@ def judge_only_evals_uploads(root):
     for name, jn, _, _ in ups:
         if (name, jn) != ("evals.yml", "evals"):
             v.append(f"{name} job {jn} uploads an artifact")
-    if not any((n, j) == ("evals.yml", "evals") for n, j, _, _ in ups):
-        v.append("evals.yml's evals job uploads nothing")
-    if sum((n, j) == ("evals.yml", "evals") for n, j, _, _ in ups) > 1:
-        v.append("evals.yml's evals job has more than one upload step")
+    mine = [st for n, j, _, st in ups if (n, j) == ("evals.yml", "evals")]
+    failed = [st for st in mine if is_failed_outputs_upload(st)]
+    meas = [st for st in mine if is_measurements_upload(st)]
+    if not failed:
+        v.append("evals.yml's evals job has no failed-outputs upload (name evals-...)")
+    if len(failed) > 1:
+        v.append("evals.yml's evals job has more than one failed-outputs upload")
+    if len(meas) > 1:
+        v.append("evals.yml's evals job has more than one measurements upload")
+    for st in mine:
+        if st not in failed and st not in meas:
+            v.append(f"evals.yml's evals job uploads under the name {upload_name(st)!r}, "
+                     "neither evals-... nor eval-measurements-...")
     return v
 
 
@@ -324,9 +354,65 @@ class OnlyEvalsUploadsTest(unittest.TestCase):
                 {"uses": f"someone/upload-artifact-fork@{HASH}", "with": {"path": "."}})
         self.assertTrue(judge_only_evals_uploads(planted(self, m)))
 
-    def test_planted_second_upload_in_evals_fails(self):
+    def test_planted_second_failed_outputs_upload_in_evals_fails(self):
         def m(d):
             ev(d)["steps"].insert(3, UPLOAD_STEP())
+        self.assertTrue(judge_only_evals_uploads(planted(self, m)))
+
+    def test_planted_upload_with_another_name_fails(self):
+        for name in ("other-${{ github.run_id }}", "eval-measurement-x", "measurements-x", ""):
+            with self.subTest(name=name):
+                def m(d, name=name):
+                    st = UPLOAD_STEP()
+                    st["with"]["name"] = name
+                    ev(d)["steps"].insert(3, st)
+                self.assertTrue(judge_only_evals_uploads(planted(self, m)))
+
+    def test_planted_upload_without_a_name_fails(self):
+        def m(d):
+            st = UPLOAD_STEP()
+            del st["with"]["name"]
+            ev(d)["steps"].insert(3, st)
+        self.assertTrue(judge_only_evals_uploads(planted(self, m)))
+
+    def test_planted_upload_without_with_fails(self):
+        def m(d):
+            ev(d)["steps"].insert(3, {"uses": PIN})
+        self.assertTrue(judge_only_evals_uploads(planted(self, m)))
+
+    def test_one_measurements_upload_in_evals_passes(self):
+        # the name is built from expressions, and the first upload is the measurements one
+        def m(d):
+            st = UPLOAD_STEP()
+            st["with"]["name"] = "eval-measurements-${{ matrix.suite }}-${{ github.run_attempt }}"
+            ev(d)["steps"].insert(3, st)
+        root = planted(self, m)
+        self.assertEqual(judge_only_evals_uploads(root), [])
+        # the other rules still judge the failed-outputs upload, not the first upload
+        for fn in (judge_upload_pinned, judge_upload_with, judge_upload_condition):
+            self.assertEqual(fn(root), [], fn.__name__)
+
+    def test_planted_two_measurements_uploads_fail(self):
+        def m(d):
+            for k in (3, 4):
+                st = UPLOAD_STEP()
+                st["with"]["name"] = f"eval-measurements-{k}"
+                ev(d)["steps"].insert(k, st)
+        self.assertTrue(judge_only_evals_uploads(planted(self, m)))
+
+    def test_planted_measurements_upload_outside_evals_fails(self):
+        def put(d, where):
+            st = UPLOAD_STEP()
+            st["with"]["name"] = "eval-measurements-x"
+            where(d).append(st)
+        for where in (lambda d: d["check.yml"]["jobs"]["py_tests"]["steps"],
+                      lambda d: d["evals.yml"]["jobs"]["config"]["steps"]):
+            with self.subTest():
+                self.assertTrue(judge_only_evals_uploads(planted(self, lambda d, where=where: put(d, where))))
+
+    def test_planted_only_a_measurements_upload_fails(self):
+        def m(d):
+            up(d)["with"]["name"] = "eval-measurements-x"
         self.assertTrue(judge_only_evals_uploads(planted(self, m)))
 
     def test_planted_no_upload_fails(self):

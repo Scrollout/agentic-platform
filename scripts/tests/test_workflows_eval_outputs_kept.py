@@ -110,9 +110,10 @@ def judge_upload_condition_failed_trial(root):
     steps, v = steps_of(root)
     if v:
         return v
-    ups = [i for i, st in enumerate(steps) if UPLOAD.search(str(st.get("uses", "")))]
+    ups = [i for i, st in enumerate(steps) if UPLOAD.search(str(st.get("uses", "")))
+           and str((st.get("with") or {}).get("name", "")).startswith("evals-")]
     if not ups:
-        return ["the evals job has no upload-artifact step"]
+        return ["the evals job has no failed-outputs upload (an upload-artifact step named evals-...)"]
     s = scan_index(steps[:ups[0]])
     sid = steps[s].get("id") if s >= 0 else None
     if not sid:
