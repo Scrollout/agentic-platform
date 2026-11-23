@@ -2,7 +2,7 @@
 # Schema: src/engine/api/preview/2026-11-12-preview/pattern.schema.json. What each condition, path
 # and dependency entry means, and how it is evaluated: README.md next to this file.
 id: api-feature-go
-version: 1.0.0
+version: 1.1.0
 status: approved
 scenario: >-
   One use case of one service, served as an HTTP API: an approved OpenAPI 3.1 contract is
@@ -98,6 +98,7 @@ steps:
     checks:
       - GenerationRepeatable
       - GeneratedCodeBuilds
+      - DeclaredValuesGenerated
       - DependenciesAllowed
       - ScopeKept
     dependencies:
@@ -137,7 +138,7 @@ steps:
   - name: code
     worker: agent:code
     # The digest of src/agents/code.yaml and src/agents/code/ (as for tests).
-    agent_digest: "27b39b942b5b83ff4c7ed57e2f9a0c31e5a2b86d932211b3c5e7bfb96f9659e2"
+    agent_digest: "0a4ca3f174535e32b441afc86527fbc1679141d258869fbec645278bd4aeb20d"
     inputs: [contract, examples, generated-code, tests, slice/rules]
     outputs: [code]
     writable:
@@ -149,6 +150,8 @@ steps:
       - GeneratedCodeUnchanged
       - ContractMatchesApproval
       - DependenciesAllowed
+      - DeclaredValuesNotRepeated
+      - DeploymentValuesConfigured
       - AllTestsPass
     dependencies:
       allowed:

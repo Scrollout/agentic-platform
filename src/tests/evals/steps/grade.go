@@ -25,6 +25,8 @@ const (
 	GGenSame      = "GeneratedCodeUnchanged"
 	GAllPass      = "AllTestsPass"
 	GContract     = "ContractMatchesApproval"
+	GNotRepeated  = "DeclaredValuesNotRepeated"
+	GDeployValues = "DeploymentValuesConfigured"
 	GBareJSON     = "ReviewIsBareJSON"
 	GShape        = "FindingsShape"
 	GEvidence     = "FindingsCarryEvidence"
@@ -180,6 +182,8 @@ func (e Env) GradeCode(before, after, approvedContract string) []Result {
 		fold(GAllPass, checks.AllTestsPass(e.Runner, after)),
 		contract,
 		e.deps(st, after),
+		fold(GNotRepeated, checks.DeclaredValuesNotRepeated(after, st.Writable, []byte(approvedContract))),
+		fold(GDeployValues, checks.DeploymentValuesConfigured(after, st.Writable)),
 	}
 	for _, r := range rs {
 		if !r.Passed {

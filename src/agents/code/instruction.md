@@ -14,7 +14,8 @@ The project already holds:
 - `api/openapi.yaml`: the approved OpenAPI 3.1 contract.
 - `gen/`: Go code generated from the contract, package `gen` of the module named in `go.mod`
   (`example.com/service`): the types, `ServerInterface`, `Handler(ServerInterface)
-  http.Handler`, and `Stub`.
+  http.Handler`, `Stub`, `declared.go` (every value the contract declares, such as a
+  `maxLength`, as a constant) and `config.go` (`ListenAddress()`, the address to listen on).
 - `internal/app/app.go`: the seam. The tests serve `gen.Handler(app.New())`, and `New` now
   returns `gen.Stub{}`, which answers every operation with 501.
 - `tests/`: the tests, written before any code. They are fixed: they say what the code must do.
@@ -31,7 +32,7 @@ Do this:
    examples describe: the status codes, the response bodies as the generated types, and the
    refusals. Keep state in memory, safe for concurrent requests.
 3. Write a `main` package under `cmd/<service>/` that serves `gen.Handler(app.New())` with
-   `net/http`.
+   `net/http` on `gen.ListenAddress()`.
 4. Check your work with the shell, from the project folder: `go vet ./...` and `go test ./...`
    must both pass, with the tests in `tests/` run and passing. Read every failure, fix your code,
    and run them again until they pass.
@@ -46,6 +47,13 @@ Do this:
   module's own packages (`example.com/service/...`). Never import `os/exec`, `syscall`,
   `unsafe`, `plugin` or `net/rpc`. Add no module: never run `go get` or `go mod tidy`, and never
   edit `go.mod`.
+- Take every value the contract declares (a limit, a default, an enum value) from its constant in
+  `gen/declared.go` or the enum constants in `gen/`; never write it again as a literal. Prefer
+  forms without bare numbers: `strconv.Atoi` rather than `strconv.ParseInt(s, 10, 64)`, and the
+  standard library's named constants, such as `http.StatusOK`.
+- Never write an address, port, URL or credential in your code, and never read the environment
+  (`os.Getenv` and the like): the service listens on `gen.ListenAddress()`, which owns its
+  configuration.
 - Never make a test pass by detecting the test, hard-coding one test's answer, or skipping work.
   The code must do what the contract and the rules say for every request.
 - Use the shell only for `go` commands in the project folder (`go vet`, `go build`, `go test`).

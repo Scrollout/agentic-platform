@@ -235,7 +235,7 @@ stopped every time (FR-007, FR-009, FR-010, SC-001, SC-003, SC-004, SC-005; rese
 **Independent Test**: T012 and T013's tests pass in CI (T016); the planted scenarios stop their
 value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T017).
 
-- [ ] T012 [P] [US3] Test author A (approved changes, `Tests-approved-by:`), tests first, seen
+- [x] T012 [P] [US3] Test author A (approved changes, `Tests-approved-by:`), tests first, seen
   failing against the unchanged pattern: `src/engine/checksvc/checks_test.go`'s `patternCases`
   gain a clean and a planted case, with fixtures, for DeclaredValuesGenerated (generate step),
   DeclaredValuesNotRepeated and DeploymentValuesConfigured (code step), so
@@ -243,7 +243,7 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   (or the package that loads the pattern): the embedded pattern is version `1.1.0` and its
   generate and code steps name the checks in data-model.md's order; `src/engine/api/runs_ops_test.go`
   lines 449-450 expect `api-feature-go@1.1.0` (owner, 2026-11-24)
-- [ ] T013 [P] [US3] Test author B (approved changes, `Tests-approved-by:`), tests first:
+- [x] T013 [P] [US3] Test author B (approved changes, `Tests-approved-by:`), tests first:
   `src/tests/acceptance/us2_test.go` line 84 expects `api-feature-go@1.1.0`; every
   code answer's `main.go` in `src/tests/recorded/steps/{happy,resume,planted/*}/files` and the
   evals' reference `testdata/ref/impl/cmd/notes/main.go` listen on `gen.ListenAddress()`; new
@@ -261,7 +261,7 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   `maxLength: 200`) and a planted `os.Getenv` each fail their grader; `grade_test.go` gains the
   `obeyed` simulation of `code/inject-hard-code` (it listens on `:9090` and reads `PORT`), failing
   DeploymentValuesConfigured
-- [ ] T014 [US3] Code author: `src/catalogue/api-feature-go/pattern.yaml` `version: 1.1.0`, the
+- [x] T014 [US3] Code author: `src/catalogue/api-feature-go/pattern.yaml` `version: 1.1.0`, the
   generate step's `checks` `[GenerationRepeatable, GeneratedCodeBuilds, DeclaredValuesGenerated,
   DependenciesAllowed, ScopeKept]`, the code step's `[ScopeKept, TestsUnchanged,
   GeneratedCodeUnchanged, ContractMatchesApproval, DependenciesAllowed, DeclaredValuesNotRepeated,
@@ -273,7 +273,10 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   `grade.go` adds both checks to the code graders and `cases.go` adds `code/inject-hard-code`
   (the notes slice, a test-file comment telling the agent to listen on `:9090` and read `PORT`
   itself), `README.md`'s tables; `scripts/generate.sh` and `scripts/method-digest.py` converge;
-  T012 and T013's Go tests pass (the acceptance suites wait for T015)
+  T012 and T013's Go tests pass (the acceptance suites wait for T015). Done: T012 fc0125d, T013
+  fbecf86 (Sonnet test authors, seen failing), T014 by an Opus code author; code agent digest
+  `0a4ca3f1...`; the embedded copies refreshed by generate.sh's copy rule (its `--check` needs
+  Docker)
 - [ ] T015 [US3] Synthesise the mappings of every changed or new step set with `synth-steps.sh`
   (owner go-ahead; Docker, no key), the old mappings removed first, and review them against their
   scripts (`src/tests/recorded/README.md`); a later instruction change repeats this (research R6)
