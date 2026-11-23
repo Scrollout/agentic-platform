@@ -70,7 +70,12 @@ on.
   fixed, R3-2 LOW (a dated clarification's narrower wording) left as history. Gate passed. Round 4
   (fresh Sonnet, at 2b1aad3, after T001-T006 and the strategy note): 0 CRITICAL, 0 HIGH; R4-1,
   R4-2 MEDIUM, R4-3 to R4-5 LOW, fixed at their source (T007, T011, Dependencies, quickstart, this
-  line). Gate passed.
+  line). Gate passed. Round 5 (fresh Sonnet, at 03c06c9, after T008-T010, T028, T029): C1 CRITICAL
+  (the hook change not in plan Exceptions), I1, I2, D1 MEDIUM, I3-I5, A1, A2 LOW; fixed at their
+  source in cad9d44 (plan Exceptions and Constitution Check, structure, Layout; spec clarification,
+  FR-007, US3 scenario 1; playbook; Dependencies; T029). Round 6 (fresh Sonnet, at cad9d44): all
+  fixed but A1 (reflow on the next touch of the contract) and A2 (informational); N1-N3 LOW, N1 and
+  N2 fixed. Gate passed.
 
 ---
 
@@ -361,6 +366,6 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   under `src/catalogue/*/template/` (its `testdata/` excluded, as for a module) is judged by
   `gofmt -l` (vet: the procedure tests build it in a generated project) and refused when
   unformatted; any other Go file in no module is refused as before; plan Exceptions; the
-  playbook `docs/playbooks/protect-changes-locally.md` step 5 updated with it New test file `scripts/tests/test_pre_commit_template_go.py` by a separate test author,
+  playbook `docs/playbooks/protect-changes-locally.md` step 5 updated with it. New test file `scripts/tests/test_pre_commit_template_go.py` by a separate test author,
   seen failing first (2206150, 9 of 13; its environment fix df57f7b owner-approved); then the hook
   change (08a9def); then T010's commit (88374b1)

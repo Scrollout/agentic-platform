@@ -63,7 +63,8 @@ A fresh clone of the repository, or a change to the hooks.
    staged path, `gofmt -l` (testdata excluded) and `go vet`, after generating the code in the
    snapshot. A staged Go file in no module is refused, except in a pattern's module template
    (`src/catalogue/<pattern>/template/`), which compiles only inside a generated project: its
-   files get `gofmt -l` alone (testdata excluded), and the engine's procedure tests build it. `scripts/check.sh`, in CI, checks Go in two pinned images of the same Go release:
+   files get `gofmt -l` alone (testdata excluded), and the engine's procedure tests build it.
+   `scripts/check.sh`, in CI, checks Go in two pinned images of the same Go release:
    `go vet` and `go build` without cgo in the `golang` image, the configuration the static
    binaries ship in, then `go test -race` with cgo in the Debian-based `golang-race` image, since
    the race detector needs a C compiler. The tests run once, with the race detector.
