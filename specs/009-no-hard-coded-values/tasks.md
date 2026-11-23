@@ -65,7 +65,9 @@ on.
   bfa2f04): F1-F24 fixed but F2's residual; 3 HIGH (N1 floats rendered as `1/10`; N2
   `us2_test.go` pins the pattern version, owner approved its change; N3 an address quoted with its
   password), N4 MEDIUM (`010`, `1_000` read with Go's meaning), N5, N6 LOW; fixed at their source
-  (spec FR-004, SC-002; research R1, R4, R6; contract; plan; T002, T003, T008, T013).
+  (spec FR-004, SC-002; research R1, R4, R6; contract; plan; T002, T003, T008, T013). Round 3
+  (fresh Sonnet, at 4217c58): N1-N6 fixed, 0 CRITICAL, 0 HIGH; R3-1 LOW (research R2's enum hint)
+  fixed, R3-2 LOW (a dated clarification's narrower wording) left as history. Gate passed.
 
 ---
 

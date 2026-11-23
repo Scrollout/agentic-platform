@@ -105,7 +105,7 @@ inline response property: every one got a typed constant per value
   after `strconv.Unquote`, byte for byte, and a string never equals a number. A match fails the
   check, naming the file, line, the quoted value (cut to 64 characters), every contract location
   that declares it and `gen.<Name>` (for an enum value: "the enum constant oapi-codegen generated
-  for it in gen/api.gen.go"), and ending "if the literal does not stand for this value, write it
+  for it in gen/api.gen.go, where it exists"), and ending "if the literal does not stand for this value, write it
   another way". Not judged: `0`, `1`, `-1` and the empty text (owner, spec FR-003), import paths
   and struct tags, and values computed from several literals (a stated limit). The approved
   contract comes from the request's `approved` contract entry, whose content is the canonical
