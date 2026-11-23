@@ -139,9 +139,16 @@ unstable (FR-001, FR-002, FR-004's fields, FR-008, FR-009; research R4, R5).
   `EARLIER`), and the evals job's `EVAL_MEASUREMENT_DIR` and measurement step in
   `.github/workflows/evals.yml` as T005 states (`Approved-by:` after the owner confirms the diff). T003-T005 pass; `test_workflows*.py` and `test_ci_evals_summary*.py` stay
   green
-- [ ] T007 [US1] Commit (tests and code in separate commits); push (owner go-ahead; every check
+- [X] T007 [US1] (CI 45148887025 green 26/26 at 7c82140; review: no blocking, T023; converge US1 clean) Commit (tests and code in separate commits); push (owner go-ahead; every check
   job runs) and fix until CI is green; record the run in research; fresh review of US1;
   `/speckit-converge` for US1
+
+- [ ] T023 [US1] Review findings US1-F1, F2 and untested cases (fresh Sonnet review, CI run
+  45148887025 green 26/26; suggestions, not blocking): a duration or `cost_usd` too large for a
+  float (`1` followed by 400 zeros) raises `OverflowError` in `scripts/ci-evals-measure.py`
+  (`seconds()`, `amount()`), caught, so no measurement is written instead of the field's
+  fallback (absent); untested: a backslash before `|`, backticks, Markdown or HTML and bidi
+  format characters (Unicode Cf) in names; tests in new files by a test author
 
 ---
 
