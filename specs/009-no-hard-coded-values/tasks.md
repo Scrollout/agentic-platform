@@ -165,7 +165,7 @@ pointer and Go name; the constant passes.
   names taken); T003-T005 pass; every existing test in `checks`, `procedures` and `checksvc` stays
   green (no pattern names the checks yet, so `TestEveryPatternCheckIsCovered` is unaffected);
   `method.sha256` converged
-- [ ] T007 [US1] Commit (tests and code in separate commits); push (owner go-ahead; check jobs);
+- [x] T007 [US1] Commit (tests and code in separate commits); push (owner go-ahead; check jobs);
   fix until CI is green but for the recorded-model jobs "Implementation strategy" names (owner,
   2026-11-23); record the run in research; fresh review of US1; `/speckit-converge`
   for US1

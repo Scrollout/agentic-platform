@@ -222,6 +222,7 @@ inline response property: every one got a typed constant per value
 | Commit | Run | Result |
 |--------|-----|--------|
 | 868e0f5 (US1, T001-T006) | 45248260393 | Go unit tests and vet, contracts lint, API breaking changes, knowledge, markdown, layout, secrets, dependencies, module boundaries, gateway, evals-current green; the recorded-model planted jobs failed on a recording miss in the tests step (`gen/declared.go` in generate's output), expected until T015 (owner, 2026-11-23); run cancelled after the Go job |
+| 2b1aad3 (US1 review fix T022) | 45254495030 | Go unit tests and vet, Python script and hook tests and every static job green; the recorded-model jobs (planted, Story 2, end-to-end, service tests) failed only on the same recording miss; cancelled after the Go and Python jobs. US1 review converged in 2 rounds (F1 fixed, F3-F7 tasks) |
 
 ## Threat-model input
 
