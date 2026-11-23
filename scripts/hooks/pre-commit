@@ -78,8 +78,11 @@ touches '*.go' '*go.mod' '*go.sum' ':(glob)src/*/api/**' && go=1
 touches ':(glob)src/agents/**/*.yaml' ':(glob)src/**/*.schema.json' 'scripts/generate.sh' && inline=1
 # gomods: each Go module of src/go.work (its `use` lines, as staged) with a staged path. The Go
 # checks fail closed: an unreadable src/go.work, or a staged Go file in no module, refuses the
-# commit rather than skipping gofmt and vet.
-gomods=
+# commit rather than skipping gofmt and vet. A pattern's module template
+# (src/catalogue/<pattern>/template/) is in no module: it compiles only inside a generated
+# project, which the engine's procedure tests build, so its staged Go files get gofmt only
+# (testdata excluded, as for a module).
+gomods=; templates=
 if [ -n "$go" ]; then
   workfile=$(git show :src/go.work 2>/dev/null) || {
     echo "pre-commit: Go changes are staged but src/go.work cannot be read from the index, so the Go checks cannot run; the commit is refused" >&2; exit 1; }
@@ -89,8 +92,12 @@ if [ -n "$go" ]; then
     if touches "src/$m/"; then gomods="$gomods $m"; fi
     outside_args="$outside_args :(exclude)src/$m/"
   done
+  git diff --cached --name-only -z --no-renames --diff-filter=d -- \
+    ':(glob)src/catalogue/*/template/**/*.go' ':(exclude,glob)src/catalogue/*/template/**/testdata/**' >"$work/templates"
+  if [ -s "$work/templates" ]; then templates=1; fi
   # shellcheck disable=SC2086
-  git diff --cached --name-only -z --no-renames --diff-filter=d -- '*.go' $outside_args >"$work/outside"
+  git diff --cached --name-only -z --no-renames --diff-filter=d -- '*.go' $outside_args \
+    ':(exclude,glob)src/catalogue/*/template/**' >"$work/outside"
   if [ -s "$work/outside" ]; then
     echo "pre-commit: these staged Go files are in no module of src/go.work, so gofmt and go vet cannot judge them; the commit is refused:" >&2
     tr '\0' '\n' <"$work/outside" | sed 's/^/  /' >&2; exit 1
@@ -178,6 +185,16 @@ if [ -n "$go" ]; then
   scripts/generate.sh >/dev/null
   image=$(awk '$1=="golang"{print $2}' src/deploy/images.lock)
   cache="${XDG_CACHE_HOME:-$HOME/.cache}/agentic-platform/go"
+  if [ -n "$templates" ]; then
+    run "gofmt of the staged module-template Go files"
+    out=$(docker run --rm -i --network none -v "$snap/src:/src:ro" -w / --user "$(id -u):$(id -g)" \
+      -e GOTOOLCHAIN=local "$image" sh -c 'xargs -0 -r gofmt -l' <"$work/templates" 2>&1) || {
+      echo "pre-commit: gofmt could not judge the staged module-template Go files; the commit is refused" >&2
+      printf '%s\n' "$out" >&2; exit 1; }
+    if [ -n "$out" ]; then
+      echo "gofmt: these files are not formatted:" >&2; printf '%s\n' "$out" >&2; exit 1
+    fi
+  fi
   for m in $gomods; do
     run "gofmt and go vet of src/$m"
     docker run --rm --network none -v "$snap/src:/src" -w "/src/$m" -v "$cache:/gopath" \
