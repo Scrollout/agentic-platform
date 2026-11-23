@@ -9,7 +9,7 @@ It reads a measurement (scripts/ci-evals-measure.py) and $EARLIER (evals.yml's c
 appends the section below to the file $GITHUB_STEP_SUMMARY names, or prints it when that variable
 is unset or the file cannot be written. The same inputs always give the same text.
 
-  ## Trials: 8 of 9 passed, 1 unstable case
+  ## Trials: 5 of 6 passed, 1 unstable case
 
   | Case | Agent | Passed | pass^3 | Seconds (low, median, high) | Cost $ (low, median, high) | Tokens in (low, median, high) | Tokens out (low, median, high) | Attempts (low, median, high) |
   |------|-------|--------|--------|-----------------------------|----------------------------|-------------------------------|--------------------------------|------------------------------|

@@ -81,7 +81,7 @@ usage: python3 scripts/ci-evals-trials.py <measurement.json>
 ### The section
 
 ```text
-## Trials: 8 of 9 passed, 1 unstable case
+## Trials: 5 of 6 passed, 1 unstable case
 
 | Case | Agent | Passed | pass^3 | Seconds (low, median, high) | Cost $ (low, median, high) | Tokens in (low, median, high) | Tokens out (low, median, high) | Attempts (low, median, high) |
 |------|-------|--------|--------|-----------------------------|----------------------------|-------------------------------|--------------------------------|------------------------------|
