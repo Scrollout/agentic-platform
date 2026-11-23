@@ -29,6 +29,9 @@ sources:
   - id: spec-006
     resource: ../../specs/006-method-record/spec.md
     title: Feature 006 specification, Key Entities
+  - id: spec-008
+    resource: ../../specs/008-eval-variance/spec.md
+    title: Feature 008 specification, Key Entities
 generated: { by: claude-code/claude-opus-5-5, at: 2026-11-18T09:00:00Z }
 ---
 
@@ -138,3 +141,15 @@ These terms come from the Feature 007 specification.
 | Revision | The analyst's new proposal for a slice after the developer answers its questions; when accepted, it replaces the slice's parts. |
 
 Sources: [Feature 007 specification](../../specs/007-analyst-answer-checks/spec.md).
+
+# Feature 008 terms
+
+These terms come from the Feature 008 specification.
+
+| Term | Meaning |
+|------|---------|
+| Trial | One run of one eval case by its agent, judged by the case's graders; it passes or fails and carries its duration, tokens, cost and, in some suites, attempts. |
+| Unstable case | An eval case some of whose trials passed and some failed in one run. |
+| Eval measurement | What one eval run keeps about its cases and trials: the measures and what identifies the run, never protected content. |
+
+Sources: [Feature 008 specification](../../specs/008-eval-variance/spec.md).

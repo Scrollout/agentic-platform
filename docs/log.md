@@ -2,6 +2,7 @@
 
 ## 2026-11-23
 
+* **Spec**: Feature 008 (N-054) specified: every eval case shows its passed trials out of k and is marked unstable when they disagree; the lowest, median and highest duration, tokens, cost and attempts of its trials; every run keeps its measurements (no protected content) for 90 days and its summary compares each case with the latest earlier run on the default branch. Measuring never changes whether a job passes. N-054 is in scope (owner) and `specified` in the [problem space](/overview/problem-space.md); glossary terms Trial, Unstable case, Eval measurement. Backlog T192 is part of it.
 * **Implementation**: Feature 007 (backlog T195, T196): the engine refuses an analyst answer that repeats a key (`slices.ParseProposal`, keys compared without regard to letter case) and a revision that drops or moves a goal, term, rule, example or operation of the current proposal, and asks the analyst again within the pattern's attempts, then fails with `OperationFailed` and changes nothing ([ADR 0081](/decisions/0081-platform-refuses-ambiguous-answers-and-revisions-that-lose-items.md)); `slice.ExampleRules` gives each example ID with its rule. The analyst's revision evals run through the platform's `Answer` with its retry and report attempts, with a planted repeated-key answer ([ADR 0082](/decisions/0082-revision-evals-grade-the-platforms-revision.md)). Evals run 45071292368: every analyst case pass^3, none quarantined, each trial in one attempt. Backlog T197.
 
 ## 2026-11-22
