@@ -90,7 +90,7 @@ unstable (FR-001, FR-002, FR-004's fields, FR-008, FR-009; research R4, R5).
 **Independent Test**: T003-T005 pass; quickstart Q1 and Q2 on a planted report with cases at 3/3,
 2/3 and 0/3 mark only the 2/3 case unstable, and the measurement holds no other field.
 
-- [ ] T003 [P] [US1] Test author: new `scripts/tests/test_ci_evals_measure.py` for
+- [X] T003 [P] [US1] Test author: new `scripts/tests/test_ci_evals_measure.py` for
   `ci-evals-measure.py`: the measurement's keys are exactly data-model.md's at each level
   (`version` `1`, `suite`, `cases`, `key` `<suite>` or `<suite>-<cases>`, `commit`, `branch`,
   `run_id`, `run_attempt`, `measured_cases`; per case `case`, `agent`, `quarantined_by` only when
@@ -109,7 +109,7 @@ unstable (FR-001, FR-002, FR-004's fields, FR-008, FR-009; research R4, R5).
   output file's folder that does not exist is created; a report that is not JSON, not a list, or missing, and an output path that cannot be written,
   write no file, print why and exit 0; wrong arguments exit 2; order of cases and trials kept; it
   runs with `PATH` holding no `gh` or `git` (it starts no process)
-- [ ] T004 [P] [US1] Test author: new `scripts/tests/test_ci_evals_trials.py` for
+- [X] T004 [P] [US1] Test author: new `scripts/tests/test_ci_evals_trials.py` for
   `ci-evals-trials.py`'s first table (contract "The section"): `Passed` is `p/n`, with
   `⚠️ unstable` exactly when some trial passed and some failed; `pass^k` names k, the largest trial
   count (3 when no case has a trial), in the heading and column; a case with no trials is `0/0`,
@@ -125,7 +125,7 @@ unstable (FR-001, FR-002, FR-004's fields, FR-008, FR-009; research R4, R5).
   set, printed otherwise; an unreadable measurement prints that it could not be read and exits 0;
   wrong arguments exit 2; with no `EARLIER` the second heading is `### No earlier run to compare
   with: <reason>`
-- [ ] T005 [P] [US1] Test author: new `scripts/tests/test_workflows_eval_trials.py` (clean tree
+- [X] T005 [P] [US1] Test author: new `scripts/tests/test_workflows_eval_trials.py` (clean tree
   and planted violations, as `test_workflows_eval_artifacts.py` builds them): the evals job's
   `env` has `EVAL_MEASUREMENT_DIR: ${{ github.workspace }}-eval-measurement` (no `.` or `..`
   segment; the text `eval-report` nowhere in the new steps, which `judge_evals_report_dir`
@@ -134,7 +134,7 @@ unstable (FR-001, FR-002, FR-004's fields, FR-008, FR-009; research R4, R5).
   "$EVAL_MEASUREMENT_DIR/measurement.json"`, then `scripts/ci-evals-trials.py` on that file, with
   `env` `SUITE: ${{ matrix.suite }}` and `EVAL_CASES: ${{ matrix.cases }}` and no secret; the step
   `Summary of the evals` is unchanged; every existing `test_workflows*.py` stays green
-- [ ] T006 [US1] Code author: `scripts/ci-evals-measure.py` (allowlist, research R5),
+- [X] T006 [US1] Code author: `scripts/ci-evals-measure.py` (allowlist, research R5),
   `scripts/ci-evals-trials.py` (first table and suite line; the comparison heading for no
   `EARLIER`), and the evals job's `EVAL_MEASUREMENT_DIR` and measurement step in
   `.github/workflows/evals.yml` as T005 states (`Approved-by:` after the owner confirms the diff). T003-T005 pass; `test_workflows*.py` and `test_ci_evals_summary*.py` stay
