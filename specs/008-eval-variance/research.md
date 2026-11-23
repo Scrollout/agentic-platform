@@ -65,6 +65,12 @@ the code on `main` (`9d8d678`), a reproduced experiment, or a cited document. De
   after the failed-outputs scan and before the failed-outputs upload, which stays last (S4: the
   first `secret-scan.sh` step must stay the failed-outputs scan, and that upload must be the last
   step).
+- **Never a gate** (analyze round 1, F1, M1): the measurement's scan step and its upload carry
+  `continue-on-error: true`, so a match (exit 1), a scan that cannot read (exit 2) or an upload
+  error leaves the job's result as it was; the upload's `if` reads the scan's `outcome` (its result
+  before `continue-on-error`), so nothing is uploaded after a match, and a following step prints a
+  warning that the measurement was not kept. The failed-outputs scan keeps failing the job on a
+  match, as ADR 0078 says.
 - **Rationale**: S4's rules otherwise refuse any second upload. The baseline is fetched in the
   `config` job, which already holds `actions: read` (R3), so `judge_permissions` does not change.
 
@@ -79,6 +85,14 @@ the code on `main` (`9d8d678`), a reproduced experiment, or a cited document. De
   test (S12), downloads its zip with `gh api` and the job's token, and writes one job output,
   `earlier`, a JSON object from each entry's key to the baseline's measurement, or to the reason
   there is none. The evals job reads `needs.config.outputs.earlier`.
+- **Listing** (analyze round 1, E1): the step writes the listing to a file, one trimmed JSON object
+  per line, with `gh api --paginate ... --jq` (contract): `--paginate` prints one result per page,
+  and 90 days of artifacts can outgrow the 128 KiB a single environment variable may hold on Linux
+  (`MAX_ARG_STRLEN`), so it is not passed in the environment.
+- **Never a gate** (analyze round 1, F2): the step's `gh api` is followed by `|| true` (as the
+  select step's is), the script exits 0, and the step carries `continue-on-error: true`; a failed
+  step leaves `earlier` unset, which the trials script shows as "no earlier run could be read". The
+  evals job's `needs: config` is unchanged, since the matrix comes from that job.
 - **Rationale**: evals run on feature branches merged by fast-forward (S14), so a default-branch
   rule would find almost nothing; the ancestor rule is the suite selection's (S12), and leaves out
   unmerged experiments. Fetching in `config` keeps `actions: read` out of the job that holds the
@@ -98,15 +112,23 @@ the code on `main` (`9d8d678`), a reproduced experiment, or a cited document. De
   - `scripts/ci-evals-trials.py <measurement.json>` appends the trials section (US1, US2) and the
     comparison (US3) to the job summary, reading the baseline from `$EARLIER` (the config job's
     output) by the entry's key.
-  Both always exit 0 on data they cannot read, saying so in the summary, so they never change
-  whether the job passes (FR-007); exit 2 only on a wrong number of arguments.
+  Each catches every error past its argument check, says what went wrong and exits 0, so it
+  never changes whether the job passes (FR-007); exit 2 only on a wrong number of arguments. The
+  step that runs them carries `continue-on-error: true` as well (analyze round 1, F3).
+- **Python** (analyze round 1, T1): the evals job has no `setup-python`, so the scripts run on the
+  runner's system `python3`: `ci-runner` is `ubuntu-26.04`, whose image has Python 3.14.4
+  (reference `github-actions`), against `ci-python` 3.14.10 in the `py_tests` job; adding
+  `setup-python` to the job that holds the model key would only add a step.
 - **Measures**: per case `passed/run` and pass^k with k the largest trial count in the
   measurement; unstable when some trial passed and some failed; lowest, median (mean of the two
   middle values for an even count) and highest of duration (seconds, parsed from Go's duration
   string), input tokens, output tokens, cost and attempts, each over the trials that carry it,
   with the count covered when it is not every trial. The comparison per case: earlier and current
   `passed/run`, median duration and median cost, and "less reliable" when the current share is
-  lower; the earlier run's id and short commit head the section.
+  lower, computed as `now_passed × before_run < before_passed × now_run` (no division, so a
+  case with no trials cannot divide by zero; such a case has nothing to compare with); the
+  earlier run's id and short commit head the section, after checking that they are an integer
+  and 40 hex characters (analyze round 1, F3, E3).
 - **Rationale**: keeping `ci-evals-summary.py` byte for byte (*owner*: T192 stays in the backlog)
   needs no existing test change (S1); the summary's job stays the gate (FR-007). Median and range
   over 3 trials describe without claiming significance (spec Assumptions).

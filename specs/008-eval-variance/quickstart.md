@@ -28,7 +28,7 @@ data-model.md's; `scripts/secret-scan.sh` on its folder finds nothing.
 
 ## Q3. Baseline choice (US3; FR-006)
 
-Run `ci-evals-earlier.py` with `ARTIFACTS` listing measurements of an ancestor commit, an
+Run `ci-evals-earlier.py` on a listing file (one artifact per line) of measurements of an ancestor commit, an
 unmerged branch's commit, this run, and an expired one, and a stub `gh` on `PATH`. Expected: the
 ancestor's is chosen for its key; a key with none gets `{"none": ...}`; a failing download gives
 `{"none": "could not be read ..."}` and exit 0.

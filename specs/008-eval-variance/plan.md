@@ -17,8 +17,9 @@ fail a job. The owner raises the artifact and log retention from 1 to 90 days (r
 
 ## Technical Context
 
-**Language/Version**: Python 3 (`ci-python` in `src/deploy/images.lock`), standard library only,
-as the other CI helper scripts; GitHub Actions workflow YAML
+**Language/Version**: Python 3, standard library only, as the other CI helper scripts: the
+evals job runs them on the runner's `python3` (3.14.4 on `ubuntu-26.04`), their tests run on
+`ci-python` (3.14.10) in the `py_tests` job (research R4); GitHub Actions workflow YAML
 
 **Primary Dependencies**: none added; `gh` (on the hosted runner, already used by the `config`
 job), `actions/upload-artifact` at the pinned v7.0.2 digest already in `evals.yml`
@@ -26,8 +27,9 @@ job), `actions/upload-artifact` at the pinned v7.0.2 digest already in `evals.ym
 **Storage**: one GitHub Actions artifact per eval job, `eval-measurements-<key>-<attempt>`,
 `retention-days: 90` (research R1)
 
-**Testing**: `unittest` files in `scripts/tests/` (new files by a separate test author; two
-existing workflow-rule files changed with the owner's approval, research R2); CI's check run of
+**Testing**: `unittest` files in `scripts/tests/`, run by the `py_tests` job (seven new files by
+a separate test author; two existing workflow-rule files changed with the owner's approval,
+research R2); CI's check run of
 the pushed commit as the full test command; one paid eval dispatch pair for Q5 with the owner's
 go-ahead
 
@@ -37,13 +39,14 @@ go-ahead
 
 **Performance Goals**: SC-004: the new steps add under 1 minute per eval job and 0 trials
 
-**Constraints**: FR-007 (never change whether a job passes); FR-009 (`ci-evals-summary.py`
+**Constraints**: FR-007 (never change whether a job passes: every new step carries
+`continue-on-error: true` and every script exits 0 past its argument check, research R2-R4); FR-009 (`ci-evals-summary.py`
 byte for byte); no `actions: read` outside the jobs `judge_permissions` allows (S4); nothing from
 the report outside data-model.md's allowlist (R5); `evals.yml` changes carry the owner's
 `Approved-by:`; changed existing tests carry `Tests-approved-by:`
 
 **Scale/Scope**: three scripts, about 25 cases × 3 trials per run, up to 4 matrix entries; one
-workflow file; two existing and three new test files
+workflow file; two existing and seven new test files
 
 ## Constitution Check
 
@@ -115,10 +118,13 @@ scripts/ci-evals-measure.py          # new: report.json -> measurement.json (all
 scripts/ci-evals-earlier.py          # new: the config job's baseline per matrix key
 scripts/ci-evals-trials.py           # new: trials section and comparison
 .github/workflows/evals.yml          # config: earlier step and output; evals: measure, trials, scan, upload (Approved-by)
-scripts/tests/test_ci_evals_measure.py        # new
-scripts/tests/test_ci_evals_earlier.py        # new
-scripts/tests/test_ci_evals_trials.py         # new
-scripts/tests/test_workflows_eval_measurements.py   # new: the measurement upload's rules
+scripts/tests/test_ci_evals_measure.py        # new (US1)
+scripts/tests/test_ci_evals_trials.py         # new (US1)
+scripts/tests/test_workflows_eval_trials.py   # new (US1): the measurement step's rules
+scripts/tests/test_ci_evals_trials_spread.py  # new (US2)
+scripts/tests/test_ci_evals_earlier.py        # new (US3)
+scripts/tests/test_ci_evals_trials_compare.py # new (US3)
+scripts/tests/test_workflows_eval_measurements.py   # new (US3): the scan, upload and config step's rules
 scripts/tests/test_workflows_eval_artifacts.py      # changed (owner-approved, R2)
 scripts/tests/test_workflows_eval_outputs_kept.py   # changed (owner-approved, R2)
 ```
