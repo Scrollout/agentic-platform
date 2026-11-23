@@ -67,7 +67,10 @@ on.
   password), N4 MEDIUM (`010`, `1_000` read with Go's meaning), N5, N6 LOW; fixed at their source
   (spec FR-004, SC-002; research R1, R4, R6; contract; plan; T002, T003, T008, T013). Round 3
   (fresh Sonnet, at 4217c58): N1-N6 fixed, 0 CRITICAL, 0 HIGH; R3-1 LOW (research R2's enum hint)
-  fixed, R3-2 LOW (a dated clarification's narrower wording) left as history. Gate passed.
+  fixed, R3-2 LOW (a dated clarification's narrower wording) left as history. Gate passed. Round 4
+  (fresh Sonnet, at 2b1aad3, after T001-T006 and the strategy note): 0 CRITICAL, 0 HIGH; R4-1,
+  R4-2 MEDIUM, R4-3 to R4-5 LOW, fixed at their source (T007, T011, Dependencies, quickstart, this
+  line). Gate passed.
 
 ---
 
@@ -163,7 +166,8 @@ pointer and Go name; the constant passes.
   green (no pattern names the checks yet, so `TestEveryPatternCheckIsCovered` is unaffected);
   `method.sha256` converged
 - [ ] T007 [US1] Commit (tests and code in separate commits); push (owner go-ahead; check jobs);
-  fix until CI is green; record the run in research; fresh review of US1; `/speckit-converge`
+  fix until CI is green but for the recorded-model jobs "Implementation strategy" names (owner,
+  2026-11-23); record the run in research; fresh review of US1; `/speckit-converge`
   for US1
 
 ---
@@ -205,7 +209,7 @@ passes.
   (`src/deploy/Dockerfile.check` copies the template folder); T008-T009 pass; every existing
   test stays green; `method.sha256` converged
 - [ ] T011 [US2] Commit (tests and code in separate commits); push (owner go-ahead); fix until CI
-  is green; record the run in research; fresh review of US2; `/speckit-converge` for US2
+  is green but for the recorded-model jobs "Implementation strategy" names (owner, 2026-11-23); record the run in research; fresh review of US2; `/speckit-converge` for US2
 
 ---
 
@@ -321,6 +325,9 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   parallel → T010 → T011.
 - US3 after US2: T012, T013 in parallel (tests first, seen failing) → T014 → T015 → T016 → T017 →
   T018.
+- T022-T027 (US1 review round 1) before T007's converge; T023-T026 each either state a limit
+  (contract and README only) or change behaviour through the spec and contract first, with new
+  test files only, never edits to T003's tests.
 - T019 after T018; T020 after T019; T021 last.
 
 ## Parallel examples

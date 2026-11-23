@@ -15,7 +15,7 @@ go test ./checksvc/ -run 'Declared|Deployment'
 
 Expected: a project whose `internal/` compares a text with `200`, where the contract declares
 `maxLength: 200`, fails DeclaredValuesNotRepeated naming the file, line,
-`/components/schemas/.../maxLength` and `gen.Declared...`; the same code using the constant
+`#/components/schemas/.../maxLength` and `gen.Declared...`; the same code using the constant
 passes; `":8080"`, `"http://notes.local"`, `SetBasicAuth("a", "b")` and `os.Getenv("PORT")` in
 `cmd/` each fail DeploymentValuesConfigured; `gen.ListenAddress()` passes. A planted file that
 does not parse fails both checks.
