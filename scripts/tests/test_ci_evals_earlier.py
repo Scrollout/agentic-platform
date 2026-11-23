@@ -270,6 +270,7 @@ class LeftOutTest(EarlierTest):
     def test_key_that_is_a_prefix_of_another_is_left_out_analyst_against_analyst_x(self):
         self.artifact("analyst-x", 97, self.c1)
         m, _ = self.earlier(M_ANALYST)
+        self.out.unlink()
         self.assertNone(m["analyst"])
         m2, _ = self.earlier([{"suite": "analyst", "cases": "x"}])
         self.assertEntry(m2["analyst-x"], 97, self.c1)
