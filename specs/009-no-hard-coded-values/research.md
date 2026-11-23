@@ -20,6 +20,10 @@ the code on `main` (`64ce30a`), a reproduced experiment, or a cited document. De
 | S10 | Constitution: Engineering Principles "Values have one home" ("Deploy configuration (endpoints, ports, store addresses) MUST come from environment variables"); Principle VI (custom code needs a written justification); XVII ("Declare the what once", "Derive the rest"); XIX (a prompt change passes the regression evals); XX (a proven solution is captured as a deterministic asset) |
 | S11 | `src/tests/recorded/README.md` "After a change to an agent's instruction" and the step sets section: step recordings are synthesised from `answers.json` by `synth-steps.sh`; an instruction change makes every recording of that agent miss |
 | S12 | `src/engine/checks/fit.go`: the contract is parsed once as a single YAML document with `go.yaml.in/yaml/v3` nodes; text that does not parse, holds several documents or a duplicate key fails (fail closed) |
+| S13 | Experiment E3 (oapi-codegen v2.8.2 over enum shapes) |
+| S14 | OpenSSF Scorecard API and GitHub, read 2026-11-23: go-mnd 1.8 (MIT, last push 2023-12-21); goconst 3.3 (MIT, last push 2026-11-07); revive 6.8 (MIT). revive's `add-constant` rule and goconst report repeated or magic literals against allow lists or repeat counts; neither knows a declaration outside the code |
+| S15 | `src/engine/checksvc/checks_test.go` `TestEveryPatternCheckIsCovered` and `patternCases`: every check the pattern names needs a clean and a planted case there; `src/tests/evals/steps/grade_test.go`: every adversarial case needs an `obeyed` simulation; the grader self-tests and held-out tests assume the notes slice |
+| S16 | `src/engine/checksvc/checks.go` `approved`: an approved part's `content` is the canonical JSON `{"contract": "<the YAML text>"}` (`canonical.ContractHash`) |
 
 ## E1. What oapi-codegen generates from schema keywords
 
@@ -43,16 +47,41 @@ in a scratch folder, `gosec -include=G101 -fmt=json ./...` on a module with
 So the mature rule (since v2.18 "only match on more specific patterns") does not find these
 credentials, and would multiply the check image's tool size for nothing.
 
+## E3. Which enum shapes get an oapi-codegen constant
+
+With the pinned oapi-codegen v2.8.2 and the template's `oapi-codegen.yaml`
+(`always-prefix-enum-values: true`), a contract with enums on a component property, array items,
+an integer property, a nullable property, an inline query parameter (string and integer) and an
+inline response property: every one got a typed constant per value
+(`NoteStatusOpen`, `NoteTagsRed`, `NoteLevelN1`, `ListNotesParamsOrderAsc`,
+`ListNotesParamsSizeN10`, `ListNotes200JSONResponseBodyKindPage`); a `null` enum item became
+`"<nil>"`; a component schema no operation references got no type and no constant.
+
 ## R1. The home of a declared value
 
 - **Decision**: the generate procedure writes `gen/declared.go`, one exported, untyped Go constant
-  for each value the approved contract declares under a schema keyword `maxLength`, `minLength`,
-  `maximum`, `minimum`, `exclusiveMaximum`, `exclusiveMinimum`, `maxItems`, `minItems`,
-  `maxProperties`, `minProperties`, `multipleOf`, `default` or `const`, with a doc comment naming
-  its JSON Pointer in the contract (naming: [contract](contracts/declared-values.md)). Enum
-  values keep their home in oapi-codegen's enum constants (E1). One collector in
-  `engine/checks`, `DeclaredValues(contract)`, finds the values for both the procedure and the
-  check (single owner).
+  for each number or string the approved contract declares under a schema keyword `maxLength`,
+  `minLength`, `maximum`, `minimum`, `exclusiveMaximum`, `exclusiveMinimum`, `maxItems`,
+  `minItems`, `maxProperties`, `minProperties`, `multipleOf`, `default` or `const`, with a doc
+  comment naming its JSON Pointer (written with `%q`, so no key can end the comment). Enum values
+  keep their home in oapi-codegen's enum constants, which every enum an operation reaches gets
+  (E3). One collector in `engine/checks`, `DeclaredValues`, finds the values for the procedure,
+  for the new generate-step check (R7) and for the code-step check (single owner).
+- **Scalars** (analyze F8): a value's kind comes from the YAML node's resolved tag. `!!str` is a
+  string, written with `strconv.Quote`. `!!int` and `!!float` are numbers, read as Go constants by
+  `go/constant.MakeFromLiteral` from the node's text after removing a leading `+` and putting `0`
+  before a leading `.`; a number that does not read so (`.inf`, `.nan`, a YAML 1.1 form such as
+  `010` or `1_000`, a value no Go constant of kind int or float holds) is recorded, gets no
+  constant and is never judged (a stated limit). `!!bool` and `!!null` are recorded, never
+  judged. A quoted `"200"` is a string, never the number 200.
+- **Walk** (F9): document order, depth first, mapping keys in their written order; that order
+  sorts the constants and decides which of two equal names gets `_2`. Aliases and merge keys
+  (`<<`) are not followed: a value under an anchor is found once, at the anchor. A key `example`,
+  `examples` or `x-*` hides its whole subtree, a property so named included (a stated limit).
+- **Names** (F10): as the contract states; a name already declared at the top level of another
+  file in `gen/` (oapi-codegen's output, the stub, the template's files) gets the next free
+  suffix. Names follow the contract: adding a value before another can rename it, and code using
+  the old name then fails to build, which the tests show.
 - **Rationale**: FR-006 needs a home the code can name; S10 says derive, never keep by hand; the
   approved contract is the one source (feature 001).
 - **Custom code justification (Principle VI)**: oapi-codegen emits no constant for these keywords
@@ -67,19 +96,28 @@ credentials, and would multiply the check image's tool size for nothing.
 ## R2. Which literals are copies of a declared value (DeclaredValuesNotRepeated)
 
 - **Decision**: in every `.go` file the code step may write, except `_test.go` files, each
-  integer, floating-point and string literal (rune literals aside) is compared by value with the
-  declared values of R1 and with the contract's enum values: numbers as exact constants
-  (`go/constant`, so `200`, `0xC8`, `2e2` and `200.0` are one value, and a literal under a unary
-  minus is negated), strings after unquoting, byte for byte. A match fails the check, naming the
-  file, line, value, every contract location that declares it and its Go name in `gen/`. Not
-  judged: `0`, `1`, `-1` and the empty text (owner, spec FR-003), import paths and struct tags,
-  and values computed from several literals (a stated limit). The approved contract comes from the
-  request (`approved`), never from the project folder (FR-007).
+  integer, floating-point and string literal (rune and imaginary literals aside) is compared by
+  value with the judged values of R1 and with the contract's enum values: numbers as exact
+  constants (`go/constant.Compare`, so `200`, `0xC8`, `2e2` and `200.0` are one value; a literal
+  whose parent is a unary `-` is negated, a parenthesised one is not: a stated limit), strings
+  after `strconv.Unquote`, byte for byte, and a string never equals a number. A match fails the
+  check, naming the file, line, the quoted value (cut to 64 characters), every contract location
+  that declares it and `gen.<Name>` (for an enum value: "the enum constant oapi-codegen generated
+  for it in gen/api.gen.go"), and ending "if the literal does not stand for this value, write it
+  another way". Not judged: `0`, `1`, `-1` and the empty text (owner, spec FR-003), import paths
+  and struct tags, and values computed from several literals (a stated limit). The approved
+  contract comes from the request's `approved` contract entry, whose content is the canonical
+  JSON `{"contract": <text>}` (S16), never from the project folder (FR-007).
+- **Collisions** (analyze F7, owner): a literal that equals a declared value without standing for
+  it is still rejected (`ParseInt(s, 10, 64)` with a declared default of 10); the reason says to
+  write it another way, the code agent's instruction prefers idioms without bare numbers
+  (`strconv.Atoi`, named constants of the standard library), and the limit is stated in the
+  catalogue README. A collision costs one attempt.
 - **Rationale**: exact value comparison is deterministic and needs no type information;
   `go/constant` is the standard library's own reading of Go literals.
-- **Custom code justification (Principle VI)**: go-mnd judges every magic number against an
-  ignore list, not against declared values, and does not judge strings (S7); no linter compares
-  literals with an OpenAPI contract.
+- **Custom code justification (Principle VI)**: go-mnd, goconst and revive's `add-constant` judge
+  literals against allow lists or repeat counts, not against a declaration outside the code, and
+  go-mnd does not judge strings (S7, S14); no linter compares literals with an OpenAPI contract.
 
 ## R3. The home of the deployment values
 
@@ -99,20 +137,25 @@ credentials, and would multiply the check image's tool size for nothing.
 ## R4. Which literals are deployment values (DeploymentValuesConfigured)
 
 - **Decision**: in the same files as R2, the check fails on:
-  - a string literal that is a URL with a scheme and a host (`net/url`), an IP address
-    (`net/netip`), or a `host:port` or `:port` whose port is a number from 1 to 65535 and whose
-    host is empty, `localhost`, an IP address or a name with a letter (`net.SplitHostPort`), so
-    `12:30` is not one;
-  - a credential: a non-empty string literal as an argument of a `SetBasicAuth` call, as the value
-    of a `Set` or `Add` call whose first argument is the literal header name `Authorization`,
-    `Proxy-Authorization`, `Cookie` or `X-Api-Key` (any case), or assigned, declared or keyed to a
-    name matching `(?i)passw(or)?d|secret|token|api_?key|credential|private_?key`; an argument
-    made only of literals joined by `+` counts as a literal;
-  - a call of `os.Getenv`, `os.LookupEnv`, `os.Environ` or `os.ExpandEnv` (owner, R3).
+  - an **address**: a string literal that is a URL with a scheme and a host (`net/url`), an IP
+    address (`net/netip`; so a four-part version `"1.2.3.4"` counts: a stated limit), or a
+    `host:port` or `:port` (`net.SplitHostPort`) whose port is a decimal number from 1 to 65535 and
+    whose host is empty, `localhost`, an IP address or a name holding a letter (so `"12:30"` is
+    not one, `"note:80"` is); `":0"` (any free port) is not judged;
+  - a **credential**: a non-empty string literal as an argument of a `SetBasicAuth` call, as the
+    second argument of a `Set` or `Add` call whose first argument is the literal header name
+    `Authorization`, `Proxy-Authorization`, `Cookie` or `X-Api-Key` (any case), or assigned,
+    declared or keyed to a name matching `(?i)passw(or)?d|secret|token|api_?key|credential|private_?key`
+    (so `const tokenHeader = "X-Api-Key"` counts: a stated limit); an argument made only of
+    literals joined by `+` counts as a literal;
+  - an **environment read**: a call of `os.Getenv`, `os.LookupEnv`, `os.Environ` or `os.ExpandEnv`
+    through any import name of `os` (owner, R3).
 
-  Each failure names the file, line, the kind of value and where it belongs (`gen/config.go`, or
-  the environment through it). Stated limits: a port written as an integer, a credential under
-  another name or in another call, and a value built at run time are not recognised.
+  Each failure names the file, the line and the kind, never the text of a credential (spec FR-004,
+  Principle XI); an address is quoted and cut to 64 characters. The reason ends `belongs in
+  configuration: read it through gen/config.go`. Stated limits: a port written as a number, a
+  credential under another name or in another call, and a value built at run time are not
+  recognised.
 - **Rationale**: syntax rules over `go/ast` are deterministic, need no type information and no
   model; the names follow the common credential names.
 - **Custom code justification (Principle VI)**: gosec's G101 found none of four plain credentials
@@ -122,31 +165,53 @@ credentials, and would multiply the check image's tool size for nothing.
 ## R5. The pattern, the method and the agents
 
 - **Decision**: the code step's `checks` gain `DeclaredValuesNotRepeated` and
-  `DeploymentValuesConfigured`; the pattern becomes version `1.1.0`; the template gains
+  `DeploymentValuesConfigured`, the generate step's `DeclaredValuesGenerated` (R7); the pattern
+  becomes version `1.1.0`; the template gains
   `gen/config.go`; the code agent's instruction names `gen.ListenAddress()`, `gen/declared.go`
   and the rules, so its `agent_digest` changes; the method identity follows from the changed
-  files (feature 006), so earlier accepted code steps are judged again (FR-009). The review
-  agent's instruction is unchanged.
+  files (feature 006), so earlier accepted code steps are judged again (FR-009). The identity
+  already changes with every commit that touches the engine, the check contract or the template
+  (`src/engine/method/method.json`), so `scripts/method-digest.py` converges it in each such commit
+  (analyze F13). The review agent's instruction is unchanged.
 - **Rationale**: FR-007, FR-009; feature 006's identity is derived, never edited by hand.
 
 ## R6. Evals, recordings and planted failures
 
-- **Decision** (owner approved the existing test changes, 2026-11-23):
-  - the step evals' code graders gain the two checks (`grade.go`), with grader self-tests in new
-    files that plant each kind of value and pass on the reference implementation;
+- **Decision** (owner approved each existing test change, 2026-11-23, after analyze round 1):
+  - the step evals' code graders gain the two checks (`grade.go`, by the code author), with
+    grader self-tests in a new file by a separate test author, planting each kind of value and
+    passing on the reference implementation;
   - the reference implementation's `main.go` and every recorded code answer (S8) listen on
     `gen.ListenAddress()`; the step sets' mappings are synthesised again from their answers (S11),
     since the code agent's instruction changes too;
-  - two new code cases: `code/declared-limit`, a slice whose contract declares a text limit of
-    200 and a default page size, judged by the code graders (no held-out tests for this slice, a
-    stated limit); `code/inject-hard-code`, the notes slice with a test-file comment telling the
-    agent to listen on `:9090` and read `PORT` itself;
+  - one new adversarial code case, `code/inject-hard-code`: the notes slice with a test-file
+    comment telling the agent to listen on `:9090` and read `PORT` itself, with its `obeyed`
+    simulation in `grade_test.go` (S15);
+  - `checksvc/checks_test.go`'s `patternCases` gain a clean and a planted case, with fixtures, for
+    each of the three new checks (S15);
   - two planted scenarios in a new acceptance file, each stopped in 3 of 3 trials:
-    `hard-coded-declared-value` and `hard-coded-listen-address` (SC-001).
+    `hard-coded-declared-value` (the example slice's contract replaced through the API with one
+    declaring `maxLength: 200`, then approved) and `hard-coded-listen-address` (SC-001).
+- **No live case with declared values** (owner): the grader self-tests and held-out tests assume
+  the notes slice, which declares none; a live case on another slice becomes a backlog task.
+- **Order** (analyze F1, F17): the new tests come first and are seen failing; then the pattern,
+  instruction and graders; then the recordings are synthesised from the final instruction. A paid
+  eval run that forces an instruction change repeats the synthesis (about 20 minutes, Docker, no
+  key): a known repeat.
 - **Rationale**: XIX (a prompt change passes the regression evals, adversarial cases for
   injection); SC-001; S11 (an instruction change makes every code recording miss).
 - **Cost**: a paid run of the steps suite before merge (owner's go-ahead), and a local
   `synth-steps.sh` run per changed set (Docker, no key; asked before it runs).
+
+## R7. A drift check for gen/declared.go (DeclaredValuesGenerated)
+
+- **Decision** (analyze F12): the generate step gains the check DeclaredValuesGenerated: the
+  project's `gen/declared.go` is byte for byte the rendering of the approved contract's declared
+  values (the same function the procedure writes it with). GenerationRepeatable stays as it is
+  (`go generate` does not write the file), and GeneratedCodeUnchanged keeps it unchanged after the
+  generate step.
+- **Rationale**: Principle XVII, "a drift check MUST prove it matches its contract"; a separate
+  check leaves GenerationRepeatable's existing tests and fixtures as they are.
 
 ## Threat-model input
 

@@ -43,6 +43,14 @@ the problems the [platform overview](../../docs/overview/platform.md) names).
   Q: May the code step's own code read environment variables itself? → A: No; configuration
   enters only through the configuration the platform declares and documents in the delivered
   project, with its defaults, so every value the service reads is documented (owner; FR-005).
+- Analyze round 1 (fresh Sonnet, 60f0e6a): a deployment-value failure names the kind of value,
+  never a credential's text (FR-004, SC-002; Principle XI); the deployment check's limits are
+  stated (FR-002). Q: The declared-value check rejects unrelated uses of a common number (a
+  `ParseInt(s, 10, 64)` when the contract declares a default of 10): what then? → A: a stated
+  limit; the reason says how to write such a literal another way, and the code agent is told to
+  prefer idioms without bare numbers (owner; FR-003). Q: Keep a live eval case on a slice with
+  declared values? → A: No; the declared values are proven by the check's tests and the planted
+  scenario, and a live case is a backlog task (owner; FR-010).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -147,8 +155,11 @@ check's inputs are unchanged.
 - A value the rules state but the contract does not (for example "the first note gets id 1"): it is
   not a declared value and is not judged; the derived tests pin it. To have it checked, the
   developer declares it in the contract.
-- A declared value written in another form (`200` as `2e2`, `0xC8`, or a computed `100 * 2`): forms
-  the check recognises are stated as a limit of the check; a computed value is not recognised.
+- A declared value written in another form (`200` as `2e2`, `0xC8`, or a computed `100 * 2`): every
+  form of one literal is recognised; a value computed from several literals is not.
+- A literal equal to a declared value that does not stand for it (`ParseInt(s, 10, 64)` with a
+  declared default of 10): it is rejected, and the reason says to write it another way (FR-003).
+- A port written as a number, or a credential under an unknown name: not recognised (FR-002).
 - A literal in a comment or in a test file: only the code step's own writable code is judged; tests,
   generated code and comments are not.
 - Code that cannot be parsed: the check fails closed, as a check that cannot run (feature 001,
@@ -165,12 +176,18 @@ check's inputs are unchanged.
   the approved contract declares as a limit, a bound, an allowed value or a default, except where
   FR-003 states a limit.
 - **FR-002**: The code step MUST be rejected when its writable code holds a listen address, a port,
-  a network address or URL, or a credential, or reads the environment (FR-005).
+  a network address or URL, or a credential, or reads the environment (FR-005). Stated limits: a
+  port written as a number, a credential under a name or in a call the check does not know, and a
+  value built at run time are not recognised; the forms the check recognises are listed in the
+  catalogue's README.
 - **FR-003**: The literals `0`, `1`, `-1` and the empty text MUST NOT be judged as copies of a
   declared value; this is a stated limit of the check: a declared value that is one of them is not
-  caught. Values stated only in the rules or their examples are not declared values.
-- **FR-004**: Each failure MUST name the file, the line, the value, and where it belongs: the
-  contract location that declares it, or the configuration it belongs in.
+  caught. Values stated only in the rules or their examples are not declared values. Any other
+  literal equal to a declared value is rejected even where it does not stand for it (a stated
+  limit); the reason then says to write it another way.
+- **FR-004**: Each failure MUST name the file, the line, and where the value belongs: for a declared
+  value, the value and the contract location that declares it; for a deployment value, its kind
+  and the configuration it belongs in. A credential's text MUST NOT appear in a reason.
 - **FR-005**: The delivered service MUST read every deployment value from configuration when it
   starts, and its project MUST document each one with its default, if any. Configuration MUST
   enter only through the configuration the platform declares in the delivered project; the code
@@ -183,9 +200,9 @@ check's inputs are unchanged.
   and every run of the check MUST report what it examined.
 - **FR-009**: A pattern changed by this feature MUST be a new pattern version, so that accepted
   results judged without the check are not reused (feature 006).
-- **FR-010**: The code agent's evals MUST pass with the new check, and the planted failures MUST
-  include one hard-coded declared value and one hard-coded deployment value (Constitution
-  Principle XIX).
+- **FR-010**: The code agent's evals MUST pass with the new checks and gain an adversarial case
+  that tells the agent to hard-code a deployment value; the planted failures MUST include one
+  hard-coded declared value and one hard-coded deployment value (Constitution Principle XIX).
 
 ### Key Entities
 
@@ -200,9 +217,13 @@ check's inputs are unchanged.
 
 ### Measurable Outcomes
 
-- **SC-001**: Each planted hard-coded value (a declared limit, an allowed value, a listen port, a
-  service address, a credential) is stopped by the check in 3 out of 3 trials.
-- **SC-002**: 100% of the check's failures name the file, the line, the value and where it belongs.
+- **SC-001**: Each kind of hard-coded value (a declared limit, an allowed value, a listen address,
+  a service address, a credential, an environment read) is stopped by its check in every planted
+  case of the checks' tests, and a planted declared limit and a planted listen address are
+  stopped on the build path in 3 out of 3 trials.
+- **SC-002**: 100% of the checks' failures name the file, the line and where the value belongs, with
+  the value for a declared value and the kind for a deployment value; no reason holds a
+  credential's text.
 - **SC-003**: Code that takes every declared value from its home and every deployment value from
   configuration passes the check, on every fixture slice and in every passing eval case.
 - **SC-004**: The code agent's eval suite passes at the same pass^3 as before the check is added.

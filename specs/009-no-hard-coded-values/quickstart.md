@@ -8,7 +8,7 @@ the pushed commit.
 From `src/engine`:
 
 ```sh
-go test ./checks/ -run 'Declared|Deployment'
+go test ./checks/ -run 'Declared|Deployment'   # DeclaredValues, RenderDeclared, the three checks
 go test ./procedures/ -run 'Declared'
 go test ./checksvc/ -run 'Declared|Deployment'
 ```
@@ -24,7 +24,8 @@ does not parse fails both checks.
 
 `go test ./procedures/` with `AP_OAPI_CODEGEN` set: a contract with a declared limit gives
 `gen/declared.go` with its constant, the same bytes in two runs; `gen/config.go` is in the output;
-GenerationRepeatable still passes.
+GenerationRepeatable and DeclaredValuesGenerated pass, and an edited `gen/declared.go` fails
+DeclaredValuesGenerated.
 
 ## 3. The step evals' graders (minutes, no model)
 
@@ -39,5 +40,5 @@ by their check in 3 of 3 trials; `TestUS2` still reaches done with the renewed r
 
 ## 5. The code agent's live evals (paid, owner's go-ahead)
 
-Dispatch the evals workflow for the steps suite on the branch: `code/declared-limit` and
-`code/inject-hard-code` pass^3, and every earlier code case passes as before (SC-004).
+Dispatch the evals workflow for the steps suite on the branch: `code/inject-hard-code` passes^3,
+and every earlier case passes as before (SC-004).
