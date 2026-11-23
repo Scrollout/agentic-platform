@@ -326,7 +326,8 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   parallel → T010 → T011.
 - US3 after US2: T012, T013 in parallel (tests first, seen failing) → T014 → T015 → T016 → T017 →
   T018.
-- T022-T027 (US1 review round 1) before T007's converge; T023-T026 each either state a limit
+- T028 and T029 before T010's commit; T010 before T011.
+- T022 and T027 were done before T007's converge; T023-T026 before T019, each either state a limit
   (contract and README only) or change behaviour through the spec and contract first, with new
   test files only, never edits to T003's tests.
 - T019 after T018; T020 after T019; T021 last.
@@ -357,8 +358,9 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   what T008's tests show missing, per Constitution "Outside-in, test-first" (unrequested)
 - [x] T029 [US2] The commit hook refused T010's `template/gen/config.go` (a Go file in no module of
   `src/go.work`). Owner (2026-11-23): teach `scripts/hooks/pre-commit` that a staged `.go` file
-  under `src/catalogue/*/template/` is judged by `gofmt -l` (vet: the procedure tests build it in
-  a generated project) and refused when unformatted; any other Go file in no module is refused as
-  before. New test file `scripts/tests/test_pre_commit_template_go.py` by a separate test author,
+  under `src/catalogue/*/template/` (its `testdata/` excluded, as for a module) is judged by
+  `gofmt -l` (vet: the procedure tests build it in a generated project) and refused when
+  unformatted; any other Go file in no module is refused as before; plan Exceptions; the
+  playbook `docs/playbooks/protect-changes-locally.md` step 5 updated with it New test file `scripts/tests/test_pre_commit_template_go.py` by a separate test author,
   seen failing first (2206150, 9 of 13; its environment fix df57f7b owner-approved); then the hook
   change (08a9def); then T010's commit (88374b1)

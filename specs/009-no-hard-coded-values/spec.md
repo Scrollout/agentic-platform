@@ -51,6 +51,11 @@ the problems the [platform overview](../../docs/overview/platform.md) names).
   prefer idioms without bare numbers (owner; FR-003). Q: Keep a live eval case on a slice with
   declared values? → A: No; the declared values are proven by the check's tests and the planted
   scenario, and a live case is a backlog task (owner; FR-010).
+- Found while building US2 (T009 test author) and analyze round 5: FR-007's "against the approved
+  contract" concerns the checks that read the contract. Q: Does the deployment-value check read the
+  approved contract? → A: No; DeploymentValuesConfigured judges only the step's own files, and the
+  two declared-value checks judge against the approved contract (the check contract's runCheck and
+  the catalogue README, 0a476a4; FR-007).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -137,7 +142,7 @@ check's inputs are unchanged.
 
 1. **Given** a code step whose work changes the contract, the generated code or anything the check
    reads, **When** the step is checked, **Then** the change is rejected by the existing checks and
-   this check still judges the step against the approved contract.
+   the declared-value checks still judge the step against the approved contract.
 2. **Given** each planted hard-coded value of Stories 1 and 2, **When** the build runs, **Then** the
    step is rejected in 3 out of 3 trials.
 3. **Given** a run that was accepted before this check existed, **When** it is replayed, **Then**
@@ -196,7 +201,8 @@ check's inputs are unchanged.
 - **FR-006**: The platform MUST make every value FR-001 covers reachable from the generated code, so
   that code can take it from its declared home.
 - **FR-007**: The check MUST be declared in the pattern before a run starts, MUST NOT call a model,
-  and MUST judge the step against the approved contract, not a copy the step can change.
+  and, where it reads the contract, MUST judge the step against the approved contract, not a copy
+  the step can change (the deployment-value check does not read it).
 - **FR-008**: A check that cannot read the code or the contract MUST fail (feature 001, FR-012),
   and every run of the check MUST report what it examined.
 - **FR-009**: A pattern changed by this feature MUST be a new pattern version, so that accepted

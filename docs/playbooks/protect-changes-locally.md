@@ -61,7 +61,9 @@ A fresh clone of the repository, or a change to the hooks.
    run, exits with an error or is killed.
 5. The hook checks Go in the pinned `golang` image, without network: for each Go module with a
    staged path, `gofmt -l` (testdata excluded) and `go vet`, after generating the code in the
-   snapshot. `scripts/check.sh`, in CI, checks Go in two pinned images of the same Go release:
+   snapshot. A staged Go file in no module is refused, except in a pattern's module template
+   (`src/catalogue/<pattern>/template/`), which compiles only inside a generated project: its
+   files get `gofmt -l` alone (testdata excluded), and the engine's procedure tests build it. `scripts/check.sh`, in CI, checks Go in two pinned images of the same Go release:
    `go vet` and `go build` without cgo in the `golang` image, the configuration the static
    binaries ship in, then `go test -race` with cgo in the Debian-based `golang-race` image, since
    the race detector needs a C compiler. The tests run once, with the race detector.

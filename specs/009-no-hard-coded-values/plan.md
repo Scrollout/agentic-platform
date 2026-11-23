@@ -79,7 +79,8 @@ one agent instruction, one eval case, two planted scenarios
 | Checks prove they can fail | Pass | Each check has clean fixtures and planted violations, and reports what it examined |
 | Existing tests change only with approval | Pass | Owner approved each change listed below by name (2026-11-23); each commit carries `Tests-approved-by:`; no other existing test changes without a new approval |
 | Fresh review | Pass | A fresh read-only reviewer per story and before done, judging the CI run |
-| Layout | Pass | Files under `src/` and `specs/` only |
+| Fix the cause | Pass | One deliberate check change, the commit hook's rule for a module template's Go files (T029), recorded in Exceptions |
+| Layout | Pass | Files under `src/`, `specs/`, `scripts/` and `docs/` only |
 
 ## Decisions
 
@@ -98,7 +99,7 @@ changes: the code step's checks read code a model wrote.
 
 | Element | S | T | R | I | D | E | OWASP mapping | Mitigation |
 |---------|---|---|---|---|---|---|---------------|------------|
-| DeclaredValuesNotRepeated, DeploymentValuesConfigured (read agent-written code) | | ✓ | | | ✓ | ✓ | LLM01 prompt injection; ASI01 agent goal hijack (an injected "hard-code it"); ASI02 tool misuse | The checks parse with `go/parser` and never run the code; their inputs (the approved contract from the request, the step's files) are bound like every check's; a file that does not parse fails; the check call's existing time limit bounds a huge file |
+| DeclaredValuesNotRepeated, DeploymentValuesConfigured (read agent-written code) | | ✓ | | | ✓ | ✓ | LLM01 prompt injection; ASI01 agent goal hijack (an injected "hard-code it"); ASI02 tool misuse | The checks parse with `go/parser` and never run the code; their inputs (the step's files and, for DeclaredValuesNotRepeated, the approved contract from the request) are bound like every check's; a file that does not parse fails; the check call's existing time limit bounds a huge file |
 | Check reasons sent back to the agent in the next attempt | | ✓ | | ✓ | | | LLM01 (a literal's text enters the model's context); LLM02 sensitive information disclosure | A declared value in a reason is quoted with `%q` and cut to 64 characters; a deployment value's text never appears in a reason (spec FR-004); the agent treats every message part as data (its instruction) |
 | `gen/declared.go` (rendered from the contract the analyst model wrote) | | ✓ | | | | ✓ | LLM05 improper output handling (contract text becoming Go code) | Strings are written with `strconv.Quote`, pointers in comments with `%q`, names restricted to `[A-Za-z0-9_]`; the project must build (GeneratedCodeBuilds) |
 
@@ -135,6 +136,8 @@ src/engine/method/method.sha256      # derived (scripts/method-digest.py)
 src/tests/evals/steps/               # graders, cases, ref main.go, new slice testdata
 src/tests/acceptance/planted_values_test.go     # new: the two planted scenarios
 src/tests/recorded/steps/                       # renewed code answers, new planted sets
+scripts/hooks/pre-commit                        # a module template's Go files judged by gofmt (T029)
+scripts/tests/test_pre_commit_template_go.py    # new: the hook's template rule (T029)
 ```
 
 **Structure Decision**: the collector and the checks live in `engine/checks` beside the other
@@ -159,7 +162,9 @@ stopped and asked for):
 
 ## Exceptions
 
-None.
+| Rule | Location | Reason |
+|------|----------|--------|
+| The commit hook refuses a staged Go file in no module of `src/go.work` (gofmt and go vet cannot judge it) | `scripts/hooks/pre-commit` (08a9def, T029) | A pattern's module template (`src/catalogue/<pattern>/template/`) compiles only inside a generated project, which the engine's procedure tests build, so its staged Go files are judged by `gofmt -l` alone and refused when unformatted; its `testdata/` is excluded, as for a module. Every other Go file in no module is refused as before. Owner approved, 2026-11-23; tests `scripts/tests/test_pre_commit_template_go.py` |
 
 ## Complexity Tracking
 
