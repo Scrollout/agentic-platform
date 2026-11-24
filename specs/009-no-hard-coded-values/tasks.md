@@ -277,9 +277,12 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   fbecf86 (Sonnet test authors, seen failing), T014 by an Opus code author; code agent digest
   `0a4ca3f1...`; the embedded copies refreshed by generate.sh's copy rule (its `--check` needs
   Docker)
-- [ ] T015 [US3] Synthesise the mappings of every changed or new step set with `synth-steps.sh`
+- [x] T015 [US3] Synthesise the mappings of every changed or new step set with `synth-steps.sh`
   (owner go-ahead; Docker, no key), the old mappings removed first, and review them against their
-  scripts (`src/tests/recorded/README.md`); a later instruction change repeats this (research R6)
+  scripts (`src/tests/recorded/README.md`); a later instruction change repeats this (research R6). Done
+  2026-11-24 (owner go-ahead): every set synthesised again (TestPlanted, TestPlantedValues,
+  TestUS2, US2.7, US2.10 all passed while writing; 35 + 11 + 14 min, the first run lost to a full
+  disk and a prune mid-run, rerun); the diffs are the agent instruction and the input hashes only
 - [ ] T016 [US3] Commit (tests, code, recordings in separate commits); push (owner go-ahead; every
   check job and `evals-current` run); fix until CI is green, with `TestUS2`, `TestPlanted` and
   `TestPlantedValues` replaying with no miss; record the run and `TestUS2`'s duration (SC-005) in

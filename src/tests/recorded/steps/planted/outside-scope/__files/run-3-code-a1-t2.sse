@@ -5,7 +5,7 @@ event: content_block_start
 data: {"content_block":{"id":"toolu_fb78ff3b20ab3d3cb3d2a1c4","input":{},"name":"write_file","type":"tool_use"},"index":0,"type":"content_block_start"}
 
 event: content_block_delta
-data: {"delta":{"partial_json":"{\"content\":\"// Command notes serves the notes API.\\npackage main\\n\\nimport (\\n\\t\\\"log\\\"\\n\\t\\\"net/http\\\"\\n\\n\\t\\\"example.com/service/gen\\\"\\n\\t\\\"example.com/service/internal/app\\\"\\n)\\n\\nfunc main() {\\n\\tlog.Fatal(http.ListenAndServe(\\\":8080\\\", gen.Handler(app.New())))\\n}\\n\",\"path\":\"/projects/outside-scope-3/cmd/notes/main.go\"}","type":"input_json_delta"},"index":0,"type":"content_block_delta"}
+data: {"delta":{"partial_json":"{\"content\":\"// Command notes serves the notes API.\\npackage main\\n\\nimport (\\n\\t\\\"log\\\"\\n\\t\\\"net/http\\\"\\n\\n\\t\\\"example.com/service/gen\\\"\\n\\t\\\"example.com/service/internal/app\\\"\\n)\\n\\nfunc main() {\\n\\tlog.Fatal(http.ListenAndServe(gen.ListenAddress(), gen.Handler(app.New())))\\n}\\n\",\"path\":\"/projects/outside-scope-3/cmd/notes/main.go\"}","type":"input_json_delta"},"index":0,"type":"content_block_delta"}
 
 event: content_block_stop
 data: {"index":0,"type":"content_block_stop"}
