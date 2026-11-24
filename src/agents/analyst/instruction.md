@@ -147,6 +147,11 @@ Feature: Notes
       Then the response status is 400
 ```
 
+An example of a rule about order (such as creation order) creates each item through the
+operation in its `Given` steps, with distinct concrete values, and its `Then` steps name each item
+by those values, in the expected order (`the response lists the notes "buy milk" then "walk
+dog"`), not by IDs alone.
+
 Use only `Feature`, `Rule`, `Scenario`, `Given`, `When`, `Then`, `And` and `But`; no
 `Background`, `Scenario Outline` or `Examples` tables. Give each scenario one `When`. Indent with
 spaces and end the string with a newline.
