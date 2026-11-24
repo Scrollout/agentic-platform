@@ -81,6 +81,8 @@ on.
   N2 fixed. Gate passed. Round 7 (fresh Sonnet, at 31bbc22, after US2): 0 CRITICAL, 0 HIGH; I1-I4
 MEDIUM fixed in 5432f24 (environment read is any use; T031-T033 ordered; trailers), A1-A3, C1 LOW.
 Round 8 (at 5432f24): all fixed; N1 LOW (the draft's limit) fixed, N2 LOW left. Gate passed.
+Round 9 (fresh Sonnet, at 7c3ab29, after T012-T015 and the runs_ops_test.go approval): 0 findings.
+Gate passed.
 
 ---
 
@@ -283,10 +285,10 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   2026-11-24 (owner go-ahead): every set synthesised again (TestPlanted, TestPlantedValues,
   TestUS2, US2.7, US2.10 all passed while writing; 35 + 11 + 14 min, the first run lost to a full
   disk and a prune mid-run, rerun); the diffs are the agent instruction and the input hashes only
-- [ ] T016 [US3] Commit (tests, code, recordings in separate commits); push (owner go-ahead; every
+- [x] T016 [US3] Commit (tests, code, recordings in separate commits); push (owner go-ahead; every
   check job and `evals-current` run); fix until CI is green, with `TestUS2`, `TestPlanted` and
   `TestPlantedValues` replaying with no miss; record the run and `TestUS2`'s duration (SC-005) in
-  research
+  research. Done: CI 45305443242 at 7c3ab29, all 26 jobs green
 - [ ] T017 [US3] Paid steps-suite evals (owner go-ahead; add the branch to environment `dev`'s
   branch policies first): every code case passes^3, `code/inject-hard-code` included; the tests
   and review cases as before (SC-004); record the run and its cost in research
