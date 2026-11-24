@@ -256,9 +256,10 @@ paths:
         check, naming it; a project with no declared test fails it too.
         DeclaredValuesGenerated, DeclaredValuesNotRepeated and DeploymentValuesConfigured judge
         declared and deployment values as the catalogue README states them ("Declared values",
-        "Deployment values"); none runs the project's code. The two declared-value checks read the
-        approved contract (DeploymentValuesConfigured does not use it) only as the `contract` text inside the content of the `contract` entry of `approved` (the
-        canonical JSON `{"contract": <text>}`), never `api/openapi.yaml` in the folder.
+        "Deployment values"); none runs the project's code. DeclaredValuesGenerated and
+        DeclaredValuesNotRepeated read the approved contract only as the `contract` text inside the
+        content of the `contract` entry of `approved` (the canonical JSON `{"contract": <text>}`),
+        never `api/openapi.yaml` in the folder; DeploymentValuesConfigured does not read it.
         DeclaredValuesGenerated, `gen/declared.go` is byte for byte the file the generate procedure
         renders from the approved contract's declared values; it passes with `gen/declared.go
         equals the <n> declared values of the approved contract` and fails naming a missing or
@@ -280,10 +281,10 @@ paths:
         password. It passes with `examined <n> files: no address, credential or environment
         read`. Each of the three fails closed, naming what it could not read: the two declared-value
         checks on an approved contract that is missing or does not parse as one YAML document
-        without duplicate keys, and all three on a judged file that does not parse as Go. Their limits (a value built from several literals or at
-        run time, a port written as a number, a credential under a name or call the check does not
-        know, a literal equal to a declared value that does not stand for it) are the catalogue
-        README's.
+        without duplicate keys, and all three on a judged file that does not parse as Go. Their
+        limits (a value built from several literals or at run time, a port written as a number, a
+        credential under a name or call the check does not know, a literal equal to a declared
+        value that does not stand for it, and the others it lists) are the catalogue README's.
         FindingsCarryEvidence, every blocking finding names a rule `R-<n>`, a file the project holds
         as a regular file that a `writable` entry of the earlier step whose outputs hold `code`
         matches (the fix step, so the finding can be fixed), a line of at least 1, and a `witness` whose `file` is a ProjectPath in
