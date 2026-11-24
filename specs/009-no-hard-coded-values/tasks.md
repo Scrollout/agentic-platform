@@ -92,6 +92,8 @@ MEDIUM; R13-1, R13-3 LOW fixed, R13-2 LOW left. Gate passed.
 Round 14 (fresh Sonnet, at 1da7e99, after T020, T040, T041): 0 CRITICAL, 0 HIGH; 1 MEDIUM, 4 LOW.
 F1, F2 (catalogue README wording) are T043, after the merge; F3, F4, F5 fixed at their source.
 Gate passed.
+Round 15 (fresh Sonnet, at bcba7b7, after T043-T045): 0 CRITICAL, 0 HIGH; F1 MEDIUM, F2-F4 LOW
+fixed at their source (research Runs, plan Exceptions and approved list, spec). Gate passed.
 
 ---
 

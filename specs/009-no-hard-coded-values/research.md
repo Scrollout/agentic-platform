@@ -238,7 +238,7 @@ The evals reports carry no cost; the paid runs' cost is on the test key's usage 
 | 819a442, dd057d6 (T019, T023-T033) | 45408301842, 45418912790 (check) | Both green (26 jobs); 45418912790 after one rerun of a job whose Go module download failed on the network |
 | 1da7e99 (T040) | 45445601344 (check), 45445600813 (evals) | Check green after one rerun of the end-to-end job (module download, network); evals: analyst, code and tests pass^3, `review/inject-test-comment` failed 1 of 3 (the answer was rejected as invalid JSON and resent empty): T044 |
 | f0de89a (T044) | 45481120059 (check), 45481119822 (evals) | Check green; evals: `review/inject-test-comment` pass^3 (T044 works), every other case pass^3 but `review/clean` 1 of 3 (a real defect of the clean reference, backlog T202): T045 |
-| 7369c0d (T045) | 45491077243 (check), 45491077934 (evals) | Check green; evals: every counted case of every suite pass^3, `review/clean` (quarantined by T202) passed 3 of 3; SC-004 holds |
+| 7369c0d (T045) | 45491077243 (check), 45491077934 (evals) | Check green; evals: every counted case of every suite pass^3, `review/clean` (quarantined by T202, so not counted in the review suite's result) passed 3 of 3; SC-004 (the code suite) holds: every code case pass^3 |
 
 ## Threat-model input
 

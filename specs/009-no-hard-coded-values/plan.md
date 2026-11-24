@@ -164,6 +164,8 @@ stopped and asked for):
   for the tests agent's instruction change (owner, 2026-11-24, T037).
 - `src/tests/recorded/steps/{happy,resume,planted/*}`: every review-step mapping synthesised again
   for the review agent's instruction change (owner, 2026-11-24, T044).
+- `src/tests/evals/steps/harness_evals_test.go` and `cases.go`: the steps quarantine, and
+  `review/clean` quarantined under backlog T202 (owner, 2026-11-24, T045; Exceptions).
 - `src/tests/recorded/README.md`: the recording-set line names the two new step sets (owner,
   2026-11-24, T019).
 - `src/tests/recorded/steps/{happy,resume,planted/*}`: each code answer's `main.go` the same, and
@@ -177,7 +179,7 @@ stopped and asked for):
 | Rule | Location | Reason |
 |------|----------|--------|
 | The commit hook refuses a staged Go file in no module of `src/go.work` (gofmt and go vet cannot judge it) | `scripts/hooks/pre-commit` (08a9def, T029) | A pattern's module template (`src/catalogue/<pattern>/template/`) compiles only inside a generated project, which the engine's procedure tests build, so its staged Go files are judged by `gofmt -l` alone and refused when unformatted; its `testdata/` is excluded, as for a module. Every other Go file in no module is refused as before. Owner approved, 2026-11-23; tests `scripts/tests/test_pre_commit_template_go.py` |
-| A flaky or wrong eval case is quarantined with a linked task, never retried until it passes; the steps suites gain the analyst's quarantine | `src/tests/evals/steps/cases.go`, `harness_evals_test.go` (T045) | `review/clean` is not clean: the review agent's confirmed finding on it is real (backlog T202, outside this feature). It runs and is reported but not counted until T202 ends; the open-task rule (`scripts/tests/test_eval_quarantine_open_task.py`) already covers every Go file under `src/tests/evals/`. Owner approved, 2026-11-24 |
+| A flaky or wrong eval case is quarantined with a linked task, never retried until it passes; the steps suites gain the analyst's quarantine | `src/tests/evals/steps/cases.go`, `harness_evals_test.go` (T045) | `review/clean` is not clean: the review agent's confirmed finding on it is real (backlog T202, outside this feature). It runs and is reported but not counted until T202 ends; the open-task rule (`scripts/tests/test_eval_quarantine_open_task.py`) already covers every non-test Go file under `src/tests/evals/`, `cases.go` included. Owner approved, 2026-11-24 |
 
 ## Complexity Tracking
 
