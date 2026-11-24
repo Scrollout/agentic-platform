@@ -420,3 +420,16 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   or skip declaration sites with a new test; with T031. Done (analyze round 7 I1): the README
   table, its limits, the contract draft and research R3 say "any use" and state the limit; the
   contract followed the code here (T030 widened what FR-005 already required), recorded in R3
+
+## T017 evals finding (run 45361420877, at 7c3ab29)
+
+- [ ] T036 [US3] The analyst's `example` case failed 1 of 3 trials (ExampleContent: its creation-order
+  scenario's Then named the notes by id, not by their quoted texts; `src/tests/evals/analyst/content.go`
+  order check). A defect against agreed intent (the case and its grader stand); owner, 2026-11-24:
+  fix the analyst, not the grader. Fix: `src/agents/analyst/instruction.md` says an example of a
+  rule about order creates its items through the operation and its Then names each item by its
+  values in the expected order; the three analyst recordings
+  (`src/tests/recorded/recordings/mappings/analyst-*.json`) renewed by the README's text
+  replacement, with the new analyst digest (owner-approved test-data change, 2026-11-24); a new
+  grader self-test file pins trial 1's examples as failing ExampleContent (separate test author);
+  push (owner go-ahead) and one paid analyst-suite run (owner, 2026-11-24); record it in research
