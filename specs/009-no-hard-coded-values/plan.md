@@ -177,6 +177,7 @@ stopped and asked for):
 | Rule | Location | Reason |
 |------|----------|--------|
 | The commit hook refuses a staged Go file in no module of `src/go.work` (gofmt and go vet cannot judge it) | `scripts/hooks/pre-commit` (08a9def, T029) | A pattern's module template (`src/catalogue/<pattern>/template/`) compiles only inside a generated project, which the engine's procedure tests build, so its staged Go files are judged by `gofmt -l` alone and refused when unformatted; its `testdata/` is excluded, as for a module. Every other Go file in no module is refused as before. Owner approved, 2026-11-23; tests `scripts/tests/test_pre_commit_template_go.py` |
+| A flaky or wrong eval case is quarantined with a linked task, never retried until it passes; the steps suites gain the analyst's quarantine | `src/tests/evals/steps/cases.go`, `harness_evals_test.go` (T045) | `review/clean` is not clean: the review agent's confirmed finding on it is real (backlog T202, outside this feature). It runs and is reported but not counted until T202 ends; the open-task rule (`scripts/tests/test_eval_quarantine_open_task.py`) already covers every Go file under `src/tests/evals/`. Owner approved, 2026-11-24 |
 
 ## Complexity Tracking
 

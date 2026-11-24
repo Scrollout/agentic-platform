@@ -527,3 +527,22 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   run, 45395859607, is pending); record it in research. Synthesised 2026-11-24 on the owner's
   clean VM (TestPlanted 56 min, the rest 22 min, all passing while writing); only the 8 review-step
   mappings changed, by the new paragraph
+
+## Evals finding (run 45481119822, at f0de89a)
+
+- [ ] T045 [US3] The review agent's `review/clean` failed 1 of 3 trials (NoConfirmedBlockingFinding):
+  trial 2 found a real defect of the evals' clean reference, outside this feature: the generated
+  server accepts `{"TEXT":"x"}` as text `"x"` (case-insensitive JSON names, required members not
+  enforced), and its witness fails having run the line. The finding is right, so the case is not
+  clean; the root cause is backlog T202. Owner, 2026-11-24: quarantine `review/clean` under T202,
+  which needs a quarantine for the steps suites like the analyst's (constitution, Fix the cause:
+  a flaky or wrong case is quarantined with a linked task, never retried until it passes). Steps:
+  (1) a separate test author writes new `src/tests/evals/steps/quarantine_test.go` (exactly
+  `review/clean` is quarantined, by T202) and new `quarantine_print_evals_test.go` (the report
+  keeps a quarantined case with `quarantined_by`, its own result unchanged, and the suite passes
+  when only a quarantined case failed and fails when a counted one failed), seen failing;
+  (2) a code author adds `Quarantine` to the steps `Case`, marks `review/clean` with `T202`, and
+  makes `CaseReport` and `printReport` in `harness_evals_test.go` report and not count it, as the
+  analyst's `print` does (owner-approved change of an existing test file, `Tests-approved-by:
+  Marius Gologan (2026-11-24)`); the steps README says how quarantine works and names the case;
+  (3) push, CI, one paid evals run of the pending suites; record it in research
