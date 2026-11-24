@@ -323,8 +323,10 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   if T014 left anything, `src/catalogue/README.md` if it names the pattern version, N-059 in
   `docs/overview/problem-space.md` (`done` or `in progress` with the reason), `docs/log.md`;
   `python3 scripts/okf.py check` reports OK. Done: overview, engine README (value checks), N-059 `in progress` (analyze round 12), log; no agents concept lists the code agent's rules, the evals README and catalogue README needed nothing; okf check OK. Open: `src/tests/recorded/README.md` naming the two new step sets is an existing test file for the commit hook, so it waits for the owner's approval (asked 2026-11-24); T019 stays open until it is done or the owner decides otherwise (analyze round 12 R12-2)
-- [ ] T020 Final fresh review of the feature (judging the CI run of the last commit);
-  `/speckit-converge`; every finding fixed or recorded as a task
+- [x] T020 Final fresh review of the feature (judging the CI run of the last commit);
+  `/speckit-converge`; every finding fixed or recorded as a task. Done: round 1 (Sonnet, at dd057d6, judging CI
+  45418912790, green after one rerun of a job whose module download failed on the network) found no
+  blocking finding; T041, T042
 - [ ] T021 Merge steps: `evals-current` names no pending suite on the branch's last check run;
   the owner merges by fast-forward; remove the branch from environment `dev`; delete the branch
   (ask). 9c6d277 and 8b6ff02 change `src/catalogue/api-feature-go/**` and
@@ -484,3 +486,13 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   closed" rule say it of passing results). Either narrow FR-008 to passing runs through
   `/speckit-clarify` (owner), or add the examined count to failures through the contract first
   with a new test file
+
+## Final fresh review, round 1 (Sonnet, at dd057d6): no blocking finding
+
+- [x] T041 S1-S3 (suggestions): a value in an embedded non-Go file, a port as a string without a
+  colon, `/proc/self/environ` and the `os` functions that read the environment indirectly are not
+  judged; a cgo file is left out of every build (`CGO_ENABLED=0` in every image). Done: stated as
+  limits in the catalogue README
+- [x] T042 S4 (suggestion): a step whose `writable` matches no `.go` file passes with "examined 0
+  files". closed: the code step's `writable` is fixed by the pattern, and AllTestsPass fails a code
+  step that delivers nothing
