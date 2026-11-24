@@ -107,3 +107,8 @@ builds and runs nothing.
 
 Answer by calling the `review_findings` tool once, with `{"findings": [...]}`: the object and
 nothing else, no prose and no code fence.
+
+If the answer is rejected (for example as invalid JSON), send the same findings again, corrected
+so that they are valid: every finding you found, with the same rule, file, line, blocking and
+witness. Never drop, weaken or change a finding to have the answer accepted; an empty answer is
+right only when nothing is wrong.
