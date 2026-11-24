@@ -38,18 +38,18 @@ command; one paid steps-suite eval dispatch with the owner's go-ahead
 **Target Platform**: the local platform (Compose), as feature 001
 
 **Project Type**: the engine's checks and generate procedure, the catalogue pattern, the code
-agent's instruction (and the analyst's and the tests agent's, for the defects the paid evals found,
-T036 and T037), their tests and evals
+agent's instruction (and the analyst's, the tests agent's and the review agent's, for the defects
+the paid evals found, T036, T037 and T044), their tests and evals
 
 **Performance Goals**: both checks parse only the step's own files, well under a second for a
 slice (SC-005 unchanged: a successful run under 30 minutes)
 
 **Constraints**: no change to the check contract's shapes (one additive description); the seam
-is unchanged, and the tests step only by its agent digest (T037); the review agent is unchanged; existing tests change only as
+is unchanged, and the tests step only by its agent digest (T037); the review agent only by its answer rule (T044); existing tests change only as
 the owner approved (Existing tests expected to change)
 
 **Scale/Scope**: one collector, three checks, one generated file, one template file, the pattern,
-one agent instruction (three with T036 and T037), one eval case, two planted scenarios
+one agent instruction (four with T036, T037 and T044), one eval case, two planted scenarios
 
 ## Constitution Check
 
@@ -162,6 +162,8 @@ stopped and asked for):
   replacement for the analyst's instruction change (owner, 2026-11-24, T036).
 - `src/tests/recorded/steps/{happy,resume,planted/*}`: every tests-step mapping synthesised again
   for the tests agent's instruction change (owner, 2026-11-24, T037).
+- `src/tests/recorded/steps/{happy,resume,planted/*}`: every review-step mapping synthesised again
+  for the review agent's instruction change (owner, 2026-11-24, T044).
 - `src/tests/recorded/README.md`: the recording-set line names the two new step sets (owner,
   2026-11-24, T019).
 - `src/tests/recorded/steps/{happy,resume,planted/*}`: each code answer's `main.go` the same, and

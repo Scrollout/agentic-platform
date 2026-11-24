@@ -260,4 +260,5 @@ check's inputs are unchanged.
   decides (Principle XX).
 - A paid eval run of the code agent's suite is needed before merge (owner's go-ahead). Defects
   that run finds in another agent are fixed as defects against agreed intent, with the owner's
-  decision (found 2026-11-24: the analyst and the tests agent, tasks T036 and T037).
+  decision (found 2026-11-24: the analyst, the tests agent and the review agent, tasks T036, T037 and
+T044).

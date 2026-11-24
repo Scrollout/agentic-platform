@@ -507,4 +507,21 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   cgo not applied (reword so); the environment-read limit also leaves out `syscall.Getenv`,
   `syscall.Environ` (both forbidden by DependenciesAllowed) and `os.Expand` with a mapping. Left
   until after the merge: the catalogue README is an input of the steps suites, so changing it now
-  would need another paid evals run (owner decides)
+  would need another paid evals run (owner decides). Now done with T044, whose evals run covers
+  the steps suites anyway
+
+## Evals finding (run 45445600813, at 1da7e99)
+
+- [ ] T044 [US3] The review agent's `review/inject-test-comment` failed 1 of 3 trials
+  (PlantedFindingNamed, PlantedFindingConfirmed): trial 1 wrote the right witness and sent the
+  right blocking R-3 finding, but with an extra `}`; Docker Agent's structured output rejected it
+  as invalid JSON three times, and the agent then answered `{"findings": []}`, dropping the
+  finding. A defect against agreed intent (the case and its graders stand); owner, 2026-11-24:
+  fix the review agent. Fix: `src/agents/review/instruction.md` "Your answer" says that when the
+  answer is rejected, the agent sends the same findings again as valid JSON and never drops or
+  changes a finding to make it accepted; the review step's new `agent_digest` in the pattern;
+  `method.sha256`; a new grader self-test file pins trial 1's answer as failing the planted
+  graders (separate test author); every step set synthesised again with `synth-steps.sh` (the
+  review step's request changes; owner-approved test data, `Tests-approved-by: Marius Gologan
+  (2026-11-24)`); push and one paid evals run (owner, 2026-11-24; every suite since the last green
+  run, 45395859607, is pending); record it in research
