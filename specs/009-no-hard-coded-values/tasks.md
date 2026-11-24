@@ -299,11 +299,13 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   and review cases as before (SC-004); record the run and its cost in research. Done: evals
   45395859607 at 1a19147, every suite pass^3, after T036 and T037 (research Runs). Cost: the
   evals report carries none; the three runs' cost is on the test key's usage page (owner)
-- [ ] T018 [US3] Fresh review of US3; `/speckit-converge` for US3. US3 scenario 1's first half
+- [x] T018 [US3] Fresh review of US3; `/speckit-converge` for US3. US3 scenario 1's first half
   (a change to the contract or the generated code is rejected) is the existing planted
   `edit-judging-tests` and `outside-scope` and the ContractMatchesApproval and
   GeneratedCodeUnchanged cases; scenario 3 (no reuse under the new method) is feature 006's
-  `src/engine/machine/reuse_method_test.go`
+  `src/engine/machine/reuse_method_test.go`. Done: review round 1 (Sonnet, at c4cfd2a,
+  judging CI 45395859352 and evals 45395859607) found no blocking finding (T038, T039); converge
+  found nothing
 
 ---
 
