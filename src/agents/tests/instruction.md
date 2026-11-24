@@ -34,8 +34,10 @@ Write the tests in `tests/`, package `tests`:
    after, and binds every step of every scenario to a step function.
 3. Each step function does what the step says through HTTP calls to that server, using the paths,
    methods, bodies and status codes the contract states, and returns an error naming what it
-   expected and what it got when the response differs. A `Then` step must really check the
-   response: status code, and the fields the step names. A step that cannot be checked yet must
+   expected and what it got when the response differs. Every request a step makes keeps its
+   response (the status and the decoded body) as the scenario's last response, so a `Then` step
+   checks what the preceding `When` received, a created resource included. A `Then` step must
+   really check the response: status code, and the fields the step names. A step that cannot be checked yet must
    still fail, never pass and never be pending.
 
 Then check your work with the shell, from the project folder:

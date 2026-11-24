@@ -117,7 +117,7 @@ steps:
     # The digest of src/agents/tests.yaml and src/agents/tests/, framed as the analyst's
     # (src/agents/README.md, "Agent digests"). The engine refuses to start when it differs from
     # the definition it embeds.
-    agent_digest: "f043478e3fae704a5bb36e6601f1c1828e2cae8b5c885b71b7f51974ad2e369c"
+    agent_digest: "268b5f0e7916664bbb84c58f5496d38d5b6948808cdf596ecb8d19243de19b5d"
     inputs: [contract, examples, generated-code, slice/rules]
     outputs: [tests]
     writable:
