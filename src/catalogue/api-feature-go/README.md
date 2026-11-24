@@ -211,9 +211,12 @@ recognised: a literal inside a conversion or call (`[]byte("x")`), a map index k
 The line a reason names follows `//line` directives, as for DeclaredValuesNotRepeated.
 Only `.go` files are judged: a value in another file the step writes and embeds with `//go:embed`
 is not seen. A port written as a string without a colon (`"8080"`) is not an address. Only the
-four functions are environment reads: reading `/proc/self/environ`, or `os.UserHomeDir`,
-`os.UserConfigDir`, `os.TempDir` and `os.Hostname`, are not judged. A file importing `"C"` is
-left out of every build, since the platform builds with `CGO_ENABLED=0`.
+four functions are environment reads: reading `/proc/self/environ`, `os.Expand` with a mapping
+of its own, `os.UserHomeDir`, `os.UserConfigDir`, `os.TempDir` and `os.Hostname` are not judged
+(`syscall.Getenv` and `syscall.Environ` are refused by DependenciesAllowed, which forbids
+`syscall`). Build constraints and cgo are not applied: every `.go` file `writable` matches is
+judged, a file importing `"C"` included, although the platform builds with `CGO_ENABLED=0` and
+leaves such a file out of the build.
 
 DeclaredValuesGenerated and DeclaredValuesNotRepeated read the approved contract the engine sends,
 not the project's `api/openapi.yaml`; DeploymentValuesConfigured does not use it. Each fails

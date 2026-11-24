@@ -502,7 +502,7 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
 
 ## Analyze round 14 (Sonnet, at 1da7e99)
 
-- [ ] T043 F1 (MEDIUM), F2 (LOW): in the catalogue README, the cgo sentence reads as if the checks
+- [x] T043 F1 (MEDIUM), F2 (LOW): in the catalogue README, the cgo sentence reads as if the checks
   skip a file importing `"C"`; they judge every `.go` file `writable` matches, build constraints and
   cgo not applied (reword so); the environment-read limit also leaves out `syscall.Getenv`,
   `syscall.Environ` (both forbidden by DependenciesAllowed) and `os.Expand` with a mapping. Left
