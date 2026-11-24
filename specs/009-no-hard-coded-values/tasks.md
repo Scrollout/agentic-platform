@@ -524,4 +524,6 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   graders (separate test author); every step set synthesised again with `synth-steps.sh` (the
   review step's request changes; owner-approved test data, `Tests-approved-by: Marius Gologan
   (2026-11-24)`); push and one paid evals run (owner, 2026-11-24; every suite since the last green
-  run, 45395859607, is pending); record it in research
+  run, 45395859607, is pending); record it in research. Synthesised 2026-11-24 on the owner's
+  clean VM (TestPlanted 56 min, the rest 22 min, all passing while writing); only the 8 review-step
+  mappings changed, by the new paragraph
