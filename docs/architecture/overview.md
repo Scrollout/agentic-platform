@@ -144,6 +144,17 @@ Shipped by Story 2:
   steps under the new method, and a slice whose checks ran under another method, or none, runs
   them again before any read and stores `checks_method`
   ([ADR 0080](/decisions/0080-results-reused-and-checks-kept-only-under-their-method.md)).
+  A value the approved contract declares (a limit, bound, default or enum value) has one home in
+  the generated code: the generate procedure writes `gen/declared.go`, whose constants
+  DeclaredValuesGenerated keeps equal to the approved contract, and the code step is rejected by
+  DeclaredValuesNotRepeated when its code repeats one as a literal. Deployment values (addresses,
+  credentials) come only from the configuration the template declares in `gen/config.go`
+  (`LISTEN_ADDRESS`, default `:8080`), and DeploymentValuesConfigured rejects an address, a
+  credential or an environment read in the code step's code; pattern `api-feature-go@1.1.0` runs
+  the three checks (feature 009;
+  [ADR 0084](/decisions/0084-declared-values-live-in-generated-code-and-are-never-repeated.md),
+  [ADR 0085](/decisions/0085-deployment-values-come-only-from-declared-configuration.md),
+  [ADR 0086](/decisions/0086-declared-values-file-has-its-own-drift-check.md)).
 
 Built for Story 2 (T053a, split into T053c to T053e, all done):
 

@@ -52,6 +52,12 @@ N-040 (2026-11-21): `done` by feature 002: its three stories pass in CI (check r
 at aab7fcb) and in the regression evals (run 44809763108), the clean-machine measurement (T032)
 passed, and the final review (T033) closed its one blocking finding (T071).
 
+N-059 (2026-11-24): `done` by feature 009: its three stories pass in CI (check run 45395859352
+at 1a19147), the planted declared limit and listen address are stopped in 3 of 3 trials, and the
+steps evals pass^3 with the adversarial `code/inject-hard-code` (run 45395859607). It judges the
+values the contract declares; values stated only in the rules are pinned by the derived tests
+(owner), and the forms the checks do not recognise are stated limits in the catalogue README.
+
 Sources: [Project owner's answers, 2026-11-11](https://claude.ai/code/session_01P2TmGw3MdjVyoyhGeQK7np).
 
 # Purpose
@@ -124,7 +130,7 @@ Constitution Principle XX makes them binding for the product.
 | N-056 | The author of a change cannot alter, skip or weaken the checks that judge it; only a recorded, independent decision can change a check | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | done |
 | N-057 | A change stays within the files and areas its task allows; anything outside is rejected | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | done |
 | N-058 | Code depends only on what the design allows; a dependency across a forbidden boundary is rejected | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | done |
-| N-059 | Values that belong in data or configuration cannot be hard-coded | yes | | [009](../../specs/009-no-hard-coded-values/spec.md) | specified |
+| N-059 | Values that belong in data or configuration cannot be hard-coded | yes | | [009](../../specs/009-no-hard-coded-values/spec.md) | done |
 | N-060 | Work cannot be reported done until its checks pass | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | done |
 | N-061 | Work is reviewed by an agent or person that did not do it | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | done |
 | N-062 | Every change traces back to a need, spec or decision | undecided | | | todo |

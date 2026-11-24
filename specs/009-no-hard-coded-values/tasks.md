@@ -313,17 +313,19 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
 
 ## Phase 5: Polish & cross-cutting
 
-- [ ] T019 Docs: `docs/architecture/overview.md` (the code step's checks and the generated
+- [x] T019 Docs: `docs/architecture/overview.md` (the code step's checks and the generated
   homes), the agents concept of the code agent if it lists its rules, `src/engine/README.md`
   (step checks), `src/tests/recorded/README.md` (the new step sets), `src/tests/evals/steps/README.md`
   if T014 left anything, `src/catalogue/README.md` if it names the pattern version, N-059 in
   `docs/overview/problem-space.md` (`done` or `in progress` with the reason), `docs/log.md`;
-  `python3 scripts/okf.py check` reports OK
+  `python3 scripts/okf.py check` reports OK. Done: overview, engine README (value checks), N-059 `done`, log; no agents concept lists the code agent's rules, the evals README and catalogue README needed nothing; okf check OK. Open: `src/tests/recorded/README.md` naming the two new step sets is an existing test file for the commit hook, so it waits for the owner's approval
 - [ ] T020 Final fresh review of the feature (judging the CI run of the last commit);
   `/speckit-converge`; every finding fixed or recorded as a task
 - [ ] T021 Merge steps: `evals-current` names no pending suite on the branch's last check run;
   the owner merges by fast-forward; remove the branch from environment `dev`; delete the branch
-  (ask)
+  (ask). 9c6d277 and 8b6ff02 change `src/catalogue/api-feature-go/**` and
+  `src/engine/checks/**`, so the three steps suites are pending again: one paid steps-suite run
+  (owner go-ahead) before the merge
 
 ---
 
@@ -334,17 +336,17 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   go/parser's message, which quotes the offending token (a URL with a password). Fix: the reason
   names `<file>:<line>:<column>` only, and `GenNames` names no host path (F2); regression test
   `src/engine/checks/parse_reason_test.go` by a separate test author, seen failing at 868e0f5
-- [ ] T023 [US1] F3 (suggestion): the check service's host-path scrub rewrites a quoted value that
+- [x] T023 [US1] F3 (suggestion): the check service's host-path scrub rewrites a quoted value that
   starts with `/` (`"/health"` shows as `"<host path>`); state it as a limit in the catalogue
-  README or print values so the scrub leaves them
-- [ ] T024 [US1] F4 (suggestion): an unquoted `default: 2020-01-01` is `!!timestamp`, so unjudged;
-  judge it as a string by its text or state it as a limit
-- [ ] T025 [US1] F5, F6 (suggestions): state as limits that an anchor under an `x-` key is never
+  README or print values so the scrub leaves them. Done 9c6d277: stated as a limit in the catalogue README
+- [x] T024 [US1] F4 (suggestion): an unquoted `default: 2020-01-01` is `!!timestamp`, so unjudged;
+  judge it as a string by its text or state it as a limit. Done 9c6d277: stated as a limit (quoted, it is a string)
+- [x] T025 [US1] F5, F6 (suggestions): state as limits that an anchor under an `x-` key is never
   found through its aliases, and that the walk continues into a non-scalar `default` or `const`
-  value (`default: {maxLength: 5}` declares 5); add a test for the second
-- [ ] T026 [US1] F7 (suggestion): an integer beyond Go's constant range in the contract passes the
+  value (`default: {maxLength: 5}` declares 5); add a test for the second. Done: both stated as limits (9c6d277); test `src/engine/checks/declared_walk_test.go` by a separate test author (8b6ff02), passing on the current code
+- [x] T026 [US1] F7 (suggestion): an integer beyond Go's constant range in the contract passes the
   number rule and would not build in `gen/declared.go` (GeneratedCodeBuilds catches it); mark such
-  a number unjudged
+  a number unjudged. Done 9c6d277: stated as a limit instead: go/constant already leaves a number it cannot hold unjudged; an integer above the compiler's 512 bits makes the generate procedure's build refuse the step, so nothing is accepted
 - [x] T027 [US1] F8, F9, F10 closed: the pointers in a reason are bounded by the service's
   `reasonMax`; `gen/declared.go`'s mode is not part of any output (files travel as content); a
   symbolic link anywhere in the project fails DependenciesAllowed in every step, so a symlinked
@@ -408,17 +410,17 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   use of one of the four through an import name of `os`, and the bare names under a dot import,
   is an environment read; regression test `src/engine/checks/deployment_env_forms_test.go` by a
   separate test author, seen failing at c6fe585
-- [ ] T031 [US2] S1, S2 (suggestions): state as limits in the catalogue README and the runCheck
+- [x] T031 [US2] S1, S2 (suggestions): state as limits in the catalogue README and the runCheck
   text the address forms not recognised (a bare host name, `//host`, surrounding spaces, a
   non-ASCII host, an address joined with `+`) and the credential forms (a conversion such as
   `[]byte("x")`, an index key `m["password"]`, a positional struct literal, a returned literal,
-  `url.UserPassword`), or recognise them through the spec and contract first
-- [ ] T032 [US2] S3 (suggestion): a `//line` directive in a judged file moves the line a reason
+  `url.UserPassword`), or recognise them through the spec and contract first. Done 9c6d277: stated as limits in the catalogue README (each form tried against the check); runCheck points to them
+- [x] T032 [US2] S3 (suggestion): a `//line` directive in a judged file moves the line a reason
   names; state in the contract and README that the line is the file's own, then a new test file,
-  then report unadjusted positions (`PositionFor(pos, false)`)
-- [ ] T033 [US2] S4 with analyze A1 (suggestion): reword and reflow runCheck's value-check
+  then report unadjusted positions (`PositionFor(pos, false)`). Done 9c6d277: stated as a limit (the line follows `//line` directives), no behaviour change
+- [x] T033 [US2] S4 with analyze A1 (suggestion): reword and reflow runCheck's value-check
   sentences ("DeclaredValuesGenerated and DeclaredValuesNotRepeated read the approved contract
-  only as ...; DeploymentValuesConfigured does not read it") in T031's contract commit
+  only as ...; DeploymentValuesConfigured does not read it") in T031's contract commit. Done 9c6d277
 - [x] T034 [US2] S5, S6 closed: two identical reasons for `SetBasicAuth("u", "p")` are two
   offences, as the contract states ("once per offence"); a local variable named `os` shadowing
   the import is a false positive too rare to judge. closed: no defect
