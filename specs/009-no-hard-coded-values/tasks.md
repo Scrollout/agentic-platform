@@ -82,7 +82,9 @@ on.
 MEDIUM fixed in 5432f24 (environment read is any use; T031-T033 ordered; trailers), A1-A3, C1 LOW.
 Round 8 (at 5432f24): all fixed; N1 LOW (the draft's limit) fixed, N2 LOW left. Gate passed.
 Round 9 (fresh Sonnet, at 7c3ab29, after T012-T015 and the runs_ops_test.go approval): 0 findings.
-Gate passed.
+Gate passed. Round 10 (at c4cfd2a, after T036, T037): H1 (T017's cost), M1-M3, L1, L2; fixed in
+1a860e5. Round 11 (at 970802a): 0 CRITICAL, 0 HIGH; F1, F2 MEDIUM (plan scope and the approved
+list), F3, F6 LOW fixed at their source; F4, F5, F7 optional, left. Gate passed.
 
 ---
 

@@ -38,17 +38,18 @@ command; one paid steps-suite eval dispatch with the owner's go-ahead
 **Target Platform**: the local platform (Compose), as feature 001
 
 **Project Type**: the engine's checks and generate procedure, the catalogue pattern, the code
-agent's instruction, their tests and evals
+agent's instruction (and the analyst's and the tests agent's, for the defects the paid evals found,
+T036 and T037), their tests and evals
 
 **Performance Goals**: both checks parse only the step's own files, well under a second for a
 slice (SC-005 unchanged: a successful run under 30 minutes)
 
 **Constraints**: no change to the check contract's shapes (one additive description); the seam
-and the tests step are unchanged; the review agent is unchanged; existing tests change only as
+is unchanged, and the tests step only by its agent digest (T037); the review agent is unchanged; existing tests change only as
 the owner approved (Existing tests expected to change)
 
 **Scale/Scope**: one collector, three checks, one generated file, one template file, the pattern,
-one agent instruction, one eval case, two planted scenarios
+one agent instruction (three with T036 and T037), one eval case, two planted scenarios
 
 ## Constitution Check
 
@@ -157,6 +158,10 @@ stopped and asked for):
 - `src/engine/api/runs_ops_test.go` lines 449-450 (`TestStartRunIsRecordedBeforeItIsAcknowledged`
   reads the real pattern): the run records `api-feature-go@1.1.0` (owner, 2026-11-24, found
   before T012).
+- `src/tests/recorded/recordings/mappings/analyst-*.json`: renewed by the recorded README's text
+  replacement for the analyst's instruction change (owner, 2026-11-24, T036).
+- `src/tests/recorded/steps/{happy,resume,planted/*}`: every tests-step mapping synthesised again
+  for the tests agent's instruction change (owner, 2026-11-24, T037).
 - `src/tests/recorded/steps/{happy,resume,planted/*}`: each code answer's `main.go` the same, and
   the mappings synthesised again (the code agent's instruction changes too).
 - `src/tests/evals/steps/grade.go` (code graders gain the two checks), `cases.go`

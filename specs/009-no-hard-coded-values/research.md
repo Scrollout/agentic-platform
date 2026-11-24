@@ -223,6 +223,8 @@ inline response property: every one got a typed constant per value
 
 ## Runs
 
+The evals reports carry no cost; the paid runs' cost is on the test key's usage page (owner).
+
 | Commit | Run | Result |
 |--------|-----|--------|
 | 868e0f5 (US1, T001-T006) | 45248260393 | Go unit tests and vet, contracts lint, API breaking changes, knowledge, markdown, layout, secrets, dependencies, module boundaries, gateway, evals-current green; the recorded-model planted jobs failed on a recording miss in the tests step (`gen/declared.go` in generate's output), expected until T015 (owner, 2026-11-23); run cancelled after the Go job |
