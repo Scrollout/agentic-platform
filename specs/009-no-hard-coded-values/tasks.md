@@ -87,7 +87,8 @@ Gate passed. Round 10 (at c4cfd2a, after T036, T037): H1 (T017's cost), M1-M3, L
 list), F3, F6 LOW fixed at their source; F4, F5, F7 optional, left. Gate passed. Round 12 (fresh Sonnet, at 819a442, after T019, T023-T026, T031-T033): R12-1 HIGH
 (N-059 `done` before T020, T021 and the head's evals), R12-2, R12-3 MEDIUM, R12-5, R12-6, R12-8
 LOW fixed at their source (problem space, log, T019, catalogue README); R12-4 MEDIUM is T040;
-R12-7 LOW accepted as the stated limit T032 chose.
+R12-7 LOW accepted as the stated limit T032 chose. Round 13 (at a24cfe8): all fixed, 0 CRITICAL, HIGH or
+MEDIUM; R13-1, R13-3 LOW fixed, R13-2 LOW left. Gate passed.
 
 ---
 
@@ -321,7 +322,7 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   (step checks), `src/tests/recorded/README.md` (the new step sets), `src/tests/evals/steps/README.md`
   if T014 left anything, `src/catalogue/README.md` if it names the pattern version, N-059 in
   `docs/overview/problem-space.md` (`done` or `in progress` with the reason), `docs/log.md`;
-  `python3 scripts/okf.py check` reports OK. Done: overview, engine README (value checks), N-059 `done`, log; no agents concept lists the code agent's rules, the evals README and catalogue README needed nothing; okf check OK. Open: `src/tests/recorded/README.md` naming the two new step sets is an existing test file for the commit hook, so it waits for the owner's approval (asked 2026-11-24); T019 stays open until it is done or the owner decides otherwise (analyze round 12 R12-2)
+  `python3 scripts/okf.py check` reports OK. Done: overview, engine README (value checks), N-059 `in progress` (analyze round 12), log; no agents concept lists the code agent's rules, the evals README and catalogue README needed nothing; okf check OK. Open: `src/tests/recorded/README.md` naming the two new step sets is an existing test file for the commit hook, so it waits for the owner's approval (asked 2026-11-24); T019 stays open until it is done or the owner decides otherwise (analyze round 12 R12-2)
 - [ ] T020 Final fresh review of the feature (judging the CI run of the last commit);
   `/speckit-converge`; every finding fixed or recorded as a task
 - [ ] T021 Merge steps: `evals-current` names no pending suite on the branch's last check run;
