@@ -84,7 +84,10 @@ Round 8 (at 5432f24): all fixed; N1 LOW (the draft's limit) fixed, N2 LOW left. 
 Round 9 (fresh Sonnet, at 7c3ab29, after T012-T015 and the runs_ops_test.go approval): 0 findings.
 Gate passed. Round 10 (at c4cfd2a, after T036, T037): H1 (T017's cost), M1-M3, L1, L2; fixed in
 1a860e5. Round 11 (at 970802a): 0 CRITICAL, 0 HIGH; F1, F2 MEDIUM (plan scope and the approved
-list), F3, F6 LOW fixed at their source; F4, F5, F7 optional, left. Gate passed.
+list), F3, F6 LOW fixed at their source; F4, F5, F7 optional, left. Gate passed. Round 12 (fresh Sonnet, at 819a442, after T019, T023-T026, T031-T033): R12-1 HIGH
+(N-059 `done` before T020, T021 and the head's evals), R12-2, R12-3 MEDIUM, R12-5, R12-6, R12-8
+LOW fixed at their source (problem space, log, T019, catalogue README); R12-4 MEDIUM is T040;
+R12-7 LOW accepted as the stated limit T032 chose.
 
 ---
 
@@ -313,12 +316,12 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
 
 ## Phase 5: Polish & cross-cutting
 
-- [x] T019 Docs: `docs/architecture/overview.md` (the code step's checks and the generated
+- [ ] T019 Docs: `docs/architecture/overview.md` (the code step's checks and the generated
   homes), the agents concept of the code agent if it lists its rules, `src/engine/README.md`
   (step checks), `src/tests/recorded/README.md` (the new step sets), `src/tests/evals/steps/README.md`
   if T014 left anything, `src/catalogue/README.md` if it names the pattern version, N-059 in
   `docs/overview/problem-space.md` (`done` or `in progress` with the reason), `docs/log.md`;
-  `python3 scripts/okf.py check` reports OK. Done: overview, engine README (value checks), N-059 `done`, log; no agents concept lists the code agent's rules, the evals README and catalogue README needed nothing; okf check OK. Open: `src/tests/recorded/README.md` naming the two new step sets is an existing test file for the commit hook, so it waits for the owner's approval
+  `python3 scripts/okf.py check` reports OK. Done: overview, engine README (value checks), N-059 `done`, log; no agents concept lists the code agent's rules, the evals README and catalogue README needed nothing; okf check OK. Open: `src/tests/recorded/README.md` naming the two new step sets is an existing test file for the commit hook, so it waits for the owner's approval (asked 2026-11-24); T019 stays open until it is done or the owner decides otherwise (analyze round 12 R12-2)
 - [ ] T020 Final fresh review of the feature (judging the CI run of the last commit);
   `/speckit-converge`; every finding fixed or recorded as a task
 - [ ] T021 Merge steps: `evals-current` names no pending suite on the branch's last check run;
@@ -346,7 +349,7 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   value (`default: {maxLength: 5}` declares 5); add a test for the second. Done: both stated as limits (9c6d277); test `src/engine/checks/declared_walk_test.go` by a separate test author (8b6ff02), passing on the current code
 - [x] T026 [US1] F7 (suggestion): an integer beyond Go's constant range in the contract passes the
   number rule and would not build in `gen/declared.go` (GeneratedCodeBuilds catches it); mark such
-  a number unjudged. Done 9c6d277: stated as a limit instead: go/constant already leaves a number it cannot hold unjudged; an integer above the compiler's 512 bits makes the generate procedure's build refuse the step, so nothing is accepted
+  a number unjudged. Done 9c6d277: stated as a limit instead (a number beyond a 64-bit float resolves to `!!str` and is declared as a string, analyze round 12 R12-6); an integer above the compiler's 512 bits makes the generate procedure's build refuse the step, so nothing is accepted
 - [x] T027 [US1] F8, F9, F10 closed: the pointers in a reason are bounded by the service's
   `reasonMax`; `gen/declared.go`'s mode is not part of any output (files travel as content); a
   symbolic link anywhere in the project fails DependenciesAllowed in every step, so a symlinked
@@ -472,3 +475,11 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   planted cases stop each (T003, T008, T030, T012's `patternCases`); SC-001 asks the build path
   for a declared limit and a listen address only; a live case with declared values is backlog
   T201. closed: covered by the checks' tests
+
+## Analyze round 12 (Sonnet, at 819a442)
+
+- [ ] T040 R12-4 (MEDIUM): FR-008 says every run of a check reports what it examined, but the
+  three value checks' failing results list offences only (the contract and the tasks' "Fail
+  closed" rule say it of passing results). Either narrow FR-008 to passing runs through
+  `/speckit-clarify` (owner), or add the examined count to failures through the contract first
+  with a new test file
