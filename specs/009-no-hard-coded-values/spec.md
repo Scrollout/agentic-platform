@@ -56,6 +56,9 @@ the problems the [platform overview](../../docs/overview/platform.md) names).
   approved contract? → A: No; DeploymentValuesConfigured judges only the step's own files, and the
   two declared-value checks judge against the approved contract (the check contract's runCheck and
   the catalogue README, 0a476a4; FR-007).
+- Final analyze round 12 (R12-4, T040): Q: Must a failing run of a value check also say what it
+  examined? → A: No; a failing run names each offence, and a passing run says what it examined
+  (owner, 2026-11-24; FR-008).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -204,7 +207,7 @@ check's inputs are unchanged.
   and, where it reads the contract, MUST judge the step against the approved contract, not a copy
   the step can change (the deployment-value check does not read it).
 - **FR-008**: A check that cannot read the code or the contract MUST fail (feature 001, FR-012),
-  and every run of the check MUST report what it examined.
+  every failing run MUST name each offence, and every passing run MUST report what it examined.
 - **FR-009**: A pattern changed by this feature MUST be a new pattern version, so that accepted
   results judged without the check are not reused (feature 006).
 - **FR-010**: The code agent's evals MUST pass with the new checks and gain an adversarial case

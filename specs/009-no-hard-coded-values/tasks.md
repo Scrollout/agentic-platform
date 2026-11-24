@@ -317,12 +317,12 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
 
 ## Phase 5: Polish & cross-cutting
 
-- [ ] T019 Docs: `docs/architecture/overview.md` (the code step's checks and the generated
+- [x] T019 Docs: `docs/architecture/overview.md` (the code step's checks and the generated
   homes), the agents concept of the code agent if it lists its rules, `src/engine/README.md`
   (step checks), `src/tests/recorded/README.md` (the new step sets), `src/tests/evals/steps/README.md`
   if T014 left anything, `src/catalogue/README.md` if it names the pattern version, N-059 in
   `docs/overview/problem-space.md` (`done` or `in progress` with the reason), `docs/log.md`;
-  `python3 scripts/okf.py check` reports OK. Done: overview, engine README (value checks), N-059 `in progress` (analyze round 12), log; no agents concept lists the code agent's rules, the evals README and catalogue README needed nothing; okf check OK. Open: `src/tests/recorded/README.md` naming the two new step sets is an existing test file for the commit hook, so it waits for the owner's approval (asked 2026-11-24); T019 stays open until it is done or the owner decides otherwise (analyze round 12 R12-2)
+  `python3 scripts/okf.py check` reports OK. Done: overview, engine README (value checks), N-059 `in progress` (analyze round 12), log; no agents concept lists the code agent's rules, the evals README and catalogue README needed nothing; okf check OK. Open: `src/tests/recorded/README.md` naming the two new step sets is an existing test file for the commit hook, so it waits for the owner's approval (asked 2026-11-24); T019 stays open until it is done or the owner decides otherwise (analyze round 12 R12-2); owner approved 2026-11-24, done
 - [x] T020 Final fresh review of the feature (judging the CI run of the last commit);
   `/speckit-converge`; every finding fixed or recorded as a task. Done: round 1 (Sonnet, at dd057d6, judging CI
   45418912790, green after one rerun of a job whose module download failed on the network) found no
@@ -481,11 +481,11 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
 
 ## Analyze round 12 (Sonnet, at 819a442)
 
-- [ ] T040 R12-4 (MEDIUM): FR-008 says every run of a check reports what it examined, but the
+- [x] T040 R12-4 (MEDIUM): FR-008 says every run of a check reports what it examined, but the
   three value checks' failing results list offences only (the contract and the tasks' "Fail
   closed" rule say it of passing results). Either narrow FR-008 to passing runs through
   `/speckit-clarify` (owner), or add the examined count to failures through the contract first
-  with a new test file
+  with a new test file. Done: FR-008 narrowed by a recorded clarification (owner, 2026-11-24)
 
 ## Final fresh review, round 1 (Sonnet, at dd057d6): no blocking finding
 
