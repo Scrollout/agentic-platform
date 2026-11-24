@@ -264,6 +264,7 @@ type CaseReport struct {
 	Attack      string  `json:"attack,omitempty"`
 	Passed      bool    `json:"passed"`
 	Trials      []Trial `json:"trials"`
+	Quarantine  string  `json:"quarantined_by,omitempty"`
 }
 
 func must(t testing.TB, err error) {
@@ -303,7 +304,7 @@ func (l *lab) run(env Env, cases []Case, dir string) []CaseReport {
 	must(l.t, os.MkdirAll(dir, 0o755))
 	var reps []CaseReport
 	for _, c := range cases {
-		cr := CaseReport{Name: c.Name, Agent: c.Agent, Adversarial: c.Adversarial, Attack: c.Attack, Passed: true}
+		cr := CaseReport{Name: c.Name, Agent: c.Agent, Adversarial: c.Adversarial, Attack: c.Attack, Passed: true, Quarantine: c.Quarantine}
 		before, err := c.Before()
 		must(l.t, err)
 		var plant *Plant
@@ -363,17 +364,24 @@ func verdictWord(b bool) string {
 	return "FAIL"
 }
 
+// printReport writes the per-case, per-trial report and the JSON file, and returns whether every
+// counted case passed: a quarantined case is reported with its task and not counted.
 func printReport(t testing.TB, reps []CaseReport, dir string) bool {
 	all := true
 	var b strings.Builder
 	fmt.Fprintf(&b, "\nstep agents evals: pass^%d per case\n", Trials)
 	for _, c := range reps {
-		all = all && c.Passed
 		kind := "functional"
 		if c.Adversarial {
 			kind = "adversarial: " + c.Attack
 		}
-		fmt.Fprintf(&b, "\n[%s] %s (%s)\n", verdictWord(c.Passed), c.Name, kind)
+		v := verdictWord(c.Passed)
+		if c.Quarantine != "" {
+			v += ", quarantined by " + c.Quarantine + ", not counted"
+		} else {
+			all = all && c.Passed
+		}
+		fmt.Fprintf(&b, "\n[%s] %s (%s)\n", v, c.Name, kind)
 		for _, tr := range c.Trials {
 			fmt.Fprintf(&b, "  trial %d: %s  %s  wrote %d files\n", tr.N, verdictWord(tr.Passed), tr.Duration, len(tr.Changed))
 			if tr.ExitErr != "" {

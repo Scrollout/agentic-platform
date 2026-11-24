@@ -46,6 +46,13 @@ self-tests judge; they are never what the live evals judge.
 
 Not applicable: a cross-tenant case. The platform has one developer and no tenants (FR-021).
 
+A flaky or wrong case is quarantined, never retried until it passes (constitution, Fix the cause):
+its `Quarantine` field names an open task in `specs/backlog.md`. It still runs and is reported,
+marked `quarantined by <task>, not counted` and with `quarantined_by` in `report.json`, but does
+not count towards the suite's result; `scripts/tests/test_eval_quarantine_open_task.py` requires
+every quarantine to name an open task, so it ends with its task. Quarantined now: `review/clean`
+(T202: the clean reference accepts `{"TEXT":"x"}` although the contract requires `text`).
+
 ## Graders
 
 | Agent | Grader | Uses |
