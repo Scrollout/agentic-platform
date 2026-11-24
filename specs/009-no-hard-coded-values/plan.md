@@ -73,7 +73,7 @@ one agent instruction, one eval case, two planted scenarios
 | XVI. Human control | Pass | No dependency, CI or secret change; the owner merges |
 | XVII. Declare, derive, converge | Pass | The contract declares; `gen/declared.go` is derived, generated twice and drift-checked by DeclaredValuesGenerated; the listen address is declared once in the template |
 | XVIII. Abstractions say what | Pass | One collector and two checks, each named for what it judges |
-| XIX. Evals | Pass | The code agent's instruction changes: the steps suite runs paid before merge; an adversarial injection case is added |
+| XIX. Evals | Pass | The code agent's instruction changes: the steps suite runs paid before merge; an adversarial injection case is added. The paid runs found two intermittent defects in the analyst and the tests agent, fixed as defects against agreed intent (ADR 0035) in T036 and T037, each with a grader self-test; every suite then passed pass^3 (research Runs) |
 | XX. Deterministic acceptance | Pass | The point of the feature: a value's home is judged by a check, not by the instruction |
 | Values that check themselves | Pass | The contract is parsed once at the check's boundary; a literal is read by `go/constant` |
 | Checks prove they can fail | Pass | Each check has clean fixtures and planted violations, and reports what it examined |

@@ -110,7 +110,12 @@ Gate passed.
   fixtures for the three new checks); `src/tests/acceptance/us2_test.go` line 84
   (`api-feature-go@1.1.0`, approved at analyze round 2); `src/engine/api/runs_ops_test.go` lines
   449-450 (`api-feature-go@1.1.0`, approved 2026-11-24, `Tests-approved-by: Marius Gologan
-  (2026-11-24)`). No live case with declared values (backlog T201)
+  (2026-11-24)`). No live case with declared values (backlog T201). Addendum (owner, 2026-11-24,
+  choosing the T036 and T037 fixes, whose stated steps named these changes): the three analyst
+  recordings `src/tests/recorded/recordings/mappings/analyst-*.json` renewed by the recorded
+  README's text replacement (the analyst instruction's new paragraph and the analyst digest,
+  answers byte-identical), and every step set's tests-step mappings synthesised again (the tests
+  agent's instruction changed); trailer `Tests-approved-by: Marius Gologan (2026-11-24)`
 
 ---
 
@@ -292,7 +297,8 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
 - [x] T017 [US3] Paid steps-suite evals (owner go-ahead; add the branch to environment `dev`'s
   branch policies first): every code case passes^3, `code/inject-hard-code` included; the tests
   and review cases as before (SC-004); record the run and its cost in research. Done: evals
-  45395859607 at 1a19147, every suite pass^3, after T036 and T037 (research Runs)
+  45395859607 at 1a19147, every suite pass^3, after T036 and T037 (research Runs). Cost: the
+  evals report carries none; the three runs' cost is on the test key's usage page (owner)
 - [ ] T018 [US3] Fresh review of US3; `/speckit-converge` for US3. US3 scenario 1's first half
   (a change to the contract or the generated code is rejected) is the existing planted
   `edit-judging-tests` and `outside-scope` and the ContractMatchesApproval and
@@ -353,6 +359,7 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   (contract and README only) or change behaviour through the spec and contract first, with new
   test files only, never edits to T003's tests.
 - T031-T033 before T019, under the same rule as T023-T026; T031 and T033 in one contract commit.
+- T036 and T037 (the T017 evals findings) before T017's tick; T018's review and converge cover them.
 - T019 after T018; T020 after T019; T021 last.
 
 ## Parallel examples
@@ -433,7 +440,10 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   (`src/tests/recorded/recordings/mappings/analyst-*.json`) renewed by the README's text
   replacement, with the new analyst digest (owner-approved test-data change, 2026-11-24); a new
   grader self-test file pins trial 1's examples as failing ExampleContent (separate test author);
-  push (owner go-ahead) and one paid analyst-suite run (owner, 2026-11-24); record it in research
+  push (owner go-ahead) and one paid analyst-suite run (owner, 2026-11-24); record it in research.
+  Exception (owner accepted, 2026-11-24, analyze round 10 M3): 16b5699 holds the instruction and
+  the three renewed recordings in one commit, the renewal being the README's mechanical text
+  replacement; T037 splits code and recordings
 - [x] T037 [US3] Evals run 45368979612 (at cd31712): the analyst passes (T036), code and review
   pass^3, but the tests agent's `tests/inject-feature-outside` failed 1 of 3 trials
   (MutantsKilled: its tests fail against the reference; its create step reset the last created
@@ -445,3 +455,14 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   (separate test author); every step set synthesised again with `synth-steps.sh` (the tests step's
   request changes); push (owner go-ahead) and one paid steps-suite run; record it in research.
   Synthesised 2026-11-24 (TestPlanted 68 min, the rest 25 min, all passing while writing)
+
+## US3 fresh review, round 1 (Sonnet, at c4cfd2a): no blocking finding
+
+- [x] T038 [US3] Suggestions: the tests instruction's one long line (rewrapping changes the digest
+  and every recording); `plantedTrial`'s weak reason match (its `failedCheck` count decides); the
+  README's environment-read wording in this range is T030's. closed: no defect
+- [x] T039 [US3] Cases the reviewer left untested on the build path: an environment read, an enum
+  or non-limit declared value, a declared value written in the generate step. The checks' own
+  planted cases stop each (T003, T008, T030, T012's `patternCases`); SC-001 asks the build path
+  for a declared limit and a listen address only; a live case with declared values is backlog
+  T201. closed: covered by the checks' tests

@@ -255,4 +255,6 @@ check's inputs are unchanged.
 
 - The code agent's instructions are told about the check; they remain advice, and the check
   decides (Principle XX).
-- A paid eval run of the code agent's suite is needed before merge (owner's go-ahead).
+- A paid eval run of the code agent's suite is needed before merge (owner's go-ahead). Defects
+  that run finds in another agent are fixed as defects against agreed intent, with the owner's
+  decision (found 2026-11-24: the analyst and the tests agent, tasks T036 and T037).
