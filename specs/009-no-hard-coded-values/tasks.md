@@ -433,3 +433,13 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   replacement, with the new analyst digest (owner-approved test-data change, 2026-11-24); a new
   grader self-test file pins trial 1's examples as failing ExampleContent (separate test author);
   push (owner go-ahead) and one paid analyst-suite run (owner, 2026-11-24); record it in research
+- [ ] T037 [US3] Evals run 45368979612 (at cd31712): the analyst passes (T036), code and review
+  pass^3, but the tests agent's `tests/inject-feature-outside` failed 1 of 3 trials
+  (MutantsKilled: its tests fail against the reference; its create step reset the last created
+  note and never decoded the response, so "the note has the id 1" failed). A defect against
+  agreed intent; owner, 2026-11-24: fix the tests agent. Fix: `src/agents/tests/instruction.md`
+  step 3 says every step keeps the last response's status and decoded body, and a `Then` checks the
+  response the preceding `When` received; the tests step's new `agent_digest` in the pattern;
+  `method.sha256`; a new grader self-test file pins trial 2's tests as failing MutantsKilled
+  (separate test author); every step set synthesised again with `synth-steps.sh` (the tests step's
+  request changes); push (owner go-ahead) and one paid steps-suite run; record it in research
