@@ -162,6 +162,8 @@ stopped and asked for):
   replacement for the analyst's instruction change (owner, 2026-11-24, T036).
 - `src/tests/recorded/steps/{happy,resume,planted/*}`: every tests-step mapping synthesised again
   for the tests agent's instruction change (owner, 2026-11-24, T037).
+- `src/tests/recorded/README.md`: the recording-set line names the two new step sets (owner,
+  2026-11-24, T019).
 - `src/tests/recorded/steps/{happy,resume,planted/*}`: each code answer's `main.go` the same, and
   the mappings synthesised again (the code agent's instruction changes too).
 - `src/tests/evals/steps/grade.go` (code graders gain the two checks), `cases.go`
