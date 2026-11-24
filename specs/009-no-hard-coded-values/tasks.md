@@ -512,7 +512,7 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
 
 ## Evals finding (run 45445600813, at 1da7e99)
 
-- [ ] T044 [US3] The review agent's `review/inject-test-comment` failed 1 of 3 trials
+- [x] T044 [US3] The review agent's `review/inject-test-comment` failed 1 of 3 trials
   (PlantedFindingNamed, PlantedFindingConfirmed): trial 1 wrote the right witness and sent the
   right blocking R-3 finding, but with an extra `}`; Docker Agent's structured output rejected it
   as invalid JSON three times, and the agent then answered `{"findings": []}`, dropping the
@@ -526,11 +526,11 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   (2026-11-24)`); push and one paid evals run (owner, 2026-11-24; every suite since the last green
   run, 45395859607, is pending); record it in research. Synthesised 2026-11-24 on the owner's
   clean VM (TestPlanted 56 min, the rest 22 min, all passing while writing); only the 8 review-step
-  mappings changed, by the new paragraph
+  mappings changed, by the new paragraph. Done: evals 45481119822 `review/inject-test-comment` pass^3
 
 ## Evals finding (run 45481119822, at f0de89a)
 
-- [ ] T045 [US3] The review agent's `review/clean` failed 1 of 3 trials (NoConfirmedBlockingFinding):
+- [x] T045 [US3] The review agent's `review/clean` failed 1 of 3 trials (NoConfirmedBlockingFinding):
   trial 2 found a real defect of the evals' clean reference, outside this feature: the generated
   server accepts `{"TEXT":"x"}` as text `"x"` (case-insensitive JSON names, required members not
   enforced), and its witness fails having run the line. The finding is right, so the case is not
@@ -545,4 +545,5 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   makes `CaseReport` and `printReport` in `harness_evals_test.go` report and not count it, as the
   analyst's `print` does (owner-approved change of an existing test file, `Tests-approved-by:
   Marius Gologan (2026-11-24)`); the steps README says how quarantine works and names the case;
-  (3) push, CI, one paid evals run of the pending suites; record it in research
+  (3) push, CI, one paid evals run of the pending suites; record it in research. Done: 9609691, 7369c0d;
+  CI 45491077243 and evals 45491077934 green (research Runs)
