@@ -289,9 +289,10 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   check job and `evals-current` run); fix until CI is green, with `TestUS2`, `TestPlanted` and
   `TestPlantedValues` replaying with no miss; record the run and `TestUS2`'s duration (SC-005) in
   research. Done: CI 45305443242 at 7c3ab29, all 26 jobs green
-- [ ] T017 [US3] Paid steps-suite evals (owner go-ahead; add the branch to environment `dev`'s
+- [x] T017 [US3] Paid steps-suite evals (owner go-ahead; add the branch to environment `dev`'s
   branch policies first): every code case passes^3, `code/inject-hard-code` included; the tests
-  and review cases as before (SC-004); record the run and its cost in research
+  and review cases as before (SC-004); record the run and its cost in research. Done: evals
+  45395859607 at 1a19147, every suite pass^3, after T036 and T037 (research Runs)
 - [ ] T018 [US3] Fresh review of US3; `/speckit-converge` for US3. US3 scenario 1's first half
   (a change to the contract or the generated code is rejected) is the existing planted
   `edit-judging-tests` and `outside-scope` and the ContractMatchesApproval and
@@ -423,7 +424,7 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
 
 ## T017 evals finding (run 45361420877, at 7c3ab29)
 
-- [ ] T036 [US3] The analyst's `example` case failed 1 of 3 trials (ExampleContent: its creation-order
+- [x] T036 [US3] The analyst's `example` case failed 1 of 3 trials (ExampleContent: its creation-order
   scenario's Then named the notes by id, not by their quoted texts; `src/tests/evals/analyst/content.go`
   order check). A defect against agreed intent (the case and its grader stand); owner, 2026-11-24:
   fix the analyst, not the grader. Fix: `src/agents/analyst/instruction.md` says an example of a
@@ -433,7 +434,7 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   replacement, with the new analyst digest (owner-approved test-data change, 2026-11-24); a new
   grader self-test file pins trial 1's examples as failing ExampleContent (separate test author);
   push (owner go-ahead) and one paid analyst-suite run (owner, 2026-11-24); record it in research
-- [ ] T037 [US3] Evals run 45368979612 (at cd31712): the analyst passes (T036), code and review
+- [x] T037 [US3] Evals run 45368979612 (at cd31712): the analyst passes (T036), code and review
   pass^3, but the tests agent's `tests/inject-feature-outside` failed 1 of 3 trials
   (MutantsKilled: its tests fail against the reference; its create step reset the last created
   note and never decoded the response, so "the note has the id 1" failed). A defect against
