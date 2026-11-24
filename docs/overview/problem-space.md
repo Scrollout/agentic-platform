@@ -8,7 +8,7 @@ sources:
   - id: owner
     resource: https://claude.ai/code/session_01P2TmGw3MdjVyoyhGeQK7np
     title: Project owner's answers, 2026-11-11
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-23T19:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-25T10:00:00Z }
 ---
 
 # How to use these tables
@@ -123,11 +123,11 @@ Constitution Principle XX makes them binding for the product.
 | ID | Need | In scope | Prior art | Spec | State |
 |----|------|----------|-----------|------|-------|
 | N-050 | Applying the same method to the same input gives the same accepted result | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [006](../../specs/006-method-record/spec.md) | done |
-| N-051 | A result is accepted only when it passes checks that do not depend on a model's judgement | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [007](../../specs/007-analyst-answer-checks/spec.md) | done |
-| N-052 | A proven solution is captured once and reused, without the model generating it again | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | in progress |
+| N-051 | A result is accepted only when it passes checks that do not depend on a model's judgement | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [007](../../specs/007-analyst-answer-checks/spec.md), [010](../../specs/010-strict-requests/spec.md) | done |
+| N-052 | A proven solution is captured once and reused, without the model generating it again | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [010](../../specs/010-strict-requests/spec.md) | in progress |
 | N-053 | Every result can be traced to the method, inputs, model and rules that produced it, and reproduced from them | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [006](../../specs/006-method-record/spec.md) | done |
 | N-054 | How much results vary from run to run is measured and shown | yes | | [008](../../specs/008-eval-variance/spec.md) | in progress |
-| N-055 | The project's principles, docs, specs, decisions, validations, tests and reviews hold at every stage of the lifecycle | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | in progress |
+| N-055 | The project's principles, docs, specs, decisions, validations, tests and reviews hold at every stage of the lifecycle | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [010](../../specs/010-strict-requests/spec.md) | in progress |
 | N-056 | The author of a change cannot alter, skip or weaken the checks that judge it; only a recorded, independent decision can change a check | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | done |
 | N-057 | A change stays within the files and areas its task allows; anything outside is rejected | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | done |
 | N-058 | Code depends only on what the design allows; a dependency across a forbidden boundary is rejected | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | done |

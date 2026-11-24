@@ -32,7 +32,7 @@ sources:
   - id: spec-008
     resource: ../../specs/008-eval-variance/spec.md
     title: Feature 008 specification, Key Entities
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-23T19:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-25T10:00:00Z }
 ---
 
 # Knowledge bundle terms
@@ -165,3 +165,14 @@ These terms come from the Feature 009 specification.
 | Hard-coded value | A literal in a step's code that repeats a declared value, or a deployment value not read from configuration. |
 
 Sources: [Feature 009 specification](../../specs/009-no-hard-coded-values/spec.md).
+
+# Feature 010 terms
+
+These terms come from the Feature 010 specification.
+
+| Term | Meaning |
+|------|---------|
+| Request schema | What the approved contract states a request body may hold: its members' exact names, which are required, their types, and whether other members are allowed. |
+| Refusal | The 400 answer a delivered service gives to a request its request schema does not allow, with a `message` naming what is wrong; nothing is changed. |
+
+Sources: [Feature 010 specification](../../specs/010-strict-requests/spec.md).
