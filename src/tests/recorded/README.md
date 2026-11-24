@@ -117,7 +117,9 @@ carry `go test` output with elapsed times, so they would never match exactly (re
 [ADR 0038](../../../docs/decisions/0038-lab-runs-the-build-path-with-synthesised-step-recordings.md)).
 They are synthesised, free, from reviewed **answer scripts**. A recording set is a folder
 `steps/<set>/` (`steps/happy` for `TestUS2`, `steps/resume` for US2.10, the happy answers with the
-code step's first turn held 30 s, and `steps/planted/<scenario>` for `TestPlanted` and US2.7) holding:
+code step's first turn held 30 s, `steps/planted/<scenario>` for `TestPlanted` and US2.7, and
+`steps/planted/hard-coded-declared-value` and `steps/planted/hard-coded-listen-address` for
+`TestPlantedValues`) holding:
 
 - `answers.json`, the answer script (the reviewed source), and its content files (`files/...`);
   the correct answers start from `src/tests/evals/steps/testdata/ref` and are adapted to the lab's
