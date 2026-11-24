@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-23
 
-**Status**: Draft
+**Status**: Implemented (merged 2026-11-25)
 
 **Input**: Need N-059, "Values that belong in data or configuration cannot be hard-coded" (owner
 chose it as the next work, 2026-11-23). Description: when an agent writes code for a slice, the

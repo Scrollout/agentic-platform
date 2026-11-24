@@ -332,11 +332,12 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   `/speckit-converge`; every finding fixed or recorded as a task. Done: round 1 (Sonnet, at dd057d6, judging CI
   45418912790, green after one rerun of a job whose module download failed on the network) found no
   blocking finding; T041, T042
-- [ ] T021 Merge steps: `evals-current` names no pending suite on the branch's last check run;
+- [x] T021 Merge steps: `evals-current` names no pending suite on the branch's last check run;
   the owner merges by fast-forward; remove the branch from environment `dev`; delete the branch
   (ask). 9c6d277 and 8b6ff02 change `src/catalogue/api-feature-go/**` and
   `src/engine/checks/**`, so the three steps suites are pending again: one paid steps-suite run
-  (owner go-ahead) before the merge
+  (owner go-ahead) before the merge. Done 2026-11-25: check run 45498593040 at 764c08a: `evals-current`
+  names no pending suite (base 7369c0d, evals 45491077934); owner go-ahead; main fast-forwarded
 
 ---
 
