@@ -442,4 +442,5 @@ value in 3 of 3 trials; `TestUS2` reaches done; the paid steps suite passes (T01
   response the preceding `When` received; the tests step's new `agent_digest` in the pattern;
   `method.sha256`; a new grader self-test file pins trial 2's tests as failing MutantsKilled
   (separate test author); every step set synthesised again with `synth-steps.sh` (the tests step's
-  request changes); push (owner go-ahead) and one paid steps-suite run; record it in research
+  request changes); push (owner go-ahead) and one paid steps-suite run; record it in research.
+  Synthesised 2026-11-24 (TestPlanted 68 min, the rest 25 min, all passing while writing)
