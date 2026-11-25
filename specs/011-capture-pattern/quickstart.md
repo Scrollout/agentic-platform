@@ -21,7 +21,8 @@ usable fitting captured pattern unless `pattern` names another.
 ## 3. End to end on the Compose stack (CI, recorded model)
 
 The acceptance suite for this feature builds the notes slice from the recorded model, captures
-its run, proves and approves it, then builds a `tasks` slice that otherwise equals it: the run
+its run (`ap capture`), proves it into a new project (`ap prove <captured pattern> <project>`,
+which builds its proof slice) and approves it, then builds a `tasks` slice that otherwise equals it: the run
 ends done, the model gateway sees no request (SC-001), and the derived tests pass. Three runs
 give the same files (SC-004).
 

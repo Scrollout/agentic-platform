@@ -1,5 +1,9 @@
 # Directory Update Log
 
+## 2026-11-26
+
+* **Plan**: Feature 011, analyze round 3 (owner): a proof is an ordinary build of the captured pattern's proof slice, an approved slice made from its copy of the source slice, and the captured pattern keeps the expected output hashes ([ADR 0097](/decisions/0097-proof-builds-a-slice-made-from-the-captured-copy.md), superseding [ADR 0096](/decisions/0096-proof-step-workers-keyed-by-captured-pattern.md)). The [glossary](/overview/glossary.md) gains Proof slice.
+
 ## 2026-11-25
 
 * **Plan**: Feature 011, found while writing its contract (T001, owner): a proof has no slice, so its step workers are started, granted and registered for the captured pattern, as a build's are for its slice; the developer names the proof's project folder ([ADR 0096](/decisions/0096-proof-step-workers-keyed-by-captured-pattern.md)).

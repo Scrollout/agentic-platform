@@ -25,6 +25,7 @@ put to the project owner as direct questions on 2026-11-25 (spec, Clarifications
 | S14 | [text/template](https://pkg.go.dev/text/template) (Go 1.26 standard library): data-driven templates with `{{...}}` actions; assumes trusted template authors, no escaping |
 | S15 | Experiment E1 (name forms in the evals' accepted notes project) |
 | S17 | Step workers are per slice: a worker token's grant names one slice and one step (`api/workers.go:29` `WorkerGrant{Slice, Step, CallToken}`, grant files `:81`); `Workers` maps slice to step to endpoint (`:131`); registerWorker refuses a slice that does not exist (`:273`); `startRun` refuses WorkersNotReady while a step has no live worker for the slice (`:250`, contract `startRun`); `ap build-workers <slice> <project>` asks the engine for the slice, makes the project folder and starts and registers one container per step (`src/deploy/ap:1362`, `src/cli/contract.md`) |
+| S18 | Runs are found by slice (analyze round 3): run records and their events are stored per slice (`store/records.go:157`, `store/store.go:76`); findings, reuse lookups and worker and check calls take the slice (`durable/activities.go:112`, `:238`); resume, replay and take-over read `run.Slice` (`api/runs.go:806`, `:848`, `:869`); `Run.slice` and `Worker.slice` are required in the engine contract; the launcher refuses a listed run without a slice (`src/deploy/ap` `refuse_active_run`, `read_run`); `deleteSlice` erases the slice's run records |
 | S16 | Constitution: Principle VI (OSS first; custom code needs a written justification), XII (every store query scoped by tenant), XIV (fail closed), XVII (one generic engine per kind of thing), XX (a proven solution is captured as a deterministic asset and reused); Engineering Principles "Values that check themselves", "Single owner for rules" |
 
 ## E1. Name forms in an accepted project
@@ -79,10 +80,9 @@ step's checks run; after the checks pass, `commitStep` commits as for any step, 
 before an attempt restores as before (S5). `fill` needs no registered step worker; the engine's
 readiness check skips it. For a build, `ap build-workers` is unchanged (S9): it still starts the
 base pattern's containers for the slice, and a captured run leaves the agent ones unused. A proof
-has no slice (R5), so its procedure steps' workers are keyed by the captured pattern instead (T001
-finding, *owner*): `ap build-workers <captured pattern> <project>` starts and registers them as for
-a slice, a grant and a registration name a slice or a captured pattern, and `ap prove <captured
-pattern> <project>` runs it first, as `ap build` does (S17).
+is a build of its proof slice (R5), so its step workers are that slice's, started by `ap
+build-workers <proof slice> <project>` as for any slice (S17, S18; *owner*, analyze round 3,
+superseding the T001 answer that keyed them by the captured pattern).
 
 **Rationale**: the project worker is already the only writer of a project besides the step
 containers, and already writes stored files for a reused step (S5); the engine stays without a
@@ -164,28 +164,35 @@ accepted project by named values is what none of them does; it is one small engi
 
 ## R5. The proof (FR-004, FR-005, FR-006, FR-011)
 
-**Decision**: a proof is a run of the captured pattern's copy of the source slice (so it works
-after the slice is erased) under the captured pattern with each parameter's source value, in a
-new project folder the developer names (as for `startRun`), on step workers registered for the
-captured pattern (R2, S17), recorded like any run (its own run ID, `RunStarted` naming the captured
-pattern, `source_run` and `proof: true`, and no slice). It passes when the run ends done and the
-`generated-code`, `tests`, `code` and `witnesses` outputs' hashes equal the source run's (*owner*:
+**Decision**: each captured pattern has one **proof slice**: an approved slice made from its copy
+of the source slice, created by `POST /captured-patterns/{id}/proof-slice` when it has none (the
+first time, and again after the developer erased it). A proof is a `startRun` of the proof slice
+into a new project folder the developer names: an ordinary run, on the proof slice's step workers,
+under the captured pattern with each parameter's source value, recorded like any run (`RunStarted`
+naming the captured pattern, `pattern_reason` `chosen`, `source_run` and `proof: true`), so it
+works after the source slice is erased (*owner*, analyze round 3; S18). At capture the captured
+pattern keeps the source run's `generated-code`, `tests`, `code` and `witnesses` hashes as its
+expected outputs, held as artifacts like the template, so they outlive the source run's record. It
+passes when the run ends done and those outputs' hashes equal the expected ones (*owner*:
 the proof shows the captured pattern reproduces its source under the current method; whether other
 values work is judged by each later run's checks). A captured pattern is **usable** when it is
 approved and its latest proof passed under the current method; a later failing proof makes it
 unusable (fail closed; analyze M1). The captured pattern keeps each proof's run ID,
 outcome, differing files and the method; it may be approved, and used, only while its latest
 passing proof's method is the engine's current method. A proof is started by the developer and
-followed as an operation.
+followed as a run. The source run's ID keeps naming it after the source slice and its runs are
+erased (getRun then answers NotFound).
 
 **Rationale**: running the proof as an ordinary run reuses every check, the record, durability and
 cancellation (features 001, 002); the method rule reuses feature 006's identity (S6).
 
 **Alternatives considered**: comparing files only (would not prove the checks still pass under the
-current method); a proof per later slice (that is the run itself, judged by its checks). For the
-proof's step workers (T001 finding, *owner*): a new slice made for each proof from the captured
-copy (proof slices in the developer's slice list, erasable, and two client calls per proof); the
-source slice's workers (no proof after the slice is erased, against ADR 0095).
+current method); a proof per later slice (that is the run itself, judged by its checks). A proof
+run with no slice, its workers keyed by the captured pattern (the owner's T001 answer, ADR 0096):
+analyze round 3 found it needs a second home for runs in the store, workflows, API and launcher
+and a breaking contract change (S18). The source slice's workers: no proof after the slice is
+erased, against ADR 0095. A new slice per proof: slices pile up; one proof slice per captured
+pattern is enough.
 
 ## R6. Which pattern a run uses (FR-010)
 
@@ -203,19 +210,18 @@ value, with the reason (*owner*).
 
 **Decision**: the engine contract gains, additively, the resource `/captured-patterns`: `POST`
 (capture a run: an operation), `GET` (list, paginated), `GET /{id}`, `PUT /{id}/parameters`
-(before approval), `POST /{id}/proofs`, `POST /{id}/approval`, `POST /{id}/withdrawal` and
+(before approval), `POST /{id}/proof-slice`, `POST /{id}/approval`, `POST /{id}/withdrawal` and
 `DELETE /{id}` (erase, confirmed), each state change an operation with an Idempotency-Key;
 `startRun` gains an optional `pattern`. New error codes: `RunNotDone`, `ParameterRefused`,
 `ProofRequired`, `CapturedPatternWithdrawn`, `CapturedPatternExists`, `CapturedPatternBusy`.
 Erasure shows what it will erase (the captured pattern, the artifacts only it holds) before the
 client asks for confirmation (Principle XVII). The terminal client gains `ap capture`, `ap patterns`,
 `ap pattern`, `ap prove`, `ap approve-pattern`, `ap withdraw-pattern` and `build --pattern`. The
-check contract gains `writeStep` (R2). The proof takes `{project}`, refused as `startRun` refuses
-a project (InvalidProject, ProjectExists) and while its step workers are not ready
-(WorkersNotReady) or another run is active (RunActive); registerWorker and its `Worker` name a
-slice or a captured pattern; a proof's `Run` and `RunStarted` have no `slice` and carry `proof`;
-an operation's `target` may be a captured pattern's ID. The launcher intercepts `prove` as it
-intercepts `build` (R2).
+check contract gains `writeStep` (R2). A proof is `startRun` on the proof slice; the run and
+`RunStarted` carry `proof: true`, additively; an operation's `target` may be a captured
+pattern's ID. The launcher intercepts `prove <captured pattern> <project>`: the client's
+`proof-slice <captured pattern>` gives the proof slice, then `build <proof slice> <project>` runs
+as `build` does (R2, R5).
 
 **Rationale**: Principles III, IV and XV; the existing operation workflow runs any job (S7).
 

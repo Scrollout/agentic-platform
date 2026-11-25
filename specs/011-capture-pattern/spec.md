@@ -69,6 +69,13 @@ reused only under the method that judged them), [feature 009](../009-no-hard-cod
   developer names a new project folder for the proof, as for a build; the step workers are
   started and registered for the captured pattern, as they are for a slice, before the proof
   starts; a proof's run has no slice and is marked as a proof (owner; FR-004).
+- Analyze round 3 (fresh Sonnet, at 9609f03): a run with no slice has no home in the engine
+  (runs, events, findings, reuse, the one-active-run rule, resume, replay and take-over are all
+  found by slice), breaks the contract (`Run.slice` is required) and the launcher, and after the
+  slice's erasure no expected hashes remain. Q: Keep it or switch? → A: the proof makes its own
+  slice: each captured pattern has one proof slice, an approved slice made from its copy of the
+  source slice, and a proof is an ordinary run of it under the captured pattern; the captured
+  pattern keeps the source run's output hashes (owner; FR-004, supersedes the answer above).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -99,7 +106,7 @@ approves it into the catalogue.
    platform proposes a captured pattern that names the source run, its slice, the base pattern
    and method that accepted it, and each proposed parameter with the source value and every place
    it occurs.
-2. **Given** a proposal, **When** the platform proves it, **Then** the rebuild makes no model
+2. **Given** a proposal, **When** the developer proves it into a new project folder, **Then** the rebuild makes no model
    call, every check the captured pattern declares passes, and every filled and generated file
    equals the accepted one; the proof's result is
    recorded with the proposal.
@@ -168,7 +175,7 @@ use the captured pattern and says it needs a new proof; proving it again restore
 1. **Given** a captured pattern proven under an earlier method, **When** a fitting slice's run
    starts, **Then** the captured pattern is not used, and the developer is told it needs a new
    proof.
-2. **Given** such a pattern, **When** the developer asks to prove it again, **Then** the proof
+2. **Given** such a pattern, **When** the developer asks to prove it again into another new project folder, **Then** the proof
    runs under the current method and, when it passes, the pattern is used again with the new
    method recorded; when it fails, the pattern stays unusable and names what failed.
 3. **Given** an approved captured pattern, **When** the developer withdraws it, **Then** no new
@@ -230,10 +237,12 @@ use the captured pattern and says it needs a new proof; proving it again restore
 
 #### Proof and approval
 
-- **FR-004**: The platform MUST prove a proposal by building the captured pattern's copy of the
-  source slice from it into a new project folder the developer names, with the source values and
-  no model call, running every check the captured pattern declares. The proof's step workers are
-  those of the captured pattern, never of a slice, so a proof needs no slice. The proof MUST pass only when every check passes and every filled and
+- **FR-004**: The platform MUST prove a proposal by building its proof slice (an approved slice
+  made from the captured pattern's copy of the source slice) from it into a new project folder
+  the developer names, with the source values and no model call, running every check the
+  captured pattern declares. A proof is an ordinary run of that slice, marked as a proof; the
+  proof slice is made again when it was erased, so a proof works after the source slice is
+  erased. The proof MUST pass only when every check passes and every filled and
   generated file equals the source run's accepted one. The proof shows that the captured pattern
   reproduces its source under the current method; whether other values work is judged by each
   later run's checks.
@@ -272,7 +281,8 @@ use the captured pattern and says it needs a new proof; proving it again restore
 - **FR-012**: The developer MUST be able to withdraw a captured pattern; no run started after that
   uses it, and records of earlier runs keep naming it.
 - **FR-013**: A run built from a captured pattern MUST record the captured pattern's identity and
-  version, its source run, the method, and each parameter's value.
+  version, its source run, the method, and each parameter's value. The source run is named by
+  its ID, which keeps naming it after the source slice and its runs are erased.
 - **FR-014**: Capture, proof, approval and withdrawal MUST each be operations the developer starts
   and follows to an outcome, never a blocking call.
 

@@ -1,9 +1,9 @@
 ---
 type: Decision
 title: "ADR 0096: A proof's step workers are keyed by its captured pattern"
-description: A proof has no slice, so its step workers are started, granted and registered for the captured pattern, as a build's are for its slice; the developer names the proof's project folder, and a proof's run has no slice.
+description: Superseded by ADR 0097 (a proof builds a slice made from the captured pattern's copy, so nothing is keyed by a captured pattern). A proof has no slice, so its step workers are started, granted and registered for the captured pattern, as a build's are for its slice; the developer names the proof's project folder, and a proof's run has no slice.
 tags: [decisions, catalogue, captured-patterns, step-workers]
-status: draft
+status: deprecated
 decision: accepted
 sources:
   - id: plan
@@ -27,6 +27,9 @@ The project owner's answer of 2026-11-25 to a gap found while writing the contra
 Sources: [Feature 011 specification, Clarifications](../../specs/011-capture-pattern/spec.md).
 
 # Context
+
+> Superseded by [ADR 0097](/decisions/0097-proof-builds-a-slice-made-from-the-captured-copy.md):
+> a run with no slice has no home in the engine, the API or the launcher (analyze round 3).
 
 - A proof builds the captured pattern's copy of its source slice, so it works after the slice is
   erased ([ADR 0095](/decisions/0095-captured-patterns-never-change-values-keep-their-kind.md)).
