@@ -41,7 +41,8 @@ recordings do not change, so the recorded-model jobs stay green throughout.
 - **One owner**: candidates, case forms, matching, fit and fill live only in
   `src/engine/captured`; the API, the run choice and the workflow call it.
 - **Test time**: locally only the packages a task touches (`go test ./captured/ ./api/
-  ./durable/ ./checksvc/ ./store/ ./machine/ ./steps/ ./slices/` in `src/engine`, `go test ./...` in `src/cli`), each capped at
+  ./durable/ ./checksvc/ ./store/ ./machine/ ./steps/ ./slices/` in `src/engine`, `go test ./...`
+  in `src/slice` after a schema change, `go build ./...` in `src/check` after regenerating, `go test ./...` in `src/cli`), each capped at
   10 minutes; no full `scripts/check.sh`, Docker lab, image build or acceptance suite without the
   owner's go-ahead. The full test command is the CI run of the pushed commit; every push is told
   to the owner with the jobs it runs and waits for a go-ahead. A live eval run is paid and needs
@@ -144,7 +145,14 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   repair for a lost or refused start), 5 LOW (O3 `part_hashes` shape; O4 `Run` without
   `part_hashes`; O5 404 in the draft; O6 who defines `usable`; O7 a replay case that cannot fail,
   and the local package list); fixed at the source (data model; contract draft; T006, T007,
-  T015, T020, Test time). Round 11 owed.
+  T015, T020, Test time). Round 11 (fresh Sonnet, at 70eb864): every
+  round-10 fix present; 0 CRITICAL, 0 HIGH; 6 MEDIUM (F1 research R5 and T007 kept the acceptance
+  design; F2 busy unjudged between the 202 and `RunStarted`, a Proof under other parameters; F3
+  empty template outputs; F4 a run under an older base pattern version; F5 the proof branch
+  needs T029's marking; F6 `ap prove`'s exit for a failed proof), 3 LOW (L1 the pin test never
+  seen failing; L2 `src/slice` and `src/check` in the local checks; L3 the capture name's form);
+  fixed at the source (data model; research R5; contract draft; T001, T003 to T008, T028, T029,
+  Test time). Round 12 owed.
 
 ---
 
@@ -189,7 +197,7 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   match one of the step's writable entries, otherwise 400 naming it). New
   `src/engine/captured/captured.go` holds the Go interface of the contract draft (`Propose`,
   `Check`, `Fit`, `Fill` with the contract draft's signatures, the declaration from the base
-  pattern, the limits as named values; types, signatures, doc comments
+  pattern, the limits and the parameter name rule as named values; types, signatures, doc comments
   stating research R4's rules and limits) with bodies that return a `not implemented` error.
   New `src/engine/api/captured.go` holds the generated server's new methods with bodies that
   answer as not implemented, and `src/engine/checksvc/` the same for `writeStep`, so every module
@@ -235,7 +243,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   not a number, a string outside "letters, digits, `_`, `-` and spaces", a value over 64
   characters, an added value that does not occur in the slice, more than 32 parameters, more than
   10000 places per parameter; a number is matched only as a whole number (`200` not in `2001`, `1.200`,
-  `200ms` or `v200`; in `-200` and `"200"`); `Fill` with each source value gives the input bytes
+  `200ms` or `v200`; in `-200` and `"200"`); an empty template output fills to no file; `Fill` with each source value gives the input bytes
   back for every file; with `task`/`tasks` gives `NewTask`, `listTasks`, `TASK` where `NOTE` was,
   and `task_id` and `detask` where `note_id` and `denote` were (every occurrence, inside words
   too); on `limit/` with `100`/`101` every `200` and `201` place carries the new value (SC-006);
@@ -244,7 +252,8 @@ proposed and adding the derived value works; the proof ends passed with no model
   paths (a filled path outside its step's writable entries is the fit's to refuse, T012). Seen
   failing
 - [ ] T004 [P] [US1] Test author: new `src/engine/checksvc/write_step_test.go`: `writeStep`
-  writes files under the step's writable entries only, refuses a path outside them with 400
+  with no files writes nothing and answers the unchanged project; it writes files under the
+  step's writable entries only, refuses a path outside them with 400
   naming it (also `..`, absolute paths, a symlinked folder), commits nothing, and `restoreStep`
   afterwards removes what it wrote; an unknown project or step is refused. Seen failing
 - [ ] T005 [P] [US1] Test author: new `src/engine/api/captured_capture_test.go` (engine rig, no
@@ -265,7 +274,10 @@ proposed and adding the derived value works; the proof ends passed with no model
   data model's state table says for `proposed` in the rows US1 owns at T007 (`replaceParameters`,
   `approveCapturedPattern`, the busy cases; `makeProofSlice` is T027's, withdrawal and erasure
   T018's); new `src/engine/api/captured_limits_contract_test.go`: the limits and
-  the parameter name rule `engine/captured` uses equal the loaded contract's; a second state change while one of its
+  the parameter name rule `engine/captured` uses equal the loaded contract's, and a planted
+  contract copy with one limit changed fails that comparison; a capture `name` outside
+  `^[a-z0-9]+(-[a-z0-9]+)*$` or over 40 characters answers 400 InvalidRequest; a run recorded
+  under another base pattern version answers `RunNotCapturable` naming both; a second state change while one of its
   operations runs answers 409 `CapturedPatternBusy`; list is newest first and paginated; a reused Idempotency-Key
   with another body answers as for other calls. Seen failing
 - [ ] T006 [P] [US1] Test author: new `src/engine/durable/fill_proof_test.go` and
@@ -284,8 +296,12 @@ proposed and adding the derived value works; the proof ends passed with no model
   the completed proof); the existing recorded workflow histories still replay (a
   regression guard, exempt from "seen failing"), and a planted history in which the `fill` path
   runs without its version gate fails the replay; a second proof under the same method reuses no earlier result and runs every step;
-  a proof start that is not accepted leaves no Proof and no busy state; a lost start answer
-  (`startedAnyway`) keeps exactly one Proof; a `proof: true` run with no Proof gets one on read;
+  a lost start answer (`startedAnyway`) keeps exactly one Proof; a `proof: true` run with no
+  Proof gets one on read; `PUT /parameters` sent between the proof start's 202 and its recorded
+  `RunStarted` answers `CapturedPatternBusy`; a Proof whose parameters differ from the current
+  ones neither makes the pattern proven nor counts for approval; a `fill` step whose template
+  output is empty (a clean review's `witnesses`) writes nothing, commits, and passes the hash
+  comparison;
   `PUT /parameters` while a proof's run has not ended (also a failed proof's waiting run)
   answers `CapturedPatternBusy`; `PUT /parameters` moves a proven one back to proposed; the
   state table's proven and approved columns in the `replaceParameters` and
@@ -309,15 +325,17 @@ proposed and adding the derived value works; the proof ends passed with no model
   `fill` worker in `src/engine/durable/workflow.go` and `src/engine/steps/` (render through
   `engine/captured`, `writeStep`, checks, `commitStep`; the readiness check skips `fill`),
   `writeStep` in `src/engine/checksvc/project.go` and `handler.go`, the proof as a run of the
-  proof slice with `proof: true` (T029 makes the proof slice): the `startRun` branch for a proof
-  slice, the `RunStarted` fields `pattern_reason`, `parameters`, `source_run`, `proof` and
+  proof slice with `proof: true` (T029 makes the proof slice and the `startRun` branch that
+  recognises it; T007 adds the `proof_of` field on `slices.Slice` that branch reads), the `RunStarted` fields `pattern_reason`, `parameters`, `source_run`, `proof` and
   `part_hashes` (written by `StartRun` and `ReplayRun` through `src/engine/api/runs.go` `newRun`,
   `src/engine/machine/` events and `src/engine/durable/` `RunInput`/`RunStart`; a replay copies
   the earlier run's `part_hashes`), `usable` computed in the Proof-completion function (T015
   applies it at `startRun` and `replayRun`), a `workflow.GetVersion` bump for the `fill` path and
   the new `RunStarted` fields (ADR 0067) so runs in flight replay on the code that started them,
   the
-  Proof record written at acceptance and completed at a hand-over or the run's end (and on read),
+  Proof created by the completion function from a `proof: true` `RunStarted` and completed at a
+  hand-over or the run's end (and on read), busy judged from the proof slice's runs, the base
+  pattern version check at capture,
   a `no reuse` flag in the run's start for a proof, `PUT /parameters` busy while a proof's run has
   not ended, one Proof-completion function every reader uses, and
   `ready` skipping `fill` in `StartRun`, `ResumeRun` and `ReplayRun`; no test is changed. `scripts/method-digest.py` converges
@@ -342,10 +360,11 @@ proposed and adding the derived value works; the proof ends passed with no model
   `ap prove <captured pattern> <project>` runs the client's `proof-slice`, then `build-workers`
   and `build` for the proof slice into `<project>`; an unknown captured pattern is exit 4
   NotFound and starts nothing; after the run's end line it prints `Proof of <id>: passed` or the
-  failures; running it again into another project builds again. Seen failing
+  failures and exits 1 for a failed proof; running it again into another project builds again.
+  Seen failing
   (owner go-ahead for the lab)
 - [ ] T029 [US1] Code author (after T007, on its store changes; done when T006's proof cases,
-  T027 and T008's proof cases pass): the proof slice in `src/engine/slices/` (made by the engine, history
+  T027 and T008's proof cases pass): the proof slice in `src/engine/slices/` (made by the engine, the `startRun` branch for a proof slice, history
   `made-for-proof`, `proof_of`, never reused by `createSlice`, `deleteSlice` clears
   `proof_slice`), the `proof-slice` call in new `src/engine/api/proof_slice.go`, the proof side of
   `ReplayRun` (a replay of a proof run is a new proof, no reuse), `proof-slice` and the proof outcome line in
@@ -354,7 +373,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   `ap patterns`, `ap pattern <id>` (parameters with places, proofs, state, usable), `--drop` and
   `--add`, `ap proof-slice <id>`, `ap approve-pattern` call the contract's operations, follow them and print
   as `src/cli/contract.md` states; the proof cases: after a proof's run the `Proof of <id>:
-  passed` and `failed: ...` lines, `ap slices` shows `PROOF OF` and `ap show` its `proof of`
+  passed` and `failed: ...` lines (exit 0 and 1), `ap slices` shows `PROOF OF` and `ap show` its `proof of`
   line; errors print their code and reason. Seen failing
 - [ ] T009 [US1] Code author: the commands in `src/cli/` (generated client only), except
   `proof-slice`, the proof outcome line, the `PROOF OF` column and the `proof of` line (T029)
