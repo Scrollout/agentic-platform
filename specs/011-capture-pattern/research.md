@@ -180,7 +180,29 @@ approved and its latest proof passed under the current method; a later failing p
 unusable (fail closed; analyze M1). The captured pattern keeps each proof's run ID,
 outcome, differing files and the method; it may be approved, and used, only while its latest
 passing proof's method is the engine's current method. A proof is started by the developer and
-followed as a run. The source run's ID keeps naming it after the source slice and its runs are
+followed as a run.
+
+The proof slice (analyze round 4, *owner*): the slices service makes it from the captured copy
+with its own description `Proof of <captured pattern>` and a `proof_of` naming the captured
+pattern; the engine approves each part, recorded in its history as made by the engine for that
+proof, after running the part checks under the current method; a part that fails a check makes the
+operation fail with `PartFailsChecks`, listing the failures, and no slice is made. It takes the
+next `S-<n>`. Slice reuse at `createSlice` (`slices/service.go` `approvedFor`) never returns a
+proof slice. A proof never reuses an earlier run's results: every step runs, so every check runs
+under the current method (FR-004). The proof's record is written into the captured pattern when
+`startRun` of the proof slice is accepted (`running`) and completed when the run's end is
+recorded, idempotently, and after an engine restart from the run record: `done` with every
+expected hash equal passes; `done` with a hash that differs fails, naming the differing files;
+`handed-over`, `expired` or `cancelled` fails, naming the end and its reason; a run interrupted or
+waiting for the developer stays `running`. A replay of a proof run is a new proof. Erasing the
+proof slice (`deleteSlice`, refused while its run is active) keeps the recorded proofs, whose run
+IDs then answer NotFound, and clears `proof_slice`.
+
+Runs that continue (analyze round 4, *owner*): resume and take-over keep the run's recorded
+pattern, its parameters and its source run; a replay of a run built from a captured pattern uses
+that captured pattern again, refused with `CapturedPatternWithdrawn` or `ProofRequired` when it is
+not usable; the readiness check of `startRun`, `resumeRun` and `replayRun` skips `fill` steps
+(`api/runs.go` `ready`, `ResumeRun`, `ReplayRun`). The source run's ID keeps naming it after the source slice and its runs are
 erased (getRun then answers NotFound).
 
 **Rationale**: running the proof as an ordinary run reuses every check, the record, durability and
@@ -200,9 +222,10 @@ pattern is enough.
 the approved slice; the most recently approved that fits is used, unless
 the request names a pattern (a captured pattern's ID or the base pattern's). A fitting captured
 pattern whose proof's method is not current is skipped and named in the answer as needing a new
-proof. The start's answer and `RunStarted` name the pattern and why (`fits captured pattern`,
-`chosen`, `base`); it also names each captured pattern that did not fit only because of a refused
-value, with the reason (*owner*).
+proof. The run (`Run`, readable as soon as `startRun` answers with its operation, as before) and
+`RunStarted` name the pattern and why (`pattern_reason`: `fits`, `chosen` or `base`; a proof run
+is `chosen`); the run also names each fitting captured pattern that needs a new proof and each
+that did not fit only because of a refused value, with the reason (*owner*).
 
 **Rationale**: the owner's answer; one rule chooses between providers of one kind (Principle VII).
 
@@ -216,7 +239,8 @@ value, with the reason (*owner*).
 `ProofRequired`, `CapturedPatternWithdrawn`, `CapturedPatternExists`, `CapturedPatternBusy`.
 Erasure shows what it will erase (the captured pattern, the artifacts only it holds) before the
 client asks for confirmation (Principle XVII). The terminal client gains `ap capture`, `ap patterns`,
-`ap pattern`, `ap prove`, `ap approve-pattern`, `ap withdraw-pattern` and `build --pattern`. The
+`ap pattern`, `ap proof-slice`, `ap approve-pattern`, `ap withdraw-pattern`, `ap erase-pattern` and
+`build --pattern`; the launcher gains `ap prove`, which prints the proof's outcome. The
 check contract gains `writeStep` (R2). A proof is `startRun` on the proof slice; the run and
 `RunStarted` carry `proof: true`, additively; an operation's `target` may be a captured
 pattern's ID. The launcher intercepts `prove <captured pattern> <project>`: the client's

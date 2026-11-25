@@ -11,12 +11,12 @@ Turn a done run into a pattern that builds later slices of the same kind with no
 
 | Call | What it does | Answers |
 |------|--------------|---------|
-| `POST /captured-patterns` `{run, name?}` | proposes a captured pattern from a run that ended done, with proposed parameters | 202 operation; the operation fails `RunNotDone` (naming the run's state) or `CapturedPatternExists` |
+| `POST /captured-patterns` `{run, name?}` | proposes a captured pattern from a run that ended done, with proposed parameters | 202 operation, its target the new captured pattern's ID; refused at once with `RunNotDone` (naming the run's state) or `CapturedPatternExists`; a capture whose operation fails leaves no captured pattern (getCapturedPattern answers 404) |
 | `GET /captured-patterns` | lists captured patterns, newest first | 200, paginated with opaque page tokens |
 | `GET /captured-patterns/{id}` | one captured pattern: parameters with their places, proofs, approval, state, usable | 200; 404 |
-| `PUT /captured-patterns/{id}/parameters` `{parameters}` | replaces the parameters of a proposed or proven one (removes, adds) | 202 operation; fails `ParameterRefused` naming the parameter and why; 409 when approved |
+| `PUT /captured-patterns/{id}/parameters` `{parameters}` | replaces the parameters of a proposed or proven one (removes, adds) | 202 operation; the operation fails `ParameterRefused` naming the parameter and why; 409 `CapturedPatternApproved`, `CapturedPatternWithdrawn` at once |
 | `POST /captured-patterns/{id}/proof-slice` | gives its proof slice, making it from the captured copy when it has none | 202 operation, its target the captured pattern, its result the proof slice; `CapturedPatternWithdrawn`, `CapturedPatternBusy` at once |
-| `POST /captured-patterns/{id}/approval` | approves it | 202 operation; fails `ProofRequired` when its latest proof did not pass under the current method |
+| `POST /captured-patterns/{id}/approval` | approves it | 202 operation; 409 `ProofRequired` at once when its latest proof did not pass under the current method |
 | `POST /captured-patterns/{id}/withdrawal` | stops its use by new runs | 202 operation |
 | `DELETE /captured-patterns/{id}` | erases it and the artifacts only it holds | 202 operation; the client first shows what will be erased and asks for confirmation |
 
@@ -27,15 +27,31 @@ places per parameter, at most 64 characters per value.
 
 `startRun` gains an optional `pattern` (a captured pattern's ID or the base pattern's ID). Without
 it the most recently approved usable captured pattern that fits is used, otherwise the base
-pattern. Its answer and `RunStarted` name `pattern`, `pattern_reason` and, for a captured pattern,
-the parameters' values; a fitting captured pattern that needs a new proof is named in the answer.
-The answer also names each captured pattern that did not fit only because of a refused value,
-with the parameter and why. A named captured pattern that does not fit answers
-`PatternDoesNotFit` with the first place the slice differs or the value refused; a withdrawn one `CapturedPatternWithdrawn`; one that needs a proof `ProofRequired`.
+pattern. `startRun` still answers 202 with the run's operation. The run (`Run`) and its
+`RunStarted` name `pattern`, `pattern_reason` (`base`, `fits`, `chosen`; a proof run `chosen`)
+and, for a captured pattern, the parameters' values and `source_run`; the `Run` also names each
+fitting captured pattern that needs a new proof and each that did not fit only because of a
+refused value, with the parameter and why. Refusals, in this order, each at once: InvalidRequest or
+InvalidProject; NotFound for an unknown slice or a `pattern` naming no pattern;
+`CapturedPatternWithdrawn`, then `ProofRequired`, for a named captured pattern (or a proof slice's,
+withdrawn only); PatternDoesNotFit, with the first place the slice differs or the value refused,
+for a named one that does not fit (and as before for the base conditions); NotApproved;
+WorkersNotReady (a `fill` step needs no worker); RunActive; ProjectExists. `replayRun` of a run
+built from a captured pattern answers `CapturedPatternWithdrawn` or `ProofRequired` when it is not
+usable; `resumeRun` and `acceptHandOver` keep the run's pattern.
+
+Additive changes elsewhere: `Operation.target` takes a new `operation_target` rule (a slice, run
+or captured pattern ID) in place of `slice_or_run_id`; `Operation.result` gains `captured_pattern`;
+`OperationKind` gains `capture-run`, `replace-parameters`, `make-proof-slice`,
+`approve-captured-pattern`, `withdraw-captured-pattern` and `erase-captured-pattern`; `Run` gains
+`proof` and the pattern choice; `Slice` and `SliceSummary` gain `proof_of`; `ErrorCode` gains the
+new codes. The client and the launcher read `target` as a string and print or match it only where
+it names a run.
 
 A proof is `startRun` of the proof slice into a new project folder: an ordinary run on that
-slice's step workers, with `proof: true` on the run and its `RunStarted`; it passes when it ends
-done and its outputs equal the captured pattern's `expected` hashes.
+slice's step workers, with `proof: true` on the run and its `RunStarted`, that reuses no earlier
+result; it passes when it ends done and its outputs equal the captured pattern's `expected`
+hashes (data model, Proof).
 
 ## Fit and fill (package `engine/captured`)
 
@@ -63,8 +79,16 @@ the step's writable paths (each path must match one; otherwise 400 naming it) wi
 | `ap pattern <id>` | `GET /captured-patterns/{id}`: parameters and places, proofs, state |
 | `ap pattern <id> --drop <param>` / `--add <value>` | `PUT /captured-patterns/{id}/parameters` |
 | `ap proof-slice <id>` | `POST /captured-patterns/{id}/proof-slice`, follows the operation, prints the proof slice's ID |
-| `ap prove <id> <project>` | the launcher runs the client's `proof-slice <id>`, then `build <proof slice> <project>` as for `build` (`build-workers` first) |
+| `ap prove <id> <project>` | the launcher runs the client's `proof-slice <id>`, then `build <proof slice> <project>` as for `build` (`build-workers` first); after the run's end line the client prints `Proof of <id>: passed` or `Proof of <id>: failed: <failure>; ...` |
 | `ap approve-pattern <id>` | `POST /captured-patterns/{id}/approval` |
 | `ap withdraw-pattern <id>` | `POST /captured-patterns/{id}/withdrawal` |
 | `ap erase-pattern <id>` | shows what will be erased, asks for confirmation, then `DELETE /captured-patterns/{id}` |
 | `ap build <slice> <project> [--pattern <id>]` | `startRun` with `pattern` |
+
+`ap proof-slice <id>` prints only the proof slice's ID and a line feed on standard output, which
+the launcher reads. Output lines `src/cli/contract.md` gains: the `RunStarted` event line's fields
+become `slice <slice>  pattern <pattern>[  reason <pattern_reason>][  proof][  source <run>][
+parameters <name>=<value>,...]`; `build`'s first line adds `with <pattern> (<pattern_reason>)`;
+the `run` header adds `reason`, `proof` and `source`; each fitting captured pattern that needs a
+proof or was refused for a value prints one line `Not used: <captured pattern>: <reason>` after the
+first line; `ap slices` gains a `PROOF OF` column.

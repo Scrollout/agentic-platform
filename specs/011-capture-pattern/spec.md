@@ -76,6 +76,11 @@ reused only under the method that judged them), [feature 009](../009-no-hard-cod
   slice: each captured pattern has one proof slice, an approved slice made from its copy of the
   source slice, and a proof is an ordinary run of it under the captured pattern; the captured
   pattern keeps the source run's output hashes (owner; FR-004, supersedes the answer above).
+- Analyze round 4 (fresh Sonnet, at fb1c8ff), owner 2026-11-26 (the recommended answers): a proof
+  slice is marked as one (its own description `Proof of <captured pattern>` and the captured
+  pattern it proves), and describing the source again never returns it; resume and take-over keep
+  a run's recorded pattern, a replay of a run built from a captured pattern follows the usable
+  rule, and a replay of a proof run is a new proof (FR-006, FR-011, FR-013).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -212,6 +217,14 @@ use the captured pattern and says it needs a new proof; proving it again restore
   proposal is never marked proven without a complete, recorded proof.
 - A run already in progress when its captured pattern is withdrawn finishes on it; erasing a
   captured pattern is refused while a run built from it, or its proof, has not ended.
+- The proof slice is erased by the developer: the proofs already recorded stay with the captured
+  pattern, and the next proof makes a new proof slice.
+- A part of the proof slice is changed: it no longer equals the captured copy, so its build is
+  refused as not fitting.
+- The captured pattern is withdrawn: its proof slice's builds are refused, naming the withdrawal.
+- A run built from a captured pattern is resumed, taken over or replayed: resume and take-over keep
+  its pattern; a replay uses the same captured pattern only while it is usable, and is refused
+  otherwise, naming why; a replay of a proof run is a new proof.
 
 ## Requirements *(mandatory)*
 
@@ -250,7 +263,7 @@ use the captured pattern and says it needs a new proof; proving it again restore
   naming each failing check or differing file when it fails.
 - **FR-006**: Only a proposal whose latest proof passed under the current method MAY be approved.
   Approval MUST be the developer's explicit act, recorded with who approved and when; until then
-  no run uses the proposal.
+  no run other than its proofs uses the proposal.
 - **FR-007**: An approved captured pattern MUST enter the catalogue with its own identity and MUST
   NOT change afterwards; to change it, the developer captures the run again under another name and
   withdraws the old one.
@@ -277,7 +290,9 @@ use the captured pattern and says it needs a new proof; proving it again restore
 - **FR-011**: A captured pattern MUST be used only while its latest proof passed under the current
   method. Otherwise (a method change, a later failing proof, a proof still running) a run MUST
   NOT use it and MUST tell the developer it needs a new
-  proof; the developer MUST be able to start that proof.
+  proof; the developer MUST be able to start that proof. A resumed or taken-over run MUST keep
+  its recorded pattern; a replay of a run built from a captured pattern MUST use it only while it
+  is usable and is otherwise refused, naming why; a replay of a proof run MUST be a new proof.
 - **FR-012**: The developer MUST be able to withdraw a captured pattern; no run started after that
   uses it, and records of earlier runs keep naming it.
 - **FR-013**: A run built from a captured pattern MUST record the captured pattern's identity and
@@ -297,6 +312,9 @@ use the captured pattern and says it needs a new proof; proving it again restore
 - **Proof**: one build of the captured pattern's copy of its source slice from the captured
   pattern with the source values and no model call, its check results, its file comparison and the
   method it ran under.
+- **Proof slice**: the approved slice the platform makes from a captured pattern's copy of its
+  source slice, described `Proof of <captured pattern>` and naming the captured pattern it proves;
+  each of its runs is a proof, and describing the source again never returns it.
 - **Approval**: the developer's recorded consent that a proven captured pattern may be used.
 
 ## Success Criteria *(mandatory)*
@@ -305,7 +323,8 @@ use the captured pattern and says it needs a new proof; proving it again restore
 
 - **SC-001**: A run from a captured pattern uses 0 model tokens and costs 0 in model spend.
 - **SC-003**: Every approved captured pattern has a passing proof under the method it is used
-  under: 0 runs use a captured pattern without one, including after a method change.
+  under: 0 runs other than its proofs use a captured pattern without one, including after a
+  method change.
 - **SC-004**: For a captured notes slice, a slice for another resource is built done and its
   derived tests pass, in 3 of 3 runs, with the same files each time.
 - **SC-005**: A slice that differs from the source outside a parameter fits the captured pattern

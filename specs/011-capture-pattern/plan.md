@@ -66,7 +66,7 @@ field on `startRun`, eight terminal commands, one acceptance suite
 | VI. Adopt mature OSS | Pass | gonew, Copier, Cookiecutter and `text/template` evaluated; none derives a template from an accepted project (research R4); the custom engine is justified there |
 | VII. Providers | Pass | The rule that chooses between fitting patterns is specified (R6) |
 | VIII. Containers | Pass | No new image |
-| IX. Knowledge stays true | Pass | ADR 0090 to 0097, the reference "Project template tools", the architecture overview and the log at implementation |
+| IX. Knowledge stays true | Pass | ADR 0090 to 0098, the reference "Project template tools", the architecture overview and the log at implementation |
 | X. No silent loss | Pass | A captured run and a proof are ordinary runs: recorded before 202, one terminal state, checkpointed steps |
 | XI. Privacy | Pass | A captured pattern holds the developer's slice and code like a slice does; erasing it is an operation; telemetry names IDs and hashes only |
 | XII. Tenants | Not applicable | One developer by scope (feature 001 FR-021), as for slices; Complexity Tracking |
@@ -96,9 +96,10 @@ Each decision that outlives the feature has a record in `docs/decisions/`.
 | Parameters are names in three case forms and declared values; a slice fits when filling the source gives it exactly; one engine owns the rules | R4 | [ADR 0092](../../docs/decisions/0092-captured-pattern-fit-is-exact-substitution.md) |
 | Any other literal value of the slice may be added as a parameter; a number matches only as a whole number | E1, R4 | [ADR 0094](../../docs/decisions/0094-any-literal-value-may-be-a-parameter.md) (supersedes ADR 0092 in part) |
 | A captured pattern never changes (always `1.0.0`; a change is a new capture); a value keeps its parameter's kind; a name has at least two letters; a proof builds from the captured pattern's copy of the slice | R3, R4, R5 | [ADR 0095](../../docs/decisions/0095-captured-patterns-never-change-values-keep-their-kind.md) (supersedes ADR 0091 and ADR 0092 in part) |
-| A captured pattern is used only while its latest proof passed under the current method, a run of its source slice whose files equal the accepted ones; the newest usable fitting one is chosen unless the run names another | R5, R6 | [ADR 0093](../../docs/decisions/0093-captured-pattern-used-only-under-its-proven-method.md) |
+| A captured pattern is used only while its latest proof passed under the current method, a run of its proof slice whose outputs equal the expected ones (ADR 0097); the newest usable fitting one is chosen unless the run names another | R5, R6 | [ADR 0093](../../docs/decisions/0093-captured-pattern-used-only-under-its-proven-method.md) |
 | A proof's step workers are keyed by its captured pattern; a proof's run has no slice (superseded by ADR 0097) | R2, R5, S17 | [ADR 0096](../../docs/decisions/0096-proof-step-workers-keyed-by-captured-pattern.md) |
 | A proof is an ordinary build of the captured pattern's proof slice, an approved slice made from its copy; the captured pattern keeps the expected output hashes | R2, R5, S17, S18 | [ADR 0097](../../docs/decisions/0097-proof-builds-a-slice-made-from-the-captured-copy.md) (supersedes ADR 0096) |
+| A proof slice is marked (`Proof of <captured pattern>`, `proof_of`) and never reused; a proof reuses no result; resume and take-over keep the pattern; a replay follows the usable rule and a replayed proof is a new proof | R5 | [ADR 0098](../../docs/decisions/0098-proof-slice-marked-and-runs-keep-their-pattern.md) |
 
 ## Threat model
 

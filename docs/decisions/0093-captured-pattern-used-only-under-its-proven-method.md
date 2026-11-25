@@ -1,7 +1,7 @@
 ---
 type: Decision
 title: "ADR 0093: A captured pattern is used only under its proven method"
-description: Superseded in part by ADR 0095 (a proof builds from the captured pattern's copy of the slice and compares generated files; usable needs the latest proof to have passed). A captured pattern may be approved and used only while the method of its latest passing proof is the engine's current one; the proof is a run of the source slice whose files equal the accepted ones; startRun picks the newest usable fitting captured pattern unless the run names another.
+description: Refined by ADR 0097 (a proof is a build of the captured pattern's proof slice, compared with the expected hashes it keeps). Superseded in part by ADR 0095 (a proof builds from the captured pattern's copy of the slice and compares generated files; usable needs the latest proof to have passed). A captured pattern may be approved and used only while the method of its latest passing proof is the engine's current one; the proof is a run of the source slice whose files equal the accepted ones; startRun picks the newest usable fitting captured pattern unless the run names another.
 tags: [decisions, catalogue, captured-patterns]
 status: draft
 decision: accepted
@@ -15,7 +15,7 @@ sources:
   - id: spec
     resource: ../../specs/011-capture-pattern/spec.md
     title: Feature 011 specification, Clarifications
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-25T23:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-26T01:10:00Z }
 ---
 
 # Origin

@@ -15,7 +15,7 @@ artifacts in its content-addressed store.
 | `declaration` | the base pattern with each agent step's worker `procedure:fill`, one attempt per `fill` step, and the review step without FindingsCarryEvidence and NoBlockingFindingOpen and with outputs `[witnesses]` | valid against `pattern.schema.json` (research R1) |
 | `template` | per filled output (`tests`, `code`, `witnesses`): the accepted output's artifact hash | held by the captured pattern (research R3) |
 | `expected` | the source run's `generated-code`, `tests`, `code` and `witnesses` hashes | copied at capture and held as artifacts, so a proof compares with them after the source run's record is erased (research R5) |
-| `proof_slice` | the slice ID of its proof slice, absent until the first proof request or after that slice is erased | an approved slice made from `slice`; its runs are the proofs (research R5) |
+| `proof_slice` | the slice ID of its proof slice, absent until the first proof request and cleared when that slice is erased | an approved slice made from `slice`; its runs are the proofs (research R5) |
 | `parameters` | list of Parameter | FR-003 |
 | `proofs` | list of Proof, newest last | FR-005 |
 | `approval` | who, when, the proof it approved | only after a passing proof under the current method (FR-006) |
@@ -41,7 +41,14 @@ Two parameters equal in any case form are refused (`ParameterRefused`).
 | `run` | the proof's run ID: a run of the proof slice under the captured pattern with the source values, into a new project folder the developer named |
 | `method` | the method identity it ran under |
 | `outcome` | `passed`, `failed` or `running` |
-| `failures` | each failing check (step, check, reason) and each differing file (step, path) |
+| `failures` | each failing check (step, check, reason), each differing file (step, path), or the run's end when it ended other than `done` |
+
+A Proof is written when `startRun` of the proof slice is accepted (`running`) and completed once
+the run's end is recorded (idempotently; after an engine restart, from the run record): `done`
+with every `expected` hash equal is `passed`; `done` with a differing hash is `failed`, naming the
+files; `handed-over`, `expired` or `cancelled` is `failed`, naming the end and its reason; an
+interrupted run or one waiting for the developer stays `running`. Erasing the proof slice keeps
+every Proof; its `run` then answers NotFound.
 
 ## States
 
@@ -58,27 +65,39 @@ proof passes (FR-011). Only a usable captured pattern is judged at `startRun`. O
 time per captured pattern; another answers `CapturedPatternBusy`. While a newer proof runs, the latest
 proof has not passed, so the captured pattern is unusable until it does (fail closed). Erasure is
 refused with `CapturedPatternBusy` while a run built from it, or its proof, has not ended; erasing
-it also erases its proof slice and that slice's runs.
+it also erases its proof slice and that slice's runs (its proofs), and keeps the records of runs of
+other slices built from it, which keep naming it.
 
 ## Proof slice
 
-An ordinary approved slice (research R5): its parts are the captured pattern's copy, approved when
-it is made, and its record names the captured pattern it proves. A `startRun` of it is a proof:
-it always uses that captured pattern, with the source values, whatever its state except
-withdrawn (`CapturedPatternWithdrawn`); a `pattern` naming another one, or a part changed since
-it was made (so it no longer equals the copy), is `PatternDoesNotFit`.
-Its step workers are started by `ap build-workers <proof slice> <project>` as for any slice; a
-`fill` step needs none. A second proof under the same method may reuse the first one's accepted
-results, as any run of a slice does (feature 006); under a new method the reuse keys differ and
-every step runs again. The developer may erase it like any slice; the next proof request makes a
-new one.
+An approved slice (research R5) made by the slices service from the captured pattern's copy:
+described `Proof of <captured pattern>`, with `proof_of` naming the captured pattern, and each
+part approved by the engine after the part checks pass under the current method, recorded in its
+history as made by the engine for that proof; a failing check fails the operation with
+`PartFailsChecks` and makes no slice. It takes the next `S-<n>`. `createSlice` never reuses it.
+A `startRun` of it is a proof: it always uses that captured pattern, with the source values,
+whatever its state except withdrawn (`CapturedPatternWithdrawn`); a `pattern` naming another one,
+or a part changed since it was made (so it no longer equals the copy), is `PatternDoesNotFit`. Its
+step workers are started by `ap build-workers <proof slice> <project>` as for any slice; a `fill`
+step needs none. A proof never reuses an earlier run's results, so every step and check runs under
+the current method. The developer may erase it like any slice (refused while its run is active);
+that clears `proof_slice`, and the next proof request makes a new one. The `Slice` resource and
+`SliceSummary` gain an optional `proof_of`, additively; `ap slices` and `ap show` print it.
+
+## Runs that continue
+
+A resumed or taken-over run keeps its recorded pattern, parameters and source run. A replay of a
+run built from a captured pattern uses that captured pattern again only while it is usable, and is
+refused with `CapturedPatternWithdrawn` or `ProofRequired` otherwise; a replay of a proof run is a
+new proof. The readiness check of `startRun`, `resumeRun` and `replayRun` skips `fill` steps.
 
 ## Run (added fields)
 
 A proof's run has `proof: true` (in `Run` and in `RunStarted`) and keeps its proof slice as its
 `slice`. A captured-pattern operation's `target` is the captured pattern's ID; the proof-slice
 operation's result names the proof slice.
-The run (`getRun`, readable as soon as `startRun` answers) carries the pattern choice: `pattern`,
+The run (`getRun`, readable as soon as `startRun` answers; the 202 is the operation, as before)
+carries the pattern choice; a proof run's `pattern_reason` is `chosen`: `pattern`,
 `pattern_reason`, and for a captured pattern `parameters` and `source_run`, plus the captured
 patterns that fit but need a new proof and those refused only for a value, each with the reason.
 
