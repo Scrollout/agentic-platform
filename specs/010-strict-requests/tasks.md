@@ -209,7 +209,7 @@ with the clean reference, `{"text":"a","TEXT":"b"}` gives 201 with `"a"`.
   text); `template/vendortools/tools.go` and the template's `go.mod`
   unchanged; T003-T006 pass; every existing test in `checks`, `procedures` and `checksvc` stays
   green or is stopped and asked for; `method.sha256` converged
-- [ ] T008 [US1] Commit (tests and code in separate commits); ask the owner before pushing (the
+- [x] T008 [US1] Commit (tests and code in separate commits); ask the owner before pushing (the
   recorded-model jobs will miss until T017); push (check jobs); fix until CI is green but for
   those jobs; record the run in research; fresh review of US1; `/speckit-converge` for US1.
   CI 45581805361 at e061694 (research Runs). Review round 1 (fresh Sonnet, at d6ba493): F1, F2
@@ -221,7 +221,8 @@ with the clean reference, `{"text":"a","TEXT":"b"}` gives 201 with `"a"`.
   mislabelled case changes only with the owner's approval): T027; F7 (aliases followed outside
   schemas) closed: consistent with the YAML reading of the whole contract, and an alias in a schema
   is refused; F8 (the GeneratedCodeUnchanged test supplies its own `gen/**`): T028; F9 (the pin
-  test proves the label only) closed: stated in its docstring and the README
+  test proves the label only) closed: stated in its docstring and the README. `/speckit-converge`
+  for US1 (after review round 2, at 6755b51): converged, nothing appended
 - [x] T024 [US1] Test author (new files): `src/engine/checks/request_shapes_regress_test.go`:
   `additionalProperties: False` and `FALSE` close a shape and `True` does not; `required: True`
   and `TRUE` make a body required; any key beside a `$ref` other than an annotation or an `x-` key
