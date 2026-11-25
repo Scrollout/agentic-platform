@@ -1,7 +1,7 @@
 ---
 type: Decision
 title: "ADR 0092: A slice fits a captured pattern by exact substitution"
-description: Superseded in part by ADR 0094 (any literal value may be a parameter). A captured pattern's parameters are names, in three case forms, and declared values; a slice fits when filling the source slice with one value per parameter gives exactly the approved slice; one engine owns these rules.
+description: Superseded in part by ADR 0094 (any literal value may be a parameter) and ADR 0095 (a value keeps its parameter's kind and a name has at least two letters). A captured pattern's parameters are names, in three case forms, and declared values; a slice fits when filling the source slice with one value per parameter gives exactly the approved slice; one engine owns these rules.
 tags: [decisions, catalogue, captured-patterns]
 status: draft
 decision: accepted
@@ -28,6 +28,8 @@ Sources: [Feature 011 plan](../../specs/011-capture-pattern/plan.md).
 
 # Context
 
+> Superseded in part by [ADR 0095](/decisions/0095-captured-patterns-never-change-values-keep-their-kind.md): a value keeps its parameter's kind and a name has at least two letters.
+>
 > Superseded in part by [ADR 0094](/decisions/0094-any-literal-value-may-be-a-parameter.md): the
 > developer may also add any other literal value of the slice as a parameter.
 

@@ -41,8 +41,8 @@ evals once before merge (method change; owner's go-ahead)
 **Project Type**: engine (new package, API resource, run choice), check program (`writeStep`),
 terminal client, contracts
 
-**Performance Goals**: a captured run makes no model call (SC-001) and ends in under a quarter of
-its source run's time (SC-002); fit is linear in the slice's text per captured pattern
+**Performance Goals**: a captured run makes no model call (SC-001); fit is linear in the slice's
+text per captured pattern
 
 **Constraints**: the base pattern, its template, agents and recordings are unchanged; contract
 changes are additive; existing tests change only as the owner approves
@@ -64,7 +64,7 @@ field on `startRun`, eight terminal commands, one acceptance suite
 | VI. Adopt mature OSS | Pass | gonew, Copier, Cookiecutter and `text/template` evaluated; none derives a template from an accepted project (research R4); the custom engine is justified there |
 | VII. Providers | Pass | The rule that chooses between fitting patterns is specified (R6) |
 | VIII. Containers | Pass | No new image |
-| IX. Knowledge stays true | Pass | ADR 0090 to 0094, the reference "Project template tools", the architecture overview and the log at implementation |
+| IX. Knowledge stays true | Pass | ADR 0090 to 0095, the reference "Project template tools", the architecture overview and the log at implementation |
 | X. No silent loss | Pass | A captured run and a proof are ordinary runs: recorded before 202, one terminal state, checkpointed steps |
 | XI. Privacy | Pass | A captured pattern holds the developer's slice and code like a slice does; erasing it is an operation; telemetry names IDs and hashes only |
 | XII. Tenants | Not applicable | One developer by scope (feature 001 FR-021), as for slices; Complexity Tracking |
@@ -93,17 +93,20 @@ Each decision that outlives the feature has a record in `docs/decisions/`.
 | Captured patterns are the developer's data in the engine store, behind `/captured-patterns`; their template artifacts are held apart from the source slice | R3, R7 | [ADR 0091](../../docs/decisions/0091-captured-patterns-kept-in-the-engine-store.md) |
 | Parameters are names in three case forms and declared values; a slice fits when filling the source gives it exactly; one engine owns the rules | R4 | [ADR 0092](../../docs/decisions/0092-captured-pattern-fit-is-exact-substitution.md) |
 | Any other literal value of the slice may be added as a parameter; a number matches only as a whole number | E1, R4 | [ADR 0094](../../docs/decisions/0094-any-literal-value-may-be-a-parameter.md) (supersedes ADR 0092 in part) |
+| A captured pattern never changes (always `1.0.0`; a change is a new capture); a value keeps its parameter's kind; a name has at least two letters; a proof builds from the captured pattern's copy of the slice | R3, R4, R5 | [ADR 0095](../../docs/decisions/0095-captured-patterns-never-change-values-keep-their-kind.md) (supersedes ADR 0091 and ADR 0092 in part) |
 | A captured pattern is used only under the method of its latest passing proof, a run of its source slice whose files equal the accepted ones; the newest usable fitting one is chosen unless the run names another | R5, R6 | [ADR 0093](../../docs/decisions/0093-captured-pattern-used-only-under-its-proven-method.md) |
 
 ## Threat model
 
 | Element | S | T | R | I | D | E | OWASP mapping | Mitigation |
 |---------|---|---|---|---|---|---|---------------|------------|
-| Parameter values (from the approved slice the analyst model may have written) entering filled code | | ✓ | | | | ✓ | LLM01 prompt injection, LLM05 improper output handling, ASI05 unexpected code execution | Values parsed into their form before any substitution (names `[a-z][a-z0-9]*`, declared and literal values as numbers or strings of letters, digits, `_`, `-`, spaces): no quote, operator or newline can enter code; the filled project runs only in the check sandbox (gVisor, no egress) and must pass every check |
+| Parameter values (from the approved slice the analyst model may have written) entering filled code | | ✓ | | | | ✓ | LLM01 prompt injection, LLM05 improper output handling, ASI05 unexpected code execution | Each value parsed into its parameter's kind before any substitution, at most 64 characters: a name `[a-z][a-z0-9]*`, a number without a sign, a string of letters, digits, `_`, `-` and spaces; a number slot takes only a number, a name slot only a name; no quote, backslash, newline or operator other than `-` can enter, and a string's `-` and spaces can change code only where the source string occurred; the filled project runs only in the check sandbox (gVisor, no egress) and must pass every check |
 | Captured template (code a model wrote, accepted once) reused without review | | ✓ | | | | ✓ | ASI06 memory and context poisoning, LLM03 supply chain | Only from a run that ended done, whose review left no blocking finding; the developer approves after a proof; withdrawal and erasure; every captured run is judged by the base checks, including DependenciesAllowed and DeploymentValuesConfigured |
 | Fit judge (`engine/captured`) | | ✓ | | | ✓ | | ASI02 tool misuse (a slice crafted to fit and pick a pattern) | Exact equality only; a fit picks values, never code; limits on parameters and places; linear matching, no backtracking regular expressions |
 | `/captured-patterns` and `writeStep` (new calls) | ✓ | ✓ | ✓ | | ✓ | ✓ | API Top 10 API1, API4, API5 | Same token, rate limit and Idempotency-Key as the engine's other calls; `writeStep` only from the engine's token and only into the step's writable paths; operations recorded in the run store |
-| Method change after approval | | ✓ | | | | | ASI08 cascading failures (an old verification carried into new runs) | Usable only under the method of the latest passing proof (FR-011) |
+| Method change after approval | | ✓ | | | | | ASI08 cascading failures (an old verification carried into new runs) | Usable only while its latest proof passed under the current method (FR-011) |
+| Approval and withdrawal | ✓ | | ✓ | | | ✓ | ASI09 human-agent trust exploitation, ASI03 identity abuse | Only the developer's own client token reaches the engine API; each approval and withdrawal is an operation recorded with its caller and time, and the approval names the proof it approved; an agent has no engine token |
+| Fill output (`engine/captured`, the project worker's `writeStep`) | | | | | ✓ | | API4 resource consumption | At most 32 parameters, 10000 places each, values of at most 64 characters, so a filled file grows by a bounded amount; `writeStep` keeps the step's file and size limits |
 
 ## Project Structure
 
@@ -158,4 +161,4 @@ None.
 
 | Violation | Why needed | Simpler alternative rejected because |
 |-----------|------------|--------------------------------------|
-| Principle XII: captured patterns have no tenant scope | One developer by scope (feature 001 FR-021) | Not applicable until the hosted version, as for slices |
+| Principle XII: captured patterns have no tenant scope | One developer by scope (feature 001 FR-021) | Not applicable until the hosted version, as for slices (feature 001's row); the owner approves this row with T002 |

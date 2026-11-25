@@ -185,6 +185,6 @@ These terms come from the Feature 011 specification.
 |------|---------|
 | Captured pattern | A pattern made from a run that ended done: its slice, tests and code as a template with named parameters, built later with no model call and used only after the developer approves its proof. |
 | Parameter | A name, declared value or other literal value in a captured pattern's source slice that a later slice may give another value, with every place it occurs. |
-| Proof | A build of a captured pattern's source slice from the captured pattern with no model call; it passes when every check passes and every file equals the accepted one. |
+| Proof | A build of a captured pattern's copy of its source slice from the captured pattern with no model call; it passes when every check the captured pattern declares passes and the filled and generated files equal the source run's, showing the captured pattern reproduces its source under the current method. |
 
 Sources: [Feature 011 specification](../../specs/011-capture-pattern/spec.md).

@@ -1,7 +1,7 @@
 ---
 type: Decision
 title: "ADR 0091: Captured patterns are kept in the engine store"
-description: Captured patterns are the developer's data in the engine store, managed through the engine API's /captured-patterns resource, and hold their template artifacts apart from the source slice.
+description: Superseded in part by ADR 0095 (its version is always 1.0.0 and a change is a new capture; one operation at a time). Captured patterns are the developer's data in the engine store, managed through the engine API's /captured-patterns resource, and hold their template artifacts apart from the source slice.
 tags: [decisions, catalogue, captured-patterns]
 status: draft
 decision: accepted
@@ -27,6 +27,8 @@ Clarifications).
 Sources: [Feature 011 plan](../../specs/011-capture-pattern/plan.md).
 
 # Context
+
+> Superseded in part by [ADR 0095](/decisions/0095-captured-patterns-never-change-values-keep-their-kind.md): its version is always 1.0.0 and a change is a new capture; one operation at a time.
 
 - Principle III: what users manage enters through the API and lives in the owning component's
   store; `src/catalogue/` holds the reviewed base patterns and is part of the method identity.

@@ -35,12 +35,15 @@ the notes slice accepts) and its slice (`testdata/slice`), every word holding `n
 
 Every occurrence is one of the three case forms of `note` or `notes`, alone or inside a word
 (`NewNote`, `listNotes`), so two name parameters (`note`, `notes`), each in three case forms,
-matched longest first, cover them all (FR-003). The slice's one declared value (`maxLength` 200,
-`slice/contract.yaml:11`) is not repeated in the code (DeclaredValuesNotRepeated); in the examples
-it appears together with values derived from it (a text one character over the limit), which are
-not names or declared values: a slice with another limit would fit only if its examples' derived
-values equalled the source's. Put to the owner: the developer may add any literal value of the
-slice as its own parameter (*owner*, spec Clarifications), so `201` is a parameter beside `200`.
+matched longest first, cover them all (FR-003).
+
+Corrected in analyze round 1 (C1): this slice declares no limit. Its `200`, `201` and `400` are
+response statuses (`slice/contract.yaml:11`, `:29`), and its numbers in the examples are ids and
+statuses; a literal parameter on one of them would replace every status of that number too. A
+declared limit and a value derived from it in the examples (a text one character over the limit)
+are the case of feature 009's planted contract (`src/tests/acceptance/planted_values_test.go`,
+`maxLength: 200`); that case is why the developer may add any literal value as a parameter
+(*owner*, spec Clarifications), and SC-006 is proven on a unit fixture that declares a limit.
 
 ## R1. What a captured pattern is (FR-002, FR-007, FR-009)
 
@@ -49,7 +52,8 @@ fixed procedure `fill`, which writes that step's accepted files from the templat
 parameters' values filled in. Step names, order, writable paths, dependencies, limits and checks
 stay the base pattern's, except that the review step drops FindingsCarryEvidence and
 NoBlockingFindingOpen, which judge findings no agent writes, and so is no longer a review step
-(S3). The template is the source run's `tests`, `code` and `witnesses` outputs (S4); `gen/**` and
+(S3); its outputs are `witnesses` only, since `findings` is not a file set; and every `fill` step
+has one attempt, since filling is deterministic and nothing may repair it (analyze R1). The template is the source run's `tests`, `code` and `witnesses` outputs (S4); `gen/**` and
 the module files are not captured: the generate procedure derives them again from the new
 slice's contract, as for any slice, and GenerationRepeatable, GeneratedCodeBuilds and
 GeneratedCodeUnchanged judge them as before.
@@ -91,8 +95,12 @@ a worker per step and `build-workers` to know which pattern a run uses, S9); wri
 parameters, the template's artifact hashes, every proof, the approval and the state. The template
 artifacts are held by the captured pattern as well as by the source slice (S4), so erasing the
 slice keeps them; erasing a captured pattern is a separate, confirmed operation. A captured
-pattern's ID is `<base id>-<name>` (S10), `<name>` given at capture or the source slice's ID; its
-version starts at `1.0.0` and a changed captured pattern is a new version (FR-007).
+pattern's ID is `<base id>-<name>` (S10), `<name>` given at capture or the source slice's ID in
+lower case (`S-3` gives `api-feature-go-s-3`); an ID that exists answers `CapturedPatternExists`.
+Its version is always `1.0.0`: an approved captured pattern never changes, and a change is a new
+capture under another name (*owner*, FR-007). One operation at a time per captured pattern: a
+parameters change, proof, approval, withdrawal or erasure while another of its operations runs
+answers `CapturedPatternBusy` (Principle IV ordering; analyze O1).
 
 **Rationale**: Principle III (user-managed things enter through the API and live in the owning
 component's store); the repository's `src/catalogue/` stays the reviewed base patterns, and a
@@ -111,24 +119,31 @@ the fit and the fill:
   schema name, split at case changes: `createNote` gives `note`) and its declared values (feature
   009's walk). The developer may remove any and add another name, declared value or literal value
   (a number or a string that occurs in the slice) (*owner*).
-- **Value forms** (Values that check themselves): a name value is `[a-z][a-z0-9]*` in its lower
-  form; a declared value or literal value is an integer, a decimal, or a string of letters,
-  digits, `_`, `-` and spaces. A number is matched only as a whole number: not next to a digit, or
-  to a `.` followed by a digit. A value outside its form is refused at the proposal and at the fit,
+- **Value forms** (Values that check themselves): a parameter's kind fixes the form of every value
+  it takes, the source's and a later slice's: a name is `[a-z][a-z0-9]*` with at least two
+  letters, so its capitalised and upper forms differ; a number (a declared or literal value
+  written as a number) is an integer or a decimal without a sign; a string (a declared or literal
+  value written as a string) is letters, digits, `_`, `-` and spaces. Every value is at most 64
+  characters. A number is matched only as a whole number: the characters around it are not
+  digits, letters or `_`, and not a `.` followed by a digit (`200` is not in `2001`, `1.200`,
+  `200ms` or `v200`; it is in `-200` and `"200"`). A value outside its form is refused at the proposal and at the fit,
   before any substitution.
 - **Case forms** (*owner*): a name covers its lower (`note`), capitalised (`Note`) and upper
-  (`NOTE`) forms, inside words too (`NewNote`); a plural is its own parameter.
+  (`NOTE`) forms, each replaced wherever it occurs, inside longer words too (`NewNote`,
+  `note_id`, `denote`); a plural is its own parameter.
 - **Matching**: occurrences are found longest source form first, left to right, never
   overlapping; two parameters whose values are equal in any case form are refused.
 - **Fit**: the source slice's canonical text (the approved goals, rules, examples, terms and
   contract, as feature 001's reuse compares them) is split into literal text and parameter holes;
   the approved slice fits when one value per parameter, read from the first hole of each and of
-  its form, fills the source into exactly the approved slice's text. Otherwise the slice does not
-  fit, naming the first place it differs. A captured pattern's base fit conditions also run.
-- **Limits** (stated in the contract): other spellings (`note_id`, `NOTEID` inside an upper word is
-  covered, `note-id` is not), irregular plurals given as their own parameter only, a derived value
-  that is not added as its own parameter (E1), and a value that occurs where it was not meant (the proposal lists
-  every place; the fit replaces it everywhere).
+  its form, fills the source into exactly the approved slice's text, and no two parameters take
+  equal values. Otherwise the slice does not fit, naming the first place it differs or the value
+  refused and why (*owner*: a value outside its form does not fit, and the start's answer says
+  so). A captured pattern's base fit conditions also run.
+- **Limits** (stated in the contract): a spelling that is none of the three forms (`nOTE`) is not
+  replaced; irregular plurals only as their own parameter; a derived value that is not added as
+  its own parameter (E1); a value that occurs where it was not meant (`denote`, a status equal to
+  a limit) is replaced everywhere, which the proposal lists place by place.
 
 **Rationale**: E1 shows the three case forms and longest-first matching cover a whole accepted
 project. A fit by substitution equality is exact, needs no model and has a single answer per
@@ -144,10 +159,15 @@ accepted project by named values is what none of them does; it is one small engi
 
 ## R5. The proof (FR-004, FR-005, FR-006, FR-011)
 
-**Decision**: a proof is a run of the source slice under the captured pattern with each
-parameter's source value, in a new project folder, recorded like any run (its own run ID,
-`RunStarted` naming the captured pattern and `proof: true`). It passes when the run ends done and
-every filled file's hash equals the accepted file's. The captured pattern keeps each proof's run ID,
+**Decision**: a proof is a run of the captured pattern's copy of the source slice (so it works
+after the slice is erased) under the captured pattern with each parameter's source value, in a
+new project folder, recorded like any run (its own run ID, `RunStarted` naming the captured
+pattern, `source_run` and `proof: true`, and no slice). It passes when the run ends done and the
+`generated-code`, `tests`, `code` and `witnesses` outputs' hashes equal the source run's (*owner*:
+the proof shows the captured pattern reproduces its source under the current method; whether other
+values work is judged by each later run's checks). A captured pattern is **usable** when it is
+approved and its latest proof passed under the current method; a later failing proof makes it
+unusable (fail closed; analyze M1). The captured pattern keeps each proof's run ID,
 outcome, differing files and the method; it may be approved, and used, only while its latest
 passing proof's method is the engine's current method. A proof is started by the developer and
 followed as an operation.
@@ -165,7 +185,8 @@ the approved slice; the most recently approved that fits is used, unless
 the request names a pattern (a captured pattern's ID or the base pattern's). A fitting captured
 pattern whose proof's method is not current is skipped and named in the answer as needing a new
 proof. The start's answer and `RunStarted` name the pattern and why (`fits captured pattern`,
-`chosen`, `base pattern`).
+`chosen`, `base`); it also names each captured pattern that did not fit only because of a refused
+value, with the reason (*owner*).
 
 **Rationale**: the owner's answer; one rule chooses between providers of one kind (Principle VII).
 
@@ -176,7 +197,9 @@ proof. The start's answer and `RunStarted` name the pattern and why (`fits captu
 (before approval), `POST /{id}/proofs`, `POST /{id}/approval`, `POST /{id}/withdrawal` and
 `DELETE /{id}` (erase, confirmed), each state change an operation with an Idempotency-Key;
 `startRun` gains an optional `pattern`. New error codes: `RunNotDone`, `ParameterRefused`,
-`ProofRequired`, `CapturedPatternWithdrawn`. The terminal client gains `ap capture`, `ap patterns`,
+`ProofRequired`, `CapturedPatternWithdrawn`, `CapturedPatternExists`, `CapturedPatternBusy`.
+Erasure shows what it will erase (the captured pattern, the artifacts only it holds) before the
+client asks for confirmation (Principle XVII). The terminal client gains `ap capture`, `ap patterns`,
 `ap pattern`, `ap prove`, `ap approve-pattern`, `ap withdraw-pattern` and `build --pattern`. The
 check contract gains `writeStep` (R2).
 

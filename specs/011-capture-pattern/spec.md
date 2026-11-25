@@ -50,6 +50,19 @@ reused only under the method that judged them), [feature 009](../009-no-hard-cod
   with another limit would not fit (SC-004). Q: May other values become parameters? → A: yes, the
   developer may add any other literal value of the slice (a number or a string) as its own
   parameter (owner; FR-003).
+- Analyze round 1 (fresh Sonnet, at 3b74d73). C1: research E1 was wrong: the evals' notes slice
+  declares no limit (its `200` is a status), so Story 2's independent test and SC-004 use another
+  resource only; another limit with its derived values is proven on a fixture that declares one
+  (SC-006). Q: A parameter value outside its form (a space, a reserved word)? → A: the slice does
+  not fit that captured pattern, and the run's start says why; nothing reaches code (owner;
+  FR-008, FR-010). Q: What does the proof prove? → A: that the captured pattern rebuilds the
+  source slice with no model call, every check it declares passes, and the filled and generated
+  files equal the accepted ones; whether other values work is judged by each later run's checks
+  (owner; FR-004). Q: SC-002's time target? → A: dropped; SC-001 states the gain (owner). Q: A
+  change to an approved captured pattern? → A: none: it never changes; the developer captures the
+  run again under a new name and withdraws the old one (owner; FR-007). I1: every occurrence of a
+  case form is replaced wherever it sits, inside a word too (`note_id` becomes `task_id`), as the
+  owner's case-form answer says (FR-003).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -65,7 +78,7 @@ The developer chooses a run that ended done and asks the platform to capture it.
 proposes a captured pattern: the run's slice, tests and code, with the parts that may vary named
 as parameters. Before the developer can approve it, the platform proves it: rebuilt from the
 captured pattern with the source slice's own values, with no model call, the result passes every
-check the source run passed and equals the accepted files.
+check the captured pattern declares and its files equal the accepted ones.
 
 **Why this priority**: nothing can be reused until a proven solution is captured; this is the
 step that moves work from the probabilistic side to the deterministic side.
@@ -81,12 +94,13 @@ approves it into the catalogue.
    and method that accepted it, and each proposed parameter with the source value and every place
    it occurs.
 2. **Given** a proposal, **When** the platform proves it, **Then** the rebuild makes no model
-   call, every check passes, and every file equals the accepted file; the proof's result is
+   call, every check the captured pattern declares passes, and every filled and generated file
+   equals the accepted one; the proof's result is
    recorded with the proposal.
 3. **Given** a proposal whose proof fails, **When** the developer looks at it, **Then** it names
    each failing check or differing file, and it cannot be approved.
 4. **Given** a proven proposal, **When** the developer approves it, **Then** it enters the
-   catalogue with its own identity and version, and the approval is recorded with who approved
+   catalogue with its own identity, and the approval is recorded with who approved
    it and when.
 5. **Given** a run that ended handed over, expired or cancelled, or one still in progress,
    **When** the developer asks to capture it, **Then** the platform refuses, naming the run's
@@ -102,10 +116,11 @@ checks. No agent step runs, and the run ends done or handed over by the checks a
 
 **Why this priority**: this is the reuse the capture exists for (N-052); it depends on Story 1.
 
-**Independent Test**: capture the notes slice with its resource names, its text limit and the examples' value derived from it as
-parameters; approve a slice for tasks with a 100-character limit that otherwise equals it; the run
-ends done with zero model tokens, and its tests (derived from the new slice's examples) pass
-against the delivered service.
+**Independent Test**: capture the notes slice with its resource names as parameters; approve a
+slice for tasks that otherwise equals it; the run ends done with zero model tokens, and its tests
+(derived from the new slice's examples) pass against the delivered service. On a slice that
+declares a text limit, capture the limit and the examples' value derived from it as parameters; a
+slice with another limit and derived value fits and is filled with them.
 
 **Acceptance Scenarios**:
 
@@ -117,10 +132,14 @@ against the delivered service.
    captured pattern, and the reason names the first place it differs.
 3. **Given** a slice that fits, **When** its run starts, **Then** the run makes no model call,
    runs every check the captured pattern declares, and ends done only when all pass.
-4. **Given** a slice whose new values make a check fail (a value that is not a valid name, or a
-   limit its examples contradict), **When** the run's checks run, **Then** the run is handed over
-   with the failing check named, and no agent step is started to repair it.
-5. **Given** a slice that fits both a captured pattern and its base pattern, **When** its run
+4. **Given** a slice whose new values make a check fail (a limit its examples contradict), **When**
+   the run's checks run, **Then** the run is handed over with the failing check named, and no
+   agent step is started to repair it.
+5. **Given** a slice that would fit except that a value is outside its parameter's form (a space
+   in a name, a reserved word, a name where a number was), **When** its run starts, **Then** it
+   does not fit that captured pattern, and the start's answer names the captured pattern, the
+   parameter and why; the run uses another pattern as for any slice that does not fit.
+6. **Given** a slice that fits both a captured pattern and its base pattern, **When** its run
    starts, **Then** the captured pattern is used unless the developer chose the base pattern for
    that run, and the run record names the pattern used.
 
@@ -161,16 +180,19 @@ use the captured pattern and says it needs a new proof; proving it again restore
   both, because a fit could not tell them apart.
 - One source value inside another (`note` and its plural `notes`, a separate parameter): the
   longer value is matched first, and no place is replaced twice.
-- A case form the code writes another way (`NoteID`, `note_id`): the forms named in FR-003 are
-  replaced where they occur inside a word as well; any other spelling is not, and the proof fails
-  on the file it leaves unequal or the check it breaks.
-- A later slice gives two parameters the same value, or a value that breaks a name (a space, a
-  reserved word): the run's checks judge the result; a failed check hands the run over (Story 2,
-  scenario 4).
+- A case form inside a longer word (`NoteID`, `note_id`, `denote`): it is replaced there too, so
+  `note_id` becomes `task_id` and `denote` becomes `detask`; the proposal lists every place, so the
+  developer sees it, and a slice whose text has the word unchanged does not fit.
+- A spelling that is none of the three case forms (`nOTE`): it is not replaced; a later slice's
+  build is judged by its checks.
+- A later slice gives two parameters the same value: the fit refuses it, naming both parameters,
+  because filling them would not be reversible.
+- A later slice gives a value outside its parameter's form: it does not fit (Story 2, scenario 5).
 - A captured pattern with no parameter: only a slice identical to the source fits it, which the
   proposal states.
 - The source run's slice is later erased: the captured pattern keeps its own copy of what it
-  needs and remains usable; erasing the captured pattern is a separate, confirmed step.
+  needs, remains usable, and a new proof builds from that copy; erasing the captured pattern is a
+  separate, confirmed step.
 - The base pattern gets a new version: the captured pattern stays as captured, and the method
   rule (Story 3) decides whether it needs a new proof.
 - The proof is interrupted by a platform restart: it continues or is started again, and a
@@ -194,31 +216,35 @@ use the captured pattern and says it needs a new proof; proving it again restore
   before the proof the developer MUST be able to remove any parameter and add another of the
   slice's names, declared values or literal values. A number is matched only as a whole number,
   never inside a longer one. Each name parameter covers its value's three case forms:
-  all lower case, first letter upper case, all upper case; a plural or other form is a separate
-  parameter. Two parameters whose source values are equal in any case form MUST be refused. Where
+  all lower case, first letter upper case, all upper case, each replaced wherever it occurs,
+  inside a longer word too; a plural or other form is a separate parameter. Two parameters whose source values are equal in any case form MUST be refused. Where
   one source value contains another, the longer MUST be matched first, and no place is replaced
   twice.
 
 #### Proof and approval
 
-- **FR-004**: The platform MUST prove a proposal by building the source slice from it with no model
-  call, running every check the source run passed. The proof MUST pass only when every check
-  passes and every built file equals the accepted file.
+- **FR-004**: The platform MUST prove a proposal by building the captured pattern's copy of the
+  source slice from it, with the source values and no model call, running every check the
+  captured pattern declares. The proof MUST pass only when every check passes and every filled and
+  generated file equals the source run's accepted one. The proof shows that the captured pattern
+  reproduces its source under the current method; whether other values work is judged by each
+  later run's checks.
 - **FR-005**: A proof's result MUST be recorded with the proposal and the method it ran under,
   naming each failing check or differing file when it fails.
 - **FR-006**: Only a proposal whose latest proof passed under the current method MAY be approved.
   Approval MUST be the developer's explicit act, recorded with who approved and when; until then
   no run uses the proposal.
-- **FR-007**: An approved captured pattern MUST enter the catalogue with its own identity and
-  version, and MUST NOT change afterwards; a change is a new version that is proven and approved
-  again.
+- **FR-007**: An approved captured pattern MUST enter the catalogue with its own identity and MUST
+  NOT change afterwards; to change it, the developer captures the run again under another name and
+  withdraws the old one.
 
 #### Fit and build
 
 - **FR-008**: A slice MUST fit a captured pattern only when replacing each parameter's source
-  value with one value per parameter turns the source slice into the approved slice exactly. The
-  fit MUST name each parameter's value, and a slice that does not fit MUST be told the first place
-  it differs.
+  value with one value per parameter turns the source slice into the approved slice exactly, and
+  every value is of its parameter's form and differs from every other parameter's value. The fit
+  MUST name each parameter's value, and a slice that does not fit MUST be told the first place it
+  differs or the value refused and why.
 - **FR-009**: A run from a captured pattern MUST fill the parameters' values into the template,
   each name in the case form its place has (FR-003),
   MUST make no model call, and MUST run every check its captured pattern declares; it MUST end
@@ -226,7 +252,8 @@ use the captured pattern and says it needs a new proof; proving it again restore
 - **FR-010**: When a slice fits a captured pattern and another pattern, the run MUST use the
   captured pattern unless the developer chose another pattern for that run; when several captured
   patterns fit, the one approved most recently MUST be used. The answer to the run's start and the
-  run record MUST name the pattern used and why.
+  run record MUST name the pattern used and why, and the answer MUST name each captured pattern
+  that did not fit only because of a refused value, with the reason.
 
 #### Method and record
 
@@ -244,12 +271,13 @@ use the captured pattern and says it needs a new proof; proving it again restore
 
 - **Captured pattern**: a pattern made from a done run: the source slice, its accepted tests and
   code as a template, its parameters, the checks it runs, and its source run, base pattern,
-  identity and version. Proposed, then proven, then approved; later withdrawn or superseded.
+  identity and version. Proposed, then proven, then approved; later withdrawn or erased.
 - **Parameter**: a named part of a captured pattern's source slice that a later slice may give
   another value: a name, a declared value or another literal value, with its source value and the
   places it occurs.
-- **Proof**: one build of a captured pattern's source slice from the captured pattern with no
-  model call, its check results, its file comparison and the method it ran under.
+- **Proof**: one build of the captured pattern's copy of its source slice from the captured
+  pattern with the source values and no model call, its check results, its file comparison and the
+  method it ran under.
 - **Approval**: the developer's recorded consent that a proven captured pattern may be used.
 
 ## Success Criteria *(mandatory)*
@@ -257,13 +285,15 @@ use the captured pattern and says it needs a new proof; proving it again restore
 ### Measurable Outcomes
 
 - **SC-001**: A run from a captured pattern uses 0 model tokens and costs 0 in model spend.
-- **SC-002**: A run from a captured pattern ends in under a quarter of its source run's time.
 - **SC-003**: Every approved captured pattern has a passing proof under the method it is used
   under: 0 runs use a captured pattern without one, including after a method change.
-- **SC-004**: For a captured notes slice, a slice for another resource with another limit is built
-  done and its derived tests pass, in 3 of 3 runs, with the same files each time.
+- **SC-004**: For a captured notes slice, a slice for another resource is built done and its
+  derived tests pass, in 3 of 3 runs, with the same files each time.
 - **SC-005**: A slice that differs from the source outside a parameter fits the captured pattern
   in 0 cases of a planted set (another rule, example, member, operation or status).
+- **SC-006**: For a captured slice that declares a text limit, with the limit and its derived value
+  as parameters, a slice with another limit and derived value fits, and the filled files carry the
+  new values in every place the old ones were.
 
 ## Assumptions
 

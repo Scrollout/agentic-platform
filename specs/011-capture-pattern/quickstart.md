@@ -6,7 +6,8 @@ package tests.
 ## 1. Substitution and fit alone (seconds, no Docker)
 
 `cd src/engine && go test ./captured/...`: the proposal finds `note` and `notes` with every place
-in the evals' notes project (research E1); a slice for `task`/`tasks` fits with those values; a
+in the evals' notes project (research E1); a slice for `task`/`tasks` fits with those values; on the limit fixture a slice with another
+limit and derived value fits (SC-006); a
 slice with another rule, example, member or operation does not fit and names the first place it
 differs; equal parameters and values outside their form are refused.
 

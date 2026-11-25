@@ -11,25 +11,27 @@ Turn a done run into a pattern that builds later slices of the same kind with no
 
 | Call | What it does | Answers |
 |------|--------------|---------|
-| `POST /captured-patterns` `{run, name?}` | proposes a captured pattern from a run that ended done, with proposed parameters | 202 operation; the operation fails `RunNotDone` (naming the run's state) |
+| `POST /captured-patterns` `{run, name?}` | proposes a captured pattern from a run that ended done, with proposed parameters | 202 operation; the operation fails `RunNotDone` (naming the run's state) or `CapturedPatternExists` |
 | `GET /captured-patterns` | lists captured patterns, newest first | 200, paginated with opaque page tokens |
 | `GET /captured-patterns/{id}` | one captured pattern: parameters with their places, proofs, approval, state, usable | 200; 404 |
 | `PUT /captured-patterns/{id}/parameters` `{parameters}` | replaces the parameters of a proposed or proven one (removes, adds) | 202 operation; fails `ParameterRefused` naming the parameter and why; 409 when approved |
 | `POST /captured-patterns/{id}/proofs` | proves it under the current method | 202 operation, its result names the proof run |
 | `POST /captured-patterns/{id}/approval` | approves it | 202 operation; fails `ProofRequired` when its latest proof did not pass under the current method |
 | `POST /captured-patterns/{id}/withdrawal` | stops its use by new runs | 202 operation |
-| `DELETE /captured-patterns/{id}` | erases it and the artifacts only it holds | 202 operation; the client asks for confirmation first |
+| `DELETE /captured-patterns/{id}` | erases it and the artifacts only it holds | 202 operation; the client first shows what will be erased and asks for confirmation |
 
-Every state change takes an `Idempotency-Key` (held 24 h, ADR 0073); a reused key with another
+One operation at a time per captured pattern: another state change while one runs answers 409
+`CapturedPatternBusy`. Every state change takes an `Idempotency-Key` (held 24 h, ADR 0073); a reused key with another
 body answers 422 as for other calls. Limits in `x-limits`: at most 32 parameters, at most 10000
-places per parameter.
+places per parameter, at most 64 characters per value.
 
 `startRun` gains an optional `pattern` (a captured pattern's ID or the base pattern's ID). Without
 it the most recently approved usable captured pattern that fits is used, otherwise the base
 pattern. Its answer and `RunStarted` name `pattern`, `pattern_reason` and, for a captured pattern,
 the parameters' values; a fitting captured pattern that needs a new proof is named in the answer.
-A named captured pattern that does not fit answers `PatternDoesNotFit` with the first place the
-slice differs; a withdrawn one `CapturedPatternWithdrawn`; one that needs a proof `ProofRequired`.
+The answer also names each captured pattern that did not fit only because of a refused value,
+with the parameter and why. A named captured pattern that does not fit answers
+`PatternDoesNotFit` with the first place the slice differs or the value refused; a withdrawn one `CapturedPatternWithdrawn`; one that needs a proof `ProofRequired`.
 
 ## Fit and fill (package `engine/captured`)
 
@@ -38,6 +40,7 @@ slice differs; a withdrawn one `CapturedPatternWithdrawn`; one that needs a proo
 - `Check(parameters) error`: value forms, uniqueness in any case form.
 - `Fit(source, parameters, approved) -> (values, ok, firstDifference)`: research R4.
 - `Fill(files, parameters, values) -> files`: each place replaced in its case form, longest first.
+- A proof's run takes the captured pattern's copy of the source slice, not a slice ID.
 
 Limits: research R4.
 
@@ -58,5 +61,5 @@ the step's writable paths (each path must match one; otherwise 400 naming it) wi
 | `ap prove <id>` | `POST /captured-patterns/{id}/proofs` |
 | `ap approve-pattern <id>` | `POST /captured-patterns/{id}/approval` |
 | `ap withdraw-pattern <id>` | `POST /captured-patterns/{id}/withdrawal` |
-| `ap erase-pattern <id>` | asks for confirmation, then `DELETE /captured-patterns/{id}` |
+| `ap erase-pattern <id>` | shows what will be erased, asks for confirmation, then `DELETE /captured-patterns/{id}` |
 | `ap build <slice> <project> [--pattern <id>]` | `startRun` with `pattern` |

@@ -1,7 +1,7 @@
 ---
 type: Decision
 title: "ADR 0093: A captured pattern is used only under its proven method"
-description: A captured pattern may be approved and used only while the method of its latest passing proof is the engine's current one; the proof is a run of the source slice whose files equal the accepted ones; startRun picks the newest usable fitting captured pattern unless the run names another.
+description: Superseded in part by ADR 0095 (a proof builds from the captured pattern's copy of the slice and compares generated files; usable needs the latest proof to have passed). A captured pattern may be approved and used only while the method of its latest passing proof is the engine's current one; the proof is a run of the source slice whose files equal the accepted ones; startRun picks the newest usable fitting captured pattern unless the run names another.
 tags: [decisions, catalogue, captured-patterns]
 status: draft
 decision: accepted
@@ -27,6 +27,8 @@ Clarifications).
 Sources: [Feature 011 plan](../../specs/011-capture-pattern/plan.md).
 
 # Context
+
+> Superseded in part by [ADR 0095](/decisions/0095-captured-patterns-never-change-values-keep-their-kind.md): a proof builds from the captured pattern's copy of the slice and compares generated files; usable needs the latest proof to have passed.
 
 - A solution proven under old checks must not be accepted under new ones without being judged
   (features 006 and 011).
