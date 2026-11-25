@@ -118,7 +118,7 @@ R2, R3, R5).
 served with the stub answers `{"TEXT":"x"}` with 400 `{"message":"member \"/text\" is required"}`;
 with the clean reference, `{"text":"a","TEXT":"b"}` gives 201 with `"a"`.
 
-- [ ] T003 [P] [US1] Test author: new `src/engine/checks/request_shapes_test.go`: `RequestShapes`
+- [x] T003 [P] [US1] Test author: new `src/engine/checks/request_shapes_test.go`: `RequestShapes`
   returns one `RequestBody` per operation with a `requestBody`, in document order, `Key` the
   method in upper case and the contract's path (`POST /notes`, `PUT /notes/{id}`), `Required`
   from `requestBody.required` (absent is false); shapes: `Types` from `type` as a name or a list
@@ -148,7 +148,7 @@ with the clean reference, `{"text":"a","TEXT":"b"}` gives 201 with `"a"`.
   RequestShapesGenerated over a fixture project: passes on a rendered file, saying what it
   examined; fails on a missing, edited or stale file and on an approved contract that does not
   parse, naming what
-- [ ] T004 [P] [US1] Test author: new `src/engine/procedures/request_check_test.go` (with the
+- [x] T004 [P] [US1] Test author: new `src/engine/procedures/request_check_test.go` (with the
   pinned oapi-codegen, `AP_OAPI_CODEGEN`, as the existing procedure tests): generating the evals'
   notes contract (`src/tests/evals/steps/testdata/slice/contract.yaml`, copied as a fixture)
   gives `gen/request_shapes.go` equal to `RenderRequestShapes` of its bodies, the template's
@@ -186,16 +186,16 @@ with the clean reference, `{"text":"a","TEXT":"b"}` gives 201 with `"a"`.
   exact names, with `Content-Length` matching; generation fails, naming the file, when the
   template's `gen/std-http-handler.tmpl` is absent (oapi-codegen would fetch the name as a URL);
   the template file's first line, a template comment, does not appear in `gen/api.gen.go`
-- [ ] T005 [P] [US1] Test author: new `src/engine/checksvc/request_shapes_test.go`: runCheck
+- [x] T005 [P] [US1] Test author: new `src/engine/checksvc/request_shapes_test.go`: runCheck
   serves `RequestShapesGenerated`, judging against the text inside the `contract` entry of
   `approved` (canonical JSON `{"contract": "<text>"}`), not `api/openapi.yaml` in the folder; a
   request without the approved contract, or whose content is not that JSON, fails closed
-- [ ] T006 [P] [US1] Test author: new `scripts/tests/test_handler_template_pin.py`: the first line
+- [x] T006 [P] [US1] Test author: new `scripts/tests/test_handler_template_pin.py`: the first line
   of `src/catalogue/api-feature-go/template/gen/std-http-handler.tmpl` names the oapi-codegen
   release `src/deploy/images.lock` pins (`v2.8.2` today); a fixture copy naming another release
   fails, naming both; the test reports the file and the pin it compared, and its docstring says it
   proves the label only (the rest is checked by the reviewer of each bump)
-- [ ] T007 [US1] Code author: `src/engine/checks/shapes.go` (`RequestShapes`,
+- [x] T007 [US1] Code author: `src/engine/checks/shapes.go` (`RequestShapes`,
   `RenderRequestShapes`, RequestShapesGenerated, on the YAML nodes the fit conditions parse); its
   entry in `src/engine/checksvc/checks.go`; `gen/request_shapes.go` written in
   `src/engine/procedures/generate.go` before `gen/declared.go`, so `GenNames` sees the same files
