@@ -159,8 +159,9 @@ asked for):
   `1.2.0` (lines 3, 5, 49-50) and the generate step's checks at line 43 gain
   RequestShapesGenerated after DeclaredValuesGenerated (analyze round 1, I1).
 - `src/engine/checks/fit_test.go` line 34: `conditions` gains RefusalDeclared and
-  RequestBodiesSupported, and `contractConditions` becomes the first five, since its `expect`
-  runs the real `pattern.yaml` (analyze round 2, N3).
+  RequestBodiesSupported, and `contractConditions` becomes the five contract conditions (every
+  condition but RulesNameOneSystem), since its `expect` runs the real `pattern.yaml` (analyze
+  round 2, N3; corrected with the owner 2026-11-25: "the first five" held RulesNameOneSystem).
 - `src/engine/api/pattern_flag_test.go` line 25 and `src/engine/slices/slices_patternflag_test.go`
   line 27: the fit conditions listed gain RefusalDeclared and RequestBodiesSupported.
 - `src/engine/checksvc/checks_test.go` `patternCases`: a clean and a planted case for
