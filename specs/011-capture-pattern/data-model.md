@@ -55,8 +55,8 @@ whose `RunStarted` has no part hashes (started before this feature) is refused t
 | `failures` | each failing check (step, check, reason), each differing file (step, path), or the run's end when it ended other than `done` |
 | `parameters` | the parameters' names and source values it proved |
 
-A Proof is written in the same store transaction as the acceptance of `startRun` of the proof
-slice (`running`), so no proof run exists without its Proof, and completed when
+A Proof (`running`) is written once the proof's run is recorded (its `RunStarted`, after the
+operation is accepted and its workflow started), and completed when
 the run is handed over or ends (idempotently): `done` with the `tests`, `code` and `witnesses`
 outputs' hashes equal to the `template` hashes is `passed`; `done` with a differing hash is
 `failed`, naming the files; a hand-over (`RunHandedOver`) is `failed` at once, naming the failing
@@ -66,7 +66,10 @@ not compared: its checks judge it (research R5). `getCapturedPattern` and `listC
 complete any proof whose run was handed over or ended before they answer, from the run record, so
 no reader sees `running` for a finished proof, also after an engine restart; every reader of a
 Proof's state (approval, the usable rule at `startRun` and `replayRun`, the busy checks) goes
-through the same completion first. While a proof's run
+through the same completion first. That completion also repairs both crash windows: it creates
+the missing Proof for a `proof: true` run that has none, and drops a `running` Proof whose run
+was never recorded (its start was not accepted), so a lost or refused start never leaves the
+captured pattern busy. While a proof's run
 has not ended, `PUT /parameters` and erasure answer `CapturedPatternBusy`. Erasing the proof slice
 keeps every Proof; its `run` then answers NotFound.
 
@@ -146,10 +149,12 @@ patterns that fit but need a new proof and those refused only for a value, each 
 any pattern; `pattern_reason` (`base`, `fits`, `chosen`); for a captured pattern `parameters`
 (an object, parameter name → value, each a `parameter_value`) and `source_run` (a run ID); `proof`
 (`true` for a proof run); `part_hashes` (the goals, rules and contract part hashes the run was
-started on, since its `inputs` hold only the pattern's slice inputs); `not_used`: a list, each entry `{pattern, reason, parameter?, detail}`,
+started on, since its `inputs` hold only the pattern's slice inputs: an object with the
+required keys `goals`, `rules` and `contract`, each a `hash`); `not_used`: a list, each entry `{pattern, reason, parameter?, detail}`,
 `pattern` a captured pattern's ID, `reason` `needs-proof` or `refused-value`, `parameter` the
 refused one (with `refused-value` only), `detail` why in words; judged at the start and recorded,
-since that state changes later. `Run` carries the same fields with the same shapes. `source_run` keeps naming the
+since that state changes later. `Run` carries the same fields with the same shapes, except `part_hashes`, which only capture
+reads. `source_run` keeps naming the
 source run after its slice and runs are erased. The method
 is already in every step outcome that carries a reuse key (feature 006). The reuse key holds the pattern's `id@version`
 and the method; for a `fill` step it also takes the hash of the run's parameter values as an

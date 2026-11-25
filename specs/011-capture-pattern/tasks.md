@@ -41,7 +41,7 @@ recordings do not change, so the recorded-model jobs stay green throughout.
 - **One owner**: candidates, case forms, matching, fit and fill live only in
   `src/engine/captured`; the API, the run choice and the workflow call it.
 - **Test time**: locally only the packages a task touches (`go test ./captured/ ./api/
-  ./durable/ ./checksvc/ ./store/` in `src/engine`, `go test ./...` in `src/cli`), each capped at
+  ./durable/ ./checksvc/ ./store/ ./machine/ ./steps/ ./slices/` in `src/engine`, `go test ./...` in `src/cli`), each capped at
   10 minutes; no full `scripts/check.sh`, Docker lab, image build or acceptance suite without the
   owner's go-ahead. The full test command is the CI run of the pushed commit; every push is told
   to the owner with the jobs it runs and waits for a go-ahead. A live eval run is paid and needs
@@ -138,7 +138,13 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   withdraw, erase and proof-slice cells still in US1 tests; M2 no task wrote `part_hashes`, the
   machine and durable owners unnamed; M3 a replay's `part_hashes`; M4 the workflow version bump,
   ADR 0067), 2 LOW (L1 404 per id-addressed call; L2 who computes `usable`); fixed at the source
-  (FR-001; data model; contract draft; plan; T001, T005 to T007, T013). Round 10 owed.
+  (FR-001; data model; contract draft; plan; T001, T005 to T007, T013). Round 10 (fresh Sonnet, at 8197a1d): every
+  round-9 fix present; 0 CRITICAL, 0 HIGH; 2 MEDIUM (O1 the proof-run capture refusal had no US1
+  owner; O2 a Proof written "in the same transaction" the file store does not have, and no
+  repair for a lost or refused start), 5 LOW (O3 `part_hashes` shape; O4 `Run` without
+  `part_hashes`; O5 404 in the draft; O6 who defines `usable`; O7 a replay case that cannot fail,
+  and the local package list); fixed at the source (data model; contract draft; T006, T007,
+  T015, T020, Test time). Round 11 owed.
 
 ---
 
@@ -275,8 +281,11 @@ proposed and adding the derived value works; the proof ends passed with no model
   outcome and failures (a hand-over fails it at once naming the check while the run waits;
   expired or cancelled fails naming the end; an interrupted one stays running;
   `getCapturedPattern` read right after the run's end line, and after an engine restart, shows
-  the completed proof); a recorded workflow history from before the change replays without a
-  nondeterminism error; a second proof under the same method reuses no earlier result and runs every step;
+  the completed proof); the existing recorded workflow histories still replay (a
+  regression guard, exempt from "seen failing"), and a planted history in which the `fill` path
+  runs without its version gate fails the replay; a second proof under the same method reuses no earlier result and runs every step;
+  a proof start that is not accepted leaves no Proof and no busy state; a lost start answer
+  (`startedAnyway`) keeps exactly one Proof; a `proof: true` run with no Proof gets one on read;
   `PUT /parameters` while a proof's run has not ended (also a failed proof's waiting run)
   answers `CapturedPatternBusy`; `PUT /parameters` moves a proven one back to proposed; the
   state table's proven and approved columns in the `replaceParameters` and
@@ -293,7 +302,9 @@ proposed and adding the derived value works; the proof ends passed with no model
   cases and T027 pass after T029): `src/engine/captured/` (Propose, Check, Fill, the declaration),
   captured-pattern records and the second artifact holder in `src/engine/store/`, the resource in
   new `src/engine/api/captured.go` (`captureRun`, `listCapturedPatterns`, `getCapturedPattern`,
-  `replaceParameters`, `approveCapturedPattern`; `makeProofSlice` is T029's, withdrawal and
+  `replaceParameters`, `approveCapturedPattern`; capture refuses a run whose `RunStarted` has
+  `proof: true` or names a pattern other than a base pattern with `RunNotCapturable`;
+  `makeProofSlice` is T029's, withdrawal and
   erasure T020's, the usable rule at `startRun` and `replayRun` T015's) with its operations in `src/engine/api/operations.go`, the
   `fill` worker in `src/engine/durable/workflow.go` and `src/engine/steps/` (render through
   `engine/captured`, `writeStep`, checks, `commitStep`; the readiness check skips `fill`),
@@ -401,10 +412,10 @@ pass, three runs give the same files.
   sends `pattern`; `build`'s first line, the `RunStarted` event line, the `run` header and the
   `Not used:` lines (from the run's `not_used`) print as `src/cli/contract.md` states; refusals print their code and reason. Seen
   failing
-- [ ] T015 [US2] Code author: `Fit` in `src/engine/captured/`, the usable rule (approved, latest
-  proof passed under the current method, through the Proof-completion function), the choice for a fitting captured
+- [ ] T015 [US2] Code author: `Fit` in `src/engine/captured/`, applying the `usable` value T007
+  computes in the Proof-completion function, the choice for a fitting captured
   pattern and a named one in `src/engine/api/runs.go` (`StartRun`; `ReplayRun`'s usable rule;
-  capture's `RunNotCapturable` for a run built from a captured pattern), the `Run`'s pattern choice and `not_used`, `ap build --pattern` and the output lines in `src/cli/`
+  a captured-pattern run chosen at `startRun`, which capture then refuses by T007's rule), the `Run`'s pattern choice and `not_used`, `ap build --pattern` and the output lines in `src/cli/`
 - [ ] T016 [US2] Commit; fast lint; push (owner go-ahead); record the CI run
 - [ ] T017 [US2] Fresh review of US2 judging T016's CI run; `/speckit-converge` for US2
 
@@ -445,7 +456,7 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   (`withdrawCapturedPattern`, `eraseCapturedPattern`, busy while a run built from it or its proof
   has not ended, the proof slice erased with it, erased IDs never given again, `ReplayRun`'s
   NotFound for an erased captured pattern); the method rule's
-  remaining cases (T015 made the usable rule); the commands in `src/cli/`
+  remaining cases (T015 applies the `usable` value T007 computes); the commands in `src/cli/`
 - [ ] T021 [US3] Commit; fast lint; push (owner go-ahead); record the CI run
 - [ ] T022 [US3] Fresh review of US3 judging T021's CI run; `/speckit-converge` for US3
 

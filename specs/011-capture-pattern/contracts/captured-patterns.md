@@ -20,6 +20,7 @@ Turn a done run into a pattern that builds later slices of the same kind with no
 | `POST /captured-patterns/{id}/withdrawal` | stops its use by new runs | 202 operation |
 | `DELETE /captured-patterns/{id}` | erases it and the artifacts only it holds | 202 operation; 409 `CapturedPatternBusy` at once while an operation, a run built from it or its proof's run has not ended; the client first shows what will be erased and asks for confirmation |
 
+Every `/captured-patterns/{id}` call answers 404 `NotFound` for an unknown or erased ID.
 One operation at a time per captured pattern: another state change while one runs answers 409
 `CapturedPatternBusy`. Every state change takes an `Idempotency-Key` (held 24 h, ADR 0073); a reused key with another
 body answers 409 `IdempotencyKeyReused` as for other calls. Limits as integer `x-limits` keys:
