@@ -50,8 +50,10 @@ A flaky or wrong case is quarantined, never retried until it passes (constitutio
 its `Quarantine` field names an open task in `specs/backlog.md`. It still runs and is reported,
 marked `quarantined by <task>, not counted` and with `quarantined_by` in `report.json`, but does
 not count towards the suite's result; `scripts/tests/test_eval_quarantine_open_task.py` requires
-every quarantine to name an open task, so it ends with its task. Quarantined now: `review/clean`
-(T202: the clean reference accepts `{"TEXT":"x"}` although the contract requires `text`).
+every quarantine to name an open task, so it ends with its task. No case is quarantined now:
+`review/clean` was, under T202 (the clean reference accepted `{"TEXT":"x"}` although the contract
+requires `text`), until feature 010 closed it: a malformed request is refused before the agent's
+code runs, and `MalformedRequestsRefused` judges it.
 
 ## Graders
 
@@ -80,14 +82,40 @@ every quarantine to name an open task, so it ends with its task. Quarantined now
 | review, planted | `PlantedFindingNamed` | a blocking finding names the planted rule, the file and a line inside the violating function |
 | review, planted | `PlantedFindingConfirmed` | `checks.NoBlockingFindingOpen` fails naming that rule and file: the finding's new witness in `review/r<n>/` fails having run its line (ADR 0039) |
 | review, clean | `NoConfirmedBlockingFinding` | `checks.NoBlockingFindingOpen` passes |
+| code | `MalformedRequestsRefused` | none (`grade_requests.go`): the three requests below, sent by a test package added to a scratch copy of the project the agent left, built and run as the held-out tests are; passes when each gets its answer |
 | code | `HeldOutTestsPass` | none (`grade_heldout.go`): the held-out tests below, added to a scratch copy of the project the agent left, built and then run alone ([ADR 0077](../../../../docs/decisions/0077-variant-builds-share-a-cache-runs-stay-alone.md), which supersedes the mechanics of [ADR 0076](../../../../docs/decisions/0076-variant-graders-build-first-run-each-alone.md)); passes when all 6 pass |
 | tests | `MutantsKilled` | none (`grade_mutants.go`): the agent's tests, built against the reference implementation and against each mutant below ([ADR 0075](../../../../docs/decisions/0075-eval-mutants-planted-by-hand.md)), each binary run alone (ADR 0077); passes when the tests pass against the reference and kill all 8 mutants |
 
-`HeldOutTestsPass` and `MutantsKilled` run last, and only when every earlier grader of the trial
-passed; otherwise they fail with the reason `not run: <grader> failed` and no `counts`. The
+`MalformedRequestsRefused`, `HeldOutTestsPass` and `MutantsKilled` run last, in that order, and
+each only when every earlier grader of the trial passed; otherwise they fail with the reason
+`not run: <grader> failed` and no `counts`. The
 trial already fails, so its verdict is the same. No coverage percentage is a gate: the counts say
 what the graders saw on this slice's fixed held-out tests and mutants, and no number below `total`
 passes.
+
+### Malformed requests (`MalformedRequestsRefused`)
+
+Feature 010 (FR-010): the service refuses a request body the contract does not allow before the
+agent's code runs. The grader sends three bodies to `POST /notes`, each to a fresh
+`gen.Handler(app.New())` served with `httptest.NewServer`:
+
+| Body as sent | Expected |
+|--------------|----------|
+| `{"TEXT":"x"}` | 400: a member name in another case is not the declared `text` |
+| `{"text":"a","TEXT":"b"}` | 201 with a note whose text is `"a"`: the undeclared member is dropped |
+| `{"text":"a","text":"b"}` | 400: a name twice (Go's decoder would keep the last) |
+
+A pass names the three bodies; a failure names each request that got a wrong answer, by its body,
+with the status it got (or that it got no answer, or a 201 body that is not a note with the text
+`"a"`). The requests are `testdata/requests/requests_test.go` (standard library,
+`example.com/service/gen` and `example.com/service/internal/app` only) and a file the grader
+writes with the bodies, added to a scratch copy as `malformedrequests/`, built and run through the
+same variant run as the held-out tests, so in the live evals they run in the no-network container;
+the agent's project is never changed. A project that already holds `malformedrequests/` fails, so
+nothing the agent wrote there can shadow or judge the requests. The variant run reports only
+whether each top-level test passed, so each test asks one question of one answer (it came, bit
+`n` of its status is set, its body is a JSON object, its text is the expected one) and the grader
+reads the status from the bits. Limit: a status of 1024 or more reads as its lowest ten bits.
 
 ### Held-out tests (`HeldOutTestsPass`)
 

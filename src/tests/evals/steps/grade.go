@@ -2,9 +2,10 @@ package steps
 
 // The graders. Each one is a deterministic rule over the project the agent left (and the project it
 // started from), and each reuses the platform's own check in engine/checks, so the eval and the
-// engine cannot disagree about what a good step is; the one exception is WitnessServesThroughServer
-// (grade_server.go), a rule of the review agent's behaviour. No grader calls a model (constitution
-// XIX, XX).
+// engine cannot disagree about what a good step is. The exceptions have no engine check to reuse:
+// WitnessServesThroughServer (grade_server.go), a rule of the review agent's behaviour, and the
+// graders that run the agent's project on a fixed list (HeldOutTestsPass, MalformedRequestsRefused,
+// MutantsKilled). No grader calls a model (constitution XIX, XX).
 
 import (
 	"fmt"
@@ -166,8 +167,9 @@ func (e Env) GradeTests(before, after string) []Result {
 }
 
 // GradeCode judges the code agent's result. approved is the contract text the slice approved.
-// The last result is always HeldOutTestsPass, run on after only when every earlier result passed;
-// otherwise it fails with the reason "not run: <first failing grader> failed" and no counts.
+// The last two results are always MalformedRequestsRefused and then HeldOutTestsPass, each run on
+// after only when every result before it passed; otherwise it fails with the reason
+// "not run: <first failing grader> failed" (HeldOutTestsPass with no counts).
 func (e Env) GradeCode(before, after, approvedContract string) []Result {
 	st := e.step("code")
 	h, err := canonical.ContractHash(approvedContract)
@@ -187,8 +189,12 @@ func (e Env) GradeCode(before, after, approvedContract string) []Result {
 	}
 	for _, r := range rs {
 		if !r.Passed {
-			return append(rs, fail(GHeldOut, "not run: %s failed", r.Grader))
+			return append(rs, fail(GRefused, "not run: %s failed", r.Grader), fail(GHeldOut, "not run: %s failed", r.Grader))
 		}
 	}
-	return append(rs, e.HeldOutTestsPass(after))
+	refused := e.MalformedRequestsRefused(after)
+	if !refused.Passed {
+		return append(rs, refused, fail(GHeldOut, "not run: %s failed", GRefused))
+	}
+	return append(rs, refused, e.HeldOutTestsPass(after))
 }
