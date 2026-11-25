@@ -22,6 +22,8 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -30,6 +32,7 @@ import (
 	"time"
 
 	"github.com/agentic-platform/engine/checks"
+	"go.yaml.in/yaml/v3"
 )
 
 // ---- helpers ---------------------------------------------------------------------------------
@@ -1182,7 +1185,23 @@ func TestRequestShapesGenerated(t *testing.T) {
 // ---- GeneratedCodeUnchanged pins the three files of the request check ------------------------
 
 func TestGeneratedCodeUnchangedCoversTheRequestCheckFiles(t *testing.T) {
-	genGlobs := []string{"gen/**", "go.mod", "go.sum", "vendor/**"}
+	genGlobs, codeGlobs := rqPatternWritable(t, "generate"), rqPatternWritable(t, "code")
+	for _, f := range []string{"gen/requests.go", "gen/request_shapes.go", "gen/std-http-handler.tmpl"} {
+		if !checks.MatchGlob(genGlobs, f) {
+			t.Errorf("pattern.yaml's generate step no longer writes %s (writable %v)", f, genGlobs)
+		}
+	}
+	// as checksvc does: both trees without the files the code step may write
+	tree := func(files map[string]string) checks.Tree {
+		b := map[string][]byte{}
+		for k, v := range files {
+			b[k] = []byte(v)
+		}
+		return checks.NotOwn(checks.HashTree(b), codeGlobs)
+	}
+	unchanged := func(before, after map[string]string) []checks.CheckResult {
+		return checks.GeneratedCodeUnchangedOf(tree(before), tree(after), genGlobs)
+	}
 	base := map[string]string{
 		"gen/requests.go":           "package gen\n\nfunc refuseMalformed() {}\n",
 		"gen/request_shapes.go":     string(checks.RenderRequestShapes(nil)),
@@ -1200,20 +1219,19 @@ func TestGeneratedCodeUnchangedCoversTheRequestCheckFiles(t *testing.T) {
 		}
 		return out
 	}
-	before := dvProject(t, base)
 
 	t.Run("control: nothing changed passes", func(t *testing.T) {
-		rs := checks.GeneratedCodeUnchanged(before, dvProject(t, base), genGlobs)
+		rs := unchanged(base, base)
 		dvWantOnePass(t, rs, "GeneratedCodeUnchanged")
 	})
 	t.Run("control: a change in the code step's own files passes", func(t *testing.T) {
-		after := dvProject(t, copyWith(map[string]string{"internal/app/app.go": "package app\n\nvar x = 1\n"}))
-		dvWantOnePass(t, checks.GeneratedCodeUnchanged(before, after, genGlobs), "GeneratedCodeUnchanged")
+		after := copyWith(map[string]string{"internal/app/app.go": "package app\n\nvar x = 1\n"})
+		dvWantOnePass(t, unchanged(base, after), "GeneratedCodeUnchanged")
 	})
 	for _, file := range []string{"gen/requests.go", "gen/request_shapes.go", "gen/std-http-handler.tmpl"} {
 		t.Run("fails when the code step edits "+file, func(t *testing.T) {
-			after := dvProject(t, copyWith(map[string]string{file: base[file] + "// weakened by the code step\n"}))
-			rs := checks.GeneratedCodeUnchanged(before, after, genGlobs)
+			after := copyWith(map[string]string{file: base[file] + "// weakened by the code step\n"})
+			rs := unchanged(base, after)
 			dvWantAllFail(t, rs, "GeneratedCodeUnchanged", file+" edited")
 			if !strings.Contains(reasons(rs), file) {
 				t.Errorf("want the reason to name %s, got %q", file, reasons(rs))
@@ -1223,10 +1241,51 @@ func TestGeneratedCodeUnchangedCoversTheRequestCheckFiles(t *testing.T) {
 	t.Run("fails when the code step deletes gen/request_shapes.go", func(t *testing.T) {
 		files := copyWith(nil)
 		delete(files, "gen/request_shapes.go")
-		rs := checks.GeneratedCodeUnchanged(before, dvProject(t, files), genGlobs)
+		rs := unchanged(base, files)
 		dvWantAllFail(t, rs, "GeneratedCodeUnchanged", "file removed")
 		if !strings.Contains(reasons(rs), "gen/request_shapes.go") {
 			t.Errorf("want the reason to name gen/request_shapes.go, got %q", reasons(rs))
 		}
 	})
+}
+
+// rqPatternWritable is the writable list of the named step of the real pattern.yaml
+// (src/catalogue/api-feature-go), found by walking up from the test's folder. The test fails when
+// the file cannot be read or parsed or the step is missing.
+func rqPatternWritable(t *testing.T, step string) []string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw []byte
+	for {
+		if raw, err = os.ReadFile(filepath.Join(dir, "src", "catalogue", "api-feature-go", "pattern.yaml")); err == nil { //nolint:gosec // the repository's own pattern file, found from the test directory
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("src/catalogue/api-feature-go/pattern.yaml not found above the test directory")
+		}
+		dir = parent
+	}
+	var doc struct {
+		Steps []struct {
+			Name     string   `yaml:"name"`
+			Writable []string `yaml:"writable"`
+		} `yaml:"steps"`
+	}
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("pattern.yaml: %v", err)
+	}
+	for _, s := range doc.Steps {
+		if s.Name == step {
+			if len(s.Writable) == 0 {
+				t.Fatalf("pattern.yaml: step %q has no writable", step)
+			}
+			return s.Writable
+		}
+	}
+	t.Fatalf("pattern.yaml has no %q step", step)
+	return nil
 }

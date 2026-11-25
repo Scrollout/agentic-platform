@@ -703,7 +703,7 @@ func rcNotesCases() []rcCase {
 		rcRefuse("text is an object", post, `{"text":{}}`, rcMember("/text", "must be a string")),
 		rcRefuse("empty object", post, `{}`, required),
 		rcRefuse("name twice", post, `{"text":"a","text":"b"}`, rcMember("/text", "is named twice")),
-		rcRefuse("name twice written with an escape", post, `{"text":"a","text":"b"}`, rcMember("/text", "is named twice")),
+		rcRefuse("name twice written with an escape", post, `{"text":"a","\u0074ext":"b"}`, rcMember("/text", "is named twice")),
 		rcRefuse("not JSON", post, `nope`, "the request body is not valid JSON"),
 		rcRefuse("trailing garbage", post, `{"text":"a"}x`, "the request body is not valid JSON"),
 		rcRefuse("two values", post, `{"text":"a"}{"text":"b"}`, "the request body is not valid JSON"),

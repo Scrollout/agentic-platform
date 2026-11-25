@@ -42,16 +42,16 @@ func rcRegressCases() []rcCase {
 				rcRefuse(n+"not JSON", op, `{"text":`, "the request body is not valid JSON"),
 				rcRefuse(n+"empty and required", op, ``, "the request body is missing"),
 				rcRefuse(n+"a duplicate", op, `{"text":"a","text":"b"}`, `member "/text" is named twice`),
-				rcRefuse(n+"a duplicate written with an escape", op, `{"text":"a","text":"b"}`, `member "/text" is named twice`),
-				rcRefuse(n+"an escaped duplicate first", op, `{"text":"a","text":"b"}`, `member "/text" is named twice`),
+				rcRefuse(n+"a duplicate written with an escape", op, `{"text":"a","\u0074ext":"b"}`, `member "/text" is named twice`),
+				rcRefuse(n+"an escaped duplicate first", op, `{"\u0074ext":"a","text":"b"}`, `member "/text" is named twice`),
 				rcPass(n+"an undeclared member is removed", op, `{"text":"a","extra":1,"more":{"x":[1]}}`, `{"text":"a"}`),
 				rcPass(n+"an undeclared member before the declared one", op, `{"extra":1,"text":"a"}`, `{"text":"a"}`),
 				rcCase{name: n + "only declared members pass byte for byte", op: op, body: `{ "text" : "a" }`, status: 501, want: `{ "text" : "a" }`, exact: true},
 				rcCase{name: n + "a declared name written with an escape passes byte for byte", op: op,
-					body: `{"text":"a"}`, status: 501, want: `{"text":"a"}`, exact: true},
+					body: `{"\u0074ext":"a"}`, status: 501, want: `{"\u0074ext":"a"}`, exact: true},
 				rcPass(n+"an escaped declared name beside a removed member is written with its exact name", op,
-					`{"text":"a","y":1}`, `{"text":"a"}`),
-				rcPass(n+"an undeclared name written with an escape is removed", op, `{"text":"a","x":1}`, `{"text":"a"}`),
+					`{"\u0074ext":"a","y":1}`, `{"text":"a"}`),
+				rcPass(n+"an undeclared name written with an escape is removed", op, `{"text":"a","\u0078":1}`, `{"text":"a"}`),
 			)
 		}
 	}
