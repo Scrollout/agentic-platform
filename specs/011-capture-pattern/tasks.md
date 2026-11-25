@@ -172,7 +172,12 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   source (contract draft; T001, T004, T007, T008, T030, T031). Round 15 (fresh Sonnet, at 14e9eb7): every
   round-14 fix present; 0 CRITICAL, 0 HIGH; 1 MEDIUM (N1 a proof run's replay: Busy and never
   `ProofRequired`), 1 LOW (N2 the check contract's other preamble sentences and the handler's
-  doc comments); fixed at the source (contract draft; T001, T007, T027). Round 16 owed.
+  doc comments); fixed at the source (contract draft; T001, T007, T027). Round 16 (fresh Sonnet, at d20223f): every
+  round-15 fix present; 0 CRITICAL, 0 HIGH; 1 MEDIUM (F1 no test of a withdrawn proof run's
+  replay), 3 LOW (F2 T015's usable rule must leave a proof run's replay alone; F3 the state
+  table; F4 `writeStep`'s files `history.go` and `contract.go`, and the `x-error-codes`
+  descriptions); fixed at the source (data model; T001, T007, T013, T015, T018). Round 17
+  owed.
 
 ---
 
@@ -219,7 +224,8 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   `writeStep` beside `commitStep` for the larger body limit and among the calls safe to
   repeat, and beside `restoreStep` in its sentences on the project worker's calls, the 404
   `VersionHistoryNotServed` of the other deployments, `UnreadableProject`, the operations that
-  read `.git`, and the history check). The engine contract gains the
+  read `.git`, and the history check, and in the `x-error-codes` descriptions that name
+  `commitStep` and `restoreStep` (WriteFailed, VersionHistoryNotServed)). The engine contract gains the
   capture `name` rule (`capture_name` in `slice-defs.schema.json`, `^[a-z0-9]+(-[a-z0-9]+)*$`,
   `maxLength` 40) and `parameter_value` (research R4); `captureRun`'s description names every
   `RunNotCapturable` cause, the base-version mismatch included; `startRun` lists
@@ -366,8 +372,11 @@ proposed and adding the derived value works; the proof ends passed with no model
   erasure T020's, the usable rule at `startRun` and `replayRun` T015's) with its operations in `src/engine/api/operations.go`, the
   `fill` worker in `src/engine/durable/workflow.go` and `src/engine/steps/` (render through
   `engine/captured`, `writeStep`, checks, `commitStep`; the readiness check skips `fill`),
-  `writeStep` in `src/engine/checksvc/project.go` and `handler.go` (its body-limit branch covers
-  `writeStep` as it covers `commitStep`; the `History` and `NewHandler` doc comments name it), the proof as a run of the
+  `writeStep` in `src/engine/checksvc/history.go` (beside `commitStep` and `restoreStep`, under
+  the project worker's lock, record and history check), `contract.go` (its request schema in the
+  op-to-schema map, so the schema's 400 applies) and `handler.go` (its route; its body-limit
+  branch covers `writeStep` as it covers `commitStep`; the `History` and `NewHandler` doc
+  comments name it), the proof as a run of the
   proof slice with `proof: true` (T029 makes the proof slice and the `startRun` branch that
   recognises it; T007 adds the `proof_of` field on `slices.Slice` that branch reads), the `RunStarted` fields `pattern_reason`, `parameters`, `source_run`, `proof` and
   `part_hashes` (written by `StartRun` and `ReplayRun` through `src/engine/api/runs.go` `newRun`,
@@ -469,8 +478,9 @@ pass, three runs give the same files.
   and the `Run` and `RunStarted` carry `pattern` (`<id>@<version>`), `pattern_reason` (`base`,
   `fits`, `chosen`), the parameters' values and `source_run`; the refusals come in the contract's
   order; resume and take-over of a captured run keep its pattern and parameters, and a replay
-  uses the same captured pattern, refused with `ProofRequired` when its latest proof failed (the
-  withdrawn refusal is T018's), keeping the recorded parameter values with no new fit; capturing a replay
+  uses the same captured pattern, refused with `ProofRequired` when its latest proof failed (a
+  run that is not a proof; a proof run's replay follows the proof rule, T027; the withdrawn
+  refusal is T018's), keeping the recorded parameter values with no new fit; capturing a replay
   whose slice changed after the earlier run started, or a replay of a run with no part hashes,
   answers `RunNotCapturable`; capturing a run built
   from a captured pattern answers `RunNotCapturable`; two slices that differ only in a value that
@@ -492,7 +502,8 @@ pass, three runs give the same files.
   failing
 - [ ] T015 [US2] Code author (done when T012, T013 and T030 pass): `Fit` in `src/engine/captured/`, applying the `usable` value T007
   computes in the Proof-completion function, the choice for a fitting captured
-  pattern and a named one in `src/engine/api/runs.go` (`StartRun`; `ReplayRun`'s usable rule;
+  pattern and a named one in `src/engine/api/runs.go` (`StartRun`; `ReplayRun`'s usable rule for runs that are not proofs, leaving a proof run's
+  replay to T029's proof rule;
   a captured-pattern run chosen at `startRun`, which capture then refuses by T007's rule), the `Run`'s pattern choice and `not_used`, `ap build --pattern` and the output lines in `src/cli/`
 - [ ] T016 [US2] Commit; fast lint; push (owner go-ahead); record the CI run
 - [ ] T017 [US2] Fresh review of US2 judging T016's CI run; `/speckit-converge` for US2
@@ -522,8 +533,8 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   an erased captured pattern answers NotFound naming it; a new capture under an erased captured
   pattern's ID answers `CapturedPatternExists`; the state table's withdrawn column (parameters,
   proof slice, approval refused with `CapturedPatternWithdrawn`, withdrawal again changes
-  nothing); a replay of a run built from a withdrawn captured pattern answers
-  `CapturedPatternWithdrawn`; a withdrawn captured pattern's proof
+  nothing); a replay of a run built from a withdrawn captured pattern, and a replay of a proof
+  run of a withdrawn captured pattern, answer `CapturedPatternWithdrawn` and start nothing; a withdrawn captured pattern's proof
   slice answers `CapturedPatternWithdrawn` at `startRun` and `proof-slice`; erasing a captured
   pattern erases its proof slice and that slice's runs, and answers `CapturedPatternBusy` while a
   proof's run has not ended. Seen failing

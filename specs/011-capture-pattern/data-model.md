@@ -92,7 +92,7 @@ any --(erase, confirmed)--> erased
 | Call | proposed | proven | approved | withdrawn |
 |------|----------|--------|----------|-----------|
 | `replaceParameters` | changes them | changes them, back to proposed | `CapturedPatternApproved` | `CapturedPatternWithdrawn` |
-| `makeProofSlice`, a proof's `startRun` | allowed | allowed | allowed | `CapturedPatternWithdrawn` |
+| `makeProofSlice`, a proof's `startRun`, a proof run's `replayRun` | allowed | allowed | allowed | `CapturedPatternWithdrawn` |
 | `approveCapturedPattern` | `ProofRequired` | approves when its latest proof passed under the current method, else `ProofRequired` | changes nothing | `CapturedPatternWithdrawn` |
 | `withdrawCapturedPattern` | withdraws | withdraws | withdraws | changes nothing |
 | `eraseCapturedPattern` | erases | erases | erases | erases |
@@ -139,7 +139,8 @@ run built from a captured pattern uses that captured pattern again only while it
 refused with `CapturedPatternWithdrawn` or `ProofRequired` otherwise, and NotFound when it was
 erased; it keeps the parameter values the run recorded, with no new fit, and copies the earlier
 run's `part_hashes` (none when the earlier run had none, so capturing it is refused); a replay of a proof run is
-a new proof. The readiness check of `startRun`, `resumeRun` and `replayRun` skips `fill` steps.
+a new proof in any state but withdrawn (withdrawn answers `CapturedPatternWithdrawn`, a busy
+captured pattern `CapturedPatternBusy`; never `ProofRequired`). The readiness check of `startRun`, `resumeRun` and `replayRun` skips `fill` steps.
 
 ## Run (added fields)
 
