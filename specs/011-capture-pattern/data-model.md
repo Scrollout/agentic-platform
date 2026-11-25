@@ -7,7 +7,7 @@ artifacts in its content-addressed store.
 
 | Field | Meaning | Rule |
 |-------|---------|------|
-| `id` | `<base id>-<name>` | `pattern_id` (`^[a-z0-9-]+$`); unique, an existing one answers `CapturedPatternExists`; `<name>` given at capture or the source slice's ID in lower case (`s-3`) |
+| `id` | `<base id>-<name>` | `pattern_id` (`^[a-z0-9-]+$`); unique, an existing or erased one answers `CapturedPatternExists` (an erased ID is never given again, so a reuse key naming `<id>@1.0.0` always means one template); `<name>` given at capture or the source slice's ID in lower case (`s-3`) |
 | `version` | semver | always `1.0.0`: an approved captured pattern never changes; a change is a new capture under another name (FR-007) |
 | `base` | the base pattern's `id@version` | the engine's pattern at capture |
 | `source` | source run ID, source slice ID | the run ended done (FR-001) |
@@ -33,6 +33,15 @@ artifacts in its content-addressed store.
 
 Two parameters equal in any case form are refused (`ParameterRefused`).
 
+`PUT /parameters` takes `{name, value}` per parameter, nothing else: the engine sets `kind` and
+`source` (a value among the slice's names is kind `name`, source `name`; one the contract
+declares is source `declared-value`, kind `number` or `string` as the contract writes it; any other
+is source `literal`, kind `number` when it is a number, else `string`; a parameter sent again keeps
+its kind and source), finds the `places`, and sets `origin`. The terminal client's `--add
+[<name>=]<value>` takes the name from the value when none is given (refused when the value is not
+a valid name). The limits (32 parameters, 10000 places, 64 characters) are the contract's integer
+`x-limits` keys.
+
 ## Proof
 
 | Field | Meaning |
@@ -43,7 +52,8 @@ Two parameters equal in any case form are refused (`ParameterRefused`).
 | `failures` | each failing check (step, check, reason), each differing file (step, path), or the run's end when it ended other than `done` |
 | `parameters` | the parameters' names and source values it proved |
 
-A Proof is written when `startRun` of the proof slice is accepted (`running`) and completed when
+A Proof is written in the same store transaction as the acceptance of `startRun` of the proof
+slice (`running`), so no proof run exists without its Proof, and completed when
 the run is handed over or ends (idempotently): `done` with the `tests`, `code` and `witnesses`
 outputs' hashes equal to the `template` hashes is `passed`; `done` with a differing hash is
 `failed`, naming the files; a hand-over (`RunHandedOver`) is `failed` at once, naming the failing
@@ -51,7 +61,9 @@ check and its reason, while the run waits for the developer as any handed-over r
 `cancelled` is `failed`, naming the end; only an interrupted run stays `running`. Generated code is
 not compared: its checks judge it (research R5). `getCapturedPattern` and `listCapturedPatterns`
 complete any proof whose run was handed over or ended before they answer, from the run record, so
-no reader sees `running` for a finished proof, also after an engine restart. While a proof's run
+no reader sees `running` for a finished proof, also after an engine restart; every reader of a
+Proof's state (approval, the usable rule at `startRun` and `replayRun`, the busy checks) goes
+through the same completion first. While a proof's run
 has not ended, `PUT /parameters` and erasure answer `CapturedPatternBusy`. Erasing the proof slice
 keeps every Proof; its `run` then answers NotFound.
 
@@ -80,7 +92,11 @@ described `Proof of <captured pattern>`, with `proof_of` naming the captured pat
 part approved by the engine after the part checks pass under the current method. Its history
 (`slice.schema.json`) starts with a new kind, `made-for-proof` (no model, `refs` its parts),
 added to the kind enum additively, then one `approved` entry per part; a failing check fails the operation with
-`PartFailsChecks` and makes no slice. It takes the next `S-<n>`. `createSlice` never reuses it.
+`PartFailsChecks` and makes no slice. It takes the next `S-<n>`. Asked again, `proof-slice`
+gives the existing proof slice while every part is approved under the current method; after a
+method change withdrew a part's approval, it checks the parts again and approves them (one
+`approved` history entry per part), or fails with `PartFailsChecks` and leaves the slice as it
+is. `createSlice` never reuses it.
 A `startRun` of it is a proof: it always uses that captured pattern, with the source values,
 whatever its state except withdrawn (`CapturedPatternWithdrawn`); a `pattern` naming another one,
 or a part changed since it was made (so it no longer equals the copy), is `PatternDoesNotFit`. Its
@@ -94,8 +110,9 @@ that clears `proof_slice`, and the next proof request makes a new one. The `Slic
 
 A resumed or taken-over run keeps its recorded pattern, parameters and source run. A replay of a
 run built from a captured pattern uses that captured pattern again only while it is usable, and is
-refused with `CapturedPatternWithdrawn` or `ProofRequired` otherwise; a replay of a proof run is a
-new proof. The readiness check of `startRun`, `resumeRun` and `replayRun` skips `fill` steps.
+refused with `CapturedPatternWithdrawn` or `ProofRequired` otherwise, and NotFound when it was
+erased; it keeps the parameter values the run recorded, with no new fit; a replay of a proof run is
+a new proof. The readiness check of `startRun`, `resumeRun` and `replayRun` skips `fill` steps.
 
 ## Run (added fields)
 
@@ -110,9 +127,11 @@ patterns that fit but need a new proof and those refused only for a value, each 
 
 `RunStarted` gains, additively: `pattern` names the captured pattern's `id@version` as before for
 any pattern; `pattern_reason` (`base`, `fits`, `chosen`); for a captured pattern `parameters`
-(name → value) and `source_run`; `proof` (`true` for a proof run); `not_used`: each captured
-pattern that fit but needs a new proof, or did not fit only because of a refused value, with the
-reason (judged at the start and recorded, since that state changes later). `source_run` keeps naming the
+(an object, parameter name → value, each a `parameter_value`) and `source_run` (a run ID); `proof`
+(`true` for a proof run); `not_used`: a list, each entry `{pattern, reason, parameter?, detail}`,
+`pattern` a captured pattern's ID, `reason` `needs-proof` or `refused-value`, `parameter` the
+refused one (with `refused-value` only), `detail` why in words; judged at the start and recorded,
+since that state changes later. `Run` carries the same fields with the same shapes. `source_run` keeps naming the
 source run after its slice and runs are erased. The method
 is already in every step outcome that carries a reuse key (feature 006). The reuse key is unchanged: it already holds
 the pattern's `id@version` and the method.

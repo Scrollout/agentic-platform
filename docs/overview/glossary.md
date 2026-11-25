@@ -32,7 +32,7 @@ sources:
   - id: spec-008
     resource: ../../specs/008-eval-variance/spec.md
     title: Feature 008 specification, Key Entities
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-26T00:20:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-26T03:00:00Z }
 ---
 
 # Knowledge bundle terms
@@ -185,7 +185,7 @@ These terms come from the Feature 011 specification.
 |------|---------|
 | Captured pattern | A pattern made from a run that ended done: its slice, tests and code as a template with named parameters, built later with no model call and used only after the developer approves its proof. |
 | Parameter | A name, declared value or other literal value in a captured pattern's source slice that a later slice may give another value, with every place it occurs. |
-| Proof | A build of a captured pattern's proof slice from the captured pattern with no model call; it passes when every check the captured pattern declares passes and the filled and generated files equal the source run's, showing the captured pattern reproduces its source under the current method. |
+| Proof | A build of a captured pattern's proof slice from the captured pattern with no model call; it passes when every check the captured pattern declares passes and the filled files (tests, code, witnesses) equal the source run's, while generated code is judged by its checks, showing the captured pattern reproduces its source under the current method. |
 | Proof slice | An approved slice the platform makes from a captured pattern's copy of its source slice; each of its runs is a proof of that captured pattern, so a proof works after the source slice is erased. |
 
 Sources: [Feature 011 specification](../../specs/011-capture-pattern/spec.md).

@@ -87,6 +87,10 @@ reused only under the method that judged them), [feature 009](../009-no-hard-cod
   every build (owner; FR-004). Q: Values occur in file paths (`cmd/notes/`); are paths filled? →
   A: yes, in the three case forms; two files that would get the same path are refused (owner;
   FR-003, FR-009).
+- Analyze round 6 (fresh Sonnet, at 30456ec), decided under the owner's instruction to apply the
+  fixes: a run built from a captured pattern, or a proof, is not captured (its template was never
+  reviewed); an erased captured pattern's ID is never given again; a replay keeps the recorded
+  parameter values (FR-001, FR-011).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -102,7 +106,7 @@ The developer chooses a run that ended done and asks the platform to capture it.
 proposes a captured pattern: the run's slice, tests and code, with the parts that may vary named
 as parameters. Before the developer can approve it, the platform proves it: rebuilt from the
 captured pattern with the source slice's own values, with no model call, the result passes every
-check the captured pattern declares and its files equal the accepted ones.
+check the captured pattern declares and its filled files equal the accepted ones.
 
 **Why this priority**: nothing can be reused until a proven solution is captured; this is the
 step that moves work from the probabilistic side to the deterministic side.
@@ -242,7 +246,8 @@ use the captured pattern and says it needs a new proof; proving it again restore
 #### Capture
 
 - **FR-001**: The developer MUST be able to ask the platform to capture a run that ended done; the
-  platform MUST refuse a run in any other state, naming that state.
+  platform MUST refuse a run in any other state, naming that state, and a run built from a
+  captured pattern or a proof, naming why (its template was never reviewed).
 - **FR-002**: A captured pattern proposal MUST hold the source slice, its accepted tests and code,
   and the names of the source run, the base pattern and the method that accepted it.
 - **FR-003**: The proposal MUST name each parameter: its name, its source value, and every place
@@ -255,8 +260,8 @@ use the captured pattern and says it needs a new proof; proving it again restore
   all lower case, first letter upper case, all upper case, each replaced wherever it occurs,
   inside a longer word too; a plural or other form is a separate parameter. Two parameters whose source values are equal in any case form MUST be refused. Where
   one source value contains another, the longer MUST be matched first, and no place is replaced
-  twice. File paths are filled like contents; two files that would get the same path MUST be
-  refused.
+  twice. File paths are filled like contents; a slice whose values would give two files the same
+  path, or a path outside its step's writable entries, MUST NOT fit.
 
 #### Proof and approval
 
@@ -304,7 +309,8 @@ use the captured pattern and says it needs a new proof; proving it again restore
   NOT use it and MUST tell the developer it needs a new
   proof; the developer MUST be able to start that proof. A resumed or taken-over run MUST keep
   its recorded pattern; a replay of a run built from a captured pattern MUST use it only while it
-  is usable and is otherwise refused, naming why; a replay of a proof run MUST be a new proof.
+  is usable and is otherwise refused, naming why, with the parameter values the run recorded; a
+  replay of a proof run MUST be a new proof.
 - **FR-012**: The developer MUST be able to withdraw a captured pattern; no run started after that
   uses it, and records of earlier runs keep naming it.
 - **FR-013**: A run built from a captured pattern MUST record the captured pattern's identity and

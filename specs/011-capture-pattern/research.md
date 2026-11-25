@@ -151,8 +151,16 @@ the fit and the fill:
   the approved slice fits when one value per parameter, read from the first hole of each and of
   its form, fills the source into exactly the approved slice's text, and no two parameters take
   equal values. Otherwise the slice does not fit, naming the first place it differs or the value
-  refused and why (*owner*: a value outside its form does not fit, and the start's answer says
-  so). A captured pattern's base fit conditions also run.
+  refused and why (*owner*: a value outside its form does not fit, and the run names it).
+  The fit also fills the template's paths with the values: two files with the same filled path,
+  or a filled path outside its step's writable entries, do not fit, naming the paths, so the
+  failure comes at `startRun`, never during the run (`Fill` refuses the same, fail closed). A captured pattern's base fit conditions also run.
+- **Declared limits** (Principle III): 32 parameters, 10000 places per parameter and 64
+  characters per value are integer `x-limits` keys of the engine contract
+  (`captured-pattern-parameters-max`, `parameter-places-max`, `parameter-value-max-chars`) and the
+  schemas' `maxItems`/`maxLength`; the parameter name pattern is the contract's
+  `parameter_name`. `engine/captured` holds them as named values, and a contract test in a new file
+  proves they match the loaded contract, as for the slices' limits.
 - **Limits** (stated in the contract): a spelling that is none of the three forms (`nOTE`) is not
   replaced; irregular plurals only as their own parameter; a derived value that is not added as
   its own parameter (E1); a value that occurs where it was not meant (`denote`, a status equal to

@@ -15,7 +15,7 @@ sources:
   - id: spec
     resource: ../../specs/011-capture-pattern/spec.md
     title: Feature 011 specification, Clarifications
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-26T01:10:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-26T03:00:00Z }
 ---
 
 # Origin
@@ -28,6 +28,10 @@ Sources: [Feature 011 plan](../../specs/011-capture-pattern/plan.md).
 
 # Context
 
+> Refined by [ADR 0097](/decisions/0097-proof-builds-a-slice-made-from-the-captured-copy.md) and
+> [ADR 0099](/decisions/0099-proof-compares-filled-outputs-and-paths-are-filled.md): a proof is a
+> build of the proof slice, and it compares only the filled outputs (tests, code, witnesses).
+>
 > Superseded in part by [ADR 0095](/decisions/0095-captured-patterns-never-change-values-keep-their-kind.md): a proof builds from the captured pattern's copy of the slice and compares generated files; usable needs the latest proof to have passed.
 
 - A solution proven under old checks must not be accepted under new ones without being judged

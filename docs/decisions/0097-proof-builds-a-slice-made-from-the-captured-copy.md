@@ -15,7 +15,7 @@ sources:
   - id: spec
     resource: ../../specs/011-capture-pattern/spec.md
     title: Feature 011 specification, Clarifications (analyze round 3)
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-26T02:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-26T03:00:00Z }
 ---
 
 # Origin
@@ -27,6 +27,9 @@ The project owner's answer of 2026-11-26 to `/speckit-analyze` round 3 of featur
 Sources: [Feature 011 specification, Clarifications](../../specs/011-capture-pattern/spec.md).
 
 # Context
+
+> Refined by [ADR 0099](/decisions/0099-proof-compares-filled-outputs-and-paths-are-filled.md):
+> no generated-code hash is kept; a proof compares only the filled outputs with the template.
 
 - [ADR 0096](/decisions/0096-proof-step-workers-keyed-by-captured-pattern.md) gave a proof no
   slice and keyed its step workers by the captured pattern.
