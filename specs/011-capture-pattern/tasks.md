@@ -75,7 +75,22 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   superseding ADR 0096); fixed at the source (spec Clarifications, FR-004, FR-013, Story 1 and 3;
   research S18, R2, R5, R7; data model; contract draft; plan; T001, T002, T006, T007, T008,
   T023, T027 to T029); M1, M2, M4 and L3 fall away with keyed workers; L2 quickstart. Round 4
-  owed before T001.
+  (fresh Sonnet, at fb1c8ff): round 3 fixed; 2 HIGH: H1 the proof slice has the source's
+  description, so createSlice's reuse (`approvedFor`, a map) may hand it back for the source
+  prose, and nothing marks a proof slice in `Slice`; H2 no task says what replay, resume and
+  take-over do for a captured run or a proof run (`ReplayRun` uses the base pattern, `ready()`
+  the base steps). 8 MEDIUM: M1 FR-006 and SC-003 need a proof-run carve-out and a proof-slice
+  entity and edge cases; M2 the exact `Operation.target`/`result`/`OperationKind` widening and
+  oasdiff evidence; M3 the pattern choice lives on `Run` and `RunStarted`, not the 202, and
+  startRun's new refusal order; M4 who records a Proof and maps a run end (handed over,
+  cancelled, expired, a reused result) to its outcome; M5 deleteSlice of a proof slice clears
+  `proof_slice`, dangling proof run IDs, T018 versus erasing proof runs; M6 a CLI test task for
+  `build --pattern` and the pattern-choice lines, output rows in T001; M7 how an approved slice
+  is made with no analyst or developer approval and what a failing check answers; M8 T029 after
+  T007, one author for `proof-slice`/`prove`, RunStarted fields and the proof branch in US1.
+  4 LOW: plan.md:99 and ADRs 0093/0095 wording (refined by 0097); R7 command list; `ap prove`
+  prints the Proof outcome; `proof_slice` cleared on erase. Gate not passed; H1 and H2 await the
+  owner; then fix at source and round 5, before T001.
 
 ---
 
