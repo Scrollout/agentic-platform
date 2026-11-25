@@ -165,7 +165,11 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   `ParameterRefused`; W1 a repeated `writeStep` and the meaning of `removed`; W2 `writeStep`'s
   body and file limits), 3 LOW (P1 a running proof's line; P2 `parameter_value` and
   `capture_name` pinned too; P3 parameters' order); fixed at the source (research R4; contract
-  draft; T001, T004, T005, T008). Round 14 owed.
+  draft; T001, T004, T005, T008). Round 14 (fresh Sonnet, at b2d6325): every
+  round-13 fix present; 0 CRITICAL, 0 HIGH; 1 MEDIUM (F1 the parameters' order tested in US1's
+  proof lines instead of US2's event lines and the page), 2 LOW (A1 too many entries is the
+  schema's 400; A2 the check contract's preamble and `handler.go`'s body limit); fixed at the
+  source (contract draft; T001, T004, T007, T008, T030, T031). Round 15 owed.
 
 ---
 
@@ -207,7 +211,9 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   `run-event.schema.json` `RunStarted` gains
   `pattern_reason`, `parameters`, `source_run`, `proof`, `part_hashes` and `not_used`, additively. `src/check/api/preview/2026-11-13-preview/openapi.yaml`
   gains `POST /project-versions/write` (`writeStep`: the contract draft's request, `CallCommon`
-  plus `files`, response `{written, removed}` and error codes). The engine contract gains the
+  plus `files`, response `{written, removed}` and error codes; the contract's preamble names
+  `writeStep` beside `commitStep` for the larger body limit and among the calls safe to
+  repeat). The engine contract gains the
   capture `name` rule (`capture_name` in `slice-defs.schema.json`, `^[a-z0-9]+(-[a-z0-9]+)*$`,
   `maxLength` 40) and `parameter_value` (research R4); `captureRun`'s description names every
   `RunNotCapturable` cause, the base-version mismatch included; `startRun` lists
@@ -275,7 +281,8 @@ proposed and adding the derived value works; the proof ends passed with no model
   with no files writes nothing and answers 200 with empty `written` and `removed`; a folder that
   does not hold `before` outside the writable entries, or whose last commit does not hold
   `before`, answers 409 `ProjectStateDiffers`; a repeated request answers the same and leaves the
-  same files; more than `step-files-max-bytes` of files answers 422 `StepFilesTooLarge`, and a
+  same files; more than `project-files-max` entries answers 400 `InvalidRequest` (schema) and
+  more than `step-files-max-bytes` of file bytes 422 `StepFilesTooLarge`, and a
   body up to `commit-request-body-max-bytes` is accepted; it writes files under the
   step's writable entries only, refuses a path outside them with 400
   naming it (also `..`, absolute paths, a symlinked folder), commits nothing, and `restoreStep`
@@ -353,7 +360,8 @@ proposed and adding the derived value works; the proof ends passed with no model
   erasure T020's, the usable rule at `startRun` and `replayRun` T015's) with its operations in `src/engine/api/operations.go`, the
   `fill` worker in `src/engine/durable/workflow.go` and `src/engine/steps/` (render through
   `engine/captured`, `writeStep`, checks, `commitStep`; the readiness check skips `fill`),
-  `writeStep` in `src/engine/checksvc/project.go` and `handler.go`, the proof as a run of the
+  `writeStep` in `src/engine/checksvc/project.go` and `handler.go` (its body-limit branch covers
+  `writeStep` as it covers `commitStep`), the proof as a run of the
   proof slice with `proof: true` (T029 makes the proof slice and the `startRun` branch that
   recognises it; T007 adds the `proof_of` field on `slices.Slice` that branch reads), the `RunStarted` fields `pattern_reason`, `parameters`, `source_run`, `proof` and
   `part_hashes` (written by `StartRun` and `ReplayRun` through `src/engine/api/runs.go` `newRun`,
@@ -406,7 +414,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   `ap patterns`, `ap pattern <id>` (parameters with places, proofs, state, usable), `--drop` and
   `--add`, `ap proof-slice <id>`, `ap approve-pattern` call the contract's operations, follow them and print
   as `src/cli/contract.md` states; the proof cases: after a proof's run the `Proof of <id>:
-  passed`, `failed: ...` and `running` lines, parameters in byte order of their names (exit 0
+  passed`, `failed: ...` and `running` lines (exit 0
   for passed; 1 for failed, whether the run was handed
   over, expired, cancelled or ended done with differing files), `ap slices` shows `PROOF OF` and `ap show` its `proof of`
   line; errors print their code and reason. Seen failing
@@ -414,7 +422,8 @@ proposed and adding the derived value works; the proof ends passed with no model
   `proof-slice`, the proof outcome line, the `PROOF OF` column and the `proof of` line (T029)
 - [ ] T031 [P] [US1] Test author: new `src/page/run_started_fields_test.go`: the run page shows a
   `RunStarted`'s `reason`, `proof`, `source` and `parameters` as the terminal's event line gives
-  them. Seen failing
+  them, the parameters in byte order of their names (two parameters declared in the other
+  order). Seen failing
 - [ ] T032 [US1] Code author (done when T031 passes): the run page's event rendering in
   `src/page/`; no test is changed
 - [ ] T010 [US1] (after T007, T009, T029 and T032) Commit (tests and code in separate commits); fast lint; ask the owner before
@@ -469,7 +478,9 @@ pass, three runs give the same files.
   the agents. Seen failing (owner go-ahead for the stack)
 - [ ] T030 [P] [US2] Test author: new `src/cli/captured_build_test.go`: `ap build --pattern`
   sends `pattern`; `build`'s first line, the `RunStarted` event line, the `run` header and the
-  `Not used:` lines (from the run's `not_used`) print as `src/cli/contract.md` states; refusals print their code and reason. Seen
+  `Not used:` lines (from the run's `not_used`) print as `src/cli/contract.md` states, the
+  parameters in byte order of their names (a case with two parameters whose declared order
+  differs from byte order); refusals print their code and reason. Seen
   failing
 - [ ] T015 [US2] Code author (done when T012, T013 and T030 pass): `Fit` in `src/engine/captured/`, applying the `usable` value T007
   computes in the Proof-completion function, the choice for a fitting captured

@@ -87,7 +87,8 @@ exactly `files` without committing, and answers 200 `{written, removed}` in byte
 `written` the paths of `files`, `removed` the writable-matching files of `before` not in
 `files`; so a repeated request leaves the same files and gives the same answer. `files` holds
 at most `x-limits.project-files-max` entries and `x-limits.step-files-max-bytes` of file bytes
-together (more is 422 `StepFilesTooLarge`), and the body may be up to
+together (more entries is 400 `InvalidRequest` by the schema's `maxItems`; more bytes is 422
+`StepFilesTooLarge`), and the body may be up to
 `x-limits.commit-request-body-max-bytes`, as for `commitStep`. Errors: 400 InvalidRequest (a path
 matching no writable entry, naming it), 401,
 404 VersionHistoryNotServed (not the project worker), 409 ProjectStateDiffers or HistoryChanged,
