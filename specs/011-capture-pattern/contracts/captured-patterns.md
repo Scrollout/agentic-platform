@@ -37,7 +37,9 @@ refused value, with the parameter and why. Refusals, in this order, each at once
 InvalidProject; NotFound for an unknown slice or a `pattern` naming no pattern; PatternDoesNotFit
 for the base conditions, as before; NotApproved; `CapturedPatternWithdrawn`, then
 `CapturedPatternBusy` (a proof's start while another captured-pattern operation runs), then
-`ProofRequired`, for a named captured pattern (or a proof slice's, withdrawn only);
+`CapturedPatternNotApproved` (a named captured pattern that is proposed or proven, FR-006; a
+proof slice's own run is not refused), then `ProofRequired`, for a named captured pattern (or a
+proof slice's, withdrawn and busy only);
 PatternDoesNotFit, with the first place the approved slice differs or the value refused, for a
 named captured pattern that does not fit;
 WorkersNotReady (a `fill` step needs no worker); RunActive; ProjectExists. `replayRun` of a run
@@ -105,7 +107,7 @@ service) for the checks, as the agent path does.
 |---------|------|
 | `ap capture <run> [--name <name>]` | `POST /captured-patterns`, follows the operation, prints the parameters |
 | `ap patterns` | `GET /captured-patterns` |
-| `ap pattern <id>` | `GET /captured-patterns/{id}`: parameters and places, proofs, state |
+| `ap pattern <id>` | `GET /captured-patterns/{id}`: parameters and places, proofs, state; with no parameter it prints `No parameters: only a slice identical to the source fits.` |
 | `ap pattern <id> --drop <param>` / `--add [<name>=]<value>` | `PUT /captured-patterns/{id}/parameters` |
 | `ap proof-slice <id>` | `POST /captured-patterns/{id}/proof-slice`, follows the operation, prints the proof slice's ID |
 | `ap prove <id> <project>` | the launcher runs the client's `proof-slice <id>`, then `build <proof slice> <project>` as for `build` (`build-workers` first); after the run's end line the client prints `Proof of <id>: passed`, `Proof of <id>: failed: <failure>; ...` or, while the proof is still running (its run interrupted), `Proof of <id>: running` with the run state's exit; a proof run exits 0 for a passed proof and 1 for a failed one, over the run state's own code (2 for a hand-over, 5 expired, 6 cancelled); `src/cli/contract.md`'s "Run states and exit codes" gains that row |

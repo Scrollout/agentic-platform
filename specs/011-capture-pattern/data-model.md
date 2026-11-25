@@ -93,6 +93,7 @@ any --(erase, confirmed)--> erased
 |------|----------|--------|----------|-----------|
 | `replaceParameters` | changes them | changes them, back to proposed | `CapturedPatternApproved` | `CapturedPatternWithdrawn` |
 | `makeProofSlice`, a proof's `startRun`, a proof run's `replayRun` | allowed | allowed | allowed | `CapturedPatternWithdrawn` |
+| a `startRun` of another slice naming it | `CapturedPatternNotApproved` | `CapturedPatternNotApproved` | used while usable, else `ProofRequired` | `CapturedPatternWithdrawn` |
 | `approveCapturedPattern` | `ProofRequired` | approves when its latest proof passed under the current method, else `ProofRequired` | changes nothing | `CapturedPatternWithdrawn` |
 | `withdrawCapturedPattern` | withdraws | withdraws | withdraws | changes nothing |
 | `eraseCapturedPattern` | erases | erases | erases | erases |

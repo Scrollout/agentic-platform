@@ -181,7 +181,11 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   `fill` worker reaches `writeStep` without changing `machine.History` and its fakes), 1 LOW (N2
   the plan's `writeStep` files); fixed at the source (plan; T007). Round 18 (fresh Sonnet, at e47852f): every
   round-17 fix present; 0 CRITICAL, 0 HIGH, 0 MEDIUM; 1 LOW (E1 T006's split between `fill` and
-  proof cases); fixed at the source (T006). Round 19 owed.
+  proof cases); fixed at the source (T006). Round 19 (fresh Sonnet, at 9eb597e, every
+  artifact read in full): E1 fixed; 0 CRITICAL, 0 HIGH; 1 MEDIUM (U1 a named unapproved captured
+  pattern at `startRun`: new `CapturedPatternNotApproved`), 2 LOW (O1 the method-rule `startRun`
+  cases move to T013; C1 `nOTE` and inline text in T003, the no-parameter line); fixed at the
+  source (contract draft; data model; T001, T003, T008, T013, T018). Round 20 owed.
 
 ---
 
@@ -199,7 +203,7 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   `startRun` answers 202 with its operation as before, and `Run` gains `proof` and the pattern
   choice (data model, Run); `startRun`'s description gives the refusal order of the contract
   draft; `x-error-codes` per operation: `startRun` and `replayRun` add `CapturedPatternWithdrawn`
-  and `ProofRequired` (409), both add `CapturedPatternBusy` (a proof's start or a proof run's
+  and `ProofRequired` (409), `startRun` also `CapturedPatternNotApproved`, both add `CapturedPatternBusy` (a proof's start or a proof run's
   replay), and `startRun` NotFound for an unknown `pattern`; each id-addressed captured-pattern call 404 `NotFound`; `captureRun` 404,
   409 `RunNotDone`, `RunNotCapturable`, `CapturedPatternExists`; `replaceParameters` 409
   `CapturedPatternApproved`, `CapturedPatternWithdrawn`, `CapturedPatternBusy`, operation
@@ -217,7 +221,7 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   each; `startRun` gains an optional `pattern`; the `Run` gains `pattern_reason` (`base`, `fits`,
   `chosen`), `parameters`, `source_run` and `not_used` (each captured pattern that needs a new
   proof or was refused for a value, with the reason), read from `RunStarted`; error codes `RunNotDone`, `ParameterRefused`, `ProofRequired`, `CapturedPatternWithdrawn`,
-  `CapturedPatternExists`, `CapturedPatternBusy`, `CapturedPatternApproved`, `RunNotCapturable`;
+  `CapturedPatternExists`, `CapturedPatternBusy`, `CapturedPatternApproved`, `RunNotCapturable`, `CapturedPatternNotApproved`;
   integer `x-limits` keys `captured-pattern-parameters-max: 32`, `parameter-places-max: 10000`,
   `parameter-value-max-chars: 64` and the matching `maxItems`/`maxLength`; `PUT /parameters`
   takes `{name, value}` per parameter; `parameters` and `not_used` have the data model's shapes;
@@ -285,7 +289,9 @@ proposed and adding the derived value works; the proof ends passed with no model
   not a number, a string outside "letters, digits, `_`, `-` and spaces", a value over 64
   characters, an added value that does not occur in the slice, more than 32 parameters, more than
   10000 places per parameter; a number is matched only as a whole number (`200` not in `2001`, `1.200`,
-  `200ms` or `v200`; in `-200` and `"200"`); an empty template output fills to no file; `Fill` with each source value gives the input bytes
+  `200ms` or `v200`; in `-200` and `"200"`); an empty template output fills to no file; `nOTE`, none of the three forms, is left unchanged
+  (the test author adds inline text for `nOTE`, `NOTE`, `note_id` and `denote`, which the notes
+  fixture lacks, research E1); `Fill` with each source value gives the input bytes
   back for every file; with `task`/`tasks` gives `NewTask`, `listTasks`, `TASK` where `NOTE` was,
   and `task_id` and `detask` where `note_id` and `denote` were (every occurrence, inside words
   too); on `limit/` with `100`/`101` every `200` and `201` place carries the new value (SC-006);
@@ -440,7 +446,8 @@ proposed and adding the derived value works; the proof ends passed with no model
   `ReplayRun` (a replay of a proof run is a new proof, no reuse), `proof-slice`, the proof outcome line and its exit code in
   `src/cli/`, `prove` in `src/deploy/ap`; no test is changed
 - [ ] T008 [P] [US1] Test author: new `src/cli/captured_test.go`: `ap capture <run> [--name]`,
-  `ap patterns`, `ap pattern <id>` (parameters with places, proofs, state, usable), `--drop` and
+  `ap patterns`, `ap pattern <id>` (parameters with places, proofs, state, usable; the
+  `No parameters` line for a captured pattern with none), `--drop` and
   `--add`, `ap proof-slice <id>`, `ap approve-pattern` call the contract's operations, follow them and print
   as `src/cli/contract.md` states; the proof cases: after a proof's run the `Proof of <id>:
   passed`, `failed: ...` and `running` lines (exit 0
@@ -483,7 +490,12 @@ pass, three runs give the same files.
   linear (a 1 MiB slice with 32 parameters fits in under 1 s). Seen failing
 - [ ] T013 [P] [US2] Test author: new `src/engine/api/captured_startrun_test.go`: `startRun`
   without `pattern` uses the most recently approved usable fitting captured pattern, otherwise the
-  base pattern; with `pattern` naming the base pattern or a captured one, that one; a named
+  base pattern; with `pattern` naming the base pattern or a usable captured one, that one; a
+  `pattern` naming a proposed or proven captured pattern answers `CapturedPatternNotApproved` and
+  starts nothing, while its proof slice's own run still starts; with the engine's method changed
+  after approval, `startRun` skips the captured pattern and names it in `not_used` as
+  `needs-proof`, and a named one answers `ProofRequired`; a later failing proof, and a proof still
+  running, make an approved one unusable the same way; a named
   captured pattern that does not fit answers `PatternDoesNotFit` with the first difference or the
   refused value; without `pattern`, a captured pattern refused only for a value is named in the
   run with the reason and the base pattern is used; `startRun` answers 202 with its operation,
@@ -532,8 +544,8 @@ pattern and names the captured pattern as needing a new proof; a new passing pro
 a withdrawn one is never chosen; erasing the source slice keeps the captured pattern usable.
 
 - [ ] T018 [P] [US3] Test author: new `src/engine/api/captured_method_test.go`: with the engine's
-  method changed after approval, `startRun` skips the captured pattern and names it as needing a
-  new proof, and a named one answers `ProofRequired`; a new passing proof under the new method
+  method changed after approval (the `startRun` skip and `ProofRequired` cases are T013's; here a
+  regression guard), a new passing proof under the new method
   makes it usable and records the method; a failing one leaves it unusable naming what failed;
   withdrawal stops its choice and a named use answers `CapturedPatternWithdrawn`, a run already
   started finishes on it, and earlier runs' records still name it; a later failing proof under the
