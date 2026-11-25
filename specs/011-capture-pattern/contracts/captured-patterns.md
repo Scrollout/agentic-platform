@@ -72,7 +72,9 @@ captured pattern's template hashes (data model, Proof); a hand-over fails it at 
   each with every place it occurs.
 - `Check(copy, template, parameters) error`: value forms, uniqueness in any case form, each value
   occurring in the copy, the declared limits.
-- `Fit(copy, template, writable, parameters, approved) -> (values, ok, firstDifference)`: research
+- `Fit(copy, template, writable, parameters, approved) -> (values, ok, refusal)`, `refusal`
+  being either the first `place` the approved slice differs or a refused `parameter` with its
+  `detail` (it fills `not_used`'s `parameter` and `detail` and `PatternDoesNotFit`'s detail): research
   R4, including the filled paths (no two equal, each inside its step's writable entries).
 - `Fill(files, parameters, values) -> files`: each place replaced in its case form, longest first,
   in contents and paths; refuses two files with the same filled path (the writable check is

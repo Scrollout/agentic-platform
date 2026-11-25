@@ -17,7 +17,7 @@ same input gives the same accepted result), N-051 (a result is accepted only whe
 not depend on a model's judgement pass) and N-053 (every result can be traced to the method,
 inputs and rules that produced it).
 **Uses terms** ([glossary](../../docs/overview/glossary.md)): Slice, Pattern, Catalogue, Run,
-Step, Check, Agent, Method, Accepted result, Declared value, Captured pattern, Parameter, Proof.
+Step, Check, Agent, Method, Accepted result, Declared value, Captured pattern, Parameter, Proof, Proof slice.
 **Builds on**: [feature 001](../001-prose-to-accepted-slice/spec.md) (the slice, the catalogue,
 pattern fit, runs and their outcomes), [feature 006](../006-method-record/spec.md) (results are
 reused only under the method that judged them), [feature 009](../009-no-hard-coded-values/spec.md)

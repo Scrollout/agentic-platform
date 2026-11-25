@@ -187,7 +187,11 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   cases move to T013; C1 `nOTE` and inline text in T003, the no-parameter line); fixed at the
   source (contract draft; data model; T001, T003, T008, T013, T018). Round 20 (fresh Sonnet, at f6fd1ce): U1, O1, C1
   fixed; 0 CRITICAL, 0 HIGH, 0 MEDIUM; 2 LOW (F1 R7's code list; F2 Busy applies only to a
-  proof's start); fixed at the source (research R7; contract draft; data model). Round 21 owed.
+  proof's start); fixed at the source (research R7; contract draft; data model). Round 21 (fresh Sonnet, at d46d36f): F1, F2
+  fixed; 0 CRITICAL, 0 HIGH; 1 MEDIUM (D1 "only a usable captured pattern is judged" against
+  `needs-proof`), 3 LOW (L1 Proof slice in the spec's terms; T1 T014 and T028 owned by T015 and
+  T029 on CI; F1 `Fit`'s refusal result); fixed at the source (spec; data model; contract draft;
+  T015, T029). Round 22 owed.
 
 ---
 
@@ -442,7 +446,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   Seen failing
   (owner go-ahead for the lab)
 - [ ] T029 [US1] Code author (after T007, on its store changes; done when T006's proof cases,
-  T027 and T008's proof cases pass): the proof slice in `src/engine/slices/` (made by the engine, the `startRun` branch for a proof slice, history
+  T027 and T008's proof cases pass, and T028 on the CI run T010 records): the proof slice in `src/engine/slices/` (made by the engine, the `startRun` branch for a proof slice, history
   `made-for-proof`, `proof_of`, never reused by `createSlice`, `deleteSlice` clears
   `proof_slice`), the `proof-slice` call in new `src/engine/api/proof_slice.go`, the proof side of
   `ReplayRun` (a replay of a proof run is a new proof, no reuse), `proof-slice`, the proof outcome line and its exit code in
@@ -526,7 +530,9 @@ pass, three runs give the same files.
   parameters in byte order of their names (a case with two parameters whose declared order
   differs from byte order); refusals print their code and reason. Seen
   failing
-- [ ] T015 [US2] Code author (done when T012, T013 and T030 pass): `Fit` in `src/engine/captured/`, applying the `usable` value T007
+- [ ] T015 [US2] Code author (done when T012, T013 and T030 pass, and T014 on the CI run T016
+  records; an approved but unusable captured pattern is still judged for fit, to be named
+  `needs-proof`): `Fit` in `src/engine/captured/`, applying the `usable` value T007
   computes in the Proof-completion function, the choice for a fitting captured
   pattern and a named one in `src/engine/api/runs.go` (`StartRun`; `ReplayRun`'s usable rule for runs that are not proofs, leaving a proof run's
   replay to T029's proof rule;
