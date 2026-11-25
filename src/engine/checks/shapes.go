@@ -54,14 +54,12 @@ type RequestBody struct {
 	Shape *RequestShape
 }
 
-// The keys a request body's schema may use (catalogue README, RequestBodiesSupported). Every
-// other key is refused, except one starting "x-". RequestShapes and the fit conditions
-// RequestBodiesSupported (through the same walk) and RefusalDeclared (annotations) share them.
+// The keys a request body's schema may use (catalogue README, RequestBodiesSupported). The keys
+// that shape the value (type, properties, required, additionalProperties, items, and $ref) are
+// the cases of shapeWalk.schema and shapeWalk.follow, their one owner. Every other key is refused,
+// except one starting "x-". RequestShapes and the fit conditions RequestBodiesSupported (through
+// the same walk) and RefusalDeclared (annotations) share them.
 var (
-	// requestShapingKeywords shape the value; RequestShapes reads each of them.
-	requestShapingKeywords = map[string]bool{
-		"type": true, "properties": true, "required": true, "additionalProperties": true, "items": true, "$ref": true,
-	}
 	// requestValueKeywords limit a value; the request check leaves them to the code.
 	requestValueKeywords = map[string]bool{
 		"maxLength": true, "minLength": true, "pattern": true, "format": true, "maximum": true, "minimum": true,
