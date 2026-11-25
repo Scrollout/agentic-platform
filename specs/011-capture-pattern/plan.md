@@ -157,7 +157,8 @@ src/engine/checksvc/project.go           # writeStep
 src/engine/slices/                       # the proof slice, made from the captured copy and approved
 src/deploy/ap                            # prove: proof-slice, then build
 src/engine/method/method.sha256          # derived
-src/cli/                                 # the commands; contract.md rows
+src/cli/                                 # the commands; contract.md rows and the proof run's exit
+src/page/                                # the run page shows RunStarted's new fields (T031, T032)
 src/tests/acceptance/                    # new suite: capture, prove, approve, build tasks with no model call
 ```
 
@@ -171,6 +172,8 @@ commit; any other is stopped and asked for):
 - Tests that list the engine contract's paths, operation kinds or error codes exactly (found by
   the code author, then asked for).
 - Tests that list `RunStarted`'s fields exactly, if any.
+- Tests in `src/page` and `src/tests` that list the generated client's types or a run event's
+  fields exactly, if any.
 - Tests that list a slice record's or `Run`'s fields exactly, if any (a proof slice names its
   captured pattern; a run gains `proof` and the pattern choice); launcher tests that list the
   commands it intercepts (`prove` is new).

@@ -42,7 +42,8 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   `src/engine/captured`; the API, the run choice and the workflow call it.
 - **Test time**: locally only the packages a task touches (`go test ./captured/ ./api/
   ./durable/ ./checksvc/ ./store/ ./machine/ ./steps/ ./slices/` in `src/engine`, `go test ./...`
-  in `src/slice` after a schema change, `go build ./...` in `src/check` after regenerating, `go test ./...` in `src/cli`), each capped at
+  in `src/slice` after a schema change, `go build ./...` in `src/check` after regenerating, `go test ./...` in `src/page` and `go vet
+  ./...` in `src/tests` after regenerating, `go test ./...` in `src/cli`), each capped at
   10 minutes; no full `scripts/check.sh`, Docker lab, image build or acceptance suite without the
   owner's go-ahead. The full test command is the CI run of the pushed commit; every push is told
   to the owner with the jobs it runs and waits for a go-ahead. A live eval run is paid and needs
@@ -152,7 +153,14 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   needs T029's marking; F6 `ap prove`'s exit for a failed proof), 3 LOW (L1 the pin test never
   seen failing; L2 `src/slice` and `src/check` in the local checks; L3 the capture name's form);
   fixed at the source (data model; research R5; contract draft; T001, T003 to T008, T028, T029,
-  Test time). Round 12 owed.
+  Test time). Round 12 (fresh Sonnet, at a07b340): every
+  round-11 fix present; 0 CRITICAL, 0 HIGH; 5 MEDIUM (N1 the proof run's exit against the run
+  states; N2 the base-version cause and the capture name not in the draft, spec or T001; N3 the
+  run page, a second contract consumer; N4 Busy at a proof's start; N5 `writeStep`'s request and
+  response), 4 LOW (N6 `parameter_value`; N7 a proof erased before it was read; N8 a no-op PUT;
+  N9 T015's and T020's owners and exits); fixed at the source (spec FR-001 and an edge case;
+  research R4; data model; contract draft; plan; T001, T004, T006, T008, T015, T020, T027 to
+  T029, new T031, T032, Test time). Round 13 owed.
 
 ---
 
@@ -193,8 +201,14 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   takes `{name, value}` per parameter; `parameters` and `not_used` have the data model's shapes;
   `run-event.schema.json` `RunStarted` gains
   `pattern_reason`, `parameters`, `source_run`, `proof`, `part_hashes` and `not_used`, additively. `src/check/api/preview/2026-11-13-preview/openapi.yaml`
-  gains `POST /project-versions/write` (`writeStep`: `{project, step, files}`, each path must
-  match one of the step's writable entries, otherwise 400 naming it). New
+  gains `POST /project-versions/write` (`writeStep`: the contract draft's request, `CallCommon`
+  plus `files`, response `{written, removed}` and error codes). The engine contract gains the
+  capture `name` rule (`capture_name` in `slice-defs.schema.json`, `^[a-z0-9]+(-[a-z0-9]+)*$`,
+  `maxLength` 40) and `parameter_value` (research R4); `captureRun`'s description names every
+  `RunNotCapturable` cause, the base-version mismatch included; `startRun` lists
+  `CapturedPatternBusy` (a proof's start); `src/cli/contract.md`'s "Run states and exit codes"
+  gains the proof run's row (0 passed, 1 failed, over 2, 5 and 6). `src/page` is regenerated and
+  builds. New
   `src/engine/captured/captured.go` holds the Go interface of the contract draft (`Propose`,
   `Check`, `Fit`, `Fill` with the contract draft's signatures, the declaration from the base
   pattern, the limits and the parameter name rule as named values; types, signatures, doc comments
@@ -252,7 +266,8 @@ proposed and adding the derived value works; the proof ends passed with no model
   paths (a filled path outside its step's writable entries is the fit's to refuse, T012). Seen
   failing
 - [ ] T004 [P] [US1] Test author: new `src/engine/checksvc/write_step_test.go`: `writeStep`
-  with no files writes nothing and answers the unchanged project; it writes files under the
+  with no files writes nothing and answers 200 with empty `written` and `removed`; a folder that
+  does not hold `before` answers 409 `ProjectStateDiffers`; it writes files under the
   step's writable entries only, refuses a path outside them with 400
   naming it (also `..`, absolute paths, a symlinked folder), commits nothing, and `restoreStep`
   afterwards removes what it wrote; an unknown project or step is refused. Seen failing
@@ -303,7 +318,8 @@ proposed and adding the derived value works; the proof ends passed with no model
   output is empty (a clean review's `witnesses`) writes nothing, commits, and passes the hash
   comparison;
   `PUT /parameters` while a proof's run has not ended (also a failed proof's waiting run)
-  answers `CapturedPatternBusy`; `PUT /parameters` moves a proven one back to proposed; the
+  answers `CapturedPatternBusy`; `PUT /parameters` moves a proven one back to proposed, also
+  when it leaves the same values; the
   state table's proven and approved columns in the `replaceParameters` and
   `approveCapturedPattern` rows (withdrawal and erasure are T018's);
   a planted template byte change fails it naming the file; a planted
@@ -354,30 +370,40 @@ proposed and adding the derived value works; the proof ends passed with no model
   state, a `pattern` naming another one or a part not equal to the copy answers
   `PatternDoesNotFit`; its run carries `proof: true`; `deleteSlice` of the proof slice clears
   `proof_slice`, keeps every recorded proof (its run then NotFound) and the template artifacts; a
-  replay of a proof run is a new proof with no reuse; capturing a proof run answers
+  replay of a proof run is a new proof with no reuse; a proof's `startRun` while another of the
+  captured pattern's operations runs answers `CapturedPatternBusy`; `deleteSlice` of the proof
+  slice right after its proof run ended, before any read, still keeps that proof; capturing a
+  proof run answers
   `RunNotCapturable`. Seen failing
 - [ ] T028 [P] [US1] Test author: new `src/tests/lab/captured_prove_test.go` (Docker lab, CI):
   `ap prove <captured pattern> <project>` runs the client's `proof-slice`, then `build-workers`
   and `build` for the proof slice into `<project>`; an unknown captured pattern is exit 4
   NotFound and starts nothing; after the run's end line it prints `Proof of <id>: passed` or the
-  failures and exits 1 for a failed proof; running it again into another project builds again.
+  failures and exits 0 for a passed proof and 1 for a failed one (handed over, expired,
+  cancelled or differing files); running it again into another project builds again.
   Seen failing
   (owner go-ahead for the lab)
 - [ ] T029 [US1] Code author (after T007, on its store changes; done when T006's proof cases,
   T027 and T008's proof cases pass): the proof slice in `src/engine/slices/` (made by the engine, the `startRun` branch for a proof slice, history
   `made-for-proof`, `proof_of`, never reused by `createSlice`, `deleteSlice` clears
   `proof_slice`), the `proof-slice` call in new `src/engine/api/proof_slice.go`, the proof side of
-  `ReplayRun` (a replay of a proof run is a new proof, no reuse), `proof-slice` and the proof outcome line in
+  `ReplayRun` (a replay of a proof run is a new proof, no reuse), `proof-slice`, the proof outcome line and its exit code in
   `src/cli/`, `prove` in `src/deploy/ap`; no test is changed
 - [ ] T008 [P] [US1] Test author: new `src/cli/captured_test.go`: `ap capture <run> [--name]`,
   `ap patterns`, `ap pattern <id>` (parameters with places, proofs, state, usable), `--drop` and
   `--add`, `ap proof-slice <id>`, `ap approve-pattern` call the contract's operations, follow them and print
   as `src/cli/contract.md` states; the proof cases: after a proof's run the `Proof of <id>:
-  passed` and `failed: ...` lines (exit 0 and 1), `ap slices` shows `PROOF OF` and `ap show` its `proof of`
+  passed` and `failed: ...` lines (exit 0 for passed; 1 for failed, whether the run was handed
+  over, expired, cancelled or ended done with differing files), `ap slices` shows `PROOF OF` and `ap show` its `proof of`
   line; errors print their code and reason. Seen failing
 - [ ] T009 [US1] Code author: the commands in `src/cli/` (generated client only), except
   `proof-slice`, the proof outcome line, the `PROOF OF` column and the `proof of` line (T029)
-- [ ] T010 [US1] (after T007, T009 and T029) Commit (tests and code in separate commits); fast lint; ask the owner before
+- [ ] T031 [P] [US1] Test author: new `src/page/run_started_fields_test.go`: the run page shows a
+  `RunStarted`'s `reason`, `proof`, `source` and `parameters` as the terminal's event line gives
+  them. Seen failing
+- [ ] T032 [US1] Code author (done when T031 passes): the run page's event rendering in
+  `src/page/`; no test is changed
+- [ ] T010 [US1] (after T007, T009, T029 and T032) Commit (tests and code in separate commits); fast lint; ask the owner before
   pushing (every check job runs); record the CI run here
 - [ ] T011 [US1] Fresh review of US1 judging T010's CI run; findings fixed as new tasks or
   recorded; `/speckit-converge` for US1
@@ -431,7 +457,7 @@ pass, three runs give the same files.
   sends `pattern`; `build`'s first line, the `RunStarted` event line, the `run` header and the
   `Not used:` lines (from the run's `not_used`) print as `src/cli/contract.md` states; refusals print their code and reason. Seen
   failing
-- [ ] T015 [US2] Code author: `Fit` in `src/engine/captured/`, applying the `usable` value T007
+- [ ] T015 [US2] Code author (done when T012, T013 and T030 pass): `Fit` in `src/engine/captured/`, applying the `usable` value T007
   computes in the Proof-completion function, the choice for a fitting captured
   pattern and a named one in `src/engine/api/runs.go` (`StartRun`; `ReplayRun`'s usable rule;
   a captured-pattern run chosen at `startRun`, which capture then refuses by T007's rule), the `Run`'s pattern choice and `not_used`, `ap build --pattern` and the output lines in `src/cli/`
@@ -471,8 +497,10 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
 - [ ] T019 [P] [US3] Test author: new `src/cli/captured_lifecycle_test.go`: `ap withdraw-pattern`
   and `ap erase-pattern` (shows what will be erased, asks for confirmation, does nothing without
   it). Seen failing
-- [ ] T020 [US3] Code author: withdrawal and erasure in `src/engine/api/` and `src/engine/store/`
-  (`withdrawCapturedPattern`, `eraseCapturedPattern`, busy while a run built from it or its proof
+- [ ] T020 [US3] Code author (done when T018 and T019 pass): withdrawal and erasure in
+  `src/engine/api/` and `src/engine/store/` (`withdrawCapturedPattern`, `eraseCapturedPattern`,
+  the `CapturedPatternWithdrawn` refusals at `startRun` (a named use and the proof-slice branch),
+  `replayRun`, `makeProofSlice`, `replaceParameters` and `approveCapturedPattern`, busy while a run built from it or its proof
   has not ended, the proof slice erased with it, erased IDs never given again, `ReplayRun`'s
   NotFound for an erased captured pattern); the method rule's
   remaining cases (T015 applies the `usable` value T007 computes); the commands in `src/cli/`
@@ -500,8 +528,8 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
 
 ## Dependencies & execution order
 
-- T001 → T002 → US1 (T003-T006, T027, T028 in parallel → T007 → T029; T008 → T009; T007, T009
-  and T029 → T010 → T011) → US2 (T012-T014, T030 in parallel → T015 → T016 → T017) → US3 (T018-T019 in parallel → T020 → T021 → T022) → T023 →
+- T001 → T002 → US1 (T003-T006, T027, T028 in parallel → T007 → T029; T008 → T009; T031 → T032;
+  T007, T009, T029 and T032 → T010 → T011) → US2 (T012-T014, T030 in parallel → T015 → T016 → T017) → US3 (T018-T019 in parallel → T020 → T021 → T022) → T023 →
   T024 → T025 → T026.
 - US2 needs US1's captured patterns and fill worker; US3 needs US2's choice at `startRun`.
 

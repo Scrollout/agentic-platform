@@ -165,7 +165,10 @@ the fit and the fill:
   characters per value are integer `x-limits` keys of the engine contract
   (`captured-pattern-parameters-max`, `parameter-places-max`, `parameter-value-max-chars`) and the
   schemas' `maxItems`/`maxLength`; the parameter name pattern is the contract's
-  `parameter_name`. `engine/captured` holds them as named values, and a contract test in a new file
+  `parameter_name`; `parameter_value` is 1 to 64 characters of letters, digits, `_`, `-`, `.` and
+  spaces (the union of the kind forms; each kind's own form stays with `engine/captured`); the
+  capture `name` is `capture_name`, `^[a-z0-9]+(-[a-z0-9]+)*$`, at most 40 characters.
+  `engine/captured` holds them as named values, and a contract test in a new file
   proves they match the loaded contract, as for the slices' limits.
 - **Limits** (stated in the contract): a spelling that is none of the three forms (`nOTE`) is not
   replaced; irregular plurals only as their own parameter; a derived value that is not added as

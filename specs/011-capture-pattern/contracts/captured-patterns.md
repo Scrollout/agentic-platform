@@ -11,7 +11,7 @@ Turn a done run into a pattern that builds later slices of the same kind with no
 
 | Call | What it does | Answers |
 |------|--------------|---------|
-| `POST /captured-patterns` `{run, name?}` (`name` `^[a-z0-9]+(-[a-z0-9]+)*$`, at most 40 characters; otherwise 400 InvalidRequest) | proposes a captured pattern from a run that ended done, with proposed parameters | 202 operation, its target the new captured pattern's ID; refused at once with `RunNotDone` (naming the run's state), `RunNotCapturable` (a run built from a captured pattern, a proof, or a run whose slice changed after it started, compared with the part hashes its `RunStarted` records) or `CapturedPatternExists` (an existing or erased ID); a capture whose operation fails leaves no captured pattern (getCapturedPattern answers 404) |
+| `POST /captured-patterns` `{run, name?}` (`name` `^[a-z0-9]+(-[a-z0-9]+)*$`, at most 40 characters; otherwise 400 InvalidRequest) | proposes a captured pattern from a run that ended done, with proposed parameters | 202 operation, its target the new captured pattern's ID; refused at once with `RunNotDone` (naming the run's state), `RunNotCapturable` (a run built under another base pattern version than the current one, a run built from a captured pattern, a proof, or a run whose slice changed after it started, compared with the part hashes its `RunStarted` records) or `CapturedPatternExists` (an existing or erased ID); a capture whose operation fails leaves no captured pattern (getCapturedPattern answers 404) |
 | `GET /captured-patterns` | lists captured patterns, newest first | 200, paginated with opaque page tokens |
 | `GET /captured-patterns/{id}` | one captured pattern: parameters with their places, proofs, approval, state, usable | 200; 404 |
 | `PUT /captured-patterns/{id}/parameters` `{parameters: [{name, value}]}` | replaces the parameters of a proposed or proven one (removes, adds); the engine sets each kind and source (data model, Parameter) | 202 operation; the operation fails `ParameterRefused` naming the parameter and why; 409 `CapturedPatternApproved`, `CapturedPatternWithdrawn`, or `CapturedPatternBusy` while an operation or a proof's run has not ended, at once |
@@ -36,6 +36,7 @@ fitting captured pattern that needs a new proof and each that did not fit only b
 refused value, with the parameter and why. Refusals, in this order, each at once: InvalidRequest or
 InvalidProject; NotFound for an unknown slice or a `pattern` naming no pattern; PatternDoesNotFit
 for the base conditions, as before; NotApproved; `CapturedPatternWithdrawn`, then
+`CapturedPatternBusy` (a proof's start while another captured-pattern operation runs), then
 `ProofRequired`, for a named captured pattern (or a proof slice's, withdrawn only);
 PatternDoesNotFit, with the first place the approved slice differs or the value refused, for a
 named captured pattern that does not fit;
@@ -76,9 +77,17 @@ Limits: research R4.
 
 ## Check API: `writeStep`
 
-`POST /project-versions/write` `{project, step, files}` (`files` may be empty: a step whose
-template output holds no file, such as a clean review's `witnesses`, writes nothing): the project worker writes the files into
-the step's writable paths (each path must match one; otherwise 400 naming it) without committing.
+`POST /project-versions/write`, served by the project worker: the body is `CallCommon` (run,
+step facts with its writable entries, attempt, project, `before`, time limit) plus `files` (each
+path, `sha256` and base64 content; it may be empty: a step whose template output holds no file,
+such as a clean review's `witnesses`, writes nothing). It checks the history and record as
+`restoreStep` does and that the folder holds `before`, then makes the files matching the step's
+writable entries exactly `files` without committing, and answers 200 `{written, removed}` (paths
+in byte order). Errors: 400 InvalidRequest (a path matching no writable entry, naming it), 401,
+404 VersionHistoryNotServed (not the project worker), 409 ProjectStateDiffers or HistoryChanged,
+422 UnreadableProject or InputHashMismatch, 429, 500 WriteFailed, 503 Busy, 504
+TimeLimitExceeded. The fill worker then reads the step's files with `readStepFiles` (check
+service) for the checks, as the agent path does.
 `restoreStep` before the next attempt removes them as it removes any uncommitted change.
 
 ## Terminal client
@@ -90,7 +99,7 @@ the step's writable paths (each path must match one; otherwise 400 naming it) wi
 | `ap pattern <id>` | `GET /captured-patterns/{id}`: parameters and places, proofs, state |
 | `ap pattern <id> --drop <param>` / `--add [<name>=]<value>` | `PUT /captured-patterns/{id}/parameters` |
 | `ap proof-slice <id>` | `POST /captured-patterns/{id}/proof-slice`, follows the operation, prints the proof slice's ID |
-| `ap prove <id> <project>` | the launcher runs the client's `proof-slice <id>`, then `build <proof slice> <project>` as for `build` (`build-workers` first); after the run's end line the client prints `Proof of <id>: passed` or `Proof of <id>: failed: <failure>; ...`; a failed proof exits 1 (a check failed), even when its run ended done |
+| `ap prove <id> <project>` | the launcher runs the client's `proof-slice <id>`, then `build <proof slice> <project>` as for `build` (`build-workers` first); after the run's end line the client prints `Proof of <id>: passed` or `Proof of <id>: failed: <failure>; ...`; a proof run exits 0 for a passed proof and 1 for a failed one, over the run state's own code (2 for a hand-over, 5 expired, 6 cancelled); `src/cli/contract.md`'s "Run states and exit codes" gains that row |
 | `ap approve-pattern <id>` | `POST /captured-patterns/{id}/approval` |
 | `ap withdraw-pattern <id>` | `POST /captured-patterns/{id}/withdrawal` |
 | `ap erase-pattern <id>` | shows what will be erased, asks for confirmation, then `DELETE /captured-patterns/{id}` |

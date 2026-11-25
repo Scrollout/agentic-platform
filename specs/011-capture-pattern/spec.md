@@ -227,7 +227,8 @@ use the captured pattern and says it needs a new proof; proving it again restore
   needs, remains usable, and a new proof builds from that copy; erasing the captured pattern is a
   separate, confirmed step.
 - The base pattern gets a new version: the captured pattern stays as captured, and the method
-  rule (Story 3) decides whether it needs a new proof.
+  rule (Story 3) decides whether it needs a new proof; a run built under the older base version
+  is no longer captured (refused, naming both versions).
 - The proof is interrupted by a platform restart: it continues or is started again, and a
   proposal is never marked proven without a complete, recorded proof.
 - A run already in progress when its captured pattern is withdrawn finishes on it; erasing a
@@ -254,7 +255,8 @@ use the captured pattern and says it needs a new proof; proving it again restore
   platform MUST refuse a run in any other state, naming that state, and a run built from a
   captured pattern or a proof, naming why (its template was never reviewed), and a run whose
   slice changed after it started (a part's hash differs from the one its start recorded, or a part
-  is no longer approved), naming the part; a run whose start recorded no part hashes is refused
+  is no longer approved), naming the part, and a run built under another base pattern version
+  than the current one, naming both; a run whose start recorded no part hashes is refused
   the same way; a replay carries the part hashes of the run it replays.
 - **FR-002**: A captured pattern proposal MUST hold the source slice, its accepted tests and code,
   and the names of the source run, the base pattern and the method that accepted it.

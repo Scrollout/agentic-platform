@@ -73,7 +73,10 @@ run without its Proof. Busy is judged from the proof slice's runs, not from Proo
 a run of the proof slice is starting (accepted, its `RunStarted` not yet recorded) or has not
 ended, `PUT /parameters` and erasure answer `CapturedPatternBusy`. A Proof records the
 parameters it proved; it moves a captured pattern to `proven`, and counts for approval, only
-while those equal the current parameters. Erasing the proof slice
+while those equal the current parameters. `proven` is a stored state: every accepted `PUT
+/parameters` moves a proven one back to `proposed`, even one that leaves the same values, so a
+new proof is needed. `deleteSlice` of a proof slice and `eraseCapturedPattern` run the completion
+first, so a finished proof is recorded before its run is erased. Erasing the proof slice
 keeps every Proof; its `run` then answers NotFound.
 
 ## States
@@ -94,7 +97,8 @@ any --(erase, confirmed)--> erased
 | `withdrawCapturedPattern` | withdraws | withdraws | withdraws | changes nothing |
 | `eraseCapturedPattern` | erases | erases | erases | erases |
 
-Every call answers `CapturedPatternBusy` while another of its operations runs; `replaceParameters`
+Every call, and a proof's `startRun`, answers `CapturedPatternBusy` while another of its
+operations runs; `replaceParameters`
 and erasure also while a proof's run (or, for erasure, a run built from it) has not ended.
 `approveCapturedPattern` on an approved one changes nothing whatever its proofs.
 
