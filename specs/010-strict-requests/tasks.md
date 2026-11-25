@@ -235,11 +235,21 @@ with the clean reference, `{"text":"a","TEXT":"b"}` gives 201 with `"a"`.
   `$ref` but annotations and `x-` keys (F3) in `src/engine/checks/shapes.go`; build each shape's
   member lookup once, not per object (F4), in `template/gen/requests.go` (the fixture templates' copies keep
   compiling with the same types and need no change); T003-T006 and T024 pass
-- [ ] T026 [US1] Commit, push (owner go-ahead), record the run; review round 2 checks only F1-F5
-  and the changed lines
+- [x] T026 [US1] Commit, push (owner go-ahead), record the run; review round 2 checks only F1-F5
+  and the changed lines. Done: CI 45591199302 at 822e79a (research Runs); review round 2 (fresh
+  Sonnet): F1-F5 fixed, no blocking finding, so US1's review converged in 2 rounds. N1 (the
+  "escape" cases of `request_regress_test.go` lines 45-46 and 49-50 hold no escape, as F6): T029;
+  N2 (no object of 16 or more members exercises the duplicate check's switch to a map): T030; N3
+  (a non-boolean `requestBody.required` is refused, unstated): fixed in the README
 - [ ] T027 [US1] Owner approval to make `request_check_test.go:706` carry the escape it is named
   for (or drop it as a duplicate of line 705, T024 covering the escape). Owner, 2026-11-25: fix it (the case carries the escape it is named for), in a new
   session; trailer `Tests-approved-by: Marius Gologan (2026-11-25)`
+- [ ] T029 [US1] Owner approval to make the four "escape" cases of
+  `src/engine/procedures/request_regress_test.go` (lines 45-46, 49-50) carry real JSON escapes
+  (`\u0074ext`), as T027 for line 706; with T027 and T028 in a new session
+- [ ] T030 [US1] Test author (new file): a body object of 17 or more members with a duplicate at
+  positions 1 and 17, 16 and 17, and 17 and 18, each named twice (the request check's switch from a
+  scan to a map at 16 members); with T027 to T029
 - [ ] T028 [US1] Owner approval for `TestGeneratedCodeUnchangedCoversTheRequestCheckFiles` to read
   the generate step's `writable` from the real `pattern.yaml` instead of its own `gen/**` (F8). Owner,
   2026-11-25: approved, in a new session (with T027), by a test author; trailer

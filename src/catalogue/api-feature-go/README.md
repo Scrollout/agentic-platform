@@ -191,7 +191,8 @@ Limits of the request check:
 - A member's path in a message is cut to 64 runes; a value is never quoted.
 - A body is judged as JSON whatever its `Content-Type`.
 - A boolean in the contract counts in any spelling YAML reads as one (`false`, `False`,
-  `FALSE`), for `additionalProperties` and `requestBody.required` alike.
+  `FALSE`), for `additionalProperties` and `requestBody.required` alike; a `requestBody.required`
+  that is not a boolean (`"true"`, `yes`, `1`, empty) is refused, naming its location.
 - The check runs before the middlewares given to `HandlerWithOptions`, so a body is read (up to
   the limit) and may be refused before, for example, an authentication middleware sees the request.
 - Path and query parameters are read by the generated code as before; a parameter error is
