@@ -55,7 +55,8 @@ type RequestBody struct {
 }
 
 // The keys a request body's schema may use (catalogue README, RequestBodiesSupported). Every
-// other key is refused, except one starting "x-". The fit condition and RequestShapes share them.
+// other key is refused, except one starting "x-". RequestShapes and the fit conditions
+// RequestBodiesSupported (through the same walk) and RefusalDeclared (annotations) share them.
 var (
 	// requestShapingKeywords shape the value; RequestShapes reads each of them.
 	requestShapingKeywords = map[string]bool{
@@ -93,12 +94,20 @@ func RequestShapes(contract []byte) ([]RequestBody, error) {
 	if why != "" {
 		return nil, errors.New(why)
 	}
-	w := &shapeWalk{root: root, shapes: map[*yaml.Node]*RequestShape{}}
-	bodies := w.bodies()
-	if len(w.problems) > 0 {
-		return nil, errors.New(strings.Join(w.problems, "; "))
+	bodies, problems := requestBodiesOf(root)
+	if len(problems) > 0 {
+		return nil, errors.New(strings.Join(problems, "; "))
 	}
 	return bodies, nil
+}
+
+// requestBodiesOf is RequestShapes on the contract's parsed root: the bodies, or every problem the
+// walk found, each naming its location, in document order. The fit condition RequestBodiesSupported
+// is these problems.
+func requestBodiesOf(root *yaml.Node) ([]RequestBody, []string) {
+	w := &shapeWalk{root: root, shapes: map[*yaml.Node]*RequestShape{}}
+	bodies := w.bodies()
+	return bodies, w.problems
 }
 
 // shapeWalk builds the shapes of one contract and collects what it refuses.
@@ -121,20 +130,43 @@ func (w *shapeWalk) refuse(loc, format string, args ...any) {
 
 // bodies is every operation's request body, in document order.
 func (w *shapeWalk) bodies() []RequestBody {
-	root := deref(w.root)
-	if root.Kind != yaml.MappingNode {
-		w.problems = append(w.problems, "the contract's root is not a mapping")
-		return nil
-	}
-	paths := lookup(root, "paths")
-	if paths == nil {
-		return nil
-	}
-	if paths = deref(paths); paths.Kind != yaml.MappingNode {
-		w.problems = append(w.problems, "paths is not a mapping")
+	ops, why := bodyOperations(w.root)
+	if why != "" {
+		w.problems = append(w.problems, why)
 		return nil
 	}
 	var out []RequestBody
+	for _, op := range ops {
+		w.from = op.loc
+		if b, ok := w.body(op.body, w.from+"/requestBody"); ok {
+			b.Key = strings.ToUpper(op.method) + " " + op.path
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
+// bodyOperation is one operation that has a requestBody key.
+type bodyOperation struct {
+	loc, method, path string     // loc is paths/<path>/<method>
+	op, body          *yaml.Node // the operation and its requestBody value
+}
+
+// bodyOperations is every operation with a requestBody key, in document order, or why the
+// contract's root or paths cannot hold operations. No paths is no operation.
+func bodyOperations(root *yaml.Node) ([]bodyOperation, string) {
+	root = deref(root)
+	if root.Kind != yaml.MappingNode {
+		return nil, "the contract's root is not a mapping"
+	}
+	paths := lookup(root, "paths")
+	if paths == nil {
+		return nil, ""
+	}
+	if paths = deref(paths); paths.Kind != yaml.MappingNode {
+		return nil, "paths is not a mapping"
+	}
+	var out []bodyOperation
 	for i := 0; i+1 < len(paths.Content); i += 2 {
 		path, item := paths.Content[i].Value, deref(paths.Content[i+1])
 		if item.Kind != yaml.MappingNode {
@@ -145,18 +177,12 @@ func (w *shapeWalk) bodies() []RequestBody {
 			if !httpMethods[method] || op.Kind != yaml.MappingNode {
 				continue
 			}
-			rb := lookup(op, "requestBody")
-			if rb == nil {
-				continue
-			}
-			w.from = "paths/" + path + "/" + method
-			if b, ok := w.body(rb, w.from+"/requestBody"); ok {
-				b.Key = strings.ToUpper(method) + " " + path
-				out = append(out, b)
+			if rb := lookup(op, "requestBody"); rb != nil {
+				out = append(out, bodyOperation{loc: "paths/" + path + "/" + method, method: method, path: path, op: op, body: rb})
 			}
 		}
 	}
-	return out
+	return out, ""
 }
 
 // body reads one requestBody at loc, following a $ref to it.
@@ -247,9 +273,23 @@ func (w *shapeWalk) resolve(ref *yaml.Node, loc string) (*yaml.Node, string, boo
 		w.refuse(loc, "$ref %s is not a local reference (#/...)", describe(ref))
 		return nil, loc, false
 	}
-	n := w.root
+	n, at, ok := localTarget(w.root, ref.Value)
+	if !ok {
+		w.refuse(loc, "$ref %q does not resolve in the contract", ref.Value)
+		return nil, loc, false
+	}
+	return n, at, true
+}
+
+// localTarget is the node the local reference ref ("#/...", JSON Pointer escapes ~1 and ~0)
+// names in the document at root, and its location; false when ref is not local or names nothing.
+func localTarget(root *yaml.Node, ref string) (*yaml.Node, string, bool) {
+	if !strings.HasPrefix(ref, "#/") {
+		return nil, "", false
+	}
+	n := root
 	var segs []string
-	for _, seg := range strings.Split(ref.Value[2:], "/") {
+	for _, seg := range strings.Split(ref[2:], "/") {
 		seg = strings.ReplaceAll(strings.ReplaceAll(seg, "~1", "/"), "~0", "~")
 		segs = append(segs, seg)
 		n = deref(n)
@@ -263,8 +303,7 @@ func (w *shapeWalk) resolve(ref *yaml.Node, loc string) (*yaml.Node, string, boo
 			}
 		}
 		if next == nil {
-			w.refuse(loc, "$ref %q does not resolve in the contract", ref.Value)
-			return nil, loc, false
+			return nil, "", false
 		}
 		n = next
 	}

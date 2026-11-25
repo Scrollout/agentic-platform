@@ -30,7 +30,10 @@ Do this:
    empty service. You may put the implementation in `internal/app/` or in other packages under
    `internal/`. Implement every operation of `gen.ServerInterface` as the contract and the
    examples describe: the status codes, the response bodies as the generated types, and the
-   refusals. Keep state in memory, safe for concurrent requests.
+   refusals. Keep state in memory, safe for concurrent requests. A malformed request body
+   (missing or misnamed members, wrong types, members the contract does not allow) is refused
+   with 400 before your code runs, so your code receives only well-formed bodies and checks only
+   the values the rules state, such as an empty text or a limit.
 3. Write a `main` package under `cmd/<service>/` that serves `gen.Handler(app.New())` with
    `net/http` on `gen.ListenAddress()`.
 4. Check your work with the shell, from the project folder: `go vet ./...` and `go test ./...`

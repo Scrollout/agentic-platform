@@ -101,6 +101,10 @@ var fitConditions = map[string]fitCondition{
 	"OnlyHttpOperations":  {"contract", onContract(onlyHttpOperations)},
 	"ContractRefsLocal":   {"contract", onContract(contractRefsLocal)},
 	"RulesNameOneSystem":  {"rules", rulesNameOneSystem},
+	// The request conditions (catalogue README; ADR 0089) keep contracts to what the request
+	// check serves.
+	"RefusalDeclared":        {"contract", onContract(refusalIsDeclared)},
+	"RequestBodiesSupported": {"contract", onContract(requestBodiesAreSupported)},
 }
 
 func onContract(f func(root *yaml.Node) (bool, string)) func(fitInput) (bool, string) {
@@ -335,6 +339,158 @@ func rulesNameOneSystem(in fitInput) (bool, string) {
 		parts = append(parts, fmt.Sprintf("no system (%s)", strings.Join(missing, ", ")))
 	}
 	return false, "the rules do not name one system: " + strings.Join(parts, "; ")
+}
+
+const noRefusal = "declares no 400 response with a JSON object body that requires only the string message"
+
+// refusalIsDeclared fails each operation with a request body whose 400 response the request check
+// cannot fill with {"message": <text>}, in document order.
+func refusalIsDeclared(root *yaml.Node) (bool, string) {
+	ops, why := bodyOperations(root)
+	if why != "" {
+		return false, why + ", so its operations cannot be read"
+	}
+	var bad []string
+	for _, op := range ops {
+		if !declaresRefusal(root, op.op) {
+			bad = append(bad, op.loc+": "+noRefusal)
+		}
+	}
+	switch {
+	case len(bad) > 0:
+		return false, strings.Join(bad, "; ")
+	case len(ops) == 0:
+		return true, "the contract has no operation with a request body, so no 400 response is needed"
+	}
+	return true, fmt.Sprintf("each of the %d operations with a request body declares a 400 response whose JSON body is an object requiring only the string message", len(ops))
+}
+
+// declaresRefusal is true when op's responses."400" (written 400 or "400"; a $ref to it followed)
+// has an application/json schema that is an object requiring exactly the string message.
+func declaresRefusal(root, op *yaml.Node) bool {
+	responses := lookup(op, "responses")
+	if responses == nil || deref(responses).Kind != yaml.MappingNode {
+		return false
+	}
+	resp := lookup(deref(responses), "400")
+	if resp == nil {
+		return false
+	}
+	resp, ok := followRefs(root, resp)
+	if !ok {
+		return false
+	}
+	content := lookup(resp, "content")
+	if content == nil || deref(content).Kind != yaml.MappingNode {
+		return false
+	}
+	media := lookup(deref(content), jsonMediaType)
+	if media == nil || deref(media).Kind != yaml.MappingNode {
+		return false
+	}
+	schema := lookup(deref(media), "schema")
+	if schema == nil {
+		return false
+	}
+	obj, ok := followRefs(root, schema)
+	if !ok || !onlyKeys(obj, refusalObjectKeywords) || !typeIs(obj, "object") {
+		return false
+	}
+	req := lookup(obj, "required")
+	if req == nil {
+		return false
+	}
+	if req = deref(req); req.Kind != yaml.SequenceNode || len(req.Content) != 1 {
+		return false
+	}
+	if r := deref(req.Content[0]); r.Kind != yaml.ScalarNode || r.ShortTag() != "!!str" || r.Value != "message" {
+		return false
+	}
+	props := lookup(obj, "properties")
+	if props == nil || deref(props).Kind != yaml.MappingNode {
+		return false
+	}
+	message := lookup(deref(props), "message")
+	if message == nil {
+		return false
+	}
+	message, ok = followRefs(root, message)
+	// A plain string: type and annotations only, so no value keyword limits it.
+	return ok && onlyKeys(message, map[string]bool{"type": true}) && typeIs(message, "string")
+}
+
+// refusalObjectKeywords are the keys, besides annotations and x- keys, the 400 body's object
+// schema may use.
+var refusalObjectKeywords = map[string]bool{"type": true, "required": true, "properties": true, "additionalProperties": true}
+
+// refSiblingKeys are the keys, besides annotations and x- keys, a $ref mapping may hold.
+var refSiblingKeys = map[string]bool{"$ref": true, "summary": true}
+
+// followRefs resolves n through local $refs, with a visited set, to a mapping that has no $ref. It
+// is false when a $ref is not local, does not resolve or loops, when a $ref mapping holds another
+// shaping key, or when the node reached is not a mapping.
+func followRefs(root, n *yaml.Node) (*yaml.Node, bool) {
+	seen := map[*yaml.Node]bool{}
+	for {
+		n = deref(n)
+		if n.Kind != yaml.MappingNode || seen[n] {
+			return nil, false
+		}
+		ref := lookup(n, "$ref")
+		if ref == nil {
+			return n, true
+		}
+		seen[n] = true
+		if !onlyKeys(n, refSiblingKeys) {
+			return nil, false
+		}
+		ref = deref(ref)
+		if ref.Kind != yaml.ScalarNode || ref.ShortTag() != "!!str" {
+			return nil, false
+		}
+		target, _, ok := localTarget(root, ref.Value)
+		if !ok {
+			return nil, false
+		}
+		n = target
+	}
+}
+
+// onlyKeys is true when every key of mapping m is in allowed, an annotation or an x- key.
+func onlyKeys(m *yaml.Node, allowed map[string]bool) bool {
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		k := m.Content[i]
+		if k.Kind != yaml.ScalarNode {
+			return false
+		}
+		if !allowed[k.Value] && !requestAnnotationKeywords[k.Value] && !strings.HasPrefix(k.Value, "x-") {
+			return false
+		}
+	}
+	return true
+}
+
+// typeIs is true when schema m's type is the one name want, written as a string.
+func typeIs(m *yaml.Node, want string) bool {
+	t := lookup(m, "type")
+	if t == nil {
+		return false
+	}
+	t = deref(t)
+	return t.Kind == yaml.ScalarNode && t.ShortTag() == "!!str" && t.Value == want
+}
+
+// requestBodiesAreSupported fails each location of a request body the request check cannot serve,
+// as RequestShapes finds them (one walk and one keyword list for both), in document order.
+func requestBodiesAreSupported(root *yaml.Node) (bool, string) {
+	bodies, problems := requestBodiesOf(root)
+	switch {
+	case len(problems) > 0:
+		return false, strings.Join(problems, "; ")
+	case len(bodies) == 0:
+		return true, "the contract has no request body, so no request body schema to judge"
+	}
+	return true, fmt.Sprintf("the %d request bodies are application/json and their schemas use only the supported keywords", len(bodies))
 }
 
 // lookup returns the value of key in mapping m, or nil.

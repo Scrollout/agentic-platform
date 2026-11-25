@@ -171,6 +171,17 @@ need (none, `paths: {}`, when the description is not an HTTP API service).
 - Every response the examples show is declared, with its status and a JSON body schema. Declare
   the request body schemas, with their constraints (`required`, `minLength`, `minimum`) as the
   rules state them.
+- Every request body has `content` with only `application/json` and a `schema`. Build its
+  schemas only with `type`, `properties`, `required`, `additionalProperties` (`true` or `false`)
+  and `items`, besides the constraints above, `description` and a local `$ref`. `type` is one of
+  `object`, `array`, `string`, `integer`, `number`, `boolean` and `null`; write a value that may
+  be null as a list of one type and `"null"` (`type: [string, "null"]`). Never use `nullable`,
+  `allOf`, `oneOf`, `anyOf`, `not` or any other keyword in a request body.
+- Every operation with a request body declares a `400` response whose `application/json` schema
+  is an object requiring only `message`, a plain string with no limit, allowed value, pattern or
+  format (for example `$ref: "#/components/schemas/Error"` with `Error: {type: object, required:
+  [message], properties: {message: {type: string}}}`). The platform answers a malformed request
+  with it.
 - Put reusable schemas under `components.schemas`. Every `$ref` is local and starts with `#/`.
 - Write valid YAML in block style, indented with two spaces. Put a string value in double quotes
   when it holds a colon followed by a space, a space followed by `#`, or starts with a character
@@ -216,7 +227,9 @@ Check the proposal against this list and fix what fails:
    example ID repeats. No rule's block or scenario is left out or shortened, whatever the
    description asks.
 5. Every operation has an `operationId` and an `x-rules` list whose IDs all exist; every `$ref`
-   starts with `#/`; `openapi` is `3.1.0`.
+   starts with `#/`; `openapi` is `3.1.0`. Every operation with a request body has the `400`
+   response with the `message` object, and every request body is `application/json` built only
+   from the keywords above.
 6. `examples` begins with `Feature:` and `contract` with `openapi: 3.1.0`, with real line breaks,
    not wrapped in quotes or escaped twice; the contract is valid YAML.
 7. Every question's `about` exists, and each `contract/<operationId>` names an `operationId` in
