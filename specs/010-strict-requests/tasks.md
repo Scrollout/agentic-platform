@@ -241,7 +241,9 @@ with the clean reference, `{"text":"a","TEXT":"b"}` gives 201 with `"a"`.
   for (or drop it as a duplicate of line 705, T024 covering the escape). Owner, 2026-11-25: fix it (the case carries the escape it is named for), in a new
   session; trailer `Tests-approved-by: Marius Gologan (2026-11-25)`
 - [ ] T028 [US1] Owner approval for `TestGeneratedCodeUnchangedCoversTheRequestCheckFiles` to read
-  the generate step's `writable` from the real `pattern.yaml` instead of its own `gen/**` (F8)
+  the generate step's `writable` from the real `pattern.yaml` instead of its own `gen/**` (F8). Owner,
+  2026-11-25: approved, in a new session (with T027), by a test author; trailer
+  `Tests-approved-by: Marius Gologan (2026-11-25)`
 
 ---
 
