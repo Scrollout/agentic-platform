@@ -20,6 +20,7 @@ the code on `main` (`5dea1d5`), a reproduced experiment, or a cited document. De
 | S10 | `src/tests/recorded/recordings/__files/analyst-notes-answered.sse`: the acceptance tests' example contract declares `createNote` with no `requestBody` and a content-less 400; `src/tests/acceptance/planted_values_test.go` adds a `requestBody` and no 400 body |
 | S11 | `src/engine/api/pattern_flag_test.go` line 25 and `src/engine/slices/slices_patternflag_test.go` line 27: both list the pattern's fit conditions by name and fail on a condition result they do not list |
 | S12 | Constitution: Principle VI (extend an adopted tool through its extension points; custom code needs a written justification), XVII (derive, drift-check), XIX (a fixed agent failure adds an eval case), XX (a proven solution is captured as a deterministic asset); Engineering Principles "Values that check themselves" (input parsed at every trust boundary) |
+| S14 | Go's `encoding/json` source (`/usr/local/go/src/encoding/json/scanner.go`, Go 1.27.1, same in 1.26): `maxNestingDepth = 10000` is enforced by the scanner that `Valid`, `Unmarshal` and `Decoder.Decode` use; `Decoder.Token` keeps its own stack with no depth limit (analyze round 1, S1) |
 | S13 | [RFC 6901](https://www.rfc-editor.org/rfc/rfc6901) (JSON Pointer) and [JSON Schema 2020-12 Validation, 6.1.1](https://json-schema.org/draft/2020-12/json-schema-validation#section-6.1.1) (`type` names `null`, `boolean`, `object`, `array`, `number`, `string`, `integer`; an integer is any number with a zero fractional part), the schema dialect of OpenAPI 3.1 |
 
 ## E1. Where the delivered service reads a request body
@@ -87,10 +88,14 @@ wrap is in the registration, which every entry point reaches. The clean referenc
   step's `cmd/` are unchanged; every entry point (`Handler`, `HandlerFromMux...`,
   `HandlerWithOptions`) refuses, so the code cannot serve around it (E4), and
   GeneratedCodeUnchanged keeps `gen/` as generated (FR-006).
-- **Drift with upstream**: the file's first line names the release it was copied from
+- **Drift with upstream**: the file's first line is a Go-template comment (`{{/* ... */}}`, not
+  written into `gen/api.gen.go`) naming the release it was copied from
   (`oapi-codegen v2.8.2 pkg/codegen/templates/stdhttp/std-http-handler.tmpl`); a new test in
   `scripts/tests/` fails when that release differs from `images.lock`'s oapi-codegen pin, so a
-  bump of the tool makes someone copy the new template and reapply the one change.
+  bump of the tool makes someone copy the new template and reapply the one change. That test
+  proves the label only; that the rest equals upstream is checked by the reviewer of each bump
+  (analyze G2). A missing template file makes oapi-codegen fetch the name as a URL, which fails
+  offline: the procedure test covers that generation then fails (analyze D5).
 - **Rationale**: user templates are oapi-codegen's own extension point (S12, Principle VI);
   one wrapped line, in the one function every operation passes through (S5).
 - **Alternatives**:
@@ -108,7 +113,7 @@ wrap is in the registration, which every entry point reaches. The clean referenc
 - **Decision**: a small generic engine, `template/gen/requests.go`, checks a body against a
   *request shape* and re-encodes it with only the declared members; the shapes are derived from
   the approved contract into `gen/request_shapes.go` by the generate procedure (R3). Standard
-  library only (`encoding/json` with `UseNumber` and its token stream, `math/big`), so the
+  library only (`encoding/json` with `UseNumber` and its token stream, `Valid`), so the
   delivered project gains no dependency.
 - **Candidates**:
   - *kin-openapi `openapi3filter` with oapi-codegen's `nethttp-middleware`* (S7; kin-openapi is
@@ -135,12 +140,22 @@ wrap is in the registration, which every entry point reaches. The clean referenc
   shape: `types` (the `type` keyword's names, empty = any), `properties` (exact names, in contract
   order), `required` (contract order), `closed` (`additionalProperties: false`), `items`.
   `checks.RenderRequestShapes` writes `gen/request_shapes.go`: one Go map from the operation's
-  method and contract path (`"POST /notes"`, the key the template passes, E4) to its shape, with named variables for
-  `$ref` targets so a recursive schema is a cycle of pointers. The generate procedure writes the
-  file; a new generate-step check, `RequestShapesGenerated`, passes when the file is byte for byte
+  method and contract path (`"POST /notes"`, the key the template passes, E4) to its shape.
+  Every shape is an unexported variable `requestShape<N>` (N from 1, in document order of first
+  use), declared without links; `init()` then sets each shape's members and items, so a recursive
+  schema is a cycle of pointers without a Go initialisation cycle (analyze A5). Names starting
+  `requestShape` cannot meet oapi-codegen's exported names or `gen/declared.go`'s `Declared...`
+  constants; the procedure writes `gen/request_shapes.go` before `gen/declared.go`, so the names
+  `GenNames` sees are the same at generation and in DeclaredValuesGenerated (analyze U1). The
+  generate procedure writes the file; a new generate-step check, `RequestShapesGenerated`, passes when the file is byte for byte
   `RenderRequestShapes` of the approved contract (as ADR 0086 for `gen/declared.go`).
 - **Rationale**: Principle XVII (derived, drift-checked); `go generate` does not write the file, so
   GenerationRepeatable cannot see it drift (ADR 0086's reasoning).
+- **Derivation details** (analyze A3, A4, owner's answers): `properties`, `required` and
+  `additionalProperties` apply to an object value whether or not `type` is present; a name in
+  `required` but not in `properties` is a declared member of any type; a `requestBody` that is a
+  `$ref` to `#/components/requestBodies/...` is followed; every `$ref` walk keeps a visited set, so
+  a cycle ends.
 - **Keys**: the method in upper case and the path exactly as the contract writes it, so the
   procedure needs nothing from oapi-codegen's naming rules (E4).
 
@@ -151,18 +166,21 @@ wrap is in the registration, which every entry point reaches. The clean referenc
   - `RefusalDeclared`: every operation with a `requestBody` declares a `400` response whose
     `application/json` schema (followed through local `$ref`s) is `type: object` with `required`
     exactly `[message]` and `properties.message` of `type: string`; other optional properties are
-    allowed. The reason names each operation (`paths//notes/post`).
+    allowed; `message` carries no value keyword (`maxLength`, `minLength`, `pattern`, `format`,
+    `enum`, `const`; owner, analyze round 1). The `400` key counts as written `400` or `"400"`;
+    `4XX` and `default` do not count. The reason names each operation (`paths//notes/post`).
   - `RequestBodiesSupported`: every `requestBody`'s `content` has exactly the key
     `application/json`, and its schema, through local `$ref`s, uses as shaping keywords only
     `type`, `properties`, `required`, `additionalProperties` (boolean only) and `items` (a schema);
-    any of `allOf`, `anyOf`, `oneOf`, `not`, `if`, `then`, `else`, `dependentSchemas`,
+    a body with no `schema`, a `type` naming anything but the seven JSON Schema types, `nullable`
+    (owner, analyze round 1), and any of `allOf`, `anyOf`, `oneOf`, `not`, `if`, `then`, `else`, `dependentSchemas`,
     `dependentRequired`, `patternProperties`, `propertyNames`, `prefixItems`, `contains`,
     `unevaluatedProperties`, `unevaluatedItems`, `$dynamicRef`, a non-boolean
     `additionalProperties`, or an unknown keyword that is not an `x-` extension fails, naming its
     location. Value keywords (`maxLength` ... `const`, `enum`, `format`, `pattern`,
     `minProperties`, `maxProperties`, `minItems`, `maxItems`, `uniqueItems`) and annotations
     (`title`, `description`, `default`, `examples`, `example`, `deprecated`, `readOnly`,
-    `writeOnly`, `nullable`, `$comment`) are allowed (fail closed: the list is the README's).
+    `writeOnly`, `$comment`) are allowed (fail closed: the list is the README's).
 - **Rationale**: the platform can only refuse with the contract's own 400 body if that body is one
   it can fill (owner); and only strip members of a shape it knows exactly (owner).
 - **Existing tests** (S10, S11): the two tests that list the fit conditions by name, and the
@@ -172,25 +190,33 @@ wrap is in the registration, which every entry point reaches. The clean referenc
 ## R5. The engine's behaviour (FR-001 to FR-005)
 
 - **Decision**: for an operation with a shape, before anything else of the operation runs:
-  1. Read at most 1 MiB (`http.MaxBytesReader`); more is refused ("larger than 1048576 bytes").
-  2. An empty body: refused when the contract's `requestBody.required` is true, else passed on.
-  3. Tokenise with `json.Decoder` (`UseNumber`): not one valid JSON value (or trailing data) is
-     refused; a name twice in one object is refused.
-  4. Walk value and shape together, depth first, reporting the first problem in this order at each
-     object: a name twice (body order), a required member missing (contract order), an undeclared
+  1. Read at most 1 MiB (`http.MaxBytesReader`); more is refused ("larger than 1048576 bytes"),
+     with 400 so that it carries the declared body.
+  2. An empty body, or one of JSON white space only: refused when the contract's
+     `requestBody.required` is true, else passed on as sent.
+  3. `json.Valid`: not exactly one JSON value, or nested deeper than its 10000 levels, is refused
+     as not valid JSON (S14), so nothing deeper is ever walked.
+  4. Read the value with `json.Decoder.Token` (`UseNumber`), building the tree; the first name
+     that appears twice in one object, anywhere in the document (document order, in subtrees that
+     will be removed too), is refused (owner: refused at any level).
+  5. Walk value and shape together, depth first, reporting the first problem (owner: one message)
+     in this order at each object: a required member missing (contract order), an undeclared
      member when `closed` (body order), then each declared member present (contract order); array
-     items in index order. A value whose JSON type is not in `types` is refused (`integer` takes a
-     number with a zero fractional part, written again as an integer, S13).
-  5. Re-encode the value with only declared members (exact names) where `properties` is declared;
+     items in index order. A value whose JSON type is not in `types` is refused. `integer` takes a
+     number whose text has a zero fractional part (S13), decided on the text (digits, fraction,
+     exponent) without building the number; one with a fraction or exponent is written again as a
+     plain integer, and one whose plain form would have more than 32 digits is refused as not an
+     integer (a stated limit; analyze S2).
+  6. Re-encode the value with only declared members (exact names) where `properties` is declared;
      a schema with no `properties` keeps the object as it is. Replace `r.Body` and
      `r.ContentLength`, then call the operation.
-  6. A refusal answers `400`, `Content-Type: application/json`, body `{"message": "<text>"}`.
+  7. A refusal answers `400`, `Content-Type: application/json`, body `{"message": "<text>"}`.
 - **Messages** (FR-004; same request, same text): `the request body is missing`,
   `the request body is not valid JSON`, `the request body is larger than 1048576 bytes`,
   `the request body must be <types>`, `member <pointer> is required`,
   `member <pointer> must be <types>`, `member <pointer> is not declared`,
   `member <pointer> is named twice`, where `<pointer>` is the member's RFC 6901 JSON Pointer
-  (S13) quoted with `strconv.Quote` and cut to 64 characters, and `<types>` the type names joined
+  (S13), cut to its first 64 runes (no ellipsis), then quoted with `strconv.Quote` (analyze D2), and `<types>` the type names joined
   with " or ", each with its article (`a string`, `an integer`, `null`).
 - **Rationale**: deterministic, no model, refuses before any state changes (FR-002); the limits
   (1 MiB) are stated in the README (FR-008).
@@ -227,7 +253,8 @@ wrap is in the registration, which every entry point reaches. The clean referenc
 ## Threat-model input
 
 The shape check is the first code of the delivered service that reads untrusted request bodies.
-It never evaluates them; it bounds their size (1 MiB), relies on `encoding/json`'s nesting limit,
-and walks only as deep as the contract's shape (a recursive shape walks as deep as the body,
-bounded by its size). A refusal echoes a member's name only JSON-encoded and cut to 64
+It never evaluates them; it bounds their size (1 MiB), checks them with `json.Valid` before
+reading them, whose scanner refuses more than 10000 levels of nesting (S14; `Decoder.Token` alone
+has no limit), decides integers on their text without building the number, and walks at most as
+deep as that limit. A refusal echoes a member's name only JSON-encoded and cut to 64
 characters.

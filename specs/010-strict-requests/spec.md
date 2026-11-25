@@ -56,6 +56,19 @@ quarantined under T202).
   does not fit (owner; FR-012).
 - Q: A body names the same member twice (`{"text":"a","text":"b"}`)? → A: refused with 400, naming
   the member (owner; FR-002).
+- Analyze round 1 (fresh Sonnet, at 4764bca). Q: A body with several problems (on a closed object
+  `{"TEXT":"x"}` lacks `text` and holds the undeclared `TEXT`): what does the refusal name? → A:
+  the first problem only, in a fixed order (owner; FR-004). Q: The declared 400 body's `message`
+  could carry a limit, an allowed value or a pattern that the platform's text breaks? → A:
+  `message` must be a plain string, with no value keyword; otherwise the slice does not fit
+  (owner; FR-011). Q: `nullable` (OpenAPI 3.0's way of allowing `null`; 3.1 writes a type list)
+  in a request body? → A: the slice does not fit; a type list is the way (owner; FR-012).
+  Following these answers (analyze round 1, A3, A4, D1, D3): a schema with `properties` or
+  `required` but no `type` applies them to an object value; a member named in `required` but not
+  in `properties` is declared, of any type; a request body given by a `$ref` to
+  `components/requestBodies` is followed; a request body without a schema, or an unknown type
+  name, does not fit; the size limit, an empty required body and the body's own type are refusals
+  of FR-002.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -150,7 +163,8 @@ trials; the review suite reports pass^3 with it counted.
 - A body member the contract does not declare (`{"text":"x","colour":"red"}`): ignored and never
   read, unless the contract forbids other members, then refused (FR-003).
 - A member in another case where the contract forbids other members (`{"TEXT":"x"}` with
-  `additionalProperties: false`): refused, naming both the missing member and the undeclared one.
+  `additionalProperties: false`): refused, naming the first problem in the fixed order: the
+  missing `text` (FR-004).
 - The refusal's body: an object with one member, `message`, naming the member and what is wrong
   (FR-004); a 400 body schema with optional members besides `message` fits, and those members are
   left out.
@@ -164,8 +178,16 @@ trials; the review suite reports pass^3 with it counted.
   (FR-002).
 - A request body schema built with `allOf`, `oneOf` or another keyword outside the simple shapes,
   or a body declared as `text/plain`: the slice does not fit (FR-012).
-- A schema with no `type`: any JSON value is allowed there; an object's members are then not
-  checked or removed (it describes none).
+- A schema with no `type`: any JSON value is allowed there; when it has `properties` or
+  `required`, they apply to an object value; with neither, an object is kept as sent.
+- A member named in `required` but not in `properties`: declared, of any type, and kept.
+- `additionalProperties: true` next to `properties`: undeclared members are removed as everywhere
+  (FR-003), so a generated map of additional members is always empty (a stated limit).
+- A body that is only white space: missing. A request whose `Content-Type` is not JSON: its body is
+  judged as JSON all the same (a stated limit). A body over the limit is refused with 400, not 413,
+  so that it carries the declared body.
+- Very deep nesting (a 1 MiB body of `[[[[...`): refused as not valid JSON beyond the JSON reader's
+  nesting limit, never walked.
 - A `null` value for a required member whose type does not allow `null`: refused as the wrong type.
 - An operation whose request body is optional and absent: accepted, as the contract allows.
 - An empty body where the contract requires one: refused with 400.
@@ -181,15 +203,18 @@ trials; the review suite reports pass^3 with it counted.
 - **FR-001**: The delivered service MUST read each request body member only by its name exactly as
   the contract declares it; a member whose name differs, including only in case, MUST NOT be taken
   as a declared member.
-- **FR-002**: The delivered service MUST answer 400, and change nothing, when a request body is not
-  valid JSON, names a member twice in one object, lacks a member the contract requires, or holds a
-  member whose type the contract does not allow.
+- **FR-002**: The delivered service MUST answer 400, and change nothing, when a request body is
+  larger than the stated limit, is empty or only white space where the contract requires it, is
+  not valid JSON, names a member twice in one object at any level, is not of the type the contract
+  states, lacks a member the contract requires, or holds a member whose type the contract does not
+  allow.
 - **FR-003**: A body member the contract does not declare MUST be refused with 400 where the
   contract forbids other members, and otherwise ignored and never read.
 - **FR-004**: A refusal MUST answer 400 with the operation's declared 400 body: an object holding
-  only `message`, a text that names the member (by its path in the body) and what is wrong
-  (missing, wrong type, not declared, named twice), or that the body is not valid JSON. The text MUST be the same
-  for the same request.
+  only `message`, a text that names the first problem in a fixed order: the member (by its path in
+  the body) and what is wrong (missing, wrong type, not declared, named twice), or that the body
+  is too large, missing, not valid JSON or of the wrong type. The text MUST be the same for the
+  same request.
 - **FR-005**: The platform MUST enforce before the code step's code runs only the request's shape:
   exact member names (FR-001), required members, member types, and other members (FR-003). Limits,
   allowed values and formats MUST stay with the code step's code, judged by the derived tests; this
@@ -209,13 +234,15 @@ trials; the review suite reports pass^3 with it counted.
   adds an eval case).
 - **FR-011**: A slice MUST fit the pattern only when every operation with a request body declares a
   400 response with a JSON body whose schema is an object that requires a string `message` and no
-  other member; the fit condition's reason MUST name each operation that does not.
+  other member, where `message` carries no value keyword (a limit, an allowed value, a pattern or a
+  format); the fit condition's reason MUST name each operation that does not.
 - **FR-012**: A slice MUST fit the pattern only when every request body is declared only as
   `application/json`, and its schema, followed through local `$ref`s, shapes the body only with
   `type`, `properties`, `required`, `additionalProperties` (`true` or `false`) and `items`; any
   other keyword that constrains which members or items a body has MUST make the slice not fit, and
-  the reason MUST name each location. Value keywords (limits, allowed values, formats, `const`)
-  and annotations are allowed.
+  the reason MUST name each location. A body without a schema, an unknown type name and `nullable`
+  MUST make the slice not fit too. Value keywords (limits, allowed values, formats, `const`) and
+  annotations are allowed.
 
 ### Key Entities
 

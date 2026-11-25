@@ -27,7 +27,7 @@ the step recordings are synthesised again; the evals gain a grader for malformed
 **Language/Version**: Go 1.26 (the engine, its checks and procedures, and the delivered project)
 
 **Primary Dependencies**: none added. oapi-codegen v2.8.2 (pinned) through its `user-templates`
-extension point; the standard library (`encoding/json`, `math/big`, `net/http`, `strconv`) in the
+extension point; the standard library (`encoding/json`, `net/http`, `strconv`, `unicode/utf8`) in the
 delivered project; `go.yaml.in/yaml/v3` in the engine, already the fit conditions' parser
 
 **Storage**: none; check results keep their shape
@@ -104,9 +104,9 @@ before.
 
 | Element | S | T | R | I | D | E | OWASP mapping | Mitigation |
 |---------|---|---|---|---|---|---|---------------|------------|
-| Request check (`gen/requests.go`, in the delivered service) | | ✓ | | ✓ | ✓ | ✓ | OWASP API Top 10 API3 (property-level authorization: an undeclared member reaching the code), API4 (resource consumption); parser differentials (E2) | Only declared members under exact names reach the code; a name twice is refused; 1 MiB cap before reading; `encoding/json`'s nesting limit; the walk never evaluates a value; a refusal echoes only a JSON-encoded pointer cut to 64 characters, never a value |
+| Request check (`gen/requests.go`, in the delivered service) | | ✓ | | ✓ | ✓ | ✓ | OWASP API Top 10 API3 (property-level authorization: an undeclared member reaching the code), API4 (resource consumption: size, nesting, huge numbers); parser differentials (E2) | Only declared members under exact names reach the code; a name twice is refused; 1 MiB cap before reading; `json.Valid` first, whose scanner refuses more than 10000 levels (`Decoder.Token` alone has no limit; research S14); integers decided on their text, at most 32 digits written again; the walk never evaluates a value; a refusal echoes only a JSON-encoded pointer cut to 64 runes, never a value |
 | `gen/request_shapes.go`, the handler template (rendered from the contract the analyst model wrote) | | ✓ | | | | ✓ | LLM05 improper output handling (contract text becoming Go code) | Names and paths written with `strconv.Quote`; RequestShapesGenerated and GeneratedCodeUnchanged keep the files as derived; the project must build (GeneratedCodeBuilds) |
-| RefusalDeclared, RequestBodiesSupported (read the analyst's contract) | | ✓ | | | ✓ | | LLM01 (an injected contract), ASI02 | Parsed once as YAML nodes, never run; unknown shaping keywords fail closed; reasons name locations quoted |
+| RefusalDeclared, RequestBodiesSupported, RequestShapes (read the analyst's contract) | | ✓ | | | ✓ | | LLM01 (an injected contract), ASI02 | Parsed once as YAML nodes, never run; every `$ref` walk keeps a visited set, so a cycle ends; unknown shaping keywords fail closed; reasons name locations quoted |
 
 ## Project Structure
 
@@ -155,12 +155,18 @@ service.
 `Tests-approved-by:` on each commit; any other existing test that needs a change is stopped and
 asked for):
 
+- `src/engine/cmd/engine/pattern_values_test.go` (feature 009 T012): the pattern is version
+  `1.2.0` (lines 3, 5, 49-50) and the generate step's checks at line 43 gain
+  RequestShapesGenerated after DeclaredValuesGenerated (analyze round 1, I1).
 - `src/engine/api/pattern_flag_test.go` line 25 and `src/engine/slices/slices_patternflag_test.go`
   line 27: the fit conditions listed gain RefusalDeclared and RequestBodiesSupported.
 - `src/engine/checksvc/checks_test.go` `patternCases`: a clean and a planted case for
   RequestShapesGenerated (`TestEveryPatternCheckIsCovered` requires one per check).
-- `src/tests/acceptance/planted_values_test.go`: the added `requestBody`'s operation declares the
-  400 body (`Error` with `message`), so the scenario's contract still fits.
+- `src/tests/acceptance/planted_values_test.go`: the example contract's content-less `400` of
+  `createNote` is replaced, in the same anchored edit that adds the `requestBody`, by one with an
+  `application/json` body `$ref: '#/components/schemas/Error'`, and the appended `components`
+  gains `Error` (object, required `[message]`, `message` a string), so the scenario's contract
+  still fits (analyze D6).
 - `src/tests/acceptance/us2_test.go` line 84 and `src/engine/api/runs_ops_test.go` lines 449-450:
   the run records `api-feature-go@1.2.0`.
 - `src/tests/evals/steps/cases.go`, `quarantine_test.go`, `quarantine_print_evals_test.go`:
@@ -177,7 +183,9 @@ asked for):
 
 ## Exceptions
 
-None.
+| Rule | Location | Reason |
+|------|----------|--------|
+| A change is done only when its CI run is green (ADR 0049) | the pushes of T008 and T014, until T017 | The template change makes every generated project's files differ, so every recorded step request misses until the step sets are synthesised again from the final instructions (T017), as feature 009's T007 to T015. Every other job must be green; the reviews of US1 and US2 judge the rest of the run. Owner approved, 2026-11-25 (analyze round 1, P1) |
 
 ## Complexity Tracking
 
