@@ -48,7 +48,8 @@ What the conditions keep out:
     `readOnly`, `writeOnly`, `$comment`, and keys starting `x-`.
 
   A boolean schema (`schema: true`, `items: false`) and a YAML anchor or alias in a schema are
-  refused, and so are a shaping key beside a `$ref` (`{$ref: ..., type: object}`), a name listed
+  refused, and so are any key beside a `$ref` but an annotation or an `x-` key
+  (`{$ref: ..., type: object}`, `{$ref: ..., not: ...}`), a name listed
   twice in `required`, and a `requestBody` with no `content`. The names under `properties`, and
   everything under an `x-` key, are names, never judged as keywords. Every `$ref` walk keeps the locations it has visited, so a cycle ends.
 
@@ -189,6 +190,10 @@ Limits of the request check:
   additional members is always empty.
 - A member's path in a message is cut to 64 runes; a value is never quoted.
 - A body is judged as JSON whatever its `Content-Type`.
+- A boolean in the contract counts in any spelling YAML reads as one (`false`, `False`,
+  `FALSE`), for `additionalProperties` and `requestBody.required` alike.
+- The check runs before the middlewares given to `HandlerWithOptions`, so a body is read (up to
+  the limit) and may be refused before, for example, an authentication middleware sees the request.
 - Path and query parameters are read by the generated code as before; a parameter error is
   answered by oapi-codegen's text error, not by this check.
 

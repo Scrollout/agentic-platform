@@ -211,7 +211,36 @@ with the clean reference, `{"text":"a","TEXT":"b"}` gives 201 with `"a"`.
   green or is stopped and asked for; `method.sha256` converged
 - [ ] T008 [US1] Commit (tests and code in separate commits); ask the owner before pushing (the
   recorded-model jobs will miss until T017); push (check jobs); fix until CI is green but for
-  those jobs; record the run in research; fresh review of US1; `/speckit-converge` for US1
+  those jobs; record the run in research; fresh review of US1; `/speckit-converge` for US1.
+  CI 45581805361 at e061694 (research Runs). Review round 1 (fresh Sonnet, at d6ba493): F1, F2
+  blocking (`additionalProperties: False` and `required: True` read as not set, since only the
+  text `false`/`true` counts; README "Request check", Principle XIV), F3 (a non-shaping key beside
+  a `$ref` neither refused nor read), F4 (a 1 MiB array of `{}` rebuilds the shape's member map per
+  object) and F5 (only POST bodies served in the tests): T024 to T026; F6 (the "escaped
+  duplicate" case at `request_check_test.go:706` holds no escape; T024 adds a real one, so the
+  mislabelled case changes only with the owner's approval): T027; F7 (aliases followed outside
+  schemas) closed: consistent with the YAML reading of the whole contract, and an alias in a schema
+  is refused; F8 (the GeneratedCodeUnchanged test supplies its own `gen/**`): T028; F9 (the pin
+  test proves the label only) closed: stated in its docstring and the README
+- [ ] T024 [US1] Test author (new files): `src/engine/checks/request_shapes_regress_test.go`:
+  `additionalProperties: False` and `FALSE` close a shape and `True` does not; `required: True`
+  and `TRUE` make a body required; any key beside a `$ref` other than an annotation or an `x-` key
+  (`not`, `allOf`, `nullable`, `maxLength`) is an error naming the location;
+  `src/engine/procedures/request_regress_test.go` (served, as T004): `PUT`, `PATCH` and `DELETE`
+  bodies on a path with a parameter are refused and rewritten like `POST`; a duplicate written with
+  an escape (`{"text":"a","\u0074ext":"b"}`) is named twice; an escaped declared name passes byte
+  for byte; a 1 MiB array of `{}` against a shape of 300 properties is answered within 2 seconds;
+  seen failing where the code is wrong
+- [ ] T025 [US1] Code author: read a YAML boolean as YAML does (F1, F2), refuse every key beside a
+  `$ref` but annotations and `x-` keys (F3) in `src/engine/checks/shapes.go`; build each shape's
+  member lookup once, not per object (F4), in `template/gen/requests.go` (the fixture templates' copies keep
+  compiling with the same types and need no change); T003-T006 and T024 pass
+- [ ] T026 [US1] Commit, push (owner go-ahead), record the run; review round 2 checks only F1-F5
+  and the changed lines
+- [ ] T027 [US1] Owner approval to make `request_check_test.go:706` carry the escape it is named
+  for (or drop it as a duplicate of line 705, T024 covering the escape)
+- [ ] T028 [US1] Owner approval for `TestGeneratedCodeUnchangedCoversTheRequestCheckFiles` to read
+  the generate step's `writable` from the real `pattern.yaml` instead of its own `gen/**` (F8)
 
 ---
 
