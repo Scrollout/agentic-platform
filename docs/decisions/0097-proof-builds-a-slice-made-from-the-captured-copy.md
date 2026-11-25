@@ -1,7 +1,7 @@
 ---
 type: Decision
 title: "ADR 0097: A proof builds a slice made from the captured pattern's copy"
-description: Supersedes ADR 0096. Each captured pattern has one proof slice, an approved slice made from its copy of the source slice; a proof is an ordinary run of that slice under the captured pattern, so step workers, run records, the launcher and the API stay keyed by slice; the captured pattern keeps the expected output hashes.
+description: Refined by ADR 0099 (a proof compares only the filled outputs with the template). Supersedes ADR 0096. Each captured pattern has one proof slice, an approved slice made from its copy of the source slice; a proof is an ordinary run of that slice under the captured pattern, so step workers, run records, the launcher and the API stay keyed by slice; the captured pattern keeps the expected output hashes.
 tags: [decisions, catalogue, captured-patterns]
 status: draft
 decision: accepted
@@ -15,7 +15,7 @@ sources:
   - id: spec
     resource: ../../specs/011-capture-pattern/spec.md
     title: Feature 011 specification, Clarifications (analyze round 3)
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-26T00:20:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-26T02:00:00Z }
 ---
 
 # Origin

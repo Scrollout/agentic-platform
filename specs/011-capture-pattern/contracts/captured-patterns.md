@@ -32,26 +32,30 @@ pattern. `startRun` still answers 202 with the run's operation. The run (`Run`) 
 and, for a captured pattern, the parameters' values and `source_run`; the `Run` also names each
 fitting captured pattern that needs a new proof and each that did not fit only because of a
 refused value, with the parameter and why. Refusals, in this order, each at once: InvalidRequest or
-InvalidProject; NotFound for an unknown slice or a `pattern` naming no pattern;
-`CapturedPatternWithdrawn`, then `ProofRequired`, for a named captured pattern (or a proof slice's,
-withdrawn only); PatternDoesNotFit, with the first place the slice differs or the value refused,
-for a named one that does not fit (and as before for the base conditions); NotApproved;
+InvalidProject; NotFound for an unknown slice or a `pattern` naming no pattern; PatternDoesNotFit
+for the base conditions, as before; NotApproved; `CapturedPatternWithdrawn`, then
+`ProofRequired`, for a named captured pattern (or a proof slice's, withdrawn only);
+PatternDoesNotFit, with the first place the approved slice differs or the value refused, for a
+named captured pattern that does not fit;
 WorkersNotReady (a `fill` step needs no worker); RunActive; ProjectExists. `replayRun` of a run
 built from a captured pattern answers `CapturedPatternWithdrawn` or `ProofRequired` when it is not
-usable; `resumeRun` and `acceptHandOver` keep the run's pattern.
+usable, and NotFound when it was erased; `resumeRun` and `acceptHandOver` keep the run's
+pattern.
 
 Additive changes elsewhere: `Operation.target` takes a new `operation_target` rule (a slice, run
 or captured pattern ID) in place of `slice_or_run_id`; `Operation.result` gains `captured_pattern`;
 `OperationKind` gains `capture-run`, `replace-parameters`, `make-proof-slice`,
 `approve-captured-pattern`, `withdraw-captured-pattern` and `erase-captured-pattern`; `Run` gains
-`proof` and the pattern choice; `Slice` and `SliceSummary` gain `proof_of`; `ErrorCode` gains the
+`proof` and the pattern choice (`pattern_reason`, `parameters`, `source_run`, `not_used`, read
+from `RunStarted`, which gains the same); `Slice` and `SliceSummary` gain `proof_of`, and the
+slice history's kinds gain `made-for-proof`; `ErrorCode` gains the
 new codes. The client and the launcher read `target` as a string and print or match it only where
 it names a run.
 
 A proof is `startRun` of the proof slice into a new project folder: an ordinary run on that
 slice's step workers, with `proof: true` on the run and its `RunStarted`, that reuses no earlier
-result; it passes when it ends done and its outputs equal the captured pattern's `expected`
-hashes (data model, Proof).
+result; it passes when it ends done and its `tests`, `code` and `witnesses` outputs equal the
+captured pattern's template hashes (data model, Proof); a hand-over fails it at once.
 
 ## Fit and fill (package `engine/captured`)
 
@@ -60,7 +64,8 @@ hashes (data model, Proof).
 - `Check(parameters) error`: value forms, uniqueness in any case form.
 - `Fit(source, parameters, approved) -> (values, ok, firstDifference)`: research R4.
 - `Fill(files, parameters, values) -> files`: each place replaced in its case form, longest first.
-- A proof's run takes the captured pattern's copy of the source slice, not a slice ID.
+- A proof slice is made from the captured pattern's copy; `Fit` and `Fill` take that copy.
+- `Fill` fills file paths as well as contents; two files with the same filled path do not fit.
 
 Limits: research R4.
 

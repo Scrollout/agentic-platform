@@ -2,7 +2,7 @@
 
 ## 2026-11-26
 
-* **Plan**: Feature 011, analyze round 3 (owner): a proof is an ordinary build of the captured pattern's proof slice, an approved slice made from its copy of the source slice, and the captured pattern keeps the expected output hashes ([ADR 0097](/decisions/0097-proof-builds-a-slice-made-from-the-captured-copy.md), superseding [ADR 0096](/decisions/0096-proof-step-workers-keyed-by-captured-pattern.md)). The [glossary](/overview/glossary.md) gains Proof slice. Analyze round 4 (owner): a proof slice is marked and never reused, a proof reuses no result, continued runs keep their pattern and a replayed proof is a new proof ([ADR 0098](/decisions/0098-proof-slice-marked-and-runs-keep-their-pattern.md)).
+* **Plan**: Feature 011, analyze round 3 (owner): a proof is an ordinary build of the captured pattern's proof slice, an approved slice made from its copy of the source slice, and the captured pattern keeps the expected output hashes ([ADR 0097](/decisions/0097-proof-builds-a-slice-made-from-the-captured-copy.md), superseding [ADR 0096](/decisions/0096-proof-step-workers-keyed-by-captured-pattern.md)). The [glossary](/overview/glossary.md) gains Proof slice. Analyze round 4 (owner): a proof slice is marked and never reused, a proof reuses no result, continued runs keep their pattern and a replayed proof is a new proof ([ADR 0098](/decisions/0098-proof-slice-marked-and-runs-keep-their-pattern.md)). Analyze round 5 (owner): a proof compares only the filled outputs, a hand-over fails it at once, and template paths are filled too ([ADR 0099](/decisions/0099-proof-compares-filled-outputs-and-paths-are-filled.md)).
 
 ## 2026-11-25
 

@@ -1,7 +1,7 @@
 ---
 type: Decision
 title: "ADR 0092: A slice fits a captured pattern by exact substitution"
-description: Superseded in part by ADR 0094 (any literal value may be a parameter) and ADR 0095 (a value keeps its parameter's kind and a name has at least two letters). A captured pattern's parameters are names, in three case forms, and declared values; a slice fits when filling the source slice with one value per parameter gives exactly the approved slice; one engine owns these rules.
+description: Refined by ADR 0099 (template paths are filled too). Superseded in part by ADR 0094 (any literal value may be a parameter) and ADR 0095 (a value keeps its parameter's kind and a name has at least two letters). A captured pattern's parameters are names, in three case forms, and declared values; a slice fits when filling the source slice with one value per parameter gives exactly the approved slice; one engine owns these rules.
 tags: [decisions, catalogue, captured-patterns]
 status: draft
 decision: accepted
@@ -15,7 +15,7 @@ sources:
   - id: spec
     resource: ../../specs/011-capture-pattern/spec.md
     title: Feature 011 specification, Clarifications
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-25T23:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-26T02:00:00Z }
 ---
 
 # Origin

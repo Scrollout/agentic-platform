@@ -95,7 +95,18 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   proof is a new proof); every round-4 finding fixed at its source (spec Clarifications, FR-006,
   FR-011, SC-003, Key Entities, edge cases; research R5 to R7; data model; contract draft; plan;
   ADR 0093 and 0095 descriptions; T001, T006, T007, T009, T013, T015, T018, T027 to T029, new
-  T030). Round 5 owed before T001.
+  T030). Round 5 (fresh Sonnet, at b870e6c): every round-4 fix present; 1 HIGH (F1 a failing
+  proof hands its run over, which waits, so the proof stayed `running`), 8 MEDIUM (F2 `not_used`
+  had no storage; F3 no history kind for the engine's approval, `slice.schema.json` not named;
+  F4 T006 could not pass at T007's end; F5 the proof side of `ReplayRun` had no owner; F6
+  parameters could change during a proof; F7 comparing generated code fails every proof after a
+  generator change; F8 paths were not filled; F9 a proof read right after its run could be
+  `running`), 5 LOW (F10 a draft leftover of ADR 0096; F11 "the start's answer"; F12 a replay of
+  an erased captured pattern; F13 the named fit before NotApproved; F14 per-step attempts are not
+  expressible). Owner (2026-11-26): F7 filled outputs only, F8 paths filled too (ADR 0099). Fixed
+  at the source (spec Clarifications, FR-003 to FR-005, FR-009, FR-010, Story 1 and 2, edge
+  cases; research R1, R4, R5; data model; contract draft; plan; ADR 0097 description; T001,
+  T003, T005 to T007, T010, T015, T018, T027, T029, T030). Round 6 owed before T001.
 
 ---
 
@@ -113,16 +124,18 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   `startRun` answers 202 with its operation as before, and `Run` gains `proof` and the pattern
   choice (data model, Run); `startRun`'s description gives the refusal order of the contract
   draft, and `replayRun` lists `CapturedPatternWithdrawn` and `ProofRequired`; `Slice` and
-  `SliceSummary` gain `proof_of`; every new field is optional, so every change is additive; the `CapturedPattern` (with `expected` and `proof_slice`), `Parameter` (`name` `^[a-z][a-z0-9-]*$`, `kind`
+  `SliceSummary` gain `proof_of`, and `slice.schema.json`'s history kinds gain `made-for-proof`
+  (data model, Proof slice); every new field and value is optional or added, so every change is
+  additive; the `CapturedPattern` (with `proof_slice`), `Parameter` (`name` `^[a-z][a-z0-9-]*$`, `kind`
   `name` | `number` | `string`, `source` `name` | `declared-value` | `literal`, `value` at most 64
-  characters, `places`, `origin` `proposed` | `added`),
+  characters, `places` with `in` `content` | `path`, `origin` `proposed` | `added`),
   `Proof` and `Approval` schemas of [data-model.md](data-model.md); `OperationKind` values for
-  each; `startRun` gains an optional `pattern`; its answer `pattern`, `pattern_reason` (`base`,
-  `fits`, `chosen`), the captured patterns that need a new proof and those refused for a value,
-  with the reason; error codes `RunNotDone`, `ParameterRefused`, `ProofRequired`, `CapturedPatternWithdrawn`,
+  each; `startRun` gains an optional `pattern`; the `Run` gains `pattern_reason` (`base`, `fits`,
+  `chosen`), `parameters`, `source_run` and `not_used` (each captured pattern that needs a new
+  proof or was refused for a value, with the reason), read from `RunStarted`; error codes `RunNotDone`, `ParameterRefused`, `ProofRequired`, `CapturedPatternWithdrawn`,
   `CapturedPatternExists`, `CapturedPatternBusy`, `CapturedPatternApproved`; `x-limits` "at most 32 parameters, at most 10000 places per parameter, at
   most 64 characters per value"; `run-event.schema.json` `RunStarted` gains
-  `pattern_reason`, `parameters`, `source_run` and `proof`, additively. `src/check/api/preview/2026-11-13-preview/openapi.yaml`
+  `pattern_reason`, `parameters`, `source_run`, `proof` and `not_used`, additively. `src/check/api/preview/2026-11-13-preview/openapi.yaml`
   gains `POST /project-versions/write` (`writeStep`: `{project, step, files}`, each path must
   match one of the step's writable entries, otherwise 400 naming it). New
   `src/engine/captured/captured.go` holds the Go interface of the contract draft (`Propose`,
@@ -175,8 +188,10 @@ proposed and adding the derived value works; the proof ends passed with no model
   `200ms` or `v200`; in `-200` and `"200"`); `Fill` with each source value gives the input bytes
   back for every file; with `task`/`tasks` gives `NewTask`, `listTasks`, `TASK` where `NOTE` was,
   and `task_id` and `detask` where `note_id` and `denote` were (every occurrence, inside words
-  too); on `limit/` with `100`/`101` every `200` and `201` place carries the new value (SC-006).
-  Seen failing
+  too); on `limit/` with `100`/`101` every `200` and `201` place carries the new value (SC-006);
+  paths are filled too (`cmd/notes/main.go` becomes `cmd/tasks/main.go`, each such place with
+  `in: path`), and two template files that would get the same filled path, or a filled path
+  outside its step's writable entries, do not fill, naming the paths. Seen failing
 - [ ] T004 [P] [US1] Test author: new `src/engine/checksvc/write_step_test.go`: `writeStep`
   writes files under the step's writable entries only, refuses a path outside them with 400
   naming it (also `..`, absolute paths, a symlinked folder), commits nothing, and `restoreStep`
@@ -189,9 +204,10 @@ proposed and adding the derived value works; the proof ends passed with no model
   base pattern and method, holding the source slice's approved parts and the `tests`, `code` and
   `witnesses` artifact hashes; its declaration is valid against `pattern.schema.json`, every agent
   step's worker is `procedure:fill`, the review step lacks FindingsCarryEvidence and
-  NoBlockingFindingOpen and has outputs `[witnesses]`, every `fill` step has `attempts` 1,
-  everything else equals the base pattern's; `PUT /parameters` removes and adds, refuses as T003
-  does, and moves a proven one back to proposed; a second state change while one of its
+  NoBlockingFindingOpen and has outputs `[witnesses]`, `limits.attempts` and
+  `limits.review_rounds` are 1, everything else equals the base pattern's; `PUT /parameters`
+  removes and adds, refuses as T003 does, answers `CapturedPatternBusy` while a proof's run has
+  not ended, and moves a proven one back to proposed; a second state change while one of its
   operations runs answers 409 `CapturedPatternBusy`; list is newest first and paginated; a reused Idempotency-Key
   with another body answers as for other calls. Seen failing
 - [ ] T006 [P] [US1] Test author: new `src/engine/durable/fill_proof_test.go` and
@@ -201,26 +217,31 @@ proposed and adding the derived value works; the proof ends passed with no model
   `RunStarted` naming the captured pattern, `pattern_reason` `chosen`, `source_run` and `proof:
   true`; a `fill` step needs no registered worker; each `fill` step renders, calls `writeStep`, runs the step's checks, then
   `commitStep`; no agent worker and no model gateway call is made; the proof passes when the run
-  ends done and the `generated-code`, `tests`, `code` and `witnesses` outputs' hashes equal the
-  captured pattern's `expected` hashes, and records run, method,
-  outcome and failures (a run ended handed over, expired or cancelled fails naming its end; an
-  interrupted one stays running; the record is completed after an engine restart from the run
-  record); a second proof under the same method reuses no earlier result and runs every step;
+  ends done and the `tests`, `code` and `witnesses` outputs' hashes equal the captured pattern's
+  template hashes (generated code is not compared; a planted change of generated bytes with its
+  checks passing still passes), and records run, method, parameters,
+  outcome and failures (a hand-over fails it at once naming the check while the run waits;
+  expired or cancelled fails naming the end; an interrupted one stays running;
+  `getCapturedPattern` read right after the run's end line, and after an engine restart, shows
+  the completed proof); a second proof under the same method reuses no earlier result and runs every step;
   a planted template byte change fails it naming the file; a planted
   failing check fails it naming step and check, and a `fill` step is never attempted twice;
   approval before a passing proof, or after one
   under another method, answers `ProofRequired`; approval records who and when; an approved
   captured pattern refuses `PUT /parameters` with 409; a proof interrupted by an engine restart
   continues and is never marked passed without its recorded end. Seen failing
-- [ ] T007 [US1] Code author: `src/engine/captured/` (Propose, Check, Fill, the declaration),
+- [ ] T007 [US1] Code author (done when T003 to T005 and T006's `fill` cases pass; T006's proof
+  cases and T027 pass after T029): `src/engine/captured/` (Propose, Check, Fill, the declaration),
   captured-pattern records and the second artifact holder in `src/engine/store/`, the resource in
-  new `src/engine/api/captured.go` with its operations in `src/engine/api/operations.go`, the
+  new `src/engine/api/captured.go` (every call but `proof-slice`) with its operations in `src/engine/api/operations.go`, the
   `fill` worker in `src/engine/durable/workflow.go` and `src/engine/steps/` (render through
   `engine/captured`, `writeStep`, checks, `commitStep`; the readiness check skips `fill`),
   `writeStep` in `src/engine/checksvc/project.go` and `handler.go`, the proof as a run of the
   proof slice with `proof: true` (T029 makes the proof slice): the `startRun` branch for a proof
   slice, the `RunStarted` fields `pattern_reason`, `parameters`, `source_run` and `proof`, the
-  Proof record written at acceptance and completed at the run's end, no reuse for a proof, and
+  Proof record written at acceptance and completed at a hand-over or the run's end (and on read),
+  a `no reuse` flag in the run's start for a proof, `PUT /parameters` and erasure busy while a
+  proof's run has not ended, and
   `ready` skipping `fill` in `StartRun`, `ResumeRun` and `ReplayRun`; no test is changed. `scripts/method-digest.py` converges
 - [ ] T027 [P] [US1] Test author: new `src/engine/api/captured_proof_slice_test.go` (engine rig,
   no model): `POST /captured-patterns/{id}/proof-slice` makes an approved slice from the captured
@@ -236,16 +257,19 @@ proposed and adding the derived value works; the proof ends passed with no model
   part changed since it was made answers `PatternDoesNotFit`; its run carries `proof: true`;
   erasing the captured pattern erases its proof slice and that slice's runs; `deleteSlice` of the
   proof slice clears `proof_slice`, keeps every recorded proof (its run then NotFound) and the
-  template and `expected` artifacts; a replay of a proof run is a new proof. Seen failing
+  template artifacts; a replay of a proof run is a new proof with no reuse; the proof slice's
+  history starts `made-for-proof`, then one `approved` per part. Seen failing
 - [ ] T028 [P] [US1] Test author: new `src/tests/lab/captured_prove_test.go` (Docker lab, CI):
   `ap prove <captured pattern> <project>` runs the client's `proof-slice`, then `build-workers`
   and `build` for the proof slice into `<project>`; an unknown captured pattern is exit 4
   NotFound and starts nothing; after the run's end line it prints `Proof of <id>: passed` or the
   failures; running it again into another project builds again. Seen failing
   (owner go-ahead for the lab)
-- [ ] T029 [US1] Code author (after T007, on its store changes): the proof slice in
-  `src/engine/slices/` and `src/engine/api/` (made by the engine, `proof_of`, never reused by
-  `createSlice`, `deleteSlice` clears `proof_slice`), `proof-slice` and the proof outcome line in
+- [ ] T029 [US1] Code author (after T007, on its store changes; done when T006's proof cases and
+  T027 pass): the proof slice in `src/engine/slices/` (made by the engine, history
+  `made-for-proof`, `proof_of`, never reused by `createSlice`, `deleteSlice` clears
+  `proof_slice`), the `proof-slice` call in new `src/engine/api/proof_slice.go`, the proof side of
+  `ReplayRun` (a replay of a proof run is a new proof, no reuse), `proof-slice` and the proof outcome line in
   `src/cli/`, `prove` in `src/deploy/ap`; no test is changed
 - [ ] T008 [P] [US1] Test author: new `src/cli/captured_test.go`: `ap capture <run> [--name]`,
   `ap patterns`, `ap pattern <id>` (parameters with places, proofs, state, usable), `--drop` and
@@ -253,7 +277,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   as `src/cli/contract.md` states; errors print their code and reason. Seen failing
 - [ ] T009 [US1] Code author: the commands in `src/cli/` (generated client only), except
   `proof-slice` (T029)
-- [ ] T010 [US1] Commit (tests and code in separate commits); fast lint; ask the owner before
+- [ ] T010 [US1] (after T007, T009 and T029) Commit (tests and code in separate commits); fast lint; ask the owner before
   pushing (every check job runs); record the CI run here
 - [ ] T011 [US1] Fresh review of US1 judging T010's CI run; findings fixed as new tasks or
   recorded; `/speckit-converge` for US1
@@ -298,11 +322,11 @@ pass, three runs give the same files.
   the agents. Seen failing (owner go-ahead for the stack)
 - [ ] T030 [P] [US2] Test author: new `src/cli/captured_build_test.go`: `ap build --pattern`
   sends `pattern`; `build`'s first line, the `RunStarted` event line, the `run` header and the
-  `Not used:` lines print as `src/cli/contract.md` states; `ap slices` shows `PROOF OF`; refusals
+  `Not used:` lines (from the run's `not_used`) print as `src/cli/contract.md` states; `ap slices` shows `PROOF OF`; refusals
   print their code and reason. Seen failing
 - [ ] T015 [US2] Code author: `Fit` in `src/engine/captured/`, the choice for a fitting captured
-  pattern and a named one in `src/engine/api/runs.go` (`StartRun`, `ReplayRun`), the `Run`'s
-  pattern choice, `ap build --pattern` and the output lines in `src/cli/`
+  pattern and a named one in `src/engine/api/runs.go` (`StartRun`; `ReplayRun`'s usable rule and
+  NotFound for an erased captured pattern), the `Run`'s pattern choice and `not_used`, `ap build --pattern` and the output lines in `src/cli/`
 - [ ] T016 [US2] Commit; fast lint; push (owner go-ahead); record the CI run
 - [ ] T017 [US2] Fresh review of US2 judging T016's CI run; `/speckit-converge` for US2
 
@@ -327,7 +351,8 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   artifacts and its use, and a new proof after the erasure passes; a proof still running makes it unusable until it passes; erasing it while a
   run built from it or its proof has not ended answers 409 `CapturedPatternBusy`; erasing the
   captured pattern removes the artifacts only it holds and its proof slice with that slice's
-  runs, and keeps the records of other slices' runs built from it. Seen failing
+  runs, and keeps the records of other slices' runs built from it; a replay of a run built from
+  an erased captured pattern answers NotFound naming it. Seen failing
 - [ ] T019 [P] [US3] Test author: new `src/cli/captured_lifecycle_test.go`: `ap withdraw-pattern`
   and `ap erase-pattern` (shows what will be erased, asks for confirmation, does nothing without
   it). Seen failing
@@ -341,7 +366,7 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
 ## Phase 5: Polish & cross-cutting
 
 - [ ] T023 Docs: `docs/architecture/overview.md` (captured patterns, the fill worker, `writeStep`,
-  the pattern choice, the proof slice, ADR 0090 to 0098 in its Decisions), `src/catalogue/README.md`
+  the pattern choice, the proof slice, ADR 0090 to 0099 in its Decisions), `src/catalogue/README.md`
   (captured patterns beside the base patterns), `src/engine/README.md`, `src/deploy/README.md`
   (`prove`), `docs/apis/engine-api.md` and
   `docs/apis/check-api.md`, N-052 in `docs/overview/problem-space.md` (state), `docs/log.md`
@@ -357,8 +382,8 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
 
 ## Dependencies & execution order
 
-- T001 → T002 → US1 (T003-T006, T027, T028 in parallel → T007 → T029; T008 → T009 → T010 →
-  T011) → US2 (T012-T014, T030 in parallel → T015 → T016 → T017) → US3 (T018-T019 in parallel → T020 → T021 → T022) → T023 →
+- T001 → T002 → US1 (T003-T006, T027, T028 in parallel → T007 → T029; T008 → T009; T007, T009
+  and T029 → T010 → T011) → US2 (T012-T014, T030 in parallel → T015 → T016 → T017) → US3 (T018-T019 in parallel → T020 → T021 → T022) → T023 →
   T024 → T025 → T026.
 - US2 needs US1's captured patterns and fill worker; US3 needs US2's choice at `startRun`.
 

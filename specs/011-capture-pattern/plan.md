@@ -66,7 +66,7 @@ field on `startRun`, eight terminal commands, one acceptance suite
 | VI. Adopt mature OSS | Pass | gonew, Copier, Cookiecutter and `text/template` evaluated; none derives a template from an accepted project (research R4); the custom engine is justified there |
 | VII. Providers | Pass | The rule that chooses between fitting patterns is specified (R6) |
 | VIII. Containers | Pass | No new image |
-| IX. Knowledge stays true | Pass | ADR 0090 to 0098, the reference "Project template tools", the architecture overview and the log at implementation |
+| IX. Knowledge stays true | Pass | ADR 0090 to 0099, the reference "Project template tools", the architecture overview and the log at implementation |
 | X. No silent loss | Pass | A captured run and a proof are ordinary runs: recorded before 202, one terminal state, checkpointed steps |
 | XI. Privacy | Pass | A captured pattern holds the developer's slice and code like a slice does; erasing it is an operation; telemetry names IDs and hashes only |
 | XII. Tenants | Not applicable | One developer by scope (feature 001 FR-021), as for slices; Complexity Tracking |
@@ -100,6 +100,7 @@ Each decision that outlives the feature has a record in `docs/decisions/`.
 | A proof's step workers are keyed by its captured pattern; a proof's run has no slice (superseded by ADR 0097) | R2, R5, S17 | [ADR 0096](../../docs/decisions/0096-proof-step-workers-keyed-by-captured-pattern.md) |
 | A proof is an ordinary build of the captured pattern's proof slice, an approved slice made from its copy; the captured pattern keeps the expected output hashes | R2, R5, S17, S18 | [ADR 0097](../../docs/decisions/0097-proof-builds-a-slice-made-from-the-captured-copy.md) (supersedes ADR 0096) |
 | A proof slice is marked (`Proof of <captured pattern>`, `proof_of`) and never reused; a proof reuses no result; resume and take-over keep the pattern; a replay follows the usable rule and a replayed proof is a new proof | R5 | [ADR 0098](../../docs/decisions/0098-proof-slice-marked-and-runs-keep-their-pattern.md) |
+| A proof compares only the filled outputs (`tests`, `code`, `witnesses`) with the template; a hand-over fails it at once; template paths are filled like contents | R4, R5 | [ADR 0099](../../docs/decisions/0099-proof-compares-filled-outputs-and-paths-are-filled.md) |
 
 ## Threat model
 
@@ -112,7 +113,7 @@ Each decision that outlives the feature has a record in `docs/decisions/`.
 | Method change after approval | | ✓ | | | | | ASI08 cascading failures (an old verification carried into new runs) | Usable only while its latest proof passed under the current method (FR-011) |
 | Proof slice (made by the engine from the captured copy) | | ✓ | | | | ✓ | ASI06 memory and context poisoning | Made only from the captured pattern's own copy, approved by the engine at creation; a part changed afterwards no longer equals the copy, so its run is refused PatternDoesNotFit; its runs always use that captured pattern; erasing it only stops proofs until the next one makes it again |
 | Approval and withdrawal | ✓ | | ✓ | | | ✓ | ASI09 human-agent trust exploitation, ASI03 identity abuse | Only the developer's own client token reaches the engine API; each approval and withdrawal is an operation recorded with its caller and time, and the approval names the proof it approved; an agent has no engine token |
-| Fill output (`engine/captured`, the project worker's `writeStep`) | | | | | ✓ | | API4 resource consumption | At most 32 parameters, 10000 places each, values of at most 64 characters, so a filled file grows by a bounded amount; `writeStep` keeps the step's file and size limits |
+| Fill output (`engine/captured`, the project worker's `writeStep`) | | | | | ✓ | | API4 resource consumption | At most 32 parameters, 10000 places each, values of at most 64 characters, so a filled file grows by a bounded amount; `writeStep` keeps the step's file and size limits; a filled path must match its step's writable entries and no two files may get the same path |
 
 ## Project Structure
 
