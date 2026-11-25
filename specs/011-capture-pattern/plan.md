@@ -15,8 +15,9 @@ each slice's contract by the generate procedure. The engine renders a filled ste
 project worker writes them with a new `writeStep` call; the base pattern's checks judge them,
 except the two that read review findings (R1, R2). A slice fits a captured pattern when filling
 the source slice with one value per parameter gives exactly the approved slice (R4). A proof is a
-run of the source slice under the captured pattern with its own values whose files must equal the
-accepted ones; the developer approves after a passing proof, and a captured pattern is used only
+run of the captured pattern's copy of the source slice under the captured pattern with its own
+values, into a project folder the developer names and on step workers registered for the
+captured pattern, whose files must equal the accepted ones; the developer approves after a passing proof, and a captured pattern is used only
 while its latest proof passed under the current method (R5). `startRun` uses the newest usable fitting
 captured pattern unless the request names another (R6). Captured patterns live in the engine
 store, behind a new `/captured-patterns` resource and new terminal commands (R3, R7).
@@ -60,7 +61,7 @@ field on `startRun`, eight terminal commands, one acceptance suite
 | II. Two planes | Pass | No new component; the engine and project worker keep their planes; no run content leaves them |
 | III. API-first | Pass | Captured patterns enter and change only through the engine API; a declaration valid against `pattern.schema.json`; desired state (approved) and observed state (usable under the current method) are separate (data model) |
 | IV. Asynchronous operations | Pass | Capture, parameters, proof, approval, withdrawal and erasure are operations (FR-014) |
-| V. Identity | Pass | No new caller; `writeStep` is called by the engine with its existing token, authorised as `commitStep` |
+| V. Identity | Pass | No new caller; `writeStep` is called by the engine with its existing token, authorised as `commitStep`; a proof's step workers get their own tokens and grants, each naming one captured pattern and one step, as a build's name one slice and one step |
 | VI. Adopt mature OSS | Pass | gonew, Copier, Cookiecutter and `text/template` evaluated; none derives a template from an accepted project (research R4); the custom engine is justified there |
 | VII. Providers | Pass | The rule that chooses between fitting patterns is specified (R6) |
 | VIII. Containers | Pass | No new image |
@@ -95,6 +96,7 @@ Each decision that outlives the feature has a record in `docs/decisions/`.
 | Any other literal value of the slice may be added as a parameter; a number matches only as a whole number | E1, R4 | [ADR 0094](../../docs/decisions/0094-any-literal-value-may-be-a-parameter.md) (supersedes ADR 0092 in part) |
 | A captured pattern never changes (always `1.0.0`; a change is a new capture); a value keeps its parameter's kind; a name has at least two letters; a proof builds from the captured pattern's copy of the slice | R3, R4, R5 | [ADR 0095](../../docs/decisions/0095-captured-patterns-never-change-values-keep-their-kind.md) (supersedes ADR 0091 and ADR 0092 in part) |
 | A captured pattern is used only while its latest proof passed under the current method, a run of its source slice whose files equal the accepted ones; the newest usable fitting one is chosen unless the run names another | R5, R6 | [ADR 0093](../../docs/decisions/0093-captured-pattern-used-only-under-its-proven-method.md) |
+| A proof's step workers are keyed by its captured pattern (grants and registrations name a slice or a captured pattern); the developer names the proof's project folder; a proof's run has no slice | R2, R5, S17 | [ADR 0096](../../docs/decisions/0096-proof-step-workers-keyed-by-captured-pattern.md) |
 
 ## Threat model
 
@@ -105,6 +107,7 @@ Each decision that outlives the feature has a record in `docs/decisions/`.
 | Fit judge (`engine/captured`) | | ✓ | | | ✓ | | ASI02 tool misuse (a slice crafted to fit and pick a pattern) | Exact equality only; a fit picks values, never code; limits on parameters and places; linear matching, no backtracking regular expressions |
 | `/captured-patterns` and `writeStep` (new calls) | ✓ | ✓ | ✓ | | ✓ | ✓ | API Top 10 API1, API4, API5 | Same token, rate limit and Idempotency-Key as the engine's other calls; `writeStep` only from the engine's token and only into the step's writable paths; operations recorded in the run store |
 | Method change after approval | | ✓ | | | | | ASI08 cascading failures (an old verification carried into new runs) | Usable only while its latest proof passed under the current method (FR-011) |
+| A proof's step worker grants (keyed by a captured pattern) | ✓ | | | | | ✓ | ASI03 identity and privilege abuse | Each grant names one captured pattern and one step, issued by the launcher like a slice's; a worker granted for a captured pattern can register only for that captured pattern's steps and is called only for its proof's runs; removing the grant unregisters it |
 | Approval and withdrawal | ✓ | | ✓ | | | ✓ | ASI09 human-agent trust exploitation, ASI03 identity abuse | Only the developer's own client token reaches the engine API; each approval and withdrawal is an operation recorded with its caller and time, and the approval names the proof it approved; an agent has no engine token |
 | Fill output (`engine/captured`, the project worker's `writeStep`) | | | | | ✓ | | API4 resource consumption | At most 32 parameters, 10000 places each, values of at most 64 characters, so a filled file grows by a bounded amount; `writeStep` keeps the step's file and size limits |
 
@@ -137,6 +140,8 @@ src/engine/api/captured.go               # new: the resource and its operations
 src/engine/api/runs.go                   # pattern choice at startRun (R6)
 src/engine/durable/workflow.go, steps/   # the fill worker: render, writeStep, checks, commit
 src/engine/checksvc/project.go           # writeStep
+src/engine/api/workers.go                # grants and registrations for a slice or a captured pattern
+src/deploy/ap                            # build-workers <captured pattern> <project>; prove runs it first
 src/engine/method/method.sha256          # derived
 src/cli/                                 # the commands; contract.md rows
 src/tests/acceptance/                    # new suite: capture, prove, approve, build tasks with no model call
@@ -152,6 +157,8 @@ commit; any other is stopped and asked for):
 - Tests that list the engine contract's paths, operation kinds or error codes exactly (found by
   the code author, then asked for).
 - Tests that list `RunStarted`'s fields exactly, if any.
+- Tests that list `registerWorker`'s or `Worker`'s fields, or the grant file's fields, exactly,
+  if any; tests of `build-workers` that expect it to refuse a name that is not a slice ID.
 
 ## Exceptions
 

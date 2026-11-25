@@ -65,7 +65,11 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   CRITICAL, 0 HIGH; F1 MEDIUM (FR-011 "latest passing proof"), F2 to F4 LOW (a running proof;
   ADR 0090 silent on the review outputs and attempts; erasure during a run); fixed at their
   source (FR-011, an edge case, research R3, data model, plan, T018); F3 closed: the detail lives
-  in research R1 and the data model, ADR 0090 records the decision. Gate passed.
+  in research R1 and the data model, ADR 0090 records the decision. Gate passed. T001 found a
+  design gap (step workers are per slice and a proof has no slice); the owner chose step workers
+  keyed by the captured pattern (2026-11-25); fixed at its source (spec Clarifications and
+  FR-004, research S17, R2, R5, R7, data model, contract draft, plan, ADR 0096, T001, T006, T008,
+  new T027 to T029). Round 3 owed before T001.
 
 ---
 
@@ -75,7 +79,10 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   gains `/captured-patterns` (`POST` capture `{run, name?}`, `GET` list paginated with opaque page
   tokens, `GET /{id}`, `PUT /{id}/parameters`, `POST /{id}/proofs`, `POST /{id}/approval`,
   `POST /{id}/withdrawal`, `DELETE /{id}`), each state change a 202 operation taking an
-  `Idempotency-Key`; the `CapturedPattern`, `Parameter` (`name` `^[a-z][a-z0-9-]*$`, `kind`
+  `Idempotency-Key`; the proof takes `{project}` and is refused as `startRun` refuses a project,
+  with WorkersNotReady and RunActive; an operation's `target` may be a captured pattern's ID;
+  `registerWorker` and `Worker` name a slice or a captured pattern; a proof's `Run` has no `slice`
+  and has `proof: true`; the `Run` carries the pattern choice (data model, Run); the `CapturedPattern`, `Parameter` (`name` `^[a-z][a-z0-9-]*$`, `kind`
   `name` | `number` | `string`, `source` `name` | `declared-value` | `literal`, `value` at most 64
   characters, `places`, `origin` `proposed` | `added`),
   `Proof` and `Approval` schemas of [data-model.md](data-model.md); `OperationKind` values for
@@ -90,6 +97,9 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   `src/engine/captured/captured.go` holds the Go interface of the contract draft (`Propose`,
   `Check`, `Fit`, `Fill`, the declaration from the base pattern; types, signatures, doc comments
   stating research R4's rules and limits) with bodies that return a `not implemented` error.
+  New `src/engine/api/captured.go` holds the generated server's new methods with bodies that
+  answer as not implemented, and `src/engine/checksvc/` the same for `writeStep`, so every module
+  builds (no other code changes).
   `scripts/generate.sh` regenerates; `scripts/method-digest.py` converges; the contract lint and
   oasdiff (no breaking change) pass; the draft then links to the authoritative copies.
   `src/cli/contract.md` gains the command rows of the draft
@@ -152,8 +162,10 @@ proposed and adding the derived value works; the proof ends passed with no model
 - [ ] T006 [P] [US1] Test author: new `src/engine/durable/fill_proof_test.go` and
   `src/engine/api/captured_proof_test.go` (workflow test environment, step workers and gateway
   faked): a proof is a run of the captured pattern's copy of the source slice (no slice ID; it
-  works after the source slice is erased) under the captured pattern with the source values, in a
-  new project, its `RunStarted` naming the captured pattern, `source_run` and `proof: true`; each `fill` step renders, calls `writeStep`, runs the step's checks, then
+  works after the source slice is erased) under the captured pattern with the source values, in
+  the new project its request names (InvalidProject, ProjectExists as for `startRun`), on the step
+  workers registered for the captured pattern (WorkersNotReady while a procedure step has none;
+  a `fill` step needs none), its `RunStarted` naming the captured pattern, `source_run` and `proof: true`; each `fill` step renders, calls `writeStep`, runs the step's checks, then
   `commitStep`; no agent worker and no model gateway call is made; the proof passes when the run
   ends done and the `generated-code`, `tests`, `code` and `witnesses` outputs' hashes equal the
   source run's, and records run, method,
@@ -170,9 +182,24 @@ proposed and adding the derived value works; the proof ends passed with no model
   `engine/captured`, `writeStep`, checks, `commitStep`; the readiness check skips `fill`),
   `writeStep` in `src/engine/checksvc/project.go` and `handler.go`, the proof as a run with
   `proof: true`; no test is changed. `scripts/method-digest.py` converges
+- [ ] T027 [P] [US1] Test author: new `src/engine/api/captured_workers_test.go`: a worker token
+  whose grant names a captured pattern registers for that captured pattern's steps; an unknown
+  captured pattern or a step its declaration lacks is NotFound; the answer names the captured
+  pattern and no slice; the registration is kept across an engine restart and removed with the
+  grant; a proof waiting for its step workers continues once each procedure step has one; a grant
+  naming both a slice and a captured pattern, or neither, grants nothing. Seen failing
+- [ ] T028 [P] [US1] Test author: new `src/tests/lab/captured_workers_test.go` (Docker lab, CI):
+  `ap build-workers <captured pattern> <project>` asks the engine for the captured pattern
+  (unknown: exit 4 NotFound), makes the project folder as for a slice, starts and registers one
+  container per step with names that fit one DNS label, and running it again changes nothing;
+  `ap prove <captured pattern> <project>` runs it first, then passes the command on. Seen failing
+  (owner go-ahead for the lab)
+- [ ] T029 [US1] Code author: grants and registrations for a captured pattern in
+  `src/engine/api/workers.go` and the store; `build-workers` and `prove` in `src/deploy/ap`; no
+  test is changed
 - [ ] T008 [P] [US1] Test author: new `src/cli/captured_test.go`: `ap capture <run> [--name]`,
   `ap patterns`, `ap pattern <id>` (parameters with places, proofs, state, usable), `--drop` and
-  `--add`, `ap prove`, `ap approve-pattern` call the contract's operations, follow them and print
+  `--add`, `ap prove <id> <project>`, `ap approve-pattern` call the contract's operations, follow them and print
   as `src/cli/contract.md` states; errors print their code and reason. Seen failing
 - [ ] T009 [US1] Code author: the commands in `src/cli/` (generated client only)
 - [ ] T010 [US1] Commit (tests and code in separate commits); fast lint; ask the owner before
@@ -270,15 +297,15 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
 
 ## Dependencies & execution order
 
-- T001 → T002 → US1 (T003-T006 in parallel → T007; T008 → T009 → T010 → T011) → US2 (T012-T014
+- T001 → T002 → US1 (T003-T006, T027, T028 in parallel → T007, T029; T008 → T009 → T010 → T011) → US2 (T012-T014
   in parallel → T015 → T016 → T017) → US3 (T018-T019 in parallel → T020 → T021 → T022) → T023 →
   T024 → T025 → T026.
 - US2 needs US1's captured patterns and fill worker; US3 needs US2's choice at `startRun`.
 
 ## Parallel examples
 
-- US1: T003, T004, T005 and T006 by separate test-author sessions (different files); T008 after
-  T001.
+- US1: T003, T004, T005, T006, T027 and T028 by separate test-author sessions (different
+  files); T008 after T001.
 - US2: T012, T013 and T014 by separate test-author sessions.
 
 ## Implementation strategy

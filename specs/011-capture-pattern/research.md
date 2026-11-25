@@ -24,6 +24,7 @@ put to the project owner as direct questions on 2026-11-25 (spec, Clarifications
 | S13 | [Cookiecutter](https://cookiecutter.readthedocs.io/en/stable/) (read 2026-11-25): "creates projects from cookiecutters (project templates)", Jinja2, Python; nothing on deriving a template or case forms |
 | S14 | [text/template](https://pkg.go.dev/text/template) (Go 1.26 standard library): data-driven templates with `{{...}}` actions; assumes trusted template authors, no escaping |
 | S15 | Experiment E1 (name forms in the evals' accepted notes project) |
+| S17 | Step workers are per slice: a worker token's grant names one slice and one step (`api/workers.go:29` `WorkerGrant{Slice, Step, CallToken}`, grant files `:81`); `Workers` maps slice to step to endpoint (`:131`); registerWorker refuses a slice that does not exist (`:273`); `startRun` refuses WorkersNotReady while a step has no live worker for the slice (`:250`, contract `startRun`); `ap build-workers <slice> <project>` asks the engine for the slice, makes the project folder and starts and registers one container per step (`src/deploy/ap:1362`, `src/cli/contract.md`) |
 | S16 | Constitution: Principle VI (OSS first; custom code needs a written justification), XII (every store query scoped by tenant), XIV (fail closed), XVII (one generic engine per kind of thing), XX (a proven solution is captured as a deterministic asset and reused); Engineering Principles "Values that check themselves", "Single owner for rules" |
 
 ## E1. Name forms in an accepted project
@@ -76,8 +77,12 @@ against the owner's answer).
 project worker writes them into the step's writable paths with a new call, `writeStep`, before the
 step's checks run; after the checks pass, `commitStep` commits as for any step, and `restoreStep`
 before an attempt restores as before (S5). `fill` needs no registered step worker; the engine's
-readiness check skips it. `ap build-workers` is unchanged (S9): it still starts the base
-pattern's containers, and a captured run leaves the agent ones unused.
+readiness check skips it. For a build, `ap build-workers` is unchanged (S9): it still starts the
+base pattern's containers for the slice, and a captured run leaves the agent ones unused. A proof
+has no slice (R5), so its procedure steps' workers are keyed by the captured pattern instead (T001
+finding, *owner*): `ap build-workers <captured pattern> <project>` starts and registers them as for
+a slice, a grant and a registration name a slice or a captured pattern, and `ap prove <captured
+pattern> <project>` runs it first, as `ap build` does (S17).
 
 **Rationale**: the project worker is already the only writer of a project besides the step
 containers, and already writes stored files for a reused step (S5); the engine stays without a
@@ -161,7 +166,8 @@ accepted project by named values is what none of them does; it is one small engi
 
 **Decision**: a proof is a run of the captured pattern's copy of the source slice (so it works
 after the slice is erased) under the captured pattern with each parameter's source value, in a
-new project folder, recorded like any run (its own run ID, `RunStarted` naming the captured
+new project folder the developer names (as for `startRun`), on step workers registered for the
+captured pattern (R2, S17), recorded like any run (its own run ID, `RunStarted` naming the captured
 pattern, `source_run` and `proof: true`, and no slice). It passes when the run ends done and the
 `generated-code`, `tests`, `code` and `witnesses` outputs' hashes equal the source run's (*owner*:
 the proof shows the captured pattern reproduces its source under the current method; whether other
@@ -176,7 +182,10 @@ followed as an operation.
 cancellation (features 001, 002); the method rule reuses feature 006's identity (S6).
 
 **Alternatives considered**: comparing files only (would not prove the checks still pass under the
-current method); a proof per later slice (that is the run itself, judged by its checks).
+current method); a proof per later slice (that is the run itself, judged by its checks). For the
+proof's step workers (T001 finding, *owner*): a new slice made for each proof from the captured
+copy (proof slices in the developer's slice list, erasable, and two client calls per proof); the
+source slice's workers (no proof after the slice is erased, against ADR 0095).
 
 ## R6. Which pattern a run uses (FR-010)
 
@@ -201,7 +210,12 @@ value, with the reason (*owner*).
 Erasure shows what it will erase (the captured pattern, the artifacts only it holds) before the
 client asks for confirmation (Principle XVII). The terminal client gains `ap capture`, `ap patterns`,
 `ap pattern`, `ap prove`, `ap approve-pattern`, `ap withdraw-pattern` and `build --pattern`. The
-check contract gains `writeStep` (R2).
+check contract gains `writeStep` (R2). The proof takes `{project}`, refused as `startRun` refuses
+a project (InvalidProject, ProjectExists) and while its step workers are not ready
+(WorkersNotReady) or another run is active (RunActive); registerWorker and its `Worker` name a
+slice or a captured pattern; a proof's `Run` and `RunStarted` have no `slice` and carry `proof`;
+an operation's `target` may be a captured pattern's ID. The launcher intercepts `prove` as it
+intercepts `build` (R2).
 
 **Rationale**: Principles III, IV and XV; the existing operation workflow runs any job (S7).
 

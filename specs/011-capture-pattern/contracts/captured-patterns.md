@@ -15,7 +15,7 @@ Turn a done run into a pattern that builds later slices of the same kind with no
 | `GET /captured-patterns` | lists captured patterns, newest first | 200, paginated with opaque page tokens |
 | `GET /captured-patterns/{id}` | one captured pattern: parameters with their places, proofs, approval, state, usable | 200; 404 |
 | `PUT /captured-patterns/{id}/parameters` `{parameters}` | replaces the parameters of a proposed or proven one (removes, adds) | 202 operation; fails `ParameterRefused` naming the parameter and why; 409 when approved |
-| `POST /captured-patterns/{id}/proofs` | proves it under the current method | 202 operation, its result names the proof run |
+| `POST /captured-patterns/{id}/proofs` `{project}` | proves it under the current method, into the new project folder `project`, on the step workers registered for the captured pattern | 202 operation, its target the proof run; refused at once as `startRun` refuses a project, while its step workers are not ready (`WorkersNotReady`) or another run is active (`RunActive`) |
 | `POST /captured-patterns/{id}/approval` | approves it | 202 operation; fails `ProofRequired` when its latest proof did not pass under the current method |
 | `POST /captured-patterns/{id}/withdrawal` | stops its use by new runs | 202 operation |
 | `DELETE /captured-patterns/{id}` | erases it and the artifacts only it holds | 202 operation; the client first shows what will be erased and asks for confirmation |
@@ -32,6 +32,9 @@ the parameters' values; a fitting captured pattern that needs a new proof is nam
 The answer also names each captured pattern that did not fit only because of a refused value,
 with the parameter and why. A named captured pattern that does not fit answers
 `PatternDoesNotFit` with the first place the slice differs or the value refused; a withdrawn one `CapturedPatternWithdrawn`; one that needs a proof `ProofRequired`.
+
+A proof's run has no `slice` and has `proof: true`. `registerWorker` and its `Worker` name a slice
+or a captured pattern (the grant's), so `ap build-workers` can start a proof's step workers.
 
 ## Fit and fill (package `engine/captured`)
 
@@ -58,7 +61,7 @@ the step's writable paths (each path must match one; otherwise 400 naming it) wi
 | `ap patterns` | `GET /captured-patterns` |
 | `ap pattern <id>` | `GET /captured-patterns/{id}`: parameters and places, proofs, state |
 | `ap pattern <id> --drop <param>` / `--add <value>` | `PUT /captured-patterns/{id}/parameters` |
-| `ap prove <id>` | `POST /captured-patterns/{id}/proofs` |
+| `ap prove <id> <project>` | the launcher runs `ap build-workers <id> <project>` first, as for `build`; then `POST /captured-patterns/{id}/proofs`, following the proof run |
 | `ap approve-pattern <id>` | `POST /captured-patterns/{id}/approval` |
 | `ap withdraw-pattern <id>` | `POST /captured-patterns/{id}/withdrawal` |
 | `ap erase-pattern <id>` | shows what will be erased, asks for confirmation, then `DELETE /captured-patterns/{id}` |

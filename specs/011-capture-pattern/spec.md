@@ -63,6 +63,12 @@ reused only under the method that judged them), [feature 009](../009-no-hard-cod
   run again under a new name and withdraws the old one (owner; FR-007). I1: every occurrence of a
   case form is replaced wherever it sits, inside a word too (`note_id` becomes `task_id`), as the
   owner's case-form answer says (FR-003).
+- Found at T001 (writing the contract): step workers are started, granted and registered per
+  slice, and a proof has no slice (ADR 0095), so a proof's procedure steps had no workers and its
+  project folder no name. Q: How does a proof get its project and step workers? → A: the
+  developer names a new project folder for the proof, as for a build; the step workers are
+  started and registered for the captured pattern, as they are for a slice, before the proof
+  starts; a proof's run has no slice and is marked as a proof (owner; FR-004).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -225,8 +231,9 @@ use the captured pattern and says it needs a new proof; proving it again restore
 #### Proof and approval
 
 - **FR-004**: The platform MUST prove a proposal by building the captured pattern's copy of the
-  source slice from it, with the source values and no model call, running every check the
-  captured pattern declares. The proof MUST pass only when every check passes and every filled and
+  source slice from it into a new project folder the developer names, with the source values and
+  no model call, running every check the captured pattern declares. The proof's step workers are
+  those of the captured pattern, never of a slice, so a proof needs no slice. The proof MUST pass only when every check passes and every filled and
   generated file equals the source run's accepted one. The proof shows that the captured pattern
   reproduces its source under the current method; whether other values work is judged by each
   later run's checks.

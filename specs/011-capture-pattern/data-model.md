@@ -36,7 +36,8 @@ Two parameters equal in any case form are refused (`ParameterRefused`).
 
 | Field | Meaning |
 |-------|---------|
-| `run` | the proof's run ID (a run of the source slice under the captured pattern with the source values) |
+| `run` | the proof's run ID (a run of the captured pattern's copy of the source slice under the captured pattern with the source values) |
+| `project` | the new project folder the developer named for it |
 | `method` | the method identity it ran under |
 | `outcome` | `passed`, `failed` or `running` |
 | `failures` | each failing check (step, check, reason) and each differing file (step, path) |
@@ -57,7 +58,19 @@ time per captured pattern; another answers `CapturedPatternBusy`. While a newer 
 proof has not passed, so the captured pattern is unusable until it does (fail closed). Erasure is
 refused with `CapturedPatternBusy` while a run built from it, or its proof, has not ended.
 
+## Step workers
+
+A proof's step workers are keyed by the captured pattern, as a build's are keyed by its slice
+(research R2, S17): a grant and a registration name either a slice or a captured pattern, never
+both; a `fill` step needs none.
+
 ## Run (added fields)
+
+A proof's run has no `slice` (in `Run` and in `RunStarted`) and has `proof: true`; every other
+run keeps its `slice`. A captured-pattern operation's `target` is the captured pattern's ID.
+The run (`getRun`, readable as soon as `startRun` answers) carries the pattern choice: `pattern`,
+`pattern_reason`, and for a captured pattern `parameters` and `source_run`, plus the captured
+patterns that fit but need a new proof and those refused only for a value, each with the reason.
 
 `RunStarted` gains, additively: `pattern` names the captured pattern's `id@version` as before for
 any pattern; `pattern_reason` (`base`, `fits`, `chosen`); for a captured pattern `parameters`
