@@ -444,7 +444,7 @@ passes at pass^3 on the changed pattern (FR-009, FR-010, SC-003; research R6).
   Done: the steps README already said no case is quarantined (T016); N-051, N-052 and N-055 keep
   their scope and state, with a dated paragraph on what feature 010 serves; okf check OK (160
   concepts)
-- [ ] T022 Final fresh review of the feature, judging the CI run of the head and the paid evals
+- [x] T022 Final fresh review of the feature, judging the CI run of the head and the paid evals
   run; `/speckit-analyze` until no CRITICAL or HIGH; `/speckit-converge` until it finds nothing
   Round 1 at 1152cee: final review (fresh Sonnet, read-only, own worktree): no blocking finding;
   `go test ./evals/steps/ -run GraderRequests` ok (67 s); `go test ./checks/` failed only on the
@@ -454,6 +454,10 @@ passes at pass^3 on the changed pattern (FR-009, FR-010, SC-003; research R6).
   0 HIGH; E1 and E2 (how FR-010 and US2 scenario 4 are met) recorded in research R6, I1 (the
   check reads a body before the middlewares) in the plan's threat model; T1 (no CI run of the
   docs-only head), T2 (status set at T023), T3, T4, D1, S1 accepted as they are
+  Round 2 at 77a3444 (analyze, fresh Sonnet, open findings and changed lines only): E1, E2 and I1
+  resolved; 0 CRITICAL, 0 HIGH, 0 MEDIUM; one LOW (`edit-judging-tests` judges the tests, not the
+  generated code) fixed in R6. `/speckit-converge` for the feature: converged, nothing appended
+  (every FR and SC has its built task; the reviews of US1-US3 and the final review left no gap)
 - [ ] T023 Merge: `evals-current` on the branch lists no pending suite; the owner fast-forwards
   `main`; remove the branch from environment `dev`'s policies; delete the branch with the owner's
   OK; the spec's status says merged

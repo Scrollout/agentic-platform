@@ -249,8 +249,8 @@ wrap is in the registration, which every entry point reaches. The clean referenc
     service refuses them (T022 analyze E1);
   - US2 scenario 4 (a code step whose work changes the generated request reading is rejected) is
     GeneratedCodeUnchanged over the generate step's `writable` globs, which cover
-    `gen/requests.go` and `gen/request_shapes.go` (T028's test), and the planted
-    `edit-judging-tests`; code that reads a body itself runs only after the request check has
+    `gen/requests.go` and `gen/request_shapes.go` (T028's test); the planted
+    `edit-judging-tests` is the same rule's sibling for the tests (`TestsUnchanged`); code that reads a body itself runs only after the request check has
     refused a malformed one, so it cannot let one through (T020, T022 analyze E2);
 - **Rationale**: FR-007, FR-009, FR-010; Principle XIX; S12.
 - **Cost**: one paid evals dispatch (analyst and steps suites) with the owner's go-ahead; one
