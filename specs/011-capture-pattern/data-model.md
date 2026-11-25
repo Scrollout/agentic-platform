@@ -13,7 +13,7 @@ artifacts in its content-addressed store.
 | `source` | source run ID, source slice ID | the run ended done (FR-001) |
 | `slice` | the source slice's approved parts (goals, rules, examples, terms, contract) | copied at capture; kept when the slice is erased |
 | `declaration` | the base pattern with each agent step's worker `procedure:fill`, `limits.attempts` 1 and `limits.review_rounds` 1 for the whole declaration (the schema has no per-step attempts), and the review step without FindingsCarryEvidence and NoBlockingFindingOpen and with outputs `[witnesses]` | valid against `pattern.schema.json` (research R1) |
-| `template` | per filled output (`tests`, `code`, `witnesses`): the accepted output's artifact hash | held by the captured pattern (research R3) |
+| `template` | per filled output (`tests`, `code`, `witnesses`): the artifact hash of the step's last acceptance in the source run, `StepAccepted` or `ResultReused` alike, after any review-round fix (so it equals the files the project ended with) | held by the captured pattern (research R3) |
 | `proof_slice` | the slice ID of its proof slice, absent until the first proof request and cleared when that slice is erased | an approved slice made from `slice`; its runs are the proofs (research R5) |
 | `parameters` | list of Parameter | FR-003 |
 | `proofs` | list of Proof, newest last | FR-005 |
@@ -107,7 +107,9 @@ A captured pattern is **usable** when it is `approved` and its latest proof pass
 engine's current method; a method change or a later failing proof makes it unusable until a new
 proof passes (FR-011). Only a usable captured pattern can be chosen at `startRun`; an
 approved one that is not usable is still judged for fit, only to be named in `not_used` as
-`needs-proof`; a proposed, proven or withdrawn one is judged only when named. One operation at a
+`needs-proof`; a proposed, proven or withdrawn one is judged only when named. The fit decides
+first: a fit refused only for a value gives `refused-value`; a fit that passes for a pattern that
+is not usable gives `needs-proof`. One operation at a
 time per captured pattern; another answers `CapturedPatternBusy`. While a newer proof runs, the latest
 proof has not passed, so the captured pattern is unusable until it does (fail closed). Erasure is
 refused with `CapturedPatternBusy` while a run built from it, or its proof, has not ended; erasing

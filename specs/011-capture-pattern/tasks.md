@@ -191,7 +191,11 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   fixed; 0 CRITICAL, 0 HIGH; 1 MEDIUM (D1 "only a usable captured pattern is judged" against
   `needs-proof`), 3 LOW (L1 Proof slice in the spec's terms; T1 T014 and T028 owned by T015 and
   T029 on CI; F1 `Fit`'s refusal result); fixed at the source (spec; data model; contract draft;
-  T015, T029). Round 22 owed.
+  T015, T029). Round 22 (fresh Sonnet, at 793ead2): D1, L1, T1,
+  F1 fixed; 0 CRITICAL, 0 HIGH; 2 MEDIUM (A1 the template hashes from a reused or fixed step; A2
+  the new operations' callers untested), 2 LOW (A3 T013's order case limited to T015's refusals;
+  A4 the fit decides `refused-value` before `needs-proof`); fixed at the source (research R3;
+  data model; T001, T005, T013, T018, T027). Round 23 owed.
 
 ---
 
@@ -210,7 +214,9 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   choice (data model, Run); `startRun`'s description gives the refusal order of the contract
   draft; `x-error-codes` per operation: `startRun` and `replayRun` add `CapturedPatternWithdrawn`
   and `ProofRequired` (409), `startRun` also `CapturedPatternNotApproved`, both add `CapturedPatternBusy` (a proof's start or a proof run's
-  replay), and `startRun` NotFound for an unknown `pattern`; each id-addressed captured-pattern call 404 `NotFound`; `captureRun` 404,
+  replay), and `startRun` NotFound for an unknown `pattern`; each id-addressed captured-pattern call 404 `NotFound`; every new operation's `security` is
+`clientToken` only (the list and `getCapturedPattern` also `pageToken`, as other reads), each
+with its `x-operation-name`; `captureRun` 404,
   409 `RunNotDone`, `RunNotCapturable`, `CapturedPatternExists`; `replaceParameters` 409
   `CapturedPatternApproved`, `CapturedPatternWithdrawn`, `CapturedPatternBusy`, operation
   `ParameterRefused`; `makeProofSlice` 409 `CapturedPatternWithdrawn`, `CapturedPatternBusy`,
@@ -335,7 +341,11 @@ proposed and adding the derived value works; the proof ends passed with no model
   feature 011 (no part hashes) answers `RunNotCapturable` too; each call answers per state as the
   data model's state table says for `proposed` in the rows US1 owns at T007 (`replaceParameters`,
   `approveCapturedPattern`, the busy cases; `makeProofSlice` is T027's, withdrawal and erasure
-  T018's); new `src/engine/api/captured_limits_contract_test.go`: the limits and
+  T018's); the template hashes equal the final project's files for a run whose `tests` and
+  `code` were `ResultReused` and for a run whose review round's fix changed `code`;
+  `approveCapturedPattern`, `replaceParameters` and `captureRun` sent with a worker or page token
+  answer 403 and change nothing (`withdrawCapturedPattern` and `eraseCapturedPattern` in T018,
+  `makeProofSlice` in T027); new `src/engine/api/captured_limits_contract_test.go`: the limits and
   the `parameter_name`, `parameter_value` and `capture_name` rules `engine/captured` uses equal
   the loaded contract's, and a planted
   contract copy with one limit changed fails that comparison; a capture `name` outside
@@ -506,7 +516,7 @@ pass, three runs give the same files.
   refused value; without `pattern`, a captured pattern refused only for a value is named in the
   run with the reason and the base pattern is used; `startRun` answers 202 with its operation,
   and the `Run` and `RunStarted` carry `pattern` (`<id>@<version>`), `pattern_reason` (`base`,
-  `fits`, `chosen`), the parameters' values and `source_run`; the refusals come in the contract's
+  `fits`, `chosen`), the parameters' values and `source_run`; the refusals T015 reaches come in the contract's
   order; resume and take-over of a captured run keep its pattern and parameters, and a replay
   uses the same captured pattern, refused with `ProofRequired` when its latest proof failed (a
   run that is not a proof; a proof run's replay follows the proof rule, T027; the withdrawn

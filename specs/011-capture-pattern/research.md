@@ -98,7 +98,10 @@ a worker per step and `build-workers` to know which pattern a run uses, S9); wri
 
 ## R3. Where captured patterns are kept (FR-002, FR-007, FR-012)
 
-**Decision**: the engine store keeps captured patterns as records beside slices: the declaration
+**Decision**: the template's hashes are read from the source run's record: for each filled
+output, the artifacts of its step's last acceptance, `StepAccepted` or `ResultReused` (a reused
+result, feature 006), after any review-round fix (analyze round 22). The engine store keeps
+captured patterns as records beside slices: the declaration
 (the base pattern's steps with `fill` workers, R1), the source slice's approved parts, the
 parameters, the template's artifact hashes, every proof, the approval and the state. The template
 artifacts are held by the captured pattern as well as by the source slice (S4), so erasing the
