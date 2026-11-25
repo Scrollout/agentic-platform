@@ -446,6 +446,14 @@ passes at pass^3 on the changed pattern (FR-009, FR-010, SC-003; research R6).
   concepts)
 - [ ] T022 Final fresh review of the feature, judging the CI run of the head and the paid evals
   run; `/speckit-analyze` until no CRITICAL or HIGH; `/speckit-converge` until it finds nothing
+  Round 1 at 1152cee: final review (fresh Sonnet, read-only, own worktree): no blocking finding;
+  `go test ./evals/steps/ -run GraderRequests` ok (67 s); `go test ./checks/` failed only on the
+  host's known `godog ran 0 scenarios` (green in CI); two suggestions filed as backlog T204 (the
+  engine's test templates hold an earlier `gen/requests.go`) and T205 (an oversized number is
+  refused by oapi-codegen's decoder, not the declared body). Analyze (fresh Sonnet): 0 CRITICAL,
+  0 HIGH; E1 and E2 (how FR-010 and US2 scenario 4 are met) recorded in research R6, I1 (the
+  check reads a body before the middlewares) in the plan's threat model; T1 (no CI run of the
+  docs-only head), T2 (status set at T023), T3, T4, D1, S1 accepted as they are
 - [ ] T023 Merge: `evals-current` on the branch lists no pending suite; the owner fast-forwards
   `main`; remove the branch from environment `dev`'s policies; delete the branch with the owner's
   OK; the spec's status says merged

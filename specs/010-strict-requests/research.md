@@ -244,6 +244,14 @@ wrap is in the registration, which every entry point reaches. The clean referenc
     approval for `cases.go`, `quarantine_test.go`, `quarantine_print_evals_test.go`); a new
     planted scenario `malformed-request-accepted` is not needed, since the shape check is
     generated and the code cannot change it (R1): the engine's procedure tests prove it.
+  - FR-010's case is that grader: `GradeCode` runs it on the built project of every code case
+    of the steps evals, so each of them sends the malformed requests and is accepted only when the
+    service refuses them (T022 analyze E1);
+  - US2 scenario 4 (a code step whose work changes the generated request reading is rejected) is
+    GeneratedCodeUnchanged over the generate step's `writable` globs, which cover
+    `gen/requests.go` and `gen/request_shapes.go` (T028's test), and the planted
+    `edit-judging-tests`; code that reads a body itself runs only after the request check has
+    refused a malformed one, so it cannot let one through (T020, T022 analyze E2);
 - **Rationale**: FR-007, FR-009, FR-010; Principle XIX; S12.
 - **Cost**: one paid evals dispatch (analyst and steps suites) with the owner's go-ahead; one
   resynthesis of the step sets.
