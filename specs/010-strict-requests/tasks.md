@@ -355,18 +355,22 @@ malformed requests are refused for it (FR-006, FR-007, FR-011, FR-012; research 
   `requestShapingKeywords` in `shapes.go` (unused before T012 too): T033. CI 45611941307 at d6fee60
   (research Runs). `/speckit-converge` for US2 (at 17db455): converged, nothing appended (US2
   scenarios 1-5, FR-006, FR-007, FR-011, FR-012 met; T031-T033 already hold the review's work)
-- [ ] T031 [US2] Owner approval to make the comment of `src/engine/cmd/engine/pattern_values_test.go`
+- [x] T031 [US2] Owner approval to make the comment of `src/engine/cmd/engine/pattern_values_test.go`
   lines 3-5 name feature 010's pattern 1.2.0 without citing a data-model section that does not
   exist (S1)
-- [ ] T032 [US2] Test author (new file `src/engine/checks/fit_requests_more_test.go`): a 400
+- [x] T032 [US2] Test author (new file `src/engine/checks/fit_requests_more_test.go`): a 400
   `message` with `readOnly` or `default` passes RefusalDeclared; a 400 whose only media type is
   `application/json; charset=utf-8` fails it; a chain of two or more `$ref`s inside the 400 object
   schema is followed, and a loop in it ends and fails; a YAML merge key or a path-item `$ref` that
   hides a request body fails OnlyHttpOperations while the two new conditions pass (the fit result
   is not fit)
-- [ ] T033 [US2] Code author: `requestShapingKeywords` in `src/engine/checks/shapes.go` is unused;
+- [x] T033 [US2] Code author: `requestShapingKeywords` in `src/engine/checks/shapes.go` is unused;
   use it where the walk decides a shaping key, or remove it (one owner of the keyword list either
   way); T009, T003 and T024 stay green
+  Done (T031-T033): 6513172 (T031, test author Haiku, owner-approved wording, Tests-approved-by
+  2026-11-25), 587ee88 (T033, Opus: the variable removed, the switch owns the shaping keys;
+  method digest c928fbf8), c7ea75d (T032, Sonnet: 6 tests, 30 cases, each seen failing on a
+  planted fault; no defect found); T003, T009, T024 and T032 green locally
 
 ---
 
