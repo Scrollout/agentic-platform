@@ -252,6 +252,7 @@ wrap is in the registration, which every entry point reaches. The clean referenc
 
 | Commit | Run | Result |
 |--------|-----|--------|
+| e061694 (US1, T001-T007) | 45581805361 | Go unit tests and vet, Python script and hook tests, contracts lint, API breaking changes, knowledge, markdown, layout, secrets, dependencies, module boundaries, gateway, evals-current green; every recorded-model job (planted, Story 2, end-to-end, service tests with the recorded model) failed only on the tests step's recording miss (`Request was not matched`, the generated files changed), expected until T017 (plan Exceptions); the stopped-run jobs cancelled |
 
 ## Threat-model input
 
