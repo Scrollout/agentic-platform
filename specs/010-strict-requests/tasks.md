@@ -419,10 +419,18 @@ passes at pass^3 on the changed pattern (FR-009, FR-010, SC-003; research R6).
   among them; record the run in research; a failing case is assessed as a defect against agreed
   intent with the owner (ADR 0035), never retried until it passes
   Done: evals 45667754374 at 4a4a6f6, 42 cases pass^3, `review/clean` counted (research Runs)
-- [ ] T020 [US3] Fresh review of US3; `/speckit-converge` for US3. US2 scenario 4 (a change to the
+- [x] T020 [US3] Fresh review of US3; `/speckit-converge` for US3. US2 scenario 4 (a change to the
   generated code is rejected) is the existing GeneratedCodeUnchanged cases and planted
   `edit-judging-tests`; scenario 5 (no reuse under the new method) is feature 006's
   `src/engine/machine/reuse_method_test.go`
+  Review round 1 (fresh Sonnet, read-only, own worktree at a9b4514): no blocking finding, so US3's
+  review converged in 1 round; `go test ./evals/steps/ -run 'GraderRequests|Quarantine'` ok
+  (42 s). S1 (the grader failing alone through `GradeCode` untested): already recorded under
+  T016, closed: no fixture passes every earlier grader and fails only this one. S2 (the grader
+  fixes `POST /notes` and `text`): closed: the README section names them and another contract
+  fails closed. S3 (a status of 1024 or more read by its low ten bits): closed: stated in the doc
+  comment, no HTTP status reaches it. `/speckit-converge` for US3: converged, nothing appended
+  (FR-009's closing of T202 is T021)
 
 ---
 
