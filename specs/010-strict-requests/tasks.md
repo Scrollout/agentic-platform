@@ -458,9 +458,11 @@ passes at pass^3 on the changed pattern (FR-009, FR-010, SC-003; research R6).
   resolved; 0 CRITICAL, 0 HIGH, 0 MEDIUM; one LOW (`edit-judging-tests` judges the tests, not the
   generated code) fixed in R6. `/speckit-converge` for the feature: converged, nothing appended
   (every FR and SC has its built task; the reviews of US1-US3 and the final review left no gap)
-- [ ] T023 Merge: `evals-current` on the branch lists no pending suite; the owner fast-forwards
+- [x] T023 Merge: `evals-current` on the branch lists no pending suite; the owner fast-forwards
   `main`; remove the branch from environment `dev`'s policies; delete the branch with the owner's
-  OK; the spec's status says merged
+  OK; the spec's status says merged. Done 2026-11-25: check run 45691413029 at c24f755 all green;
+  `evals-current` names no pending suite (base 4a4a6f6, evals 45667754374); owner go-ahead; main
+  fast-forwarded to c24f755; branch removed from `dev`'s policies; branch deleted with the owner's OK
 
 ---
 

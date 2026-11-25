@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-25
 
-**Status**: Draft
+**Status**: Implemented (merged 2026-11-25)
 
 **Input**: Backlog task T202 (feature 009 evals run 45481119822, owner 2026-11-24; owner chose it
 as the next work, 2026-11-25). The service the catalogue's pattern delivers does not enforce the
