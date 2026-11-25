@@ -1,8 +1,8 @@
 package main
 
-// T012 (feature 009): the pattern api-feature-go is version 1.1.0, and its generate and code
+// T012 (feature 009): the pattern api-feature-go is version 1.2.0, and its generate and code
 // steps judge the declared values and the deployment values (data-model.md, "Pattern
-// api-feature-go 1.1.0"). The engine loads the copy it embeds (`pattern`, setup.go), which
+// api-feature-go 1.2.0"). The engine loads the copy it embeds (`pattern`, setup.go), which
 // scripts/generate.sh copies from the source file src/catalogue/api-feature-go/pattern.yaml; the
 // source file is the authoritative one (generate.sh --check proves the copy matches it), so both
 // are judged.
@@ -40,14 +40,14 @@ func TestPatternDeclaresTheValueChecks(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantChecks := map[string][]string{
-		"generate": {"GenerationRepeatable", "GeneratedCodeBuilds", "DeclaredValuesGenerated", "DependenciesAllowed", "ScopeKept"},
+		"generate": {"GenerationRepeatable", "GeneratedCodeBuilds", "DeclaredValuesGenerated", "RequestShapesGenerated", "DependenciesAllowed", "ScopeKept"},
 		"code": {"ScopeKept", "TestsUnchanged", "GeneratedCodeUnchanged", "ContractMatchesApproval", "DependenciesAllowed",
 			"DeclaredValuesNotRepeated", "DeploymentValuesConfigured", "AllTestsPass"},
 	}
 	for name, b := range map[string][]byte{"the embedded pattern": pattern, "the source pattern.yaml": source} {
 		version, checks := patternVersionAndChecks(t, name, b)
-		if version != "1.1.0" {
-			t.Errorf("%s: version = %q, want 1.1.0", name, version)
+		if version != "1.2.0" {
+			t.Errorf("%s: version = %q, want 1.2.0", name, version)
 		}
 		for step, want := range wantChecks {
 			if got := checks[step]; !reflect.DeepEqual(got, want) {

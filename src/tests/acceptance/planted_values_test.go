@@ -37,13 +37,26 @@ const (
 		"        content:\n" +
 		"          application/json:\n" +
 		"            schema: {$ref: '#/components/schemas/NewNote'}\n"
+	// createNote's refusal: the content-less 400 of the example contract, and what replaces it so
+	// the changed contract still fits under RefusalDeclared (a body naming the Error schema).
+	emptyRefusal    = "        '400': {description: empty text}\n"
+	declaredRefusal = "        '400':\n" +
+		"          description: empty text\n" +
+		"          content:\n" +
+		"            application/json:\n" +
+		"              schema: {$ref: '#/components/schemas/Error'}\n"
 	newNoteSchema = "components:\n" +
 		"  schemas:\n" +
 		"    NewNote:\n" +
 		"      type: object\n" +
 		"      required: [text]\n" +
 		"      properties:\n" +
-		"        text: {type: string, maxLength: 200}\n"
+		"        text: {type: string, maxLength: 200}\n" +
+		"    Error:\n" +
+		"      type: object\n" +
+		"      required: [message]\n" +
+		"      properties:\n" +
+		"        message: {type: string}\n"
 )
 
 // withTextLimit returns the example contract with maxLength 200 declared on the new note's text.
@@ -51,9 +64,13 @@ const (
 // of the example is noticed here rather than as a different scenario.
 func withTextLimit(t *testing.T, contract string) string {
 	t.Helper()
+	if strings.Count(contract, emptyRefusal) != 1 {
+		t.Fatalf("the example contract has no single content-less '400': {description: empty text} for createNote to replace:\n%s", contract)
+	}
 	if strings.Count(contract, createNoteAnchor) != 1 || strings.Contains(contract, "components:") || !strings.HasSuffix(contract, "\n") {
 		t.Fatalf("the example contract is not the one this scenario adds maxLength to (createNote with x-rules [R-2, R-3], no components, ending in a newline):\n%s", contract)
 	}
+	contract = strings.Replace(contract, emptyRefusal, declaredRefusal, 1)
 	return strings.Replace(contract, createNoteAnchor, createNoteBody, 1) + newNoteSchema
 }
 

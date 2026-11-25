@@ -81,7 +81,7 @@ func TestUS2(t *testing.T) {
 		}
 		// Principle X: acknowledged only after it is recorded. The run and its first event answer at once.
 		r := getRun(t, l, op.Target)
-		if r.ID != op.Target || r.Slice != slice || r.Project != "notes" || r.Operation != op.ID || r.Pattern != "api-feature-go@1.1.0" {
+		if r.ID != op.Target || r.Slice != slice || r.Project != "notes" || r.Operation != op.ID || r.Pattern != "api-feature-go@1.2.0" {
 			t.Errorf("getRun right after the 202 answers %+v, want the run recorded for %s, project notes, operation %s", r, slice, op.ID)
 		}
 		if evs := events(t, l, op.Target); len(evs) == 0 || evs[0].Kind != "RunStarted" {

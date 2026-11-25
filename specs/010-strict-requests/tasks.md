@@ -284,7 +284,8 @@ malformed requests are refused for it (FR-006, FR-007, FR-011, FR-012; research 
   `enum` or `const`; the key written `400` and `"400"` both count, `4XX` and `default` alone do
   not; a `$ref` loop in the 400 schema ends (visited set); the 400 object schema with
   `minProperties`, `not`, `allOf`, `const` or `enum`; both `400` and `"400"` present; a `400`
-  given by a `$ref` to `#/components/responses/...` is followed. RequestBodiesSupported passes on the notes contract and on a
+  given by a `$ref` to `#/components/responses/...` is followed (`400` and `"400"` together
+  are one duplicate key to the contract's reader: unreadable, so it fails closed). RequestBodiesSupported passes on the notes contract and on a
   schema using every allowed keyword, annotation and an `x-` key; fails, naming the location, for
   each of `allOf`, `anyOf`, `oneOf`, `not`, `if`, `then`, `else`, `dependentSchemas`,
   `dependentRequired`, `patternProperties`, `propertyNames`, `prefixItems`, `contains`,
@@ -293,7 +294,8 @@ malformed requests are refused for it (FR-006, FR-007, FR-011, FR-012; research 
   through a `$ref`, `nullable: true`, a shaping key beside a `$ref`, a name twice in
   `required`, a `requestBody` without `content`, `type: [integer, number]` and `[string, integer, "null"]`
   (only one type and `"null"` may be listed), a body with no `schema`, a `type` of `str` or `[string,
-  date]`, a recursive schema and a `$ref` loop (each ends, visited set), and a `content` with
+  date]`, a `$ref` loop (it ends, visited set; a recursive schema passes and its walk ends, as
+  `RequestShapes` builds it), and a `content` with
   `text/plain` alone or beside `application/json`, an empty type list, an unquoted YAML `null`
   in a type list, a boolean schema, a YAML anchor or alias; a property named `oneOf` or
   `nullable` and an `x-` value holding `allOf` pass (names, not keywords); both

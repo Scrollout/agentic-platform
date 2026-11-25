@@ -24,7 +24,7 @@ func TestChecksCarryThePatternFlag(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fromPattern := map[string]bool{"ContractIsOpenApi31": true, "OnlyHttpOperations": true, "ContractRefsLocal": true, "RulesNameOneSystem": true}
+	fromPattern := map[string]bool{"ContractIsOpenApi31": true, "OnlyHttpOperations": true, "ContractRefsLocal": true, "RulesNameOneSystem": true, "RefusalDeclared": true, "RequestBodiesSupported": true}
 	seen := map[string]bool{}
 	for _, c := range r.Slice.Checks {
 		seen[c.Check] = true

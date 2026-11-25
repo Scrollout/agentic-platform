@@ -233,6 +233,22 @@ var patternCases = []pcase{
 			}
 			return ""
 		}},
+	// T010 (feature 010): RequestShapesGenerated judges gen/request_shapes.go against the request
+	// bodies of the approved contract (here one required body with a required string member `text`).
+	{check: "RequestShapesGenerated", step: step("generate", genWritable, []string{"generated-code"}, nil, nil),
+		base: func(t *testing.T, dir string, _ bool) {
+			copyTree(t, filepath.Join("testdata", "requestshapes", "clean"), dir)
+		},
+		mut: func(t *testing.T, dir string, b map[string]any) {
+			b["approved"] = approvedParts(string(readTestdata(t, "requestshapes", "contract.yaml")), approvedExamples(t))
+		},
+		change: func(t *testing.T, dir string, planted bool) string {
+			if planted {
+				appendTo(t, dir, "gen/request_shapes.go", "\nvar invented = 1\n")
+				return "gen/request_shapes.go"
+			}
+			return ""
+		}},
 	// DeclaredValuesNotRepeated judges the code step's files against the APPROVED contract (in the
 	// request), here one declaring maxLength 200; other literals (0, 1, a string) are not judged.
 	{check: "DeclaredValuesNotRepeated", step: step("code", codeWritable, []string{"code"}, nil, nil),

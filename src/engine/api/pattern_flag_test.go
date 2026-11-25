@@ -22,7 +22,7 @@ func TestGetSliceChecksCarryPatternFlag(t *testing.T) {
 	if err := json.Unmarshal(r.Body.Bytes(), &s); err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]bool{"ContractIsOpenApi31": true, "OnlyHttpOperations": true, "ContractRefsLocal": true, "RulesNameOneSystem": true}
+	want := map[string]bool{"ContractIsOpenApi31": true, "OnlyHttpOperations": true, "ContractRefsLocal": true, "RulesNameOneSystem": true, "RefusalDeclared": true, "RequestBodiesSupported": true}
 	seen := map[string]bool{}
 	for _, c := range s.Checks {
 		name, _ := c["check"].(string)

@@ -1,0 +1,21 @@
+openapi: 3.0.3
+info:
+  title: Notes
+  version: "1"
+paths:
+  /notes:
+    post:
+      operationId: createNote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text:
+                  type: string
+      responses:
+        "201":
+          description: created

@@ -31,9 +31,9 @@ import (
 	"testing"
 )
 
-var conditions = []string{"ContractIsOpenApi31", "OnlyHttpOperations", "ContractRefsLocal", "RulesNameOneSystem"}
+var conditions = []string{"ContractIsOpenApi31", "OnlyHttpOperations", "ContractRefsLocal", "RulesNameOneSystem", "RefusalDeclared", "RequestBodiesSupported"}
 
-var contractConditions = conditions[:3]
+var contractConditions = []string{"ContractIsOpenApi31", "OnlyHttpOperations", "ContractRefsLocal", "RefusalDeclared", "RequestBodiesSupported"}
 
 // repoPattern reads the real declaration, found by walking up to the repository's pattern file.
 func repoPattern(t *testing.T) []byte {
