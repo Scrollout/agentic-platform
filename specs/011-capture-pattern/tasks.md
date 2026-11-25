@@ -195,7 +195,10 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   F1 fixed; 0 CRITICAL, 0 HIGH; 2 MEDIUM (A1 the template hashes from a reused or fixed step; A2
   the new operations' callers untested), 2 LOW (A3 T013's order case limited to T015's refusals;
   A4 the fit decides `refused-value` before `needs-proof`); fixed at the source (research R3;
-  data model; T001, T005, T013, T018, T027). Round 23 owed.
+  data model; T001, T005, T013, T018, T027). Round 23 stopped by the owner (2026-11-26): the
+  gate has passed since round 7 and later rounds found only MEDIUM and LOW edge cases; the analyze
+  loop ends here. Edge cases found from now on go to the stories' fresh reviews and
+  `/speckit-converge`. Gate passed; T001 next.
 
 ---
 
