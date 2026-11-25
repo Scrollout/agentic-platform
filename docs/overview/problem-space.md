@@ -42,6 +42,13 @@ part of the need: N-003 (one Go pattern), N-052 (proposing a new pattern moved t
 and N-055 (the platform applies the spec's rules, tests and reviews, not yet the docs and
 decisions).
 
+Feature 010 (2026-11-25) serves N-051, N-052 and N-055 without changing their scope or state:
+a slice's delivered service refuses a request its contract does not allow by a generated check,
+not by the code agent's code (N-051); the check is a template engine over shapes derived from the
+contract, so no model writes it again (N-052); and the pattern's fit conditions apply the rule to
+every contract (N-055). Its stories pass in CI (check run 45638095111) and every counted eval case
+passes 3 of 3 trials (evals run 45667754374).
+
 N-054 (2026-11-23): `yes` by the owner for feature 008, which covers the platform's own eval
 suites; how the developer's own runs of a slice vary stays in scope for a later feature.
 `in progress` since feature 008's implementation (2026-11-23): every eval job shows each case's

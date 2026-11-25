@@ -155,6 +155,20 @@ Shipped by Story 2:
   [ADR 0084](/decisions/0084-declared-values-live-in-generated-code-and-are-never-repeated.md),
   [ADR 0085](/decisions/0085-deployment-values-come-only-from-declared-configuration.md),
   [ADR 0086](/decisions/0086-declared-values-file-has-its-own-drift-check.md)).
+  The delivered service refuses a request body its contract does not allow before the code step's
+  code runs: the pattern overrides oapi-codegen's handler template so every operation is wrapped
+  by the template's request check (`gen/requests.go`, standard library only), which reads the
+  request shapes the generate procedure derives from the approved contract into
+  `gen/request_shapes.go`, kept equal to it by RequestShapesGenerated. It answers a missing body,
+  invalid JSON, a name twice, a missing required member, a wrong type or, where the contract
+  closes an object, an undeclared member with `400 {"message": ...}`, and passes on only the
+  declared members under their exact names. Two fit conditions keep contracts to what it can
+  serve: RefusalDeclared (every operation with a request body declares that 400 body) and
+  RequestBodiesSupported (JSON bodies of simple shapes). Pattern `api-feature-go` runs them from
+  1.2.0 on, and the step evals' MalformedRequestsRefused grader judges the built service (feature
+  010; [ADR 0087](/decisions/0087-delivered-service-refuses-malformed-requests-before-its-code.md),
+  [ADR 0088](/decisions/0088-request-shapes-are-generated-and-drift-checked.md),
+  [ADR 0089](/decisions/0089-contracts-declare-the-refusal-and-simple-request-shapes.md)).
 
 Built for Story 2 (T053a, split into T053c to T053e, all done):
 

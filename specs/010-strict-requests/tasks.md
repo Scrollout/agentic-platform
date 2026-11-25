@@ -436,11 +436,14 @@ passes at pass^3 on the changed pattern (FR-009, FR-010, SC-003; research R6).
 
 ## Phase 5: Polish & cross-cutting
 
-- [ ] T021 Docs: `docs/architecture/overview.md` (the request check in the delivered service, the
+- [x] T021 Docs: `docs/architecture/overview.md` (the request check in the delivered service, the
   two fit conditions), `src/engine/README.md` (the check), `src/tests/evals/steps/README.md` (no
   case quarantined), N-051, N-052 and N-055 in `docs/overview/problem-space.md` (scope and state),
   backlog T202 checked `closed: feature 010` in `specs/backlog.md`, `docs/log.md`;
   `python3 scripts/okf.py check` reports OK
+  Done: the steps README already said no case is quarantined (T016); N-051, N-052 and N-055 keep
+  their scope and state, with a dated paragraph on what feature 010 serves; okf check OK (160
+  concepts)
 - [ ] T022 Final fresh review of the feature, judging the CI run of the head and the paid evals
   run; `/speckit-analyze` until no CRITICAL or HIGH; `/speckit-converge` until it finds nothing
 - [ ] T023 Merge: `evals-current` on the branch lists no pending suite; the owner fast-forwards
