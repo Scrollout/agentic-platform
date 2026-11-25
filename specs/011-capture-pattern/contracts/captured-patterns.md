@@ -14,7 +14,7 @@ Turn a done run into a pattern that builds later slices of the same kind with no
 | `POST /captured-patterns` `{run, name?}` (`name` `^[a-z0-9]+(-[a-z0-9]+)*$`, at most 40 characters; otherwise 400 InvalidRequest) | proposes a captured pattern from a run that ended done, with proposed parameters | 202 operation, its target the new captured pattern's ID; refused at once with `RunNotDone` (naming the run's state), `RunNotCapturable` (a run built under another base pattern version than the current one, a run built from a captured pattern, a proof, or a run whose slice changed after it started, compared with the part hashes its `RunStarted` records) or `CapturedPatternExists` (an existing or erased ID); a capture whose operation fails leaves no captured pattern (getCapturedPattern answers 404) |
 | `GET /captured-patterns` | lists captured patterns, newest first | 200, paginated with opaque page tokens |
 | `GET /captured-patterns/{id}` | one captured pattern: parameters with their places, proofs, approval, state, usable | 200; 404 |
-| `PUT /captured-patterns/{id}/parameters` `{parameters: [{name, value}]}` | replaces the parameters of a proposed or proven one (removes, adds); the engine sets each kind and source (data model, Parameter) | 202 operation; the operation fails `ParameterRefused` naming the parameter and why; 409 `CapturedPatternApproved`, `CapturedPatternWithdrawn`, or `CapturedPatternBusy` while an operation or a proof's run has not ended, at once |
+| `PUT /captured-patterns/{id}/parameters` `{parameters: [{name, value}]}` | replaces the parameters of a proposed or proven one (removes, adds); the engine sets each kind and source (data model, Parameter) | 400 `InvalidRequest` at once for a body outside the schema (more than 32 parameters, a value over 64 characters or outside `parameter_value`); otherwise 202 operation, which fails `ParameterRefused` naming the parameter and why (a value outside its kind's form, equal to another in any case form, not occurring in the slice, or more than 10000 places); 409 `CapturedPatternApproved`, `CapturedPatternWithdrawn`, or `CapturedPatternBusy` while an operation or a proof's run has not ended, at once |
 | `POST /captured-patterns/{id}/proof-slice` | gives its proof slice, making it from the captured copy when it has none | 202 operation, its target the captured pattern, its result the proof slice; `CapturedPatternWithdrawn`, `CapturedPatternBusy` at once |
 | `POST /captured-patterns/{id}/approval` | approves it, recorded with `by` (`client`), `at` and the proof (the state table in the data model gives every call's answer per state) | 202 operation; 409 `ProofRequired` at once when its latest proof did not pass under the current method |
 | `POST /captured-patterns/{id}/withdrawal` | stops its use by new runs | 202 operation |
@@ -81,11 +81,17 @@ Limits: research R4.
 step facts with its writable entries, attempt, project, `before`, time limit) plus `files` (each
 path, `sha256` and base64 content; it may be empty: a step whose template output holds no file,
 such as a clean review's `witnesses`, writes nothing). It checks the history and record as
-`restoreStep` does and that the folder holds `before`, then makes the files matching the step's
-writable entries exactly `files` without committing, and answers 200 `{written, removed}` (paths
-in byte order). Errors: 400 InvalidRequest (a path matching no writable entry, naming it), 401,
+`restoreStep` does, that the last commit holds `before`, and that the files outside the step's
+writable entries equal `before`'s, then makes the files matching the step's writable entries
+exactly `files` without committing, and answers 200 `{written, removed}` in byte order:
+`written` the paths of `files`, `removed` the writable-matching files of `before` not in
+`files`; so a repeated request leaves the same files and gives the same answer. `files` holds
+at most `x-limits.project-files-max` entries and `x-limits.step-files-max-bytes` of file bytes
+together (more is 422 `StepFilesTooLarge`), and the body may be up to
+`x-limits.commit-request-body-max-bytes`, as for `commitStep`. Errors: 400 InvalidRequest (a path
+matching no writable entry, naming it), 401,
 404 VersionHistoryNotServed (not the project worker), 409 ProjectStateDiffers or HistoryChanged,
-422 UnreadableProject or InputHashMismatch, 429, 500 WriteFailed, 503 Busy, 504
+422 UnreadableProject, InputHashMismatch or StepFilesTooLarge, 429, 500 WriteFailed, 503 Busy, 504
 TimeLimitExceeded. The fill worker then reads the step's files with `readStepFiles` (check
 service) for the checks, as the agent path does.
 `restoreStep` before the next attempt removes them as it removes any uncommitted change.
@@ -99,7 +105,7 @@ service) for the checks, as the agent path does.
 | `ap pattern <id>` | `GET /captured-patterns/{id}`: parameters and places, proofs, state |
 | `ap pattern <id> --drop <param>` / `--add [<name>=]<value>` | `PUT /captured-patterns/{id}/parameters` |
 | `ap proof-slice <id>` | `POST /captured-patterns/{id}/proof-slice`, follows the operation, prints the proof slice's ID |
-| `ap prove <id> <project>` | the launcher runs the client's `proof-slice <id>`, then `build <proof slice> <project>` as for `build` (`build-workers` first); after the run's end line the client prints `Proof of <id>: passed` or `Proof of <id>: failed: <failure>; ...`; a proof run exits 0 for a passed proof and 1 for a failed one, over the run state's own code (2 for a hand-over, 5 expired, 6 cancelled); `src/cli/contract.md`'s "Run states and exit codes" gains that row |
+| `ap prove <id> <project>` | the launcher runs the client's `proof-slice <id>`, then `build <proof slice> <project>` as for `build` (`build-workers` first); after the run's end line the client prints `Proof of <id>: passed`, `Proof of <id>: failed: <failure>; ...` or, while the proof is still running (its run interrupted), `Proof of <id>: running` with the run state's exit; a proof run exits 0 for a passed proof and 1 for a failed one, over the run state's own code (2 for a hand-over, 5 expired, 6 cancelled); `src/cli/contract.md`'s "Run states and exit codes" gains that row |
 | `ap approve-pattern <id>` | `POST /captured-patterns/{id}/approval` |
 | `ap withdraw-pattern <id>` | `POST /captured-patterns/{id}/withdrawal` |
 | `ap erase-pattern <id>` | shows what will be erased, asks for confirmation, then `DELETE /captured-patterns/{id}` |
@@ -108,7 +114,7 @@ service) for the checks, as the agent path does.
 `ap proof-slice <id>` prints only the proof slice's ID and a line feed on standard output, which
 the launcher reads. Output lines `src/cli/contract.md` gains: the `RunStarted` event line's fields
 become `slice <slice>  pattern <pattern>[  reason <pattern_reason>][  proof][  source <run>][
-parameters <name>=<value>,...]`; `build`'s first line adds `with <pattern> (<pattern_reason>)`;
+parameters <name>=<value>,...]` (parameters in byte order of their names, here and on the run page); `build`'s first line adds `with <pattern> (<pattern_reason>)`;
 the `run` header adds `reason`, `proof` and `source`; each fitting captured pattern that needs a
 proof or was refused for a value prints one line `Not used: <captured pattern>: <reason>` after the
 first line, `<reason>` being the entry's `detail` (and, for `refused-value`, the parameter);

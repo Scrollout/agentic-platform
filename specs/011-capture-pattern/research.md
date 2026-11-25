@@ -168,6 +168,8 @@ the fit and the fill:
   `parameter_name`; `parameter_value` is 1 to 64 characters of letters, digits, `_`, `-`, `.` and
   spaces (the union of the kind forms; each kind's own form stays with `engine/captured`); the
   capture `name` is `capture_name`, `^[a-z0-9]+(-[a-z0-9]+)*$`, at most 40 characters.
+  A body outside these schema rules is 400 `InvalidRequest` at once; `ParameterRefused` covers
+  what only the slice can judge (a kind's form, uniqueness in any case form, occurrence, places).
   `engine/captured` holds them as named values, and a contract test in a new file
   proves they match the loaded contract, as for the slices' limits.
 - **Limits** (stated in the contract): a spelling that is none of the three forms (`nOTE`) is not

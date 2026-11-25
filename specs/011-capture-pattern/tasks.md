@@ -160,7 +160,12 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   response), 4 LOW (N6 `parameter_value`; N7 a proof erased before it was read; N8 a no-op PUT;
   N9 T015's and T020's owners and exits); fixed at the source (spec FR-001 and an edge case;
   research R4; data model; contract draft; plan; T001, T004, T006, T008, T015, T020, T027 to
-  T029, new T031, T032, Test time). Round 13 owed.
+  T029, new T031, T032, Test time). Round 13 (fresh Sonnet, at 3b64d71): every
+  round-12 fix present; 0 CRITICAL, 0 HIGH; 3 MEDIUM (S1 the schema's 400 versus
+  `ParameterRefused`; W1 a repeated `writeStep` and the meaning of `removed`; W2 `writeStep`'s
+  body and file limits), 3 LOW (P1 a running proof's line; P2 `parameter_value` and
+  `capture_name` pinned too; P3 parameters' order); fixed at the source (research R4; contract
+  draft; T001, T004, T005, T008). Round 14 owed.
 
 ---
 
@@ -211,7 +216,8 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   builds. New
   `src/engine/captured/captured.go` holds the Go interface of the contract draft (`Propose`,
   `Check`, `Fit`, `Fill` with the contract draft's signatures, the declaration from the base
-  pattern, the limits and the parameter name rule as named values; types, signatures, doc comments
+  pattern, the limits and the `parameter_name`, `parameter_value` and `capture_name` rules as
+  named values; types, signatures, doc comments
   stating research R4's rules and limits) with bodies that return a `not implemented` error.
   New `src/engine/api/captured.go` holds the generated server's new methods with bodies that
   answer as not implemented, and `src/engine/checksvc/` the same for `writeStep`, so every module
@@ -267,7 +273,10 @@ proposed and adding the derived value works; the proof ends passed with no model
   failing
 - [ ] T004 [P] [US1] Test author: new `src/engine/checksvc/write_step_test.go`: `writeStep`
   with no files writes nothing and answers 200 with empty `written` and `removed`; a folder that
-  does not hold `before` answers 409 `ProjectStateDiffers`; it writes files under the
+  does not hold `before` outside the writable entries, or whose last commit does not hold
+  `before`, answers 409 `ProjectStateDiffers`; a repeated request answers the same and leaves the
+  same files; more than `step-files-max-bytes` of files answers 422 `StepFilesTooLarge`, and a
+  body up to `commit-request-body-max-bytes` is accepted; it writes files under the
   step's writable entries only, refuses a path outside them with 400
   naming it (also `..`, absolute paths, a symlinked folder), commits nothing, and `restoreStep`
   afterwards removes what it wrote; an unknown project or step is refused. Seen failing
@@ -282,14 +291,18 @@ proposed and adding the derived value works; the proof ends passed with no model
   NoBlockingFindingOpen and has outputs `[witnesses]`, `limits.attempts` and
   `limits.review_rounds` are 1, everything else equals the base pattern's; `PUT /parameters`
   takes `{name, value}` and sets kind and source as the data model says, removes and adds,
-  refuses as T003 does; a run whose slice changed after
+  answers 400 `InvalidRequest` at once for a body outside the schema (33 parameters, a 65-character
+  value, a value outside `parameter_value`) and `ParameterRefused` for the rest of T003's cases (a
+  value outside its kind, equal values in any case form, a value not in the slice, more than
+  10000 places); a run whose slice changed after
   it started (a part replaced, or its approval withdrawn) answers `RunNotCapturable` naming the
   part (compared with the part hashes its `RunStarted` records), and a run started before
   feature 011 (no part hashes) answers `RunNotCapturable` too; each call answers per state as the
   data model's state table says for `proposed` in the rows US1 owns at T007 (`replaceParameters`,
   `approveCapturedPattern`, the busy cases; `makeProofSlice` is T027's, withdrawal and erasure
   T018's); new `src/engine/api/captured_limits_contract_test.go`: the limits and
-  the parameter name rule `engine/captured` uses equal the loaded contract's, and a planted
+  the `parameter_name`, `parameter_value` and `capture_name` rules `engine/captured` uses equal
+  the loaded contract's, and a planted
   contract copy with one limit changed fails that comparison; a capture `name` outside
   `^[a-z0-9]+(-[a-z0-9]+)*$` or over 40 characters answers 400 InvalidRequest; a run recorded
   under another base pattern version answers `RunNotCapturable` naming both; a second state change while one of its
@@ -393,7 +406,8 @@ proposed and adding the derived value works; the proof ends passed with no model
   `ap patterns`, `ap pattern <id>` (parameters with places, proofs, state, usable), `--drop` and
   `--add`, `ap proof-slice <id>`, `ap approve-pattern` call the contract's operations, follow them and print
   as `src/cli/contract.md` states; the proof cases: after a proof's run the `Proof of <id>:
-  passed` and `failed: ...` lines (exit 0 for passed; 1 for failed, whether the run was handed
+  passed`, `failed: ...` and `running` lines, parameters in byte order of their names (exit 0
+  for passed; 1 for failed, whether the run was handed
   over, expired, cancelled or ended done with differing files), `ap slices` shows `PROOF OF` and `ap show` its `proof of`
   line; errors print their code and reason. Seen failing
 - [ ] T009 [US1] Code author: the commands in `src/cli/` (generated client only), except
