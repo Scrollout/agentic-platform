@@ -9,7 +9,7 @@
             {
               "content": [
                 {
-                  "text": "Run RUN-1, step tests, attempt 1.\nThe project is the folder /projects/hard-coded-declared-value-1.\nYou may write only: tests/**.\nInputs (name: SHA-256):\n- contract: 60d9fb082bc2714c2e0d9eda33ca88fba18a74d663fb2cd6f60e6a78e7b23891\n- examples: d8232313925af92689766c3b2c7697cbe599831dbeff954216a830f5c34fd4c5\n- generated-code: 0a37ccdcad09ca2c6bd56ed4bab2ae7b81596724d7bb3c2a423838ef8c58b98c\n- slice/rules: 23cad41a92508f95f95a3106d79c864affe34b3877d745fdcbe3832191803abe\n",
+                  "text": "Run RUN-1, step tests, attempt 1.\nThe project is the folder /projects/hard-coded-declared-value-1.\nYou may write only: tests/**.\nInputs (name: SHA-256):\n- contract: 7d443c320696063c9da9b9ed1f8c16c402d43ab8dd258917d4ad59903c389bb9\n- examples: d8232313925af92689766c3b2c7697cbe599831dbeff954216a830f5c34fd4c5\n- generated-code: 01fb9ea4a69029ee62a3908701fd78946c7b4427bd73fe0b5187018e453eecca\n- slice/rules: 23cad41a92508f95f95a3106d79c864affe34b3877d745fdcbe3832191803abe\n",
                   "type": "text"
                 }
               ],
