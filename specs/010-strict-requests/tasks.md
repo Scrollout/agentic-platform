@@ -400,11 +400,16 @@ passes at pass^3 on the changed pattern (FR-009, FR-010, SC-003; research R6).
   failing against a scratch stub; `TestGraderRequests*` and `Quarantine` 41 s, `GraderHeldOut` and
   `GraderCodeAgent` 79 s, `GraderValues` 18 s). Not tested: the grader failing on its own through
   `GradeCode` (no fixture passes every earlier grader and fails only it)
-- [ ] T017 [US3] The coordinating session (not the code author) synthesises the mappings of every step set with `synth-steps.sh` (owner go-ahead;
+- [x] T017 [US3] The coordinating session (not the code author) synthesises the mappings of every step set with `synth-steps.sh` (owner go-ahead;
   Docker, no key; on the clean VM as in feature 009, `scripts/check.sh --prepare` first on a fresh
   clone), the old mappings removed first; review the diffs against their scripts
   (`src/tests/recorded/README.md`): the generated files, the instruction and the input hashes only
   (approved in T002, `Tests-approved-by:`)
+  Done: c5b5e56, 2026-11-25 on the owner's clean VM, fresh clone at 04c242f; TestPlanted 33 min,
+  TestPlantedValues 6 min, TestUS2 with US2.7 and US2.10 4.5 min, all passing while writing; 224
+  mappings change and no `__files`: the generated-code input hash (every step), the code step's
+  instruction paragraph on malformed bodies (186) and `hard-coded-declared-value`'s contract hash
+  (30, the approved `createNote` 400 change)
 - [ ] T018 [US3] Commit (tests, code, recordings in separate commits); push (owner go-ahead; every
   check job and `evals-current`); fix until CI is green with `TestUS1`, `TestUS2`, `TestPlanted`
   and `TestPlantedValues` replaying with no miss; record the run and `TestUS2`'s duration (SC-004)
