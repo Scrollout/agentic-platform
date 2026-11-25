@@ -253,7 +253,7 @@ wrap is in the registration, which every entry point reaches. The clean referenc
 | Commit | Run | Result |
 |--------|-----|--------|
 | e061694 (US1, T001-T007) | 45581805361 | Go unit tests and vet, Python script and hook tests, contracts lint, API breaking changes, knowledge, markdown, layout, secrets, dependencies, module boundaries, gateway, evals-current green; every recorded-model job (planted, Story 2, end-to-end, service tests with the recorded model) failed only on the tests step's recording miss (`Request was not matched`, the generated files changed), expected until T017 (plan Exceptions); the stopped-run jobs cancelled |
-| 822e79a (US1 review fixes, T024, T025) | 45591199302 | Go unit tests and vet and every static job green; the recorded-model jobs failed only on the same recording miss (service tests: `TestErasureReachesTheDurableService`, `TestPlantedValues`), expected until T017 |
+| 822e79a (US1 review fixes, T024, T025) | 45591199302 | Go unit tests and vet and every static job green; the recorded-model jobs failed only on the same recording miss (service tests: `TestErasureReachesTheDurableService`, `TestPlantedValues`), expected until T017; the Python script and hook tests failed once on `test_compose` `RunscNameResolutionTest` (a Docker network pool overlap on the runner, backlog T203) and passed on one rerun of that job (owner agreed) |
 
 ## Threat-model input
 
