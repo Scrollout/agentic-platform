@@ -1138,7 +1138,7 @@ func TestRequestShapesGenerated(t *testing.T) {
 		dvWantAllFail(t, checks.RequestShapesGenerated(dir, []byte(rqGenContract)), check, "a name differs")
 	})
 	t.Run("fails on a file that dropped a requirement", func(t *testing.T) {
-		weaker := string(rqRender(t, strings.Replace(rqGenContract, "required: [text]\n", "", 1)))
+		weaker := string(rqRender(t, strings.Replace(rqGenContract, "      required: [text]\n", "", 1)))
 		dir := dvProject(t, map[string]string{"gen/request_shapes.go": weaker})
 		dvWantAllFail(t, checks.RequestShapesGenerated(dir, []byte(rqGenContract)), check, "the file is weaker than the contract")
 	})

@@ -1031,7 +1031,7 @@ func rcTreeCases() []rcCase {
 		rcRefuse("tree: children is an object", op, `{"value":1,"children":{}}`, rcMember("/children", "must be an array")),
 		rcRefuse("tree: a child is null", op, `{"value":1,"children":[null]}`, rcMember("/children/0", "must be an object")),
 		rcRefuse("tree: 2000 levels, then a type error", op, strings.Replace(chain(2000, ""), `{"value":1}`+strings.Repeat(`]}`, 2000), `{"value":true}`+strings.Repeat(`]}`, 2000), 1),
-			rcMember(strings.Repeat("/children/0", 2000)+"/value", "must be an integer")),
+			rcMember(rcCut(strings.Repeat("/children/0", 2000)+"/value"), "must be an integer")),
 	}
 }
 
