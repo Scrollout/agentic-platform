@@ -345,6 +345,26 @@ malformed requests are refused for it (FR-006, FR-007, FR-011, FR-012; research 
 - [ ] T014 [US2] Commit (tests, code, recordings in separate commits); push (owner go-ahead; check
   jobs); fix until CI is green but for the step recordings' misses (T017); record the run; fresh
   review of US2; `/speckit-converge` for US2
+  Review round 1 (fresh Sonnet, at d6fee60): no blocking finding, so US2's review converged in 1
+  round. S1 (`pattern_values_test.go` lines 3-5 cite a data-model section "Pattern api-feature-go
+  1.2.0" that does not exist, under "T012 (feature 009)"): T031; S2 (a 400 `message` with
+  `readOnly` or `default` passes) closed: the README allows annotations; S3 (the analyst's "every
+  response the examples show is declared" beside the 400 rule) closed: the new bullet and
+  checklist item 5 state the 400's shape; S4 (T009's wording changed in 645188a) closed: no
+  requirement changed, an unreadable contract is not fit. Untested cases: T032. Unused
+  `requestShapingKeywords` in `shapes.go` (unused before T012 too): T033
+- [ ] T031 [US2] Owner approval to make the comment of `src/engine/cmd/engine/pattern_values_test.go`
+  lines 3-5 name feature 010's pattern 1.2.0 without citing a data-model section that does not
+  exist (S1)
+- [ ] T032 [US2] Test author (new file `src/engine/checks/fit_requests_more_test.go`): a 400
+  `message` with `readOnly` or `default` passes RefusalDeclared; a 400 whose only media type is
+  `application/json; charset=utf-8` fails it; a chain of two or more `$ref`s inside the 400 object
+  schema is followed, and a loop in it ends and fails; a YAML merge key or a path-item `$ref` that
+  hides a request body fails OnlyHttpOperations while the two new conditions pass (the fit result
+  is not fit)
+- [ ] T033 [US2] Code author: `requestShapingKeywords` in `src/engine/checks/shapes.go` is unused;
+  use it where the walk decides a shaping key, or remove it (one owner of the keyword list either
+  way); T009, T003 and T024 stay green
 
 ---
 
