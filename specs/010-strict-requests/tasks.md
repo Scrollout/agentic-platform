@@ -45,7 +45,7 @@ asked before T008 is pushed).
 - **Fail closed**: a fit condition or check that cannot read the contract or a file fails, naming
   it; every passing result says what it examined.
 - **Model text**: names and paths from the contract are written into Go with `strconv.Quote`;
-  a refusal's pointer is quoted and cut to 64 characters, and never carries a member's value.
+  a refusal's pointer is cut to 64 runes, then quoted, and never carries a member's value.
 - **Test time**: locally only the packages a task touches (`go test ./checks/ ./procedures/
   ./checksvc/` in `src/engine`, `go test ./evals/steps/ -run Grade` in `src/tests`, the one new
   Python test), each capped at 10 minutes; no full `scripts/check.sh`, Docker lab, image build or
@@ -68,7 +68,11 @@ asked before T008 is pushed).
   from T008 to T017 as a plan exception); fixed at their source (spec clarifications, FR-002,
   FR-004, FR-011, FR-012, edge cases; research S14, R1, R3, R4, R5; contract; data model; plan
   threat model, approved list, Exceptions; ADR 0089; T002, T003, T004, T006, T007, T009 to T011,
-  T013, T015 to T017).
+  T013, T015 to T017). Round 2 (fresh Sonnet, at f75fb74): every round-1 finding fixed; 0
+  CRITICAL, 0 HIGH; N1-N4 MEDIUM (the `Properties` nil rule; the 32-digit rule's wording and the
+  README's limits; `fit_test.go` not listed; the grader given to the code author), N5-N9 LOW;
+  fixed at their source (spec FR-008, edge cases; research R5; contract; data model; plan
+  approved list; ADR 0089; T001, T003, T004, T009, T010, T012, T015, T016). Gate passed.
 - **Recordings** are test data: the analyst recordings (T013) and the synthesised step sets (T017)
   are made and committed by the coordinating session, which writes no code and no test of this
   feature, never by a code author.
@@ -84,7 +88,8 @@ asked before T008 is pushed).
   and RequestBodiesSupported in the fit-condition table (passes when, reason) with the allowed
   keyword lists, a "Request check" section (the handler template override and its one changed
   line, `gen/requests.go`, `gen/request_shapes.go`, the walk order, the messages table, the
-  1048576-byte limit, what is left to the code: limits, allowed values, formats) and the module
+  1048576-byte limit, the 10000-level nesting limit, the 64-rune cut, the 32-digit integer rule,
+  what is left to the code: limits, allowed values, formats) and the module
   template table's new files; new `src/engine/checks/shapes.go` holds the Go interface of the
   contract draft (types, signatures, doc comments) with bodies that return an error or a failing
   `not implemented` result; `scripts/generate.sh` refreshes the embedded contract copies;
@@ -111,7 +116,11 @@ with the clean reference, `{"text":"a","TEXT":"b"}` gives 201 with `"a"`.
   method in upper case and the contract's path (`POST /notes`, `PUT /notes/{id}`), `Required`
   from `requestBody.required` (absent is false); shapes: `Types` from `type` as a name or a list
   (`[string, "null"]`), empty when absent; `Properties` in contract order with exact names
-  (`text` and `Text` are two members), nil when the schema has no `properties`;
+  (`text` and `Text` are two members), then names only in `required` in `required` order; nil
+  when the schema has neither `properties` nor `required` nor `additionalProperties: false`;
+  `properties: {}` non-nil and empty; `additionalProperties: false` with no `properties` closed,
+  every member undeclared; an empty type list, a non-string type item (unquoted YAML `null`), a
+  boolean schema and a YAML anchor or alias are errors naming the location;
   `RequiredMembers` in contract order; `Closed` only for `additionalProperties: false`; `Items`;
   a local `$ref` target is one shared shape (two uses give the same pointer; a recursive schema is
   a cycle and the walk ends); value keywords and annotations ignored; a body schema with an
@@ -162,7 +171,10 @@ with the clean reference, `{"text":"a","TEXT":"b"}` gives 201 with `"a"`.
   handler as `1`; `1.5` refused; `1e31` passes written as 32 digits; `1e32` and `1e999999`
   refused as not an integer, quickly, without building the number), a type list with `null`, a schema with no `type` (any value), a schema with
   no `properties` (the object kept as sent), an optional body absent (reaches the handler), a
-  member name over 64 characters (cut in the message), a recursive schema; and, with a recording
+  member name over 64 runes (cut in the message); a 40-digit plain integer kept as sent; an
+  exponent beyond int64 (`1e99999999999999999999`) refused quickly; `[integer, number]` with
+  `1.0` kept as sent; `-0.0` for `integer` written as `0`; duplicates ordered by their second
+  occurrence (`{"a":1,"b":{"c":1,"c":2},"a":3}` names `/b/c`), a recursive schema; and, with a recording
   handler in place of the stub, the body the handler reads holds only declared members under
   exact names, with `Content-Length` matching; generation fails, naming the file, when the
   template's `gen/std-http-handler.tmpl` is absent (oapi-codegen would fetch the name as a URL);
@@ -214,7 +226,9 @@ malformed requests are refused for it (FR-006, FR-007, FR-011, FR-012; research 
   exactly `[message]` (missing, `[message, code]`, `[]`), `message` absent or not `type: string`,
   or a `$ref` that does not resolve; `message` with `maxLength`, `minLength`, `pattern`, `format`,
   `enum` or `const`; the key written `400` and `"400"` both count, `4XX` and `default` alone do
-  not; a `$ref` loop in the 400 schema ends (visited set). RequestBodiesSupported passes on the notes contract and on a
+  not; a `$ref` loop in the 400 schema ends (visited set); the 400 object schema with
+  `minProperties`, `not`, `allOf`, `const` or `enum`; both `400` and `"400"` present; a `400`
+  given by a `$ref` to `#/components/responses/...` is followed. RequestBodiesSupported passes on the notes contract and on a
   schema using every allowed keyword, annotation and an `x-` key; fails, naming the location, for
   each of `allOf`, `anyOf`, `oneOf`, `not`, `if`, `then`, `else`, `dependentSchemas`,
   `dependentRequired`, `patternProperties`, `propertyNames`, `prefixItems`, `contains`,
@@ -222,19 +236,24 @@ malformed requests are refused for it (FR-006, FR-007, FR-011, FR-012; research 
   `additionalProperties` schema, a nested property or `items` using one of them, one reached only
   through a `$ref`, `nullable: true`, a body with no `schema`, a `type` of `str` or `[string,
   date]`, a recursive schema and a `$ref` loop (each ends, visited set), and a `content` with
-  `text/plain` alone or beside `application/json`; both
+  `text/plain` alone or beside `application/json`, an empty type list, an unquoted YAML `null`
+  in a type list, a boolean schema, a YAML anchor or alias; a property named `oneOf` or
+  `nullable` and an `x-` value holding `allOf` pass (names, not keywords); both
   conditions fail every slice whose contract does not parse (fail closed) and say what they
   examined on a pass
 - [ ] T010 [P] [US2] Test author A (approved changes, `Tests-approved-by:`), tests first, seen
-  failing against the unchanged pattern: `src/engine/cmd/engine/pattern_values_test.go` expects
+  failing against the unchanged pattern: `src/engine/checks/fit_test.go` line 34's `conditions`
+  gains RefusalDeclared and RequestBodiesSupported and `contractConditions` becomes the first
+  five; `src/engine/cmd/engine/pattern_values_test.go` expects
   version `1.2.0` (lines 3, 5, 49-50) and the generate step's checks at line 43 with
   RequestShapesGenerated after DeclaredValuesGenerated; `src/engine/api/pattern_flag_test.go` line 25 and
   `src/engine/slices/slices_patternflag_test.go` line 27 list RefusalDeclared and
   RequestBodiesSupported; `src/engine/checksvc/checks_test.go` `patternCases` gain a clean and a
   planted case, with fixtures, for RequestShapesGenerated; `src/engine/api/runs_ops_test.go`
   lines 449-450 and `src/tests/acceptance/us2_test.go` line 84 expect `api-feature-go@1.2.0`;
-  `src/tests/acceptance/planted_values_test.go`: the anchored edit that adds `createNote`'s
-  `requestBody` also replaces its content-less `400` with an `application/json` body
+  `src/tests/acceptance/planted_values_test.go`: besides the anchored edit that adds
+  `createNote`'s `requestBody`, a second anchored replacement replaces its content-less `400`
+  (`'400': {description: empty text}`) with an `application/json` body
   `$ref: '#/components/schemas/Error'`, and the appended `components` gains `Error` (object,
   required `[message]`, `message` a string), so the scenario's contract still fits
 - [ ] T011 [P] [US2] Test author B: new `src/engine/cmd/engine/pattern_conditions_test.go`: the
@@ -249,7 +268,10 @@ malformed requests are refused for it (FR-006, FR-007, FR-011, FR-012; research 
   `src/agents/analyst/instruction.md`: every operation with a request body declares a 400
   response whose JSON body is an object requiring only the string `message`, and request bodies
   are `application/json` objects built only with `type`, `properties`, `required`,
-  `additionalProperties` and `items`; `src/agents/code/instruction.md`: a malformed body (missing
+  `additionalProperties` (`true` or `false`) and `items`, every body with a schema, types named
+  only from the seven JSON Schema types and `null` written in a type list (`[string, "null"]`),
+  never `nullable`, `allOf`, `oneOf` or the like; `message` a plain string with no limit, allowed
+  value, pattern or format; `src/agents/code/instruction.md`: a malformed body (missing
   or misnamed members, wrong types) is refused before its code runs, so its code checks only the
   rules' values; `scripts/generate.sh` and `scripts/method-digest.py` converge; T009-T011 pass
 - [ ] T013 [US2] Analyst recordings (the coordinating session, not the code author): renew `src/tests/recorded/recordings/mappings/analyst-*.json`
@@ -269,17 +291,18 @@ passes at pass^3 on the changed pattern (FR-009, FR-010, SC-003; research R6).
 **Independent Test**: T015 passes; quickstart 5: the paid run reports every counted case pass^3,
 `review/clean` counted.
 
-- [ ] T015 [P] [US3] Test author (approved changes, `Tests-approved-by:`), tests first: new
-  `src/tests/evals/steps/grade_requests_test.go`: the malformed-request grader passes on the
+- [ ] T015 [P] [US3] Test author B (approved changes, `Tests-approved-by:`), tests first: new
+  `src/tests/evals/steps/grade_requests_test.go`, the grader's self-test: the malformed-request grader passes on the
   reference implementation in a project generated on the changed pattern (`{"TEXT":"x"}` 400,
   `{"text":"a","TEXT":"b"}` 201 with `"a"`, `{"text":"a","text":"b"}` 400) and fails, naming the
   request, on a project whose generated handler was replaced by the unwrapped one;
-  `src/tests/evals/steps/cases.go` drops `Quarantine: "T202"` from `review/clean` (an eval case
-  is a test); `src/tests/evals/steps/quarantine_test.go` and `quarantine_print_evals_test.go` expect no case
+  `src/tests/evals/steps/quarantine_test.go` and `quarantine_print_evals_test.go` expect no case
   quarantined (`review/clean` counted), the quarantine's report form still tested with a
   synthetic case
-- [ ] T016 [US3] Code author: the malformed-request grader in `src/tests/evals/steps/grade.go`
-  among the code graders, and in its `README.md` table; T015 passes
+- [ ] T016 [US3] Test author A, not T015's (approved changes, `Tests-approved-by:`; a grader and an
+  eval case are tests): the malformed-request grader in `src/tests/evals/steps/grade.go` among the
+  code graders, and in its `README.md` table; `src/tests/evals/steps/cases.go` drops
+  `Quarantine: "T202"` from `review/clean`; T015 passes
 - [ ] T017 [US3] The coordinating session (not the code author) synthesises the mappings of every step set with `synth-steps.sh` (owner go-ahead;
   Docker, no key; on the clean VM as in feature 009, `scripts/check.sh --prepare` first on a fresh
   clone), the old mappings removed first; review the diffs against their scripts

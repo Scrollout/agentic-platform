@@ -14,7 +14,7 @@ R5 give the reasons.
 // RequestShape is what the approved contract allows one request body to hold.
 type RequestShape struct {
     Types           []string                 // JSON Schema type names; empty means any
-    Properties      []Member                 // declared members, in contract order; nil when the schema has no properties
+    Properties      []Member                 // declared members: properties in contract order, then names only in required, in required order (any type); nil when the schema has neither properties nor required nor additionalProperties: false; properties: {} is non-nil and empty
     RequiredMembers []string                 // in contract order
     Closed          bool                     // additionalProperties: false
     Items           *RequestShape            // array items; nil means any
@@ -72,13 +72,17 @@ For an operation with a body, before the operation's parameters are read or its 
 2. An empty body, or one of JSON white space only: refused when `Required`, else the handler runs
    with it as sent.
 3. `json.Valid` fails (not exactly one JSON value, or nested deeper than 10000 levels): refused.
-4. The value is read with `json.Decoder.Token`; the first name twice in one object, anywhere in
-   the document (document order), is refused.
+4. The value is read with `json.Decoder.Token`; a name twice in one object, anywhere in the
+   document, is refused: the one whose second occurrence comes first in the body (a pre-pass,
+   before the walk of step 5).
 5. Walk value and shape, depth first. At each object, in this order: a required member missing
    (`RequiredMembers` order), an undeclared member when `Closed` (body order), then each declared
    member present (`Properties` order); arrays item by item. A value whose JSON type is not in
    `Types` is refused. `integer` is decided on the number's text: a zero fractional part after
-   the exponent is applied; a plain form of more than 32 digits is refused as not an integer.
+   the exponent is applied. A number written with a fraction or exponent whose plain form would
+   exceed 32 digits is refused as not an integer; a plain integer literal is kept as sent, at any
+   length. When `Types` holds `number` too, the value is kept as sent (no rewrite). `-0`, `-0.0`
+   and `0e5` are written again as `0`.
    The first problem is the refusal (one message).
 6. Write the value again with only declared members, under their exact names, where `Properties`
    is not nil; numbers keep their text, except an `integer` written with a fraction or exponent,
@@ -109,15 +113,20 @@ document order.
 - `RefusalDeclared`: for every operation with `requestBody`, `responses."400".content."application/json".schema`,
   through local `$ref`s, has `type: object`, `required` equal to `[message]`, and
   `properties.message.type: string` with no value keyword on `message` (`maxLength`, `minLength`,
-  `pattern`, `format`, `enum`, `const`). The key `400` counts written as `400` or `"400"`; `4XX`
-  and `default` do not count. Reason: `<operation>: declares no 400 response with a JSON
+  `pattern`, `format`, `enum`, `const`), and the object schema itself uses only `type`,
+  `required`, `properties`, `additionalProperties` and annotations. The key `400` counts written
+  as `400` or `"400"` (both present: not fit); `4XX` and `default` do not count; a response that
+  is a `$ref` to `#/components/responses/...` is followed. Reason: `<operation>: declares no 400 response with a JSON
   object body that requires only the string message`.
 - `RequestBodiesSupported`: for every `requestBody`, `content` has exactly the key
   `application/json` (reason: `<operation>/requestBody: media types other than application/json: <names>`),
   and every schema reached from it, through local `$ref`s (with a visited set), has only allowed
   keywords (reason: `<location>: <keyword> is not supported in a request body`); a body with no
   `schema` (`<operation>/requestBody: no schema`) and a `type` naming anything but `null`,
-  `boolean`, `object`, `array`, `number`, `string`, `integer` fail too. Allowed: `type`, `properties`,
+  `boolean`, `object`, `array`, `number`, `string`, `integer` fail too, as do an empty type list,
+  a type list item that is not a string (an unquoted YAML `null`: write `"null"`), a boolean
+  schema (`items: true`, `schema: false`), and a YAML anchor or alias in a schema. A name of a
+  property, or a key under an `x-` extension, is never judged as a keyword. Allowed: `type`, `properties`,
   `required`, `additionalProperties` (boolean), `items` (a schema), `$ref`; value keywords
   `maxLength`, `minLength`, `pattern`, `format`, `maximum`, `minimum`, `exclusiveMaximum`,
   `exclusiveMinimum`, `multipleOf`, `maxItems`, `minItems`, `uniqueItems`, `maxProperties`,

@@ -158,12 +158,16 @@ asked for):
 - `src/engine/cmd/engine/pattern_values_test.go` (feature 009 T012): the pattern is version
   `1.2.0` (lines 3, 5, 49-50) and the generate step's checks at line 43 gain
   RequestShapesGenerated after DeclaredValuesGenerated (analyze round 1, I1).
+- `src/engine/checks/fit_test.go` line 34: `conditions` gains RefusalDeclared and
+  RequestBodiesSupported, and `contractConditions` becomes the first five, since its `expect`
+  runs the real `pattern.yaml` (analyze round 2, N3).
 - `src/engine/api/pattern_flag_test.go` line 25 and `src/engine/slices/slices_patternflag_test.go`
   line 27: the fit conditions listed gain RefusalDeclared and RequestBodiesSupported.
 - `src/engine/checksvc/checks_test.go` `patternCases`: a clean and a planted case for
   RequestShapesGenerated (`TestEveryPatternCheckIsCovered` requires one per check).
 - `src/tests/acceptance/planted_values_test.go`: the example contract's content-less `400` of
-  `createNote` is replaced, in the same anchored edit that adds the `requestBody`, by one with an
+  `createNote` (`'400': {description: empty text}`) is replaced by a second anchored replacement,
+  besides the one that adds the `requestBody`, by one with an
   `application/json` body `$ref: '#/components/schemas/Error'`, and the appended `components`
   gains `Error` (object, required `[message]`, `message` a string), so the scenario's contract
   still fits (analyze D6).
@@ -173,7 +177,8 @@ asked for):
   `review/clean` is no longer quarantined (T202 closed); the quarantine mechanism stays, with no
   case under it.
 - `src/tests/evals/steps/grade.go` and its README: the code graders gain the malformed-request
-  grader.
+  grader; a grader is a test, so a test author writes it, and another test author its self-test
+  (analyze round 2, N4).
 - `src/tests/recorded/recordings/mappings/analyst-*.json`: renewed for the analyst's instruction
   change (the recorded README's text replacement).
 - `src/tests/recorded/steps/{happy,resume,planted/*}`: every mapping synthesised again, since the

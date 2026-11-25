@@ -188,6 +188,9 @@ trials; the review suite reports pass^3 with it counted.
   so that it carries the declared body.
 - Very deep nesting (a 1 MiB body of `[[[[...`): refused as not valid JSON beyond the JSON reader's
   nesting limit, never walked.
+- An integer written with a fraction or exponent (`1.0`, `1e3`) is passed on as a plain integer;
+  one whose plain form would exceed 32 digits (`1e32`) is refused as not an integer (a stated
+  limit); a plain integer literal is kept as sent, at any length.
 - A `null` value for a required member whose type does not allow `null`: refused as the wrong type.
 - An operation whose request body is optional and absent: accepted, as the contract allows.
 - An empty body where the contract requires one: refused with 400.
@@ -225,7 +228,10 @@ trials; the review suite reports pass^3 with it counted.
 - **FR-007**: The pattern changed by this feature MUST be a new pattern version, so that accepted
   results judged without strict reading are not reused (feature 006).
 - **FR-008**: The pattern's README MUST state which request rules the service enforces before the
-  code step's code runs, how a refusal is answered, and each limit (FR-005, the body size limit).
+  code step's code runs, how a refusal is answered, and each limit: what is left to the code
+  (FR-005), the body size limit, the JSON nesting limit, the 64-rune cut of a member's path in a
+  message, and that an integer written with a fraction or exponent whose plain form would exceed
+  32 digits is refused (a plain integer literal is kept as sent, at any length).
 - **FR-009**: The evals' clean reference MUST be rebuilt on the changed pattern; `review/clean`
   MUST leave the quarantine and T202 MUST be closed only when it passes 3 of 3 trials counted.
 - **FR-010**: The steps evals MUST gain a case, or the planted scenarios a plant, in which a

@@ -39,12 +39,14 @@ Sources: [Feature 010 research, R4](../../specs/010-strict-requests/research.md)
 
 - New fit condition RefusalDeclared: every operation with a `requestBody` declares a `400` whose
   `application/json` schema is an object requiring exactly `message`, a string with no value
-  keyword (owner, analyze round 1).
+  keyword (owner, analyze round 1), and the object schema uses only `type`, `required`,
+  `properties`, `additionalProperties` and annotations.
 - New fit condition RequestBodiesSupported: every request body is `application/json` only, and
   its schema shapes the body only with `type`, `properties`, `required`, boolean
   `additionalProperties` and `items`, through local `$ref`s; value keywords and annotations are
   allowed; any other key fails (fail closed), `nullable` among them (owner, analyze round 1: a type
-  list allows `null`); a body without a schema fails.
+  list allows `null`); a body without a schema, a type name other than the seven JSON Schema
+  types, a boolean schema and a YAML anchor or alias fail.
 
 Sources: [Feature 010 research, R4](../../specs/010-strict-requests/research.md).
 

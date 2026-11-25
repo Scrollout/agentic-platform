@@ -206,7 +206,8 @@ wrap is in the registration, which every entry point reaches. The clean referenc
      number whose text has a zero fractional part (S13), decided on the text (digits, fraction,
      exponent) without building the number; one with a fraction or exponent is written again as a
      plain integer, and one whose plain form would have more than 32 digits is refused as not an
-     integer (a stated limit; analyze S2).
+     integer (a stated limit; analyze S2); a plain integer literal is kept as sent at any length,
+     and with `number` among the types nothing is rewritten (analyze round 2, N2, N8).
   6. Re-encode the value with only declared members (exact names) where `properties` is declared;
      a schema with no `properties` keeps the object as it is. Replace `r.Body` and
      `r.ContentLength`, then call the operation.
