@@ -1,11 +1,10 @@
 package main
 
-// T012 (feature 009): the pattern api-feature-go is version 1.2.0, and its generate and code
-// steps judge the declared values and the deployment values (data-model.md, "Pattern
-// api-feature-go 1.2.0"). The engine loads the copy it embeds (`pattern`, setup.go), which
-// scripts/generate.sh copies from the source file src/catalogue/api-feature-go/pattern.yaml; the
-// source file is the authoritative one (generate.sh --check proves the copy matches it), so both
-// are judged.
+// The pattern api-feature-go is version 1.2.0 (feature 010, T012); its generate and code steps
+// judge the declared values and the deployment values (feature 009). The engine loads the copy it
+// embeds (`pattern`, setup.go), which scripts/generate.sh copies from the source file
+// src/catalogue/api-feature-go/pattern.yaml; the source file is the authoritative one
+// (generate.sh --check proves the copy matches it), so both are judged.
 
 import (
 	"os"
