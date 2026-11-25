@@ -40,8 +40,9 @@ is source `literal`, kind `number` when it is a number, else `string`; a paramet
 its kind and source), finds the `places`, and sets `origin`. The terminal client's `--add
 [<name>=]<value>` takes the name from the value when none is given (refused when the value is not
 a valid name). Capture refuses with `RunNotCapturable` a run of a captured pattern, a proof run,
-and a run whose slice changed after it started (a part's hash differs from the run's
-`RunStarted` inputs, or a part is no longer approved), naming the part. The limits (32 parameters, 10000 places, 64 characters) are the contract's integer
+and a run whose slice changed after it started (a part's hash differs from the
+part hash its `RunStarted` records, or a part is no longer approved), naming the part; a run
+whose `RunStarted` has no part hashes (started before this feature) is refused the same way. The limits (32 parameters, 10000 places, 64 characters) are the contract's integer
 `x-limits` keys.
 
 ## Proof
@@ -83,7 +84,7 @@ any --(erase, confirmed)--> erased
 |------|----------|--------|----------|-----------|
 | `replaceParameters` | changes them | changes them, back to proposed | `CapturedPatternApproved` | `CapturedPatternWithdrawn` |
 | `makeProofSlice`, a proof's `startRun` | allowed | allowed | allowed | `CapturedPatternWithdrawn` |
-| `approveCapturedPattern` | `ProofRequired` | approves | changes nothing | `CapturedPatternWithdrawn` |
+| `approveCapturedPattern` | `ProofRequired` | approves when its latest proof passed under the current method, else `ProofRequired` | changes nothing | `CapturedPatternWithdrawn` |
 | `withdrawCapturedPattern` | withdraws | withdraws | withdraws | changes nothing |
 | `eraseCapturedPattern` | erases | erases | erases | erases |
 
@@ -143,7 +144,8 @@ patterns that fit but need a new proof and those refused only for a value, each 
 `RunStarted` gains, additively: `pattern` names the captured pattern's `id@version` as before for
 any pattern; `pattern_reason` (`base`, `fits`, `chosen`); for a captured pattern `parameters`
 (an object, parameter name → value, each a `parameter_value`) and `source_run` (a run ID); `proof`
-(`true` for a proof run); `not_used`: a list, each entry `{pattern, reason, parameter?, detail}`,
+(`true` for a proof run); `part_hashes` (the goals, rules and contract part hashes the run was
+started on, since its `inputs` hold only the pattern's slice inputs); `not_used`: a list, each entry `{pattern, reason, parameter?, detail}`,
 `pattern` a captured pattern's ID, `reason` `needs-proof` or `refused-value`, `parameter` the
 refused one (with `refused-value` only), `detail` why in words; judged at the start and recorded,
 since that state changes later. `Run` carries the same fields with the same shapes. `source_run` keeps naming the

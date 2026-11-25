@@ -128,7 +128,12 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   state table, approval, capture refusals, reuse key; contract draft; plan; ADR 0093 description;
   T003, T005 to T009, T013, T015, T018, T020, T027, T029, T030); ADR 0095's body line stays as
   written (an accepted decision is not rewritten), its banner says the run names it. Round 8
-  owed.
+  (fresh Sonnet, at e9ade3e): every round-7 fix present; 0 CRITICAL, 0 HIGH; 4 MEDIUM (N1 T005's
+  proven/approved cases need T029's proofs; N2 goals have no hash in `RunStarted`; N3 the `tasks`
+  slice cannot be created without the analyst after the capture; N4 T013's withdrawn replay needs
+  US3), 3 LOW (N5 R7's code list; N6 the approval cell; N7 per-operation error codes in T001);
+  fixed at the source (spec FR-001; research R7; data model; contract draft; T001, T005, T006,
+  T013, T014, T018). Round 9 owed.
 
 ---
 
@@ -145,7 +150,15 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   `erase-captured-pattern`; `startRun` of a proof slice is a proof (data model, Proof slice);
   `startRun` answers 202 with its operation as before, and `Run` gains `proof` and the pattern
   choice (data model, Run); `startRun`'s description gives the refusal order of the contract
-  draft, and `replayRun` lists `CapturedPatternWithdrawn` and `ProofRequired`; `Slice` and
+  draft; `x-error-codes` per operation: `startRun` and `replayRun` add `CapturedPatternWithdrawn`
+  and `ProofRequired` (409) and `startRun` NotFound for an unknown `pattern`; `captureRun` 404,
+  409 `RunNotDone`, `RunNotCapturable`, `CapturedPatternExists`; `replaceParameters` 409
+  `CapturedPatternApproved`, `CapturedPatternWithdrawn`, `CapturedPatternBusy`, operation
+  `ParameterRefused`; `makeProofSlice` 409 `CapturedPatternWithdrawn`, `CapturedPatternBusy`,
+  operation `PartFailsChecks`; `approveCapturedPattern` 409 `ProofRequired`,
+  `CapturedPatternWithdrawn`, `CapturedPatternBusy`; `withdrawCapturedPattern` and
+  `eraseCapturedPattern` 409 `CapturedPatternBusy`; each with `IdempotencyKeyReused`; `RunStarted`
+  gains `part_hashes` (goals, rules, contract); `Slice` and
   `SliceSummary` gain `proof_of`, and `slice.schema.json`'s history kinds gain `made-for-proof`
   (data model, Proof slice); every new field and value is optional or added, so every change is
   additive; the `CapturedPattern` (with `proof_slice`), `Parameter` (`name` `^[a-z][a-z0-9-]*$`, `kind`
@@ -234,10 +247,11 @@ proposed and adding the derived value works; the proof ends passed with no model
   NoBlockingFindingOpen and has outputs `[witnesses]`, `limits.attempts` and
   `limits.review_rounds` are 1, everything else equals the base pattern's; `PUT /parameters`
   takes `{name, value}` and sets kind and source as the data model says, removes and adds,
-  refuses as T003 does, and moves a proven one back to proposed; a run whose slice changed after
+  refuses as T003 does; a run whose slice changed after
   it started (a part replaced, or its approval withdrawn) answers `RunNotCapturable` naming the
-  part; each call answers per state as the data model's state table says (the states reachable
-  in US1: proposed, proven, approved); new `src/engine/api/captured_limits_contract_test.go`: the limits and
+  part (compared with the part hashes its `RunStarted` records), and a run started before
+  feature 011 (no part hashes) answers `RunNotCapturable` too; each call answers per state as the
+  data model's state table says for `proposed` (the proven and approved columns are T006's); new `src/engine/api/captured_limits_contract_test.go`: the limits and
   the parameter name rule `engine/captured` uses equal the loaded contract's; a second state change while one of its
   operations runs answers 409 `CapturedPatternBusy`; list is newest first and paginated; a reused Idempotency-Key
   with another body answers as for other calls. Seen failing
@@ -256,7 +270,8 @@ proposed and adding the derived value works; the proof ends passed with no model
   `getCapturedPattern` read right after the run's end line, and after an engine restart, shows
   the completed proof); a second proof under the same method reuses no earlier result and runs every step;
   `PUT /parameters` while a proof's run has not ended (also a failed proof's waiting run)
-  answers `CapturedPatternBusy`;
+  answers `CapturedPatternBusy`; `PUT /parameters` moves a proven one back to proposed; the
+  state table's proven and approved columns;
   a planted template byte change fails it naming the file; a planted
   failing check fails it naming step and check, and a `fill` step is never attempted twice;
   approval before a passing proof, or after one
@@ -352,17 +367,18 @@ pass, three runs give the same files.
   and the `Run` and `RunStarted` carry `pattern` (`<id>@<version>`), `pattern_reason` (`base`,
   `fits`, `chosen`), the parameters' values and `source_run`; the refusals come in the contract's
   order; resume and take-over of a captured run keep its pattern and parameters, and a replay
-  uses the same captured pattern, refused with `CapturedPatternWithdrawn` or `ProofRequired` when
-  it is not usable, keeping the recorded parameter values with no new fit; capturing a run built
+  uses the same captured pattern, refused with `ProofRequired` when its latest proof failed (the
+  withdrawn refusal is T018's), keeping the recorded parameter values with no new fit; capturing a run built
   from a captured pattern answers `RunNotCapturable`; two slices that differ only in a value that
   occurs in the goals alone never reuse each other's filled results; a run from a captured pattern makes no agent worker or
   gateway call and ends handed over, naming the failing check, when a filled check fails, with no
   agent step started; the base pattern's fit conditions still run. Seen failing
 - [ ] T014 [P] [US2] Test author: new `src/tests/acceptance/captured_test.go` (Compose stack,
-  recorded model): build the notes slice from the recorded happy set until done; capture; prove;
-  approve; write and approve the `tasks` slice (the notes slice with `note`/`notes` replaced)
-  through the slice API, with no analyst call; `ap build` ends done; the gateway's access log has
-  no request after the capture (SC-001); three builds give equal file hashes (SC-004); `--pattern api-feature-go` runs
+  recorded model): create the `tasks` slice first, from a recorded analyst answer kept as test
+  data, then build the notes slice from the recorded happy set until done; capture; prove;
+  approve; replace and approve the `tasks` slice's parts (the notes slice with `note`/`notes`
+  replaced) through the slice API, which calls no analyst; `ap build` ends done; the gateway's
+  access log has no request from the capture to the build's end (SC-001); three builds give equal file hashes (SC-004); `--pattern api-feature-go` runs
   the agents. Seen failing (owner go-ahead for the stack)
 - [ ] T030 [P] [US2] Test author: new `src/cli/captured_build_test.go`: `ap build --pattern`
   sends `pattern`; `build`'s first line, the `RunStarted` event line, the `run` header and the
@@ -400,7 +416,8 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   an erased captured pattern answers NotFound naming it; a new capture under an erased captured
   pattern's ID answers `CapturedPatternExists`; the state table's withdrawn column (parameters,
   proof slice, approval refused with `CapturedPatternWithdrawn`, withdrawal again changes
-  nothing); a withdrawn captured pattern's proof
+  nothing); a replay of a run built from a withdrawn captured pattern answers
+  `CapturedPatternWithdrawn`; a withdrawn captured pattern's proof
   slice answers `CapturedPatternWithdrawn` at `startRun` and `proof-slice`; erasing a captured
   pattern erases its proof slice and that slice's runs, and answers `CapturedPatternBusy` while a
   proof's run has not ended. Seen failing
