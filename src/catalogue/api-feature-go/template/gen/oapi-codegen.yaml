@@ -7,5 +7,10 @@ generate:
   strict-server: true
   models: true
 output: api.gen.go
+output-options:
+  # The request check (catalogue README, "Request check"): every operation is registered through
+  # refuseMalformed (gen/requests.go).
+  user-templates:
+    stdhttp/std-http-handler.tmpl: std-http-handler.tmpl
 compatibility:
   always-prefix-enum-values: true

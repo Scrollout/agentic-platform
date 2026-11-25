@@ -51,14 +51,15 @@ const generateDirective = "//go:generate oapi-codegen "
 // Generate is the generate procedure. From the contract output of contract-check (the framed form
 // of api/openapi.yaml) it produces the output generated-code: the template's files (go.mod, go.sum,
 // gen/), the code oapi-codegen generates into gen/ by the template's directive, gen/stub.go (a
-// server that answers every operation 501 Not Implemented), gen/declared.go (the contract's
-// declared values as constants, checks.RenderDeclared), the seam internal/app/app.go (New
+// server that answers every operation 501 Not Implemented), gen/request_shapes.go (the contract's
+// request bodies as the template's request check reads them, checks.RenderRequestShapes),
+// gen/declared.go (the contract's declared values as constants, checks.RenderDeclared), the seam internal/app/app.go (New
 // returning that stub, for the tests to serve) and vendor/ from `go mod vendor`, all
 // offline. It runs the whole generation twice in fresh folders and completes only when both give
 // the same bytes, go.mod and go.sum are the template's byte for byte (so the template's go.sum
 // verified every module), and the module builds from vendor/ alone.
 //
-// A wrong input set, a contract oapi-codegen rejects, a go.sum that disagrees with a module and
+// A wrong input set, a contract oapi-codegen or checks.RequestShapes rejects, a go.sum that disagrees with a module and
 // a module that does not build are Completed false, with a reason naming project paths only. A
 // content that does not have its hash is ErrInputHashMismatch; a tool or template that cannot be
 // used is another error.
@@ -156,6 +157,10 @@ func generateOnce(ctx context.Context, cfg GenerateConfig, contract []byte) ([]F
 	if directive == nil {
 		return nil, "", fmt.Errorf("generate: the template's gen/ has no %q line", strings.TrimSpace(generateDirective))
 	}
+	bodies, err := checks.RequestShapes(contract)
+	if err != nil {
+		return nil, "the contract's request bodies cannot be served by the request check: " + err.Error(), nil
+	}
 	keep := map[string][]byte{}
 	for _, f := range template {
 		keep[f.Path] = f.Content
@@ -198,6 +203,11 @@ func generateOnce(ctx context.Context, cfg GenerateConfig, contract []byte) ([]F
 		return nil, "the generated code in gen/ cannot be read for the stub: " + scrub([]byte(err.Error()), dir), nil
 	}
 	if err := os.WriteFile(filepath.Join(gen, "stub.go"), stub, 0o644); err != nil {
+		return nil, "", err
+	}
+	// gen/request_shapes.go is written before gen/declared.go, so GenNames sees the same files here
+	// as DeclaredValuesGenerated sees in the project.
+	if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(checks.RequestShapesFile)), checks.RenderRequestShapes(bodies), 0o600); err != nil {
 		return nil, "", err
 	}
 	taken, err := checks.GenNames(gen)

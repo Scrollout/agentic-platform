@@ -58,6 +58,13 @@ var checkByName = map[string]func(c *call) []checks.CheckResult{
 		}
 		return checks.DeclaredValuesNotRepeated(c.dir, c.req.Step.Writable, text)
 	},
+	"RequestShapesGenerated": func(c *call) []checks.CheckResult {
+		text, bad := c.approvedContract("RequestShapesGenerated")
+		if bad != nil {
+			return bad
+		}
+		return checks.RequestShapesGenerated(c.dir, text)
+	},
 	"DeploymentValuesConfigured": func(c *call) []checks.CheckResult {
 		return checks.DeploymentValuesConfigured(c.dir, c.req.Step.Writable)
 	},
