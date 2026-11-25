@@ -382,7 +382,7 @@ passes at pass^3 on the changed pattern (FR-009, FR-010, SC-003; research R6).
 **Independent Test**: T015 passes; quickstart 5: the paid run reports every counted case pass^3,
 `review/clean` counted.
 
-- [ ] T015 [P] [US3] Test author B (approved changes, `Tests-approved-by:`), tests first: new
+- [x] T015 [P] [US3] Test author B (approved changes, `Tests-approved-by:`), tests first: new
   `src/tests/evals/steps/grade_requests_test.go`, the grader's self-test: the malformed-request grader passes on the
   reference implementation in a project generated on the changed pattern (`{"TEXT":"x"}` 400,
   `{"text":"a","TEXT":"b"}` 201 with `"a"`, `{"text":"a","text":"b"}` 400) and fails, naming the
@@ -390,10 +390,16 @@ passes at pass^3 on the changed pattern (FR-009, FR-010, SC-003; research R6).
   `src/tests/evals/steps/quarantine_test.go` and `quarantine_print_evals_test.go` expect no case
   quarantined (`review/clean` counted), the quarantine's report form still tested with a
   synthetic case
-- [ ] T016 [US3] Test author A, not T015's (approved changes, `Tests-approved-by:`; a grader and an
+- [x] T016 [US3] Test author A, not T015's (approved changes, `Tests-approved-by:`; a grader and an
   eval case are tests): the malformed-request grader in `src/tests/evals/steps/grade.go` among the
   code graders, and in its `README.md` table; `src/tests/evals/steps/cases.go` drops
   `Quarantine: "T202"` from `review/clean`; T015 passes
+  Done: T016 795838a (`MalformedRequestsRefused`, constant `GRefused`, `grade_requests.go` and
+  `testdata/requests/requests_test.go`; the status is read from one pass/fail test per status bit,
+  since `VariantRun` reports test outcomes only), T015 6b0df1b (`grade_requests_test.go`; seen
+  failing against a scratch stub; `TestGraderRequests*` and `Quarantine` 41 s, `GraderHeldOut` and
+  `GraderCodeAgent` 79 s, `GraderValues` 18 s). Not tested: the grader failing on its own through
+  `GradeCode` (no fixture passes every earlier grader and fails only it)
 - [ ] T017 [US3] The coordinating session (not the code author) synthesises the mappings of every step set with `synth-steps.sh` (owner go-ahead;
   Docker, no key; on the clean VM as in feature 009, `scripts/check.sh --prepare` first on a fresh
   clone), the old mappings removed first; review the diffs against their scripts
