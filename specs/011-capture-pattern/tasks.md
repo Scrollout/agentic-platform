@@ -185,7 +185,9 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   artifact read in full): E1 fixed; 0 CRITICAL, 0 HIGH; 1 MEDIUM (U1 a named unapproved captured
   pattern at `startRun`: new `CapturedPatternNotApproved`), 2 LOW (O1 the method-rule `startRun`
   cases move to T013; C1 `nOTE` and inline text in T003, the no-parameter line); fixed at the
-  source (contract draft; data model; T001, T003, T008, T013, T018). Round 20 owed.
+  source (contract draft; data model; T001, T003, T008, T013, T018). Round 20 (fresh Sonnet, at f6fd1ce): U1, O1, C1
+  fixed; 0 CRITICAL, 0 HIGH, 0 MEDIUM; 2 LOW (F1 R7's code list; F2 Busy applies only to a
+  proof's start); fixed at the source (research R7; contract draft; data model). Round 21 owed.
 
 ---
 

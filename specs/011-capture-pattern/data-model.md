@@ -98,8 +98,8 @@ any --(erase, confirmed)--> erased
 | `withdrawCapturedPattern` | withdraws | withdraws | withdraws | changes nothing |
 | `eraseCapturedPattern` | erases | erases | erases | erases |
 
-Every call, and a proof's `startRun`, answers `CapturedPatternBusy` while another of its
-operations runs; `replaceParameters`
+Every call, and a proof's `startRun` (never another slice's `startRun`), answers
+`CapturedPatternBusy` while another of its operations runs; `replaceParameters`
 and erasure also while a proof's run (or, for erasure, a run built from it) has not ended.
 `approveCapturedPattern` on an approved one changes nothing whatever its proofs.
 

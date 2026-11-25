@@ -36,7 +36,9 @@ fitting captured pattern that needs a new proof and each that did not fit only b
 refused value, with the parameter and why. Refusals, in this order, each at once: InvalidRequest or
 InvalidProject; NotFound for an unknown slice or a `pattern` naming no pattern; PatternDoesNotFit
 for the base conditions, as before; NotApproved; `CapturedPatternWithdrawn`, then
-`CapturedPatternBusy` (a proof's start while another captured-pattern operation runs), then
+`CapturedPatternBusy` (only a proof's start, while another captured-pattern operation runs; a
+non-proof `startRun`, named or not, never answers Busy: it judges the pattern by its recorded
+state and `usable` value), then
 `CapturedPatternNotApproved` (a named captured pattern that is proposed or proven, FR-006; a
 proof slice's own run is not refused), then `ProofRequired`, for a named captured pattern (or a
 proof slice's, withdrawn and busy only);

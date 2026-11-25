@@ -272,7 +272,8 @@ that did not fit only because of a refused value, with the reason (*owner*).
 `DELETE /{id}` (erase, confirmed), each state change an operation with an Idempotency-Key;
 `startRun` gains an optional `pattern`. New error codes: `RunNotDone`, `ParameterRefused`,
 `ProofRequired`, `CapturedPatternWithdrawn`, `CapturedPatternExists`, `CapturedPatternBusy`,
-`CapturedPatternApproved`, `RunNotCapturable` (the contract draft lists them per call).
+`CapturedPatternApproved`, `RunNotCapturable`, `CapturedPatternNotApproved` (a named proposed or
+proven captured pattern at `startRun`, FR-006; the contract draft lists them per call).
 Erasure shows what it will erase (the captured pattern, the artifacts only it holds) before the
 client asks for confirmation (Principle XVII). The terminal client gains `ap capture`, `ap patterns`,
 `ap pattern`, `ap proof-slice`, `ap approve-pattern`, `ap withdraw-pattern`, `ap erase-pattern` and
