@@ -1,0 +1,62 @@
+openapi: 3.1.0
+info:
+  title: Notes
+  version: 1.0.0
+paths:
+  /notes:
+    get:
+      operationId: listNotes
+      x-rules: [R-1]
+      responses:
+        "200":
+          description: Every note, in creation order.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Note"
+    post:
+      operationId: createNote
+      x-rules: [R-2, R-3]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewNote"
+      responses:
+        "201":
+          description: The created note.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "400":
+          description: The text is empty.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  schemas:
+    Note:
+      type: object
+      required: [id, text]
+      properties:
+        id:
+          type: integer
+        text:
+          type: string
+    NewNote:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string

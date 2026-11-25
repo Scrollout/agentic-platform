@@ -1,0 +1,252 @@
+openapi: 3.1.0
+info:
+  title: Shapes
+  version: 1.0.0
+paths:
+  /orders:
+    post:
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Order"
+      responses:
+        "200":
+          description: Seen.
+        "400":
+          $ref: "#/components/responses/Refused"
+  /orders/{id}/lines:
+    post:
+      operationId: updateThing
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderItem"
+      responses:
+        "200":
+          description: Seen.
+        "400":
+          $ref: "#/components/responses/Refused"
+  /closed:
+    post:
+      operationId: createClosed
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [text]
+              properties:
+                text:
+                  type: string
+                other:
+                  type: string
+      responses:
+        "200":
+          description: Seen.
+        "400":
+          $ref: "#/components/responses/Refused"
+  /ints:
+    post:
+      operationId: setInts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                n:
+                  type: integer
+                r:
+                  type: number
+      responses:
+        "200":
+          description: Seen.
+        "400":
+          $ref: "#/components/responses/Refused"
+  /free:
+    post:
+      operationId: setFree
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Seen.
+        "400":
+          $ref: "#/components/responses/Refused"
+  /reqonly:
+    post:
+      operationId: setReqOnly
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+      responses:
+        "200":
+          description: Seen.
+        "400":
+          $ref: "#/components/responses/Refused"
+  /optional:
+    post:
+      operationId: setOptional
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+      responses:
+        "200":
+          description: Seen.
+        "400":
+          $ref: "#/components/responses/Refused"
+  /tree:
+    post:
+      operationId: setTree
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Node"
+      responses:
+        "200":
+          description: Seen.
+        "400":
+          $ref: "#/components/responses/Refused"
+  /list:
+    post:
+      operationId: setList
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                required: [name]
+                properties:
+                  name:
+                    type: string
+      responses:
+        "200":
+          description: Seen.
+        "400":
+          $ref: "#/components/responses/Refused"
+  /either:
+    post:
+      operationId: setEither
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: [object, "null"]
+              properties:
+                a:
+                  type: string
+      responses:
+        "200":
+          description: Seen.
+        "400":
+          $ref: "#/components/responses/Refused"
+  /anything:
+    post:
+      operationId: setAnything
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {}
+      responses:
+        "200":
+          description: Seen.
+        "400":
+          $ref: "#/components/responses/Refused"
+components:
+  responses:
+    Refused:
+      description: The request is refused.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+    OrderItem:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        qty:
+          type: integer
+    Order:
+      type: object
+      required: [name, items, "a/b", "c~d"]
+      properties:
+        name:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        count:
+          type: integer
+        flag:
+          type: boolean
+        note:
+          type: [string, "null"]
+        anything: {}
+        meta:
+          type: object
+        tags:
+          type: array
+        loose:
+          properties:
+            x:
+              type: string
+        "a/b":
+          type: string
+        "c~d":
+          type: string
+    Node:
+      type: object
+      required: [value]
+      properties:
+        value:
+          type: integer
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/Node"
+        next:
+          $ref: "#/components/schemas/Node"
