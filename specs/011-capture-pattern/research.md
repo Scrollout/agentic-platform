@@ -100,7 +100,7 @@ lower case (`S-3` gives `api-feature-go-s-3`); an ID that exists answers `Captur
 Its version is always `1.0.0`: an approved captured pattern never changes, and a change is a new
 capture under another name (*owner*, FR-007). One operation at a time per captured pattern: a
 parameters change, proof, approval, withdrawal or erasure while another of its operations runs
-answers `CapturedPatternBusy` (Principle IV ordering; analyze O1).
+answers `CapturedPatternBusy` (Principle IV ordering; analyze O1). Erasure is also refused while a run built from it, or its proof, has not ended (analyze round 2, F4).
 
 **Rationale**: Principle III (user-managed things enter through the API and live in the owning
 component's store); the repository's `src/catalogue/` stays the reviewed base patterns, and a

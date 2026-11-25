@@ -53,7 +53,9 @@ any --(erase, confirmed)--> erased
 A captured pattern is **usable** when it is `approved` and its latest proof passed under the
 engine's current method; a method change or a later failing proof makes it unusable until a new
 proof passes (FR-011). Only a usable captured pattern is judged at `startRun`. One operation at a
-time per captured pattern; another answers `CapturedPatternBusy`.
+time per captured pattern; another answers `CapturedPatternBusy`. While a newer proof runs, the latest
+proof has not passed, so the captured pattern is unusable until it does (fail closed). Erasure is
+refused with `CapturedPatternBusy` while a run built from it, or its proof, has not ended.
 
 ## Run (added fields)
 

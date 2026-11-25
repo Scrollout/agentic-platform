@@ -60,7 +60,12 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   the fit and say why; the proof's real claim; SC-002 dropped; no versions); fixed at their source
   (spec Clarifications, Story 2, edge cases, FR-003, FR-004, FR-007, FR-008, FR-010, SC-006;
   research E1, R1, R3 to R7; data model; contract; plan threat model, Decisions, Complexity
-  Tracking; ADR 0095; glossary; T001 to T003, T005, T006, T012 to T014, T018, T019).
+  Tracking; ADR 0095; glossary; T001 to T003, T005, T006, T012 to T014, T018, T019). Round 2
+  (fresh Sonnet, at 351e28b): every round-1 finding fixed except M1's wording in FR-011; 0
+  CRITICAL, 0 HIGH; F1 MEDIUM (FR-011 "latest passing proof"), F2 to F4 LOW (a running proof;
+  ADR 0090 silent on the review outputs and attempts; erasure during a run); fixed at their
+  source (FR-011, an edge case, research R3, data model, plan, T018); F3 closed: the detail lives
+  in research R1 and the data model, ADR 0090 records the decision. Gate passed.
 
 ---
 
@@ -219,7 +224,7 @@ pass, three runs give the same files.
 
 ## Phase 4: User Story 3 - A captured pattern stays true to its method (Priority: P3)
 
-**Goal**: a captured pattern is used only under the method of its latest passing proof; it can be
+**Goal**: a captured pattern is used only while its latest proof passed under the current method; it can be
 withdrawn and erased; runs record it (FR-011 to FR-013; research R3, R5).
 
 **Independent Test**: T018-T019 pass: after a method change a fitting slice's run uses the base
@@ -233,7 +238,9 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   withdrawal stops its choice and a named use answers `CapturedPatternWithdrawn`, a run already
   started finishes on it, and earlier runs' records still name it; a later failing proof under the
   current method makes an approved one unusable; erasing the source slice keeps its template
-  artifacts and its use, and a new proof after the erasure passes; erasing the captured pattern removes the artifacts only it
+  artifacts and its use, and a new proof after the erasure passes; a proof still running makes it unusable until it passes; erasing it while a
+  run built from it or its proof has not ended answers 409 `CapturedPatternBusy`; erasing the
+  captured pattern removes the artifacts only it
   holds and keeps the run records. Seen failing
 - [ ] T019 [P] [US3] Test author: new `src/cli/captured_lifecycle_test.go`: `ap withdraw-pattern`
   and `ap erase-pattern` (shows what will be erased, asks for confirmation, does nothing without

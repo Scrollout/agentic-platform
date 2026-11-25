@@ -17,7 +17,7 @@ except the two that read review findings (R1, R2). A slice fits a captured patte
 the source slice with one value per parameter gives exactly the approved slice (R4). A proof is a
 run of the source slice under the captured pattern with its own values whose files must equal the
 accepted ones; the developer approves after a passing proof, and a captured pattern is used only
-under the method of its latest passing proof (R5). `startRun` uses the newest usable fitting
+while its latest proof passed under the current method (R5). `startRun` uses the newest usable fitting
 captured pattern unless the request names another (R6). Captured patterns live in the engine
 store, behind a new `/captured-patterns` resource and new terminal commands (R3, R7).
 
@@ -94,7 +94,7 @@ Each decision that outlives the feature has a record in `docs/decisions/`.
 | Parameters are names in three case forms and declared values; a slice fits when filling the source gives it exactly; one engine owns the rules | R4 | [ADR 0092](../../docs/decisions/0092-captured-pattern-fit-is-exact-substitution.md) |
 | Any other literal value of the slice may be added as a parameter; a number matches only as a whole number | E1, R4 | [ADR 0094](../../docs/decisions/0094-any-literal-value-may-be-a-parameter.md) (supersedes ADR 0092 in part) |
 | A captured pattern never changes (always `1.0.0`; a change is a new capture); a value keeps its parameter's kind; a name has at least two letters; a proof builds from the captured pattern's copy of the slice | R3, R4, R5 | [ADR 0095](../../docs/decisions/0095-captured-patterns-never-change-values-keep-their-kind.md) (supersedes ADR 0091 and ADR 0092 in part) |
-| A captured pattern is used only under the method of its latest passing proof, a run of its source slice whose files equal the accepted ones; the newest usable fitting one is chosen unless the run names another | R5, R6 | [ADR 0093](../../docs/decisions/0093-captured-pattern-used-only-under-its-proven-method.md) |
+| A captured pattern is used only while its latest proof passed under the current method, a run of its source slice whose files equal the accepted ones; the newest usable fitting one is chosen unless the run names another | R5, R6 | [ADR 0093](../../docs/decisions/0093-captured-pattern-used-only-under-its-proven-method.md) |
 
 ## Threat model
 

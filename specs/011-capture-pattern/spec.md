@@ -197,7 +197,8 @@ use the captured pattern and says it needs a new proof; proving it again restore
   rule (Story 3) decides whether it needs a new proof.
 - The proof is interrupted by a platform restart: it continues or is started again, and a
   proposal is never marked proven without a complete, recorded proof.
-- A run already in progress when its captured pattern is withdrawn finishes on it.
+- A run already in progress when its captured pattern is withdrawn finishes on it; erasing a
+  captured pattern is refused while a run built from it, or its proof, has not ended.
 
 ## Requirements *(mandatory)*
 
@@ -257,8 +258,9 @@ use the captured pattern and says it needs a new proof; proving it again restore
 
 #### Method and record
 
-- **FR-011**: A captured pattern MUST be used only under the method its latest passing proof ran
-  under. Under any other method a run MUST NOT use it and MUST tell the developer it needs a new
+- **FR-011**: A captured pattern MUST be used only while its latest proof passed under the current
+  method. Otherwise (a method change, a later failing proof, a proof still running) a run MUST
+  NOT use it and MUST tell the developer it needs a new
   proof; the developer MUST be able to start that proof.
 - **FR-012**: The developer MUST be able to withdraw a captured pattern; no run started after that
   uses it, and records of earlier runs keep naming it.
