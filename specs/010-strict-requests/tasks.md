@@ -247,7 +247,8 @@ with the clean reference, `{"text":"a","TEXT":"b"}` gives 201 with `"a"`.
   session; trailer `Tests-approved-by: Marius Gologan (2026-11-25)`
 - [ ] T029 [US1] Owner approval to make the four "escape" cases of
   `src/engine/procedures/request_regress_test.go` (lines 45-46, 49-50) carry real JSON escapes
-  (`\u0074ext`), as T027 for line 706; with T027 and T028 in a new session
+  (`\u0074ext`), as T027 for line 706; with T027 and T028 in a new session. Owner, 2026-11-25:
+  approved; trailer `Tests-approved-by: Marius Gologan (2026-11-25)`
 - [ ] T030 [US1] Test author (new file): a body object of 17 or more members with a duplicate at
   positions 1 and 17, 16 and 17, and 17 and 18, each named twice (the request check's switch from a
   scan to a map at 16 members); with T027 to T029
