@@ -222,7 +222,7 @@ with the clean reference, `{"text":"a","TEXT":"b"}` gives 201 with `"a"`.
   schemas) closed: consistent with the YAML reading of the whole contract, and an alias in a schema
   is refused; F8 (the GeneratedCodeUnchanged test supplies its own `gen/**`): T028; F9 (the pin
   test proves the label only) closed: stated in its docstring and the README
-- [ ] T024 [US1] Test author (new files): `src/engine/checks/request_shapes_regress_test.go`:
+- [x] T024 [US1] Test author (new files): `src/engine/checks/request_shapes_regress_test.go`:
   `additionalProperties: False` and `FALSE` close a shape and `True` does not; `required: True`
   and `TRUE` make a body required; any key beside a `$ref` other than an annotation or an `x-` key
   (`not`, `allOf`, `nullable`, `maxLength`) is an error naming the location;
@@ -231,7 +231,7 @@ with the clean reference, `{"text":"a","TEXT":"b"}` gives 201 with `"a"`.
   an escape (`{"text":"a","\u0074ext":"b"}`) is named twice; an escaped declared name passes byte
   for byte; a 1 MiB array of `{}` against a shape of 300 properties is answered within 2 seconds;
   seen failing where the code is wrong
-- [ ] T025 [US1] Code author: read a YAML boolean as YAML does (F1, F2), refuse every key beside a
+- [x] T025 [US1] Code author: read a YAML boolean as YAML does (F1, F2), refuse every key beside a
   `$ref` but annotations and `x-` keys (F3) in `src/engine/checks/shapes.go`; build each shape's
   member lookup once, not per object (F4), in `template/gen/requests.go` (the fixture templates' copies keep
   compiling with the same types and need no change); T003-T006 and T024 pass

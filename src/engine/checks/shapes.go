@@ -161,7 +161,7 @@ func (w *shapeWalk) bodies() []RequestBody {
 
 // body reads one requestBody at loc, following a $ref to it.
 func (w *shapeWalk) body(n *yaml.Node, loc string) (RequestBody, bool) {
-	n, loc, ok := w.follow(n, loc)
+	n, loc, ok := w.follow(n, loc, false)
 	if !ok {
 		return RequestBody{}, false
 	}
@@ -171,7 +171,10 @@ func (w *shapeWalk) body(n *yaml.Node, loc string) (RequestBody, bool) {
 	}
 	var b RequestBody
 	if r := lookup(n, "required"); r != nil {
-		b.Required = deref(r).ShortTag() == "!!bool" && deref(r).Value == "true"
+		if b.Required, ok = yamlBool(deref(r)); !ok {
+			w.refuse(loc+"/required", "required is not true or false")
+			return RequestBody{}, false
+		}
 	}
 	content := lookup(n, "content")
 	if content == nil || deref(content).Kind != yaml.MappingNode || len(deref(content).Content) == 0 {
@@ -205,8 +208,9 @@ func (w *shapeWalk) body(n *yaml.Node, loc string) (RequestBody, bool) {
 }
 
 // follow resolves n through local $refs to the node they name, with a visited set; loc is then
-// the target's location. A $ref that is not local, does not resolve or loops is refused.
-func (w *shapeWalk) follow(n *yaml.Node, loc string) (*yaml.Node, string, bool) {
+// the target's location. A $ref that is not local, does not resolve or loops is refused, and so,
+// in a schema, is a key beside a $ref other than an annotation or an x- key.
+func (w *shapeWalk) follow(n *yaml.Node, loc string, schema bool) (*yaml.Node, string, bool) {
 	seen := map[*yaml.Node]bool{}
 	for {
 		if n.Kind == yaml.AliasNode || n.Anchor != "" {
@@ -222,6 +226,9 @@ func (w *shapeWalk) follow(n *yaml.Node, loc string) (*yaml.Node, string, bool) 
 		}
 		if seen[n] {
 			w.refuse(loc, "$ref loops and never reaches a schema")
+			return nil, loc, false
+		}
+		if schema && !w.refSiblings(n, loc) {
 			return nil, loc, false
 		}
 		seen[n] = true
@@ -266,16 +273,7 @@ func (w *shapeWalk) resolve(ref *yaml.Node, loc string) (*yaml.Node, string, boo
 
 // schema is the shape of the schema at n (location loc), or nil when it is refused.
 func (w *shapeWalk) schema(n *yaml.Node, loc string) *RequestShape {
-	if n.Kind == yaml.MappingNode && lookup(n, "$ref") != nil {
-		for i := 0; i+1 < len(n.Content); i += 2 {
-			if k := n.Content[i].Value; k != "$ref" && requestShapingKeywords[k] {
-				w.refuse(loc, "%s beside $ref is not supported in a request body", k)
-				return nil
-			}
-		}
-		w.anchorsIn(n, loc, "$ref")
-	}
-	n, loc, ok := w.follow(n, loc)
+	n, loc, ok := w.follow(n, loc, true)
 	if !ok {
 		return nil
 	}
@@ -308,10 +306,10 @@ func (w *shapeWalk) schema(n *yaml.Node, loc string) *RequestShape {
 		case key == "required":
 			s.RequiredMembers = w.required(v, at)
 		case key == "additionalProperties":
-			if v.Kind != yaml.ScalarNode || v.ShortTag() != "!!bool" || v.Anchor != "" {
+			if open, ok := yamlBool(v); !ok || v.Anchor != "" {
 				w.refuse(at, "additionalProperties is not supported in a request body unless it is true or false")
 			} else {
-				s.Closed = v.Value == "false"
+				s.Closed = !open
 			}
 		case key == "items":
 			s.Items = w.schema(v, at)
@@ -330,6 +328,30 @@ func (w *shapeWalk) schema(n *yaml.Node, loc string) *RequestShape {
 		}
 	}
 	return s
+}
+
+// refSiblings refuses each key of the $ref mapping n other than $ref, an annotation or an x- key,
+// and a YAML anchor or alias in it; it reports whether n passed.
+func (w *shapeWalk) refSiblings(n *yaml.Node, loc string) bool {
+	before := len(w.problems)
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		k := n.Content[i].Value
+		if k != "$ref" && !requestAnnotationKeywords[k] && !strings.HasPrefix(k, "x-") {
+			w.refuse(loc, "%s beside $ref is not supported in a request body", k)
+		}
+	}
+	w.anchorsIn(n, loc, "$ref")
+	return len(w.problems) == before
+}
+
+// yamlBool is the value of a YAML boolean, in any spelling YAML reads as one (false, False, FALSE,
+// ...), and whether n is one; a quoted string is not.
+func yamlBool(n *yaml.Node) (bool, bool) {
+	var b bool
+	if n.Kind != yaml.ScalarNode || n.ShortTag() != "!!bool" || n.Decode(&b) != nil {
+		return false, false
+	}
+	return b, true
 }
 
 // anchorsIn refuses a YAML anchor or alias anywhere in the value of keyword at loc.

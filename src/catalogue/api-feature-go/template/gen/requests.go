@@ -12,8 +12,10 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // requestBody is one operation's request body as the contract declares it.
@@ -177,7 +179,7 @@ func (c *requestCheck) read() (*requestValue, string) {
 			return v, ""
 		}
 		v := &requestValue{kind: "object"}
-		seen := map[string]bool{}
+		var seen map[string]bool // made once an object has enough members to need it
 		for c.dec.More() {
 			nt, err := c.dec.Token()
 			name, ok := nt.(string)
@@ -185,10 +187,18 @@ func (c *requestCheck) read() (*requestValue, string) {
 				return nil, "the request body is not valid JSON"
 			}
 			c.push(name)
-			if seen[name] {
+			if seen == nil && len(v.names) >= 16 {
+				seen = make(map[string]bool, 2*len(v.names))
+				for _, n := range v.names {
+					seen[n] = true
+				}
+			}
+			if (seen == nil && v.has(name)) || seen[name] {
 				return nil, c.member("is named twice")
 			}
-			seen[name] = true
+			if seen != nil {
+				seen[name] = true
+			}
 			m, message := c.read()
 			c.pop()
 			if message != "" {
@@ -255,56 +265,77 @@ func (c *requestCheck) walk(v *requestValue, s *requestShape) (bool, string) {
 	return changed, ""
 }
 
-// walkObject is walk for an object value.
+// walkObject is walk for an object value. The declared names are looked up in the shape's index,
+// made once per shape, so an object costs time for its own members only.
 func (c *requestCheck) walkObject(v *requestValue, s *requestShape, changed bool) (bool, string) {
-	at := make(map[string]int, len(v.names))
-	for i, n := range v.names {
-		at[n] = i
-	}
 	for _, n := range s.RequiredMembers {
-		if _, ok := at[n]; !ok {
+		if !v.has(n) {
 			c.push(n)
 			return false, c.member("is required")
 		}
 	}
-	declared := make(map[string]bool, len(s.Properties))
-	for _, m := range s.Properties {
-		declared[m.Name] = true
+	if len(v.names) == 0 || (s.Properties == nil && !s.Closed) {
+		return changed, ""
 	}
-	if s.Closed {
-		for _, n := range v.names {
-			if !declared[n] {
-				c.push(n)
-				return false, c.member("is not declared")
-			}
+	index := requestMemberIndex(s)
+	var present [][2]int // the position of each declared member in Properties, and in the body
+	for i, n := range v.names {
+		if p, ok := index[n]; ok {
+			present = append(present, [2]int{p, i})
+		} else if s.Closed {
+			c.push(n)
+			return false, c.member("is not declared")
 		}
 	}
-	for _, m := range s.Properties {
-		i, ok := at[m.Name]
-		if !ok {
-			continue
-		}
-		c.push(m.Name)
-		ch, message := c.walk(v.members[i], m.Shape)
+	slices.SortFunc(present, func(a, b [2]int) int { return a[0] - b[0] })
+	for _, p := range present {
+		c.push(v.names[p[1]])
+		ch, message := c.walk(v.members[p[1]], s.Properties[p[0]].Shape)
 		c.pop()
 		if message != "" {
 			return false, message
 		}
 		changed = changed || ch
 	}
-	if s.Properties == nil {
+	if s.Properties == nil || len(present) == len(v.names) {
 		return changed, ""
 	}
-	names, members := v.names[:0:0], v.members[:0:0]
+	names, members := make([]string, 0, len(present)), make([]*requestValue, 0, len(present))
 	for i, n := range v.names {
-		if declared[n] {
+		if _, ok := index[n]; ok {
 			names, members = append(names, n), append(members, v.members[i])
 		}
 	}
-	if len(names) != len(v.names) {
-		v.names, v.members, changed = names, members, true
+	v.names, v.members = names, members
+	return true, ""
+}
+
+// has reports whether the object v has a member named n.
+func (v *requestValue) has(n string) bool {
+	for _, x := range v.names {
+		if x == n {
+			return true
+		}
 	}
-	return changed, ""
+	return false
+}
+
+// requestMemberIndexes holds, per shape, the position in Properties of each declared name.
+var requestMemberIndexes sync.Map // *requestShape -> map[string]int
+
+// requestMemberIndex is the position in s.Properties of each declared name, made on first use.
+func requestMemberIndex(s *requestShape) map[string]int {
+	if m, ok := requestMemberIndexes.Load(s); ok {
+		return m.(map[string]int)
+	}
+	m := make(map[string]int, len(s.Properties))
+	for i, p := range s.Properties {
+		if _, dup := m[p.Name]; !dup {
+			m[p.Name] = i
+		}
+	}
+	got, _ := requestMemberIndexes.LoadOrStore(s, m)
+	return got.(map[string]int)
 }
 
 // requestPlainInteger decides, on its text alone, whether the JSON number text has a zero fractional
