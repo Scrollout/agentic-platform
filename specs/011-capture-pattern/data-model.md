@@ -17,7 +17,7 @@ artifacts in its content-addressed store.
 | `proof_slice` | the slice ID of its proof slice, absent until the first proof request and cleared when that slice is erased | an approved slice made from `slice`; its runs are the proofs (research R5) |
 | `parameters` | list of Parameter | FR-003 |
 | `proofs` | list of Proof, newest last | FR-005 |
-| `approval` | who, when, the proof it approved | only after a passing proof under the current method (FR-006) |
+| `approval` | `by` (`client`: the developer's client token, the only caller that may approve; the engine holds no user identity), `at`, the proof it approved | only after a passing proof under the current method (FR-006) |
 | `state` | see below | |
 
 ## Parameter
@@ -39,7 +39,9 @@ declares is source `declared-value`, kind `number` or `string` as the contract w
 is source `literal`, kind `number` when it is a number, else `string`; a parameter sent again keeps
 its kind and source), finds the `places`, and sets `origin`. The terminal client's `--add
 [<name>=]<value>` takes the name from the value when none is given (refused when the value is not
-a valid name). The limits (32 parameters, 10000 places, 64 characters) are the contract's integer
+a valid name). Capture refuses with `RunNotCapturable` a run of a captured pattern, a proof run,
+and a run whose slice changed after it started (a part's hash differs from the run's
+`RunStarted` inputs, or a part is no longer approved), naming the part. The limits (32 parameters, 10000 places, 64 characters) are the contract's integer
 `x-limits` keys.
 
 ## Proof
@@ -73,8 +75,21 @@ keeps every Proof; its `run` then answers NotFound.
 proposed --(proof passes)--> proven --(developer approves)--> approved --(withdraw)--> withdrawn
 proven --(parameters changed, or a proof fails)--> proposed
 approved: a new proof may run at any time; the state stays approved
+withdrawn: final; only erasure follows
 any --(erase, confirmed)--> erased
 ```
+
+| Call | proposed | proven | approved | withdrawn |
+|------|----------|--------|----------|-----------|
+| `replaceParameters` | changes them | changes them, back to proposed | `CapturedPatternApproved` | `CapturedPatternWithdrawn` |
+| `makeProofSlice`, a proof's `startRun` | allowed | allowed | allowed | `CapturedPatternWithdrawn` |
+| `approveCapturedPattern` | `ProofRequired` | approves | changes nothing | `CapturedPatternWithdrawn` |
+| `withdrawCapturedPattern` | withdraws | withdraws | withdraws | changes nothing |
+| `eraseCapturedPattern` | erases | erases | erases | erases |
+
+Every call answers `CapturedPatternBusy` while another of its operations runs; `replaceParameters`
+and erasure also while a proof's run (or, for erasure, a run built from it) has not ended.
+`approveCapturedPattern` on an approved one changes nothing whatever its proofs.
 
 A captured pattern is **usable** when it is `approved` and its latest proof passed under the
 engine's current method; a method change or a later failing proof makes it unusable until a new
@@ -133,5 +148,7 @@ any pattern; `pattern_reason` (`base`, `fits`, `chosen`); for a captured pattern
 refused one (with `refused-value` only), `detail` why in words; judged at the start and recorded,
 since that state changes later. `Run` carries the same fields with the same shapes. `source_run` keeps naming the
 source run after its slice and runs are erased. The method
-is already in every step outcome that carries a reuse key (feature 006). The reuse key is unchanged: it already holds
-the pattern's `id@version` and the method.
+is already in every step outcome that carries a reuse key (feature 006). The reuse key holds the pattern's `id@version`
+and the method; for a `fill` step it also takes the hash of the run's parameter values as an
+extra input (research R4, Reuse), so two slices that differ only in a value never share a filled
+result.

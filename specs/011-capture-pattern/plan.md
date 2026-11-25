@@ -136,7 +136,12 @@ specs/011-capture-pattern/
 
 ```text
 src/engine/api/preview/2026-11-12-preview/openapi.yaml   # /captured-patterns, startRun.pattern, error codes, x-limits
-src/engine/api/preview/2026-11-12-preview/run-event.schema.json  # RunStarted pattern_reason, parameters, proof
+src/engine/api/preview/2026-11-12-preview/run-event.schema.json  # RunStarted pattern_reason, parameters, source_run, proof, not_used
+src/engine/api/preview/2026-11-12-preview/slice-defs.schema.json # operation_target, parameter_name, parameter_value
+src/engine/api/preview/2026-11-12-preview/slice.schema.json      # proof_of, history kind made-for-proof
+src/engine/api/operations.go             # the new operation kinds
+src/engine/api/proof_slice.go            # new: makeProofSlice (T029)
+src/engine/api/captured_limits_contract_test.go  # new: the limits pinned to the contract (T005)
 src/check/api/preview/2026-11-13-preview/openapi.yaml    # writeStep
 src/engine/captured/                     # new: Propose, Check, Fit, Fill, the declaration from the base pattern
 src/engine/store/                        # captured-pattern records, second artifact holder

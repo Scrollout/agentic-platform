@@ -11,12 +11,12 @@ Turn a done run into a pattern that builds later slices of the same kind with no
 
 | Call | What it does | Answers |
 |------|--------------|---------|
-| `POST /captured-patterns` `{run, name?}` | proposes a captured pattern from a run that ended done, with proposed parameters | 202 operation, its target the new captured pattern's ID; refused at once with `RunNotDone` (naming the run's state), `RunNotCapturable` (a run built from a captured pattern, or a proof) or `CapturedPatternExists` (an existing or erased ID); a capture whose operation fails leaves no captured pattern (getCapturedPattern answers 404) |
+| `POST /captured-patterns` `{run, name?}` | proposes a captured pattern from a run that ended done, with proposed parameters | 202 operation, its target the new captured pattern's ID; refused at once with `RunNotDone` (naming the run's state), `RunNotCapturable` (a run built from a captured pattern, a proof, or a run whose slice changed after it started) or `CapturedPatternExists` (an existing or erased ID); a capture whose operation fails leaves no captured pattern (getCapturedPattern answers 404) |
 | `GET /captured-patterns` | lists captured patterns, newest first | 200, paginated with opaque page tokens |
 | `GET /captured-patterns/{id}` | one captured pattern: parameters with their places, proofs, approval, state, usable | 200; 404 |
 | `PUT /captured-patterns/{id}/parameters` `{parameters: [{name, value}]}` | replaces the parameters of a proposed or proven one (removes, adds); the engine sets each kind and source (data model, Parameter) | 202 operation; the operation fails `ParameterRefused` naming the parameter and why; 409 `CapturedPatternApproved`, `CapturedPatternWithdrawn`, or `CapturedPatternBusy` while an operation or a proof's run has not ended, at once |
 | `POST /captured-patterns/{id}/proof-slice` | gives its proof slice, making it from the captured copy when it has none | 202 operation, its target the captured pattern, its result the proof slice; `CapturedPatternWithdrawn`, `CapturedPatternBusy` at once |
-| `POST /captured-patterns/{id}/approval` | approves it | 202 operation; 409 `ProofRequired` at once when its latest proof did not pass under the current method |
+| `POST /captured-patterns/{id}/approval` | approves it, recorded with `by` (`client`), `at` and the proof (the state table in the data model gives every call's answer per state) | 202 operation; 409 `ProofRequired` at once when its latest proof did not pass under the current method |
 | `POST /captured-patterns/{id}/withdrawal` | stops its use by new runs | 202 operation |
 | `DELETE /captured-patterns/{id}` | erases it and the artifacts only it holds | 202 operation; 409 `CapturedPatternBusy` at once while an operation, a run built from it or its proof's run has not ended; the client first shows what will be erased and asks for confirmation |
 
@@ -66,9 +66,10 @@ captured pattern's template hashes (data model, Proof); a hand-over fails it at 
   occurring in the copy, the declared limits.
 - `Fit(copy, template, writable, parameters, approved) -> (values, ok, firstDifference)`: research
   R4, including the filled paths (no two equal, each inside its step's writable entries).
-- `Fill(files, parameters, values) -> files`: each place replaced in its case form, longest first.
+- `Fill(files, parameters, values) -> files`: each place replaced in its case form, longest first,
+  in contents and paths; refuses two files with the same filled path (the writable check is
+  `Fit`'s, and `writeStep` refuses such a path again).
 - A proof slice is made from the captured pattern's copy; `Fit` and `Fill` take that copy.
-- `Fill` fills file paths as well as contents; two files with the same filled path do not fit.
 
 Limits: research R4.
 
@@ -99,7 +100,8 @@ become `slice <slice>  pattern <pattern>[  reason <pattern_reason>][  proof][  s
 parameters <name>=<value>,...]`; `build`'s first line adds `with <pattern> (<pattern_reason>)`;
 the `run` header adds `reason`, `proof` and `source`; each fitting captured pattern that needs a
 proof or was refused for a value prints one line `Not used: <captured pattern>: <reason>` after the
-first line; `ap slices` gains a `PROOF OF` column and `ap show` a `proof of <captured pattern>`
+first line, `<reason>` being the entry's `detail` (and, for `refused-value`, the parameter);
+`ap slices` gains a `PROOF OF` column and `ap show` a `proof of <captured pattern>`
 line; after a proof's run `ap prove` prints `Proof of <id>: passed` or `Proof of <id>: failed:
 <failure>; ...`. A failed proof's run waits for the developer like any handed-over run: cancel
 or take it over before changing the parameters or proving again.

@@ -91,6 +91,11 @@ reused only under the method that judged them), [feature 009](../009-no-hard-cod
   fixes: a run built from a captured pattern, or a proof, is not captured (its template was never
   reviewed); an erased captured pattern's ID is never given again; a replay keeps the recorded
   parameter values (FR-001, FR-011).
+- Analyze round 7 (fresh Sonnet, at 472576f), same instruction: a run whose slice changed after it
+  started (a part's hash differs or is no longer approved) is not captured; who approved is the
+  developer's client, the only caller that may approve; a limit's derived value is stated as a
+  number in the examples (a text of 201 characters), since a literal over 64 characters cannot be
+  a parameter (FR-001, FR-006, SC-006).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -247,7 +252,9 @@ use the captured pattern and says it needs a new proof; proving it again restore
 
 - **FR-001**: The developer MUST be able to ask the platform to capture a run that ended done; the
   platform MUST refuse a run in any other state, naming that state, and a run built from a
-  captured pattern or a proof, naming why (its template was never reviewed).
+  captured pattern or a proof, naming why (its template was never reviewed), and a run whose
+  slice changed after it started (a part's hash differs from the run's, or a part is no longer
+  approved), naming the part.
 - **FR-002**: A captured pattern proposal MUST hold the source slice, its accepted tests and code,
   and the names of the source run, the base pattern and the method that accepted it.
 - **FR-003**: The proposal MUST name each parameter: its name, its source value, and every place
@@ -279,7 +286,8 @@ use the captured pattern and says it needs a new proof; proving it again restore
   naming each failing check or differing file when it fails; a proof whose run is handed over
   fails at once, naming why.
 - **FR-006**: Only a proposal whose latest proof passed under the current method MAY be approved.
-  Approval MUST be the developer's explicit act, recorded with who approved and when; until then
+  Approval MUST be the developer's explicit act, recorded with who approved (the developer's
+  client, the only caller that may approve) and when; until then
   no run other than its proofs uses the proposal.
 - **FR-007**: An approved captured pattern MUST enter the catalogue with its own identity and MUST
   NOT change afterwards; to change it, the developer captures the run again under another name and
@@ -349,7 +357,8 @@ use the captured pattern and says it needs a new proof; proving it again restore
   in 0 cases of a planted set (another rule, example, member, operation or status).
 - **SC-006**: For a captured slice that declares a text limit, with the limit and its derived value
   as parameters, a slice with another limit and derived value fits, and the filled files carry the
-  new values in every place the old ones were.
+  new values in every place the old ones were (the examples state the derived value as a number,
+  "a text of 201 characters"; a literal text over 64 characters cannot be a parameter).
 
 ## Assumptions
 

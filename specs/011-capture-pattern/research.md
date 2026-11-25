@@ -154,7 +154,13 @@ the fit and the fill:
   refused and why (*owner*: a value outside its form does not fit, and the run names it).
   The fit also fills the template's paths with the values: two files with the same filled path,
   or a filled path outside its step's writable entries, do not fit, naming the paths, so the
-  failure comes at `startRun`, never during the run (`Fill` refuses the same, fail closed). A captured pattern's base fit conditions also run.
+  failure comes at `startRun`, never during the run. `Fill` refuses two files with the same filled
+  path (fail closed); a path outside the step's writable entries is the fit's to refuse, and
+  `writeStep` refuses it again with 400 naming it. A captured pattern's base fit conditions also run.
+- **Reuse** (analyze round 7, R1): a `fill` step's output depends on the parameter values, which
+  may sit in parts the step does not take as inputs (a value in the goals only), so each `fill`
+  step's reuse key gains the hash of the run's parameter values as an extra input; two slices
+  that differ only in a value never share a filled result.
 - **Declared limits** (Principle III): 32 parameters, 10000 places per parameter and 64
   characters per value are integer `x-limits` keys of the engine contract
   (`captured-pattern-parameters-max`, `parameter-places-max`, `parameter-value-max-chars`) and the
