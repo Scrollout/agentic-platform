@@ -16,5 +16,6 @@
 * [gosec hard-coded credentials](gosec-hardcoded-credentials.md) - What gosec's G101 rule found in plain Go service code, its size and health, as measured on 2026-11-23 for feature 009.
 * [nginx access control for the run page](nginx-access-control.md) - The nginx directives that serve TLS, ask for HTTP Basic authentication, limit requests per address and refuse unknown names, as proven on the pinned nginx image on 2026-11-18.
 * [Open Knowledge Format v0.2 specification](okf-spec.md) - The format the knowledge bundle in docs/ follows, pinned to the upstream commit it was written against.
+* [Project template tools](project-template-tools.md) - What gonew, Copier, Cookiecutter and Go's text/template do for making new projects from a template, and that none derives a template from an existing project, as read on 2026-11-25.
 * [Rubric-graded model judges](rubric-model-judges.md) - How rubric-based model judges are built, calibrated against human labels and kept reliable, what Microsoft's Copilot Studio kit provides and lacks, and which open-source tools cover the gaps, as researched on 2026-11-20 for a future model-judge grader.
 * [Temporal](temporal.md) - Temporal's licence, OpenSSF Scorecard, releases, images, self-hosted stores, upgrades, retries and default limits, as checked on 2026-11-17 and 2026-11-19 for the platform's durable execution.
