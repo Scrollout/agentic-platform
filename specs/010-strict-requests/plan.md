@@ -160,7 +160,7 @@ asked for):
   RequestShapesGenerated after DeclaredValuesGenerated (analyze round 1, I1).
 - `src/engine/checks/fit_test.go` line 34: `conditions` gains RefusalDeclared and
   RequestBodiesSupported, and `contractConditions` becomes the five contract conditions (every
-  condition but RulesNameOneSystem), since its `expect` runs the real `pattern.yaml` (analyze
+  condition but RulesNameOneSystem, listed by name, not a slice), since its `expect` runs the real `pattern.yaml` (analyze
   round 2, N3; corrected with the owner 2026-11-25: "the first five" held RulesNameOneSystem).
 - `src/engine/api/pattern_flag_test.go` line 25 and `src/engine/slices/slices_patternflag_test.go`
   line 27: the fit conditions listed gain RefusalDeclared and RequestBodiesSupported.

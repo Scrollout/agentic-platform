@@ -98,7 +98,8 @@ asked before T008 is pushed).
 - [x] T002 Owner approvals: ask the owner to approve, by name, each existing test change plan.md
   lists ("Existing tests expected to change"), and record each approval here with its date; a
   change not approved is not made, and the task that needs it stops. Done: the owner approved all
-  eleven, named one by one (2026-11-25): `fit_test.go` line 34; `pattern_values_test.go`;
+  eleven, named one by one (2026-11-25): `fit_test.go` line 34 (scope corrected by the owner, 2026-11-25, to the five contract
+  conditions, T010); `pattern_values_test.go`;
   `pattern_flag_test.go` line 25 and `slices_patternflag_test.go` line 27; `checks_test.go`
   `patternCases`; `us2_test.go` line 84 and `runs_ops_test.go` lines 449-450;
   `planted_values_test.go` (the second anchored replacement); `cases.go` (`review/clean`
@@ -245,7 +246,7 @@ with the clean reference, `{"text":"a","TEXT":"b"}` gives 201 with `"a"`.
 - [x] T027 [US1] Owner approval to make `request_check_test.go:706` carry the escape it is named
   for (or drop it as a duplicate of line 705, T024 covering the escape). Owner, 2026-11-25: fix it (the case carries the escape it is named for), in a new
   session; trailer `Tests-approved-by: Marius Gologan (2026-11-25)`
-- [x] T029 [US1] Owner approval to make the four "escape" cases of
+- [x] T029 [US1] Owner approval to make the "escape" cases (four named at approval, five found) of
   `src/engine/procedures/request_regress_test.go` (lines 45-46, 49-50) carry real JSON escapes
   (`\u0074ext`), as T027 for line 706; with T027 and T028 in a new session. Owner, 2026-11-25:
   approved; trailer `Tests-approved-by: Marius Gologan (2026-11-25)`. Owner, 2026-11-25 (new
@@ -257,8 +258,8 @@ with the clean reference, `{"text":"a","TEXT":"b"}` gives 201 with `"a"`.
 - [x] T028 [US1] Owner approval for `TestGeneratedCodeUnchangedCoversTheRequestCheckFiles` to read
   the generate step's `writable` from the real `pattern.yaml` instead of its own `gen/**` (F8). Owner,
   2026-11-25: approved, in a new session (with T027), by a test author; trailer
-  `Tests-approved-by: Marius Gologan (2026-11-25)`. Done (T027-T030): a3fdd87, by a test author
-  (Sonnet); the escapes verified on disk; T030 seen failing on two planted faults in a scratch
+  `Tests-approved-by: Marius Gologan (2026-11-25)`. Done (T027-T030): a3fdd87, tests by a test author
+  (Sonnet), committed by the coordinating session (Opus, its trailer); the escapes verified on disk; T030 seen failing on two planted faults in a scratch
   copy (the map not seeded; names after the switch not recorded)
 
 ---
@@ -301,7 +302,8 @@ malformed requests are refused for it (FR-006, FR-007, FR-011, FR-012; research 
 - [ ] T010 [P] [US2] Test author A (approved changes, `Tests-approved-by:`), tests first, seen
   failing against the unchanged pattern: `src/engine/checks/fit_test.go` line 34's `conditions`
   gains RefusalDeclared and RequestBodiesSupported and `contractConditions` becomes the five
-  contract conditions (every condition but RulesNameOneSystem; owner, 2026-11-25, as "the first
+  contract conditions, listed by name or built by dropping RulesNameOneSystem from `conditions`,
+  not a slice (every condition but RulesNameOneSystem; owner, 2026-11-25, as "the first
   five" held RulesNameOneSystem and missed RequestBodiesSupported); `src/engine/cmd/engine/pattern_values_test.go` expects
   version `1.2.0` (lines 3, 5, 49-50) and the generate step's checks at line 43 with
   RequestShapesGenerated after DeclaredValuesGenerated; `src/engine/api/pattern_flag_test.go` line 25 and
