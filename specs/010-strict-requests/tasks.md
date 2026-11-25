@@ -81,7 +81,7 @@ asked before T008 is pushed).
 
 ## Phase 1: Setup (contract first)
 
-- [ ] T001 Contract (committed alone): the runCheck description of
+- [x] T001 Contract (committed alone): the runCheck description of
   `src/check/api/preview/2026-11-13-preview/openapi.yaml` states RequestShapesGenerated as
   [contracts/strict-requests.md](contracts/strict-requests.md) does (what it compares, how it
   fails, fail closed), additively; `src/catalogue/api-feature-go/README.md` gains RefusalDeclared

@@ -7,7 +7,7 @@ states what its values mean, so the checks can be written from it.
 
 ## Fit conditions
 
-A slice fits when all four pass. Each one is a rule on the slice's `contract` (YAML text) and
+A slice fits when all six pass. Each one is a rule on the slice's `contract` (YAML text) and
 `rules`. None calls a model. The checks run when the contract is approved and again at `startRun`.
 A failing condition is reported as a `check_result` with `check` set to the condition's name,
 `part` set as below, `passed: false`, and a `reason` that names what failed. The contract is
@@ -20,8 +20,35 @@ has a duplicate key fails every contract condition (fail closed).
 | `OnlyHttpOperations` | `contract` | `paths` is a mapping with at least one operation. Each path item has only the keys `get`, `put`, `post`, `delete`, `options`, `head`, `patch`, `trace`, `summary`, `description`, `servers`, `parameters` or `x-*`, and no `$ref`. No operation has a non-empty `callbacks`. `webhooks` and `components.pathItems` are absent or empty | each offending location, for example `webhooks/noteAdded` or `paths//notes/post/callbacks` |
 | `ContractRefsLocal` | `contract` | every `$ref` value in the document is a string starting with `#/` | the location of each other `$ref` |
 | `RulesNameOneSystem` | `rules` | there is at least one rule, and every rule's `system` is byte-for-byte equal to the first rule's | the distinct names, with the rule IDs that use each |
+| `RefusalDeclared` | `contract` | every operation with a `requestBody` declares a `400` response whose `application/json` schema, through local `$ref`s, is `type: object` with `required` exactly `[message]` and `properties.message` of `type: string` with no value keyword; the object schema uses only `type`, `required`, `properties`, `additionalProperties` and annotations | each operation, as `<operation>: declares no 400 response with a JSON object body that requires only the string message` |
+| `RequestBodiesSupported` | `contract` | every `requestBody` has `content` with exactly the key `application/json` and a `schema`, and every schema reached from it through local `$ref`s uses only the keys listed below | each location, as `<location>: <keyword> is not supported in a request body`, `<operation>/requestBody: no schema` or `<operation>/requestBody: media types other than application/json: <names>` |
 
 What the conditions keep out:
+
+- `RefusalDeclared` and `RequestBodiesSupported` keep contracts to what the
+  [request check](#request-check) can serve: it refuses a malformed body with the operation's own
+  400 body, so that body must be one it can fill (`{"message": <text>}`), and it removes members
+  the contract does not declare, so it must know every member exactly. `RefusalDeclared` counts
+  the key written `400` or `"400"` (both present: not fit), not `4XX` or `default`, and follows a
+  response that is a `$ref` to `#/components/responses/...`. Value keywords on `message` are
+  `maxLength`, `minLength`, `pattern`, `format`, `enum` and `const`; the object schema may not use
+  `minProperties`, `not`, `allOf`, `const`, `enum` or any key outside its list.
+- `RequestBodiesSupported` allows these keys in a request body's schemas, and refuses every other
+  (fail closed), `nullable` among them (a type list allows `null`):
+  - shaping: `type` (one of `null`, `boolean`, `object`, `array`, `number`, `string`, `integer`,
+    or a non-empty list of them, each written as a string, so `null` is `"null"`), `properties`,
+    `required`, `additionalProperties` (`true` or `false` only), `items` (a schema, not a
+    boolean), `$ref` (local; a `requestBody` that is a `$ref` to `#/components/requestBodies/...`
+    is followed);
+  - values, left to the code: `maxLength`, `minLength`, `pattern`, `format`, `maximum`, `minimum`,
+    `exclusiveMaximum`, `exclusiveMinimum`, `multipleOf`, `maxItems`, `minItems`, `uniqueItems`,
+    `maxProperties`, `minProperties`, `enum`, `const`;
+  - annotations: `title`, `description`, `default`, `examples`, `example`, `deprecated`,
+    `readOnly`, `writeOnly`, `$comment`, and keys starting `x-`.
+
+  A boolean schema (`schema: true`, `items: false`) and a YAML anchor or alias in a schema are
+  refused. The names under `properties`, and everything under an `x-` key, are names, never
+  judged as keywords. Every `$ref` walk keeps the locations it has visited, so a cycle ends.
 
 - `OnlyHttpOperations` admits only operations a client calls over HTTP. It refuses webhooks and
   callbacks, which the service would send, and refuses keys this version does not know
@@ -70,12 +97,95 @@ into the project, except `vendortools/`.
 | `template/gen/oapi-codegen.yaml` | The project's oapi-codegen settings: package `gen`, strict server on `net/http`, models, output `gen/api.gen.go` |
 | `template/gen/generate.go` | The `//go:generate oapi-codegen` line. The procedure runs it with the pinned oapi-codegen in `gen/`, and `GenerationRepeatable` runs it again with `go generate` |
 | `template/gen/config.go` | The service's configuration, see [Configuration](#configuration) |
+| `template/gen/std-http-handler.tmpl` | oapi-codegen v2.8.2's `stdhttp/std-http-handler.tmpl` with one change, see [Request check](#request-check); named under `output-options.user-templates` in `oapi-codegen.yaml` |
+| `template/gen/requests.go` | The request check, see [Request check](#request-check) |
 | `template/vendortools/tools.go` | The packages vendored besides those the generated code imports, so later steps build offline from `vendor/`: godog for the tests step, and the runtime packages generated code may import. Its `tools` build tag keeps it out of every build, and the procedure never writes it into the project |
 
-The procedure also writes `gen/stub.go`, a `Stub` that answers every operation of the generated
+The procedure also writes `gen/request_shapes.go`, the contract's request bodies as the
+[request check](#request-check) reads them, `gen/stub.go`, a `Stub` that answers every operation of the generated
 `ServerInterface` with 501 Not Implemented, for the tests to fail against, `gen/declared.go`, the
 contract's declared values as Go constants (see [Declared values](#declared-values)), and the seam
 `internal/app/app.go`, whose `New` returns it.
+
+## Request check
+
+The delivered service refuses a request body its contract does not allow before anything of the
+operation runs, the stub's 501 and the code step's code alike, and passes on a body that holds
+only the declared members under their exact names.
+
+How. The template's `gen/std-http-handler.tmpl` replaces oapi-codegen's template of the same name
+(`user-templates`). It is the pinned release's text, its first line a template comment naming that
+release (`scripts/tests/test_handler_template_pin.py` fails when it differs from
+`src/deploy/images.lock`), with one change: each operation is registered as
+`refuseMalformed("<METHOD> <path>", <its handler>)`. `HandlerWithOptions` registers every
+operation, and `Handler`, `HandlerFromMux` and `HandlerFromMuxWithBaseURL` call it, so every way
+of serving the generated handler refuses. `refuseMalformed`, in the template's `gen/requests.go`
+(standard library only), applies the operation's shape from `gen/request_shapes.go`; an operation
+with no request body is served as before.
+
+`gen/request_shapes.go`. Line 1 is `// Code generated by the generate procedure from
+api/openapi.yaml. DO NOT EDIT.`, then a blank line and `package gen`. One map,
+`requestBodies`, from `"<METHOD> <path>"` (the method in upper case, the path as the contract
+writes it) to the body: whether `requestBody.required`, and its shape. Every shape is an unexported
+`requestShape<N>` (N from 1, in document order of first use), linked in `init()`, so a recursive
+schema is a cycle. A shape holds: its JSON types (from `type`; none means any), its members
+(`properties` in contract order, then names only in `required`, in `required` order, of any
+type), its required members (`required` order), whether it is closed (`additionalProperties:
+false`), and the shape of its items. `properties`, `required` and `additionalProperties` apply to
+an object value whether or not `type` is present. A shape with no `properties`, no `required` and
+not closed keeps an object as it is. The same contract always gives the same bytes.
+**RequestShapesGenerated** (generate step) passes when the file is byte for byte this rendering of
+the approved contract and fails naming a missing or differing file.
+
+What a body goes through, in this order; the first problem is the refusal:
+
+1. More than 1048576 bytes: refused. The request's `Content-Type` is not judged.
+2. Empty, or JSON white space only: refused when `requestBody.required` is true; otherwise the
+   operation runs with it as sent.
+3. Not exactly one JSON value, or nested deeper than 10000 levels (`encoding/json`'s scanner):
+   refused.
+4. A name twice in one object, anywhere in the body (the one whose second occurrence comes first):
+   refused.
+5. The walk, depth first. At each object: a required member missing (`required` order), then an
+   undeclared member when the object is closed (body order), then each declared member present
+   (contract order); array items in order. A value whose JSON type the shape does not allow is
+   refused. `integer` takes a number with a zero fractional part, decided on its text; written
+   with a fraction or exponent (`1.0`, `1e3`), it is passed on as a plain integer, and refused as
+   not an integer when that plain form would exceed 32 digits; a plain integer literal is kept as
+   sent, at any length. With `number` among the types nothing is rewritten. `-0`, `-0.0` and
+   `0e5` are written again as `0`.
+6. The body is written again with only the declared members, under their exact names, where the
+   shape declares members; its length follows. The operation runs.
+
+A refusal answers `400` with `Content-Type: application/json` and `{"message": <text>}`, the same
+text for the same request. `<p>` is the member's JSON Pointer (RFC 6901) from the body's root, cut
+to its first 64 runes and written with Go's `strconv.Quote`; `<t>` is the allowed types, each with
+its article (`a string`, `an integer`, `a number`, `a boolean`, `an object`, `an array`, `null`),
+joined with ` or `:
+
+| Problem | `message` |
+|---------|-----------|
+| larger than the limit | `the request body is larger than 1048576 bytes` |
+| empty and required | `the request body is missing` |
+| not one JSON value, or too deep | `the request body is not valid JSON` |
+| the body's own type | `the request body must be <t>` |
+| a name twice | `member <p> is named twice` |
+| required and absent | `member <p> is required` |
+| undeclared, object closed | `member <p> is not declared` |
+| a member's type | `member <p> must be <t>` |
+
+Limits of the request check:
+
+- Only the shape is checked. Limits, allowed values, formats and patterns are left to the code
+  step's code, which answers them as the rules and examples say (taking each value from
+  `gen/declared.go`).
+- A body over 1048576 bytes is refused with 400, not 413, so that it carries the declared body.
+- An undeclared member next to `additionalProperties: true` is removed, so a generated map of
+  additional members is always empty.
+- A member's path in a message is cut to 64 runes; a value is never quoted.
+- A body is judged as JSON whatever its `Content-Type`.
+- Path and query parameters are read by the generated code as before; a parameter error is
+  answered by oapi-codegen's text error, not by this check.
 
 ## Declared values
 

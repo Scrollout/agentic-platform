@@ -4,8 +4,8 @@ Draft for the [plan](../plan.md). The authoritative copies live with their provi
 contract ([`openapi.yaml`](../../../src/check/api/preview/2026-11-13-preview/openapi.yaml),
 runCheck's description), the catalogue README
 ([`README.md`](../../../src/catalogue/api-feature-go/README.md): fit conditions, the request
-check and its limits), the template's `gen/requests.go` doc comment, and the Go doc comments of
-`checks/shapes.go` and `checks/fit.go`. Where this draft and they differ, they win. Research R1 to
+check and its limits, [Request check](../../../src/catalogue/api-feature-go/README.md#request-check)), the template's `gen/requests.go` doc comment, and the Go doc comments of
+[`checks/shapes.go`](../../../src/engine/checks/shapes.go) and `checks/fit.go`. Where this draft and they differ, they win. Research R1 to
 R5 give the reasons.
 
 ## Go interface (package `engine/checks`)
