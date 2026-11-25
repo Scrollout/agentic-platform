@@ -7,7 +7,7 @@ artifacts in its content-addressed store.
 
 | Field | Meaning | Rule |
 |-------|---------|------|
-| `id` | `<base id>-<name>` | `pattern_id` (`^[a-z0-9-]+$`); unique, an existing or erased one answers `CapturedPatternExists` (an erased ID is never given again, so a reuse key naming `<id>@1.0.0` always means one template); `<name>` given at capture or the source slice's ID in lower case (`s-3`) |
+| `id` | `<base id>-<name>` | `pattern_id` (`^[a-z0-9-]+$`); `<name>` `^[a-z0-9]+(-[a-z0-9]+)*$`, at most 40 characters; unique, an existing or erased one answers `CapturedPatternExists` (an erased ID is never given again, so a reuse key naming `<id>@1.0.0` always means one template); `<name>` given at capture or the source slice's ID in lower case (`s-3`) |
 | `version` | semver | always `1.0.0`: an approved captured pattern never changes; a change is a new capture under another name (FR-007) |
 | `base` | the base pattern's `id@version` | the engine's pattern at capture |
 | `source` | source run ID, source slice ID | the run ended done (FR-001) |
@@ -39,7 +39,9 @@ declares is source `declared-value`, kind `number` or `string` as the contract w
 is source `literal`, kind `number` when it is a number, else `string`; a parameter sent again keeps
 its kind and source), finds the `places`, and sets `origin`. The terminal client's `--add
 [<name>=]<value>` takes the name from the value when none is given (refused when the value is not
-a valid name). Capture refuses with `RunNotCapturable` a run of a captured pattern, a proof run,
+a valid name). Capture refuses with `RunNotCapturable` a run whose recorded `pattern` is not the
+engine's current base pattern `id@version` (naming both; the declaration and template would come
+from different versions), a run of a captured pattern, a proof run,
 and a run whose slice changed after it started (a part's hash differs from the
 part hash its `RunStarted` records, or a part is no longer approved), naming the part; a run
 whose `RunStarted` has no part hashes (started before this feature) is refused the same way. The limits (32 parameters, 10000 places, 64 characters) are the contract's integer
@@ -55,8 +57,8 @@ whose `RunStarted` has no part hashes (started before this feature) is refused t
 | `failures` | each failing check (step, check, reason), each differing file (step, path), or the run's end when it ended other than `done` |
 | `parameters` | the parameters' names and source values it proved |
 
-A Proof (`running`) is written once the proof's run is recorded (its `RunStarted`, after the
-operation is accepted and its workflow started), and completed when
+No Proof exists until a `RunStarted` with `proof: true` is on record; the Proof-completion
+function creates it from that run (`running`), and completes it when
 the run is handed over or ends (idempotently): `done` with the `tests`, `code` and `witnesses`
 outputs' hashes equal to the `template` hashes is `passed`; `done` with a differing hash is
 `failed`, naming the files; a hand-over (`RunHandedOver`) is `failed` at once, naming the failing
@@ -66,11 +68,12 @@ not compared: its checks judge it (research R5). `getCapturedPattern` and `listC
 complete any proof whose run was handed over or ended before they answer, from the run record, so
 no reader sees `running` for a finished proof, also after an engine restart; every reader of a
 Proof's state (approval, the usable rule at `startRun` and `replayRun`, the busy checks) goes
-through the same completion first. That completion also repairs both crash windows: it creates
-the missing Proof for a `proof: true` run that has none, and drops a `running` Proof whose run
-was never recorded (its start was not accepted), so a lost or refused start never leaves the
-captured pattern busy. While a proof's run
-has not ended, `PUT /parameters` and erasure answer `CapturedPatternBusy`. Erasing the proof slice
+through the same completion first, so a restart or a lost start answer never leaves a proof
+run without its Proof. Busy is judged from the proof slice's runs, not from Proof records: while
+a run of the proof slice is starting (accepted, its `RunStarted` not yet recorded) or has not
+ended, `PUT /parameters` and erasure answer `CapturedPatternBusy`. A Proof records the
+parameters it proved; it moves a captured pattern to `proven`, and counts for approval, only
+while those equal the current parameters. Erasing the proof slice
 keeps every Proof; its `run` then answers NotFound.
 
 ## States

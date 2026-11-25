@@ -212,18 +212,19 @@ proof, after running the part checks under the current method; a part that fails
 operation fail with `PartFailsChecks`, listing the failures, and no slice is made. It takes the
 next `S-<n>`. Slice reuse at `createSlice` (`slices/service.go` `approvedFor`) never returns a
 proof slice. A proof never reuses an earlier run's results: every step runs, so every check runs
-under the current method (FR-004). The proof's record is written into the captured pattern when
-`startRun` of the proof slice is accepted (`running`) and completed when the run's end is
-recorded, idempotently: `done` with every template hash equal passes; `done` with a hash that
+under the current method (FR-004). No Proof exists until a `RunStarted` with `proof: true` is on record;
+the Proof-completion function creates it from that run and completes it when the run is handed
+over or ends, idempotently: `done` with every template hash equal passes; `done` with a hash that
 differs fails, naming the differing files; a hand-over (`RunHandedOver`, the run then waits for
 the developer) fails at once, naming the failing check and its reason; `expired` or `cancelled`
 fails, naming the end; only an interrupted run stays `running`. `getCapturedPattern` and
 `listCapturedPatterns` complete any proof whose run has ended or been handed over before they
 answer, from the run record, so a reader never sees `running` for a finished proof, also after an
 engine restart (analyze round 5, F1, F9). The failed proof's run waits like any handed-over run
-until the developer cancels or takes it over. While a proof's run has not ended, `PUT
-/parameters` and erasure answer `CapturedPatternBusy`, so a passing proof always proved the
-parameters it is recorded with (F6). A replay of a proof run is a new proof, with no reuse. Erasing the
+until the developer cancels or takes it over. Busy is judged from the proof slice's runs (starting or
+not ended), so `PUT /parameters` and erasure answer `CapturedPatternBusy` from the start's 202
+on; a Proof counts only while its recorded parameters equal the current ones (F6, analyze round
+11). A replay of a proof run is a new proof, with no reuse. Erasing the
 proof slice (`deleteSlice`, refused while its run is active) keeps the recorded proofs, whose run
 IDs then answer NotFound, and clears `proof_slice`.
 

@@ -11,7 +11,7 @@ Turn a done run into a pattern that builds later slices of the same kind with no
 
 | Call | What it does | Answers |
 |------|--------------|---------|
-| `POST /captured-patterns` `{run, name?}` | proposes a captured pattern from a run that ended done, with proposed parameters | 202 operation, its target the new captured pattern's ID; refused at once with `RunNotDone` (naming the run's state), `RunNotCapturable` (a run built from a captured pattern, a proof, or a run whose slice changed after it started, compared with the part hashes its `RunStarted` records) or `CapturedPatternExists` (an existing or erased ID); a capture whose operation fails leaves no captured pattern (getCapturedPattern answers 404) |
+| `POST /captured-patterns` `{run, name?}` (`name` `^[a-z0-9]+(-[a-z0-9]+)*$`, at most 40 characters; otherwise 400 InvalidRequest) | proposes a captured pattern from a run that ended done, with proposed parameters | 202 operation, its target the new captured pattern's ID; refused at once with `RunNotDone` (naming the run's state), `RunNotCapturable` (a run built from a captured pattern, a proof, or a run whose slice changed after it started, compared with the part hashes its `RunStarted` records) or `CapturedPatternExists` (an existing or erased ID); a capture whose operation fails leaves no captured pattern (getCapturedPattern answers 404) |
 | `GET /captured-patterns` | lists captured patterns, newest first | 200, paginated with opaque page tokens |
 | `GET /captured-patterns/{id}` | one captured pattern: parameters with their places, proofs, approval, state, usable | 200; 404 |
 | `PUT /captured-patterns/{id}/parameters` `{parameters: [{name, value}]}` | replaces the parameters of a proposed or proven one (removes, adds); the engine sets each kind and source (data model, Parameter) | 202 operation; the operation fails `ParameterRefused` naming the parameter and why; 409 `CapturedPatternApproved`, `CapturedPatternWithdrawn`, or `CapturedPatternBusy` while an operation or a proof's run has not ended, at once |
@@ -76,7 +76,8 @@ Limits: research R4.
 
 ## Check API: `writeStep`
 
-`POST /project-versions/write` `{project, step, files}`: the project worker writes the files into
+`POST /project-versions/write` `{project, step, files}` (`files` may be empty: a step whose
+template output holds no file, such as a clean review's `witnesses`, writes nothing): the project worker writes the files into
 the step's writable paths (each path must match one; otherwise 400 naming it) without committing.
 `restoreStep` before the next attempt removes them as it removes any uncommitted change.
 
@@ -89,7 +90,7 @@ the step's writable paths (each path must match one; otherwise 400 naming it) wi
 | `ap pattern <id>` | `GET /captured-patterns/{id}`: parameters and places, proofs, state |
 | `ap pattern <id> --drop <param>` / `--add [<name>=]<value>` | `PUT /captured-patterns/{id}/parameters` |
 | `ap proof-slice <id>` | `POST /captured-patterns/{id}/proof-slice`, follows the operation, prints the proof slice's ID |
-| `ap prove <id> <project>` | the launcher runs the client's `proof-slice <id>`, then `build <proof slice> <project>` as for `build` (`build-workers` first); after the run's end line the client prints `Proof of <id>: passed` or `Proof of <id>: failed: <failure>; ...` |
+| `ap prove <id> <project>` | the launcher runs the client's `proof-slice <id>`, then `build <proof slice> <project>` as for `build` (`build-workers` first); after the run's end line the client prints `Proof of <id>: passed` or `Proof of <id>: failed: <failure>; ...`; a failed proof exits 1 (a check failed), even when its run ended done |
 | `ap approve-pattern <id>` | `POST /captured-patterns/{id}/approval` |
 | `ap withdraw-pattern <id>` | `POST /captured-patterns/{id}/withdrawal` |
 | `ap erase-pattern <id>` | shows what will be erased, asks for confirmation, then `DELETE /captured-patterns/{id}` |
