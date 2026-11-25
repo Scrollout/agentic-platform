@@ -274,7 +274,7 @@ malformed requests are refused for it (FR-006, FR-007, FR-011, FR-012; research 
 `allOf`, or with `text/plain` does not fit, naming the location; `TestUS1`, `TestUS2`,
 `TestPlanted` and `TestPlantedValues` replay with no miss (T018).
 
-- [ ] T009 [P] [US2] Test author: new `src/engine/checks/fit_requests_test.go`: RefusalDeclared
+- [x] T009 [P] [US2] Test author: new `src/engine/checks/fit_requests_test.go`: RefusalDeclared
   passes on the evals' notes contract, on the acceptance example (no `requestBody`) and with the
   `Error` schema behind a `$ref` or inline, with optional properties besides `message`; fails,
   naming each operation (`paths//notes/post`) in document order, when the 400 is absent, has no
@@ -301,7 +301,7 @@ malformed requests are refused for it (FR-006, FR-007, FR-011, FR-012; research 
   `nullable` and an `x-` value holding `allOf` pass (names, not keywords); both
   conditions fail every slice whose contract does not parse (fail closed) and say what they
   examined on a pass
-- [ ] T010 [P] [US2] Test author A (approved changes, `Tests-approved-by:`), tests first, seen
+- [x] T010 [P] [US2] Test author A (approved changes, `Tests-approved-by:`), tests first, seen
   failing against the unchanged pattern: `src/engine/checks/fit_test.go` line 34's `conditions`
   gains RefusalDeclared and RequestBodiesSupported and `contractConditions` becomes the five
   contract conditions, listed by name or built by dropping RulesNameOneSystem from `conditions`,
@@ -318,11 +318,11 @@ malformed requests are refused for it (FR-006, FR-007, FR-011, FR-012; research 
   (`'400': {description: empty text}`) with an `application/json` body
   `$ref: '#/components/schemas/Error'`, and the appended `components` gains `Error` (object,
   required `[message]`, `message` a string), so the scenario's contract still fits
-- [ ] T011 [P] [US2] Test author B: new `src/engine/cmd/engine/pattern_conditions_test.go`: the
+- [x] T011 [P] [US2] Test author B: new `src/engine/cmd/engine/pattern_conditions_test.go`: the
   embedded and source pattern's conditions are the four of today followed by RefusalDeclared and
   RequestBodiesSupported (the version and the generate step's checks are
   `pattern_values_test.go`'s, T010)
-- [ ] T012 [US2] Code author: RefusalDeclared and RequestBodiesSupported in
+- [x] T012 [US2] Code author: RefusalDeclared and RequestBodiesSupported in
   `src/engine/checks/fit.go` (sharing the keyword lists with `shapes.go`: one owner);
   `src/catalogue/api-feature-go/pattern.yaml` `version: 1.2.0`, both conditions, the generate
   step's `checks` `[GenerationRepeatable, GeneratedCodeBuilds, DeclaredValuesGenerated,
@@ -336,9 +336,12 @@ malformed requests are refused for it (FR-006, FR-007, FR-011, FR-012; research 
   value, pattern or format; `src/agents/code/instruction.md`: a malformed body (missing
   or misnamed members, wrong types) is refused before its code runs, so its code checks only the
   rules' values; `scripts/generate.sh` and `scripts/method-digest.py` converge; T009-T011 pass
-- [ ] T013 [US2] Analyst recordings (the coordinating session, not the code author): renew `src/tests/recorded/recordings/mappings/analyst-*.json`
+- [x] T013 [US2] Analyst recordings (the coordinating session, not the code author): renew `src/tests/recorded/recordings/mappings/analyst-*.json`
   by the recorded README's text replacement for the analyst's instruction change and digest
   (approved in T002, `Tests-approved-by:`); the answers stay byte-identical
+  Done: tests acee9ee (T009, T011, Sonnet) and 645188a (T010, Sonnet, approved changes), code
+  e38bdeb (T012, Opus; T009-T011 and the six packages green but the godog-0-scenarios host
+  failures), recordings (T013, coordinating session; old digest 50448f2d, new a3ee7d95)
 - [ ] T014 [US2] Commit (tests, code, recordings in separate commits); push (owner go-ahead; check
   jobs); fix until CI is green but for the step recordings' misses (T017); record the run; fresh
   review of US2; `/speckit-converge` for US2
