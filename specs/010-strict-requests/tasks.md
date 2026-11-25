@@ -414,10 +414,11 @@ passes at pass^3 on the changed pattern (FR-009, FR-010, SC-003; research R6).
   check job and `evals-current`); fix until CI is green with `TestUS1`, `TestUS2`, `TestPlanted`
   and `TestPlantedValues` replaying with no miss; record the run and `TestUS2`'s duration (SC-004)
   in research. Done: CI 45638095111 at 4a4a6f6, all 26 jobs green, no miss (research Runs)
-- [ ] T019 [US3] Paid evals for the analyst and steps suites (owner go-ahead; add the branch to
+- [x] T019 [US3] Paid evals for the analyst and steps suites (owner go-ahead; add the branch to
   environment `dev`'s branch policies first): every counted case passes^3, `review/clean` counted
   among them; record the run in research; a failing case is assessed as a defect against agreed
   intent with the owner (ADR 0035), never retried until it passes
+  Done: evals 45667754374 at 4a4a6f6, 42 cases pass^3, `review/clean` counted (research Runs)
 - [ ] T020 [US3] Fresh review of US3; `/speckit-converge` for US3. US2 scenario 4 (a change to the
   generated code is rejected) is the existing GeneratedCodeUnchanged cases and planted
   `edit-judging-tests`; scenario 5 (no reuse under the new method) is feature 006's
