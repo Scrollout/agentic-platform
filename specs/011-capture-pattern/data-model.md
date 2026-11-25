@@ -24,10 +24,10 @@ artifacts in its content-addressed store.
 | Field | Meaning | Rule |
 |-------|---------|------|
 | `name` | the parameter's name | `^[a-z][a-z0-9-]*$`, unique in the captured pattern |
-| `kind` | `name` or `declared-value` | research R4 |
+| `kind` | `name`, `declared-value` or `literal` | research R4 |
 | `value` | the source value | of its kind's form; for `name`, the lower form |
 | `places` | each occurrence: part (`slice`, a step's file path), line, column, case form | found longest first, never overlapping |
-| `origin` | `proposed` or `added` | added only from the slice's names or declared values (*owner*) |
+| `origin` | `proposed` or `added` | added only from the slice's names, declared values or literal values (*owner*) |
 
 Two parameters equal in any case form are refused (`ParameterRefused`).
 

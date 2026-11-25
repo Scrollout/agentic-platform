@@ -45,6 +45,11 @@ reused only under the method that judged them), [feature 009](../009-no-hard-cod
 - Q: When an approved slice fits a captured pattern, is it used automatically? → A: yes, the most
   recently approved fitting captured pattern; the developer may choose the base pattern for a run,
   and the run's start names the pattern used (owner; FR-010).
+- Found while planning (research E1): the examples hold values derived from a declared value (a
+  text of 201 characters for a limit of 200), which are not names or declared values, so a slice
+  with another limit would not fit (SC-004). Q: May other values become parameters? → A: yes, the
+  developer may add any other literal value of the slice (a number or a string) as its own
+  parameter (owner; FR-003).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -97,8 +102,8 @@ checks. No agent step runs, and the run ends done or handed over by the checks a
 
 **Why this priority**: this is the reuse the capture exists for (N-052); it depends on Story 1.
 
-**Independent Test**: capture the notes slice with its resource name and its text limit as
-parameters; approve a slice for tasks with a 200-character limit that otherwise equals it; the run
+**Independent Test**: capture the notes slice with its resource names, its text limit and the examples' value derived from it as
+parameters; approve a slice for tasks with a 100-character limit that otherwise equals it; the run
 ends done with zero model tokens, and its tests (derived from the new slice's examples) pass
 against the delivered service.
 
@@ -183,10 +188,12 @@ use the captured pattern and says it needs a new proof; proving it again restore
 - **FR-002**: A captured pattern proposal MUST hold the source slice, its accepted tests and code,
   and the names of the source run, the base pattern and the method that accepted it.
 - **FR-003**: The proposal MUST name each parameter: its name, its source value, and every place
-  in the slice, tests and code where the value occurs. Parameters MAY be only the slice's names
-  (resource, operation and member names) and its declared values. The platform MUST propose the
-  candidates; before the proof the developer MUST be able to remove any parameter and add another
-  of the slice's names or declared values. Each name parameter covers its value's three case forms:
+  in the slice, tests and code where the value occurs. Parameters MAY be the slice's names
+  (resource, operation and member names), its declared values and its other literal values (a
+  number or a string). The platform MUST propose the names and declared values as candidates;
+  before the proof the developer MUST be able to remove any parameter and add another of the
+  slice's names, declared values or literal values. A number is matched only as a whole number,
+  never inside a longer one. Each name parameter covers its value's three case forms:
   all lower case, first letter upper case, all upper case; a plural or other form is a separate
   parameter. Two parameters whose source values are equal in any case form MUST be refused. Where
   one source value contains another, the longer MUST be matched first, and no place is replaced
@@ -239,7 +246,8 @@ use the captured pattern and says it needs a new proof; proving it again restore
   code as a template, its parameters, the checks it runs, and its source run, base pattern,
   identity and version. Proposed, then proven, then approved; later withdrawn or superseded.
 - **Parameter**: a named part of a captured pattern's source slice that a later slice may give
-  another value: a name or a declared value, with its source value and the places it occurs.
+  another value: a name, a declared value or another literal value, with its source value and the
+  places it occurs.
 - **Proof**: one build of a captured pattern's source slice from the captured pattern with no
   model call, its check results, its file comparison and the method it ran under.
 - **Approval**: the developer's recorded consent that a proven captured pattern may be used.
@@ -263,7 +271,7 @@ use the captured pattern and says it needs a new proof; proving it again restore
   it); "no model" covers the build, from the approved slice to the run's outcome.
 - A run from a captured pattern has no review step: its code is the reviewed source code with new
   values, and its checks (including the tests derived from the new slice's examples) decide.
-- Parameters are the slice's names and declared values only (FR-003); turning behaviour (rules or examples that differ in kind) into parameters is out of scope.
+- Parameters are the slice's names, declared values and literal values (FR-003); turning behaviour (rules or examples that differ in kind) into parameters is out of scope.
 - Exact equality in fit and proof means character for character, as feature 001's reuse does.
 - A captured pattern belongs to the developer's catalogue on their installation, like their
   slices; sharing captured patterns between installations or tenants is out of scope.

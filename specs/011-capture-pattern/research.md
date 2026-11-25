@@ -38,9 +38,9 @@ Every occurrence is one of the three case forms of `note` or `notes`, alone or i
 matched longest first, cover them all (FR-003). The slice's one declared value (`maxLength` 200,
 `slice/contract.yaml:11`) is not repeated in the code (DeclaredValuesNotRepeated); in the examples
 it appears together with values derived from it (a text one character over the limit), which are
-not parameters: a slice with another limit fits only if its examples' derived values are equal to
-the source's, so in this version a declared-value parameter serves only examples that do not
-derive from it (a stated limit, R4).
+not names or declared values: a slice with another limit would fit only if its examples' derived
+values equalled the source's. Put to the owner: the developer may add any literal value of the
+slice as its own parameter (*owner*, spec Clarifications), so `201` is a parameter beside `200`.
 
 ## R1. What a captured pattern is (FR-002, FR-007, FR-009)
 
@@ -109,11 +109,12 @@ the fit and the fill:
 
 - **Candidates**: the slice's names (each schema property name and each word of an operation ID or
   schema name, split at case changes: `createNote` gives `note`) and its declared values (feature
-  009's walk). The developer may remove any and add another name or declared value of the slice
-  (*owner*).
+  009's walk). The developer may remove any and add another name, declared value or literal value
+  (a number or a string that occurs in the slice) (*owner*).
 - **Value forms** (Values that check themselves): a name value is `[a-z][a-z0-9]*` in its lower
-  form; a declared value is the contract's literal (an integer, a decimal, or a string of letters,
-  digits, `_`, `-` and spaces). A value outside its form is refused at the proposal and at the fit,
+  form; a declared value or literal value is an integer, a decimal, or a string of letters,
+  digits, `_`, `-` and spaces. A number is matched only as a whole number: not next to a digit, or
+  to a `.` followed by a digit. A value outside its form is refused at the proposal and at the fit,
   before any substitution.
 - **Case forms** (*owner*): a name covers its lower (`note`), capitalised (`Note`) and upper
   (`NOTE`) forms, inside words too (`NewNote`); a plural is its own parameter.
@@ -125,8 +126,8 @@ the fit and the fill:
   its form, fills the source into exactly the approved slice's text. Otherwise the slice does not
   fit, naming the first place it differs. A captured pattern's base fit conditions also run.
 - **Limits** (stated in the contract): other spellings (`note_id`, `NOTEID` inside an upper word is
-  covered, `note-id` is not), irregular plurals given as their own parameter only, values derived
-  from a declared value (E1), and a value that occurs where it was not meant (the proposal lists
+  covered, `note-id` is not), irregular plurals given as their own parameter only, a derived value
+  that is not added as its own parameter (E1), and a value that occurs where it was not meant (the proposal lists
   every place; the fit replaces it everywhere).
 
 **Rationale**: E1 shows the three case forms and longest-first matching cover a whole accepted

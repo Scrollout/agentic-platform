@@ -10,7 +10,7 @@ N-051, N-053)
 A run that ended done is captured as a captured pattern: its base pattern with each agent step's
 worker replaced by the fixed procedure `fill`, whose template is the run's accepted `tests`,
 `code` and `witnesses` outputs, and whose parameters are names (in three case forms, longest
-first) and declared values of the source slice (research R1, R4). `gen/**` is derived again from
+first), declared values and other literal values of the source slice (research R1, R4). `gen/**` is derived again from
 each slice's contract by the generate procedure. The engine renders a filled step's files and the
 project worker writes them with a new `writeStep` call; the base pattern's checks judge them,
 except the two that read review findings (R1, R2). A slice fits a captured pattern when filling
@@ -64,7 +64,7 @@ field on `startRun`, eight terminal commands, one acceptance suite
 | VI. Adopt mature OSS | Pass | gonew, Copier, Cookiecutter and `text/template` evaluated; none derives a template from an accepted project (research R4); the custom engine is justified there |
 | VII. Providers | Pass | The rule that chooses between fitting patterns is specified (R6) |
 | VIII. Containers | Pass | No new image |
-| IX. Knowledge stays true | Pass | ADR 0090 to 0093, the reference "Project template tools", the architecture overview and the log at implementation |
+| IX. Knowledge stays true | Pass | ADR 0090 to 0094, the reference "Project template tools", the architecture overview and the log at implementation |
 | X. No silent loss | Pass | A captured run and a proof are ordinary runs: recorded before 202, one terminal state, checkpointed steps |
 | XI. Privacy | Pass | A captured pattern holds the developer's slice and code like a slice does; erasing it is an operation; telemetry names IDs and hashes only |
 | XII. Tenants | Not applicable | One developer by scope (feature 001 FR-021), as for slices; Complexity Tracking |
@@ -92,13 +92,14 @@ Each decision that outlives the feature has a record in `docs/decisions/`.
 | A captured pattern is its base pattern with each agent step filled from the accepted files by the fixed procedure `fill`; generated code is derived again; the review step keeps only the checks that need no findings | R1, R2 | [ADR 0090](../../docs/decisions/0090-captured-pattern-fills-agent-steps-from-accepted-files.md) |
 | Captured patterns are the developer's data in the engine store, behind `/captured-patterns`; their template artifacts are held apart from the source slice | R3, R7 | [ADR 0091](../../docs/decisions/0091-captured-patterns-kept-in-the-engine-store.md) |
 | Parameters are names in three case forms and declared values; a slice fits when filling the source gives it exactly; one engine owns the rules | R4 | [ADR 0092](../../docs/decisions/0092-captured-pattern-fit-is-exact-substitution.md) |
+| Any other literal value of the slice may be added as a parameter; a number matches only as a whole number | E1, R4 | [ADR 0094](../../docs/decisions/0094-any-literal-value-may-be-a-parameter.md) (supersedes ADR 0092 in part) |
 | A captured pattern is used only under the method of its latest passing proof, a run of its source slice whose files equal the accepted ones; the newest usable fitting one is chosen unless the run names another | R5, R6 | [ADR 0093](../../docs/decisions/0093-captured-pattern-used-only-under-its-proven-method.md) |
 
 ## Threat model
 
 | Element | S | T | R | I | D | E | OWASP mapping | Mitigation |
 |---------|---|---|---|---|---|---|---------------|------------|
-| Parameter values (from the approved slice the analyst model may have written) entering filled code | | ✓ | | | | ✓ | LLM01 prompt injection, LLM05 improper output handling, ASI05 unexpected code execution | Values parsed into their form before any substitution (names `[a-z][a-z0-9]*`, declared values as numbers or strings of letters, digits, `_`, `-`, spaces): no quote, operator or newline can enter code; the filled project runs only in the check sandbox (gVisor, no egress) and must pass every check |
+| Parameter values (from the approved slice the analyst model may have written) entering filled code | | ✓ | | | | ✓ | LLM01 prompt injection, LLM05 improper output handling, ASI05 unexpected code execution | Values parsed into their form before any substitution (names `[a-z][a-z0-9]*`, declared and literal values as numbers or strings of letters, digits, `_`, `-`, spaces): no quote, operator or newline can enter code; the filled project runs only in the check sandbox (gVisor, no egress) and must pass every check |
 | Captured template (code a model wrote, accepted once) reused without review | | ✓ | | | | ✓ | ASI06 memory and context poisoning, LLM03 supply chain | Only from a run that ended done, whose review left no blocking finding; the developer approves after a proof; withdrawal and erasure; every captured run is judged by the base checks, including DependenciesAllowed and DeploymentValuesConfigured |
 | Fit judge (`engine/captured`) | | ✓ | | | ✓ | | ASI02 tool misuse (a slice crafted to fit and pick a pattern) | Exact equality only; a fit picks values, never code; limits on parameters and places; linear matching, no backtracking regular expressions |
 | `/captured-patterns` and `writeStep` (new calls) | ✓ | ✓ | ✓ | | ✓ | ✓ | API Top 10 API1, API4, API5 | Same token, rate limit and Idempotency-Key as the engine's other calls; `writeStep` only from the engine's token and only into the step's writable paths; operations recorded in the run store |
