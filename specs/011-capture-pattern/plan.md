@@ -153,7 +153,8 @@ src/engine/api/runs.go                   # pattern choice at startRun (R6); part
 src/engine/machine/                      # RunStarted's new fields
 src/engine/durable/                      # RunInput/RunStart: part_hashes, no reuse; workflow version bump
 src/engine/durable/workflow.go, steps/   # the fill worker: render, writeStep, checks, commit
-src/engine/checksvc/project.go           # writeStep
+src/engine/checksvc/history.go, contract.go, handler.go  # writeStep
+src/engine/machine/, src/engine/durable/  # machine.Writer (optional, by type assertion) and the WriteProject activity
 src/engine/slices/                       # the proof slice, made from the captured copy and approved
 src/deploy/ap                            # prove: proof-slice, then build
 src/engine/method/method.sha256          # derived

@@ -177,7 +177,9 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   replay), 3 LOW (F2 T015's usable rule must leave a proof run's replay alone; F3 the state
   table; F4 `writeStep`'s files `history.go` and `contract.go`, and the `x-error-codes`
   descriptions); fixed at the source (data model; T001, T007, T013, T015, T018). Round 17
-  owed.
+  (fresh Sonnet, at 3baaad6): every round-16 fix present; 0 CRITICAL, 0 HIGH; 1 MEDIUM (N1 how the
+  `fill` worker reaches `writeStep` without changing `machine.History` and its fakes), 1 LOW (N2
+  the plan's `writeStep` files); fixed at the source (plan; T007). Round 18 owed.
 
 ---
 
@@ -370,7 +372,11 @@ proposed and adding the derived value works; the proof ends passed with no model
   `proof: true` or names a pattern other than a base pattern with `RunNotCapturable`;
   `makeProofSlice` is T029's, withdrawal and
   erasure T020's, the usable rule at `startRun` and `replayRun` T015's) with its operations in `src/engine/api/operations.go`, the
-  `fill` worker in `src/engine/durable/workflow.go` and `src/engine/steps/` (render through
+  `fill` worker in `src/engine/durable/workflow.go` and `src/engine/steps/` (it reaches
+  `writeStep` through a new optional interface `machine.Writer`, found by type assertion on the
+  history, so `machine.History` and its existing fakes stay unchanged, and a `WriteProject`
+  activity in `durable/durable.go`, `activities.go` and `client.go` behind the same
+  `workflow.GetVersion` bump; render through
   `engine/captured`, `writeStep`, checks, `commitStep`; the readiness check skips `fill`),
   `writeStep` in `src/engine/checksvc/history.go` (beside `commitStep` and `restoreStep`, under
   the project worker's lock, record and history check), `contract.go` (its request schema in the
