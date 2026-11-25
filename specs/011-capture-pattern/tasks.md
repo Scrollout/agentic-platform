@@ -179,7 +179,9 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   descriptions); fixed at the source (data model; T001, T007, T013, T015, T018). Round 17
   (fresh Sonnet, at 3baaad6): every round-16 fix present; 0 CRITICAL, 0 HIGH; 1 MEDIUM (N1 how the
   `fill` worker reaches `writeStep` without changing `machine.History` and its fakes), 1 LOW (N2
-  the plan's `writeStep` files); fixed at the source (plan; T007). Round 18 owed.
+  the plan's `writeStep` files); fixed at the source (plan; T007). Round 18 (fresh Sonnet, at e47852f): every
+  round-17 fix present; 0 CRITICAL, 0 HIGH, 0 MEDIUM; 1 LOW (E1 T006's split between `fill` and
+  proof cases); fixed at the source (T006). Round 19 owed.
 
 ---
 
@@ -329,7 +331,11 @@ proposed and adding the derived value works; the proof ends passed with no model
   under another base pattern version answers `RunNotCapturable` naming both; a second state change while one of its
   operations runs answers 409 `CapturedPatternBusy`; list is newest first and paginated; a reused Idempotency-Key
   with another body answers as for other calls. Seen failing
-- [ ] T006 [P] [US1] Test author: new `src/engine/durable/fill_proof_test.go` and
+- [ ] T006 [P] [US1] Test author (two groups: the `fill` cases, in
+  `src/engine/durable/fill_proof_test.go`, are the workflow-level ones: a `fill` step needs no
+  worker, renders, calls `writeStep`, runs its checks, commits, makes no model call, writes nothing
+  for an empty output, is never attempted twice, and the recorded histories replay; every other
+  case is a proof case, passing after T029): new `src/engine/durable/fill_proof_test.go` and
   `src/engine/api/captured_proof_test.go` (workflow test environment, step workers and gateway
   faked): a proof is a `startRun` of the captured pattern's proof slice (it works after the
   source slice and its runs are erased) under the captured pattern with the source values, its
