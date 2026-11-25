@@ -410,10 +410,10 @@ passes at pass^3 on the changed pattern (FR-009, FR-010, SC-003; research R6).
   mappings change and no `__files`: the generated-code input hash (every step), the code step's
   instruction paragraph on malformed bodies (186) and `hard-coded-declared-value`'s contract hash
   (30, the approved `createNote` 400 change)
-- [ ] T018 [US3] Commit (tests, code, recordings in separate commits); push (owner go-ahead; every
+- [x] T018 [US3] Commit (tests, code, recordings in separate commits); push (owner go-ahead; every
   check job and `evals-current`); fix until CI is green with `TestUS1`, `TestUS2`, `TestPlanted`
   and `TestPlantedValues` replaying with no miss; record the run and `TestUS2`'s duration (SC-004)
-  in research
+  in research. Done: CI 45638095111 at 4a4a6f6, all 26 jobs green, no miss (research Runs)
 - [ ] T019 [US3] Paid evals for the analyst and steps suites (owner go-ahead; add the branch to
   environment `dev`'s branch policies first): every counted case passes^3, `review/clean` counted
   among them; record the run in research; a failing case is assessed as a defect against agreed
