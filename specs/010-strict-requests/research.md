@@ -60,7 +60,7 @@ In a scratch module: the template's `oapi-codegen.yaml` plus
 `output-options.user-templates: {stdhttp/std-http-handler.tmpl: std-http-handler.tmpl}`, where the
 file is v2.8.2's template with one change, each registration wrapped:
 `m.HandleFunc(..., refuseMalformed("<METHOD> <contract path>", wrapper.<Handler>))`, written
-`refuseMalformed({{.Method | toGoString}}+" "+{{.Path | toGoString}}, ...)` (an earlier run with
+`refuseMalformed({{.Method | toGoString}}+" "+{{.Path | toGoString}}, ...)` in the prototype, which renders `"POST"+" "+"/notes"`; the template writes one literal with `{{printf "%s %s" .Method .Path | toGoString}}` (T007) (an earlier run with
 `{{.OperationId}}` gave oapi-codegen's Go name, `CreateNote`, so the key is the method and the
 contract's path instead, which the contract states directly); a hand-written
 `refuseMalformed` that checks `required` and types and re-encodes only the declared members; the

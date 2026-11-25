@@ -203,7 +203,7 @@ with the clean reference, `{"text":"a","TEXT":"b"}` gives 201 with `"a"`.
   step naming why); the template's `gen/oapi-codegen.yaml` gains
   `output-options.user-templates: {stdhttp/std-http-handler.tmpl: std-http-handler.tmpl}`; new
   `template/gen/std-http-handler.tmpl` (v2.8.2's text, its first line naming that release, each
-  registration wrapped by `refuseMalformed({{.Method | toGoString}}+" "+{{.Path | toGoString}}, ...)`);
+  registration wrapped by `refuseMalformed({{printf "%s %s" .Method .Path | toGoString}}, ...)` (one literal, `"POST /notes"`));
   new `template/gen/requests.go` (the generic engine of the contract draft's Behaviour and
   Messages, standard library only: `json.Valid` before `Decoder.Token`, integers decided on their
   text); `template/vendortools/tools.go` and the template's `go.mod`
@@ -241,7 +241,8 @@ malformed requests are refused for it (FR-006, FR-007, FR-011, FR-012; research 
   `dependentRequired`, `patternProperties`, `propertyNames`, `prefixItems`, `contains`,
   `unevaluatedProperties`, `unevaluatedItems`, `$dynamicRef`, an unknown key, an
   `additionalProperties` schema, a nested property or `items` using one of them, one reached only
-  through a `$ref`, `nullable: true`, `type: [integer, number]` and `[string, integer, "null"]`
+  through a `$ref`, `nullable: true`, a shaping key beside a `$ref`, a name twice in
+  `required`, a `requestBody` without `content`, `type: [integer, number]` and `[string, integer, "null"]`
   (only one type and `"null"` may be listed), a body with no `schema`, a `type` of `str` or `[string,
   date]`, a recursive schema and a `$ref` loop (each ends, visited set), and a `content` with
   `text/plain` alone or beside `application/json`, an empty type list, an unquoted YAML `null`

@@ -48,8 +48,9 @@ What the conditions keep out:
     `readOnly`, `writeOnly`, `$comment`, and keys starting `x-`.
 
   A boolean schema (`schema: true`, `items: false`) and a YAML anchor or alias in a schema are
-  refused. The names under `properties`, and everything under an `x-` key, are names, never
-  judged as keywords. Every `$ref` walk keeps the locations it has visited, so a cycle ends.
+  refused, and so are a shaping key beside a `$ref` (`{$ref: ..., type: object}`), a name listed
+  twice in `required`, and a `requestBody` with no `content`. The names under `properties`, and
+  everything under an `x-` key, are names, never judged as keywords. Every `$ref` walk keeps the locations it has visited, so a cycle ends.
 
 - `OnlyHttpOperations` admits only operations a client calls over HTTP. It refuses webhooks and
   callbacks, which the service would send, and refuses keys this version does not know
@@ -128,7 +129,8 @@ with no request body is served as before.
 api/openapi.yaml. DO NOT EDIT.`, then a blank line and `package gen`. One map,
 `requestBodies`, from `"<METHOD> <path>"` (the method in upper case, the path as the contract
 writes it) to the body: whether `requestBody.required`, and its shape. Every shape is an unexported
-`requestShape<N>` (N from 1, in document order of first use), linked in `init()`, so a recursive
+`requestShape<N>` (N from 1, depth first, a shape before its members and items, across the bodies
+in document order), linked in `init()`, so a recursive
 schema is a cycle. A shape holds: its JSON types (from `type`; none means any), its members
 (`properties` in contract order, then names only in `required`, in `required` order, of any
 type), its required members (`required` order), whether it is closed (`additionalProperties:
@@ -140,7 +142,8 @@ the approved contract and fails naming a missing or differing file.
 
 What a body goes through, in this order; the first problem is the refusal:
 
-1. More than 1048576 bytes: refused. The request's `Content-Type` is not judged.
+1. More than 1048576 bytes: refused. A body that cannot be read for another reason (the client
+   went away) is answered as not valid JSON. The request's `Content-Type` is not judged.
 2. Empty, or JSON white space only: refused when `requestBody.required` is true; otherwise the
    operation runs with it as sent.
 3. Not exactly one JSON value, or nested deeper than 10000 levels (`encoding/json`'s scanner):
@@ -155,8 +158,9 @@ What a body goes through, in this order; the first problem is the refusal:
    not an integer when that plain form would exceed 32 digits; a plain integer literal is kept as
    sent, at any length. With `number` among the types nothing is rewritten. `-0`, `-0.0` and
    `0e5` are written again as `0`.
-6. The body is written again with only the declared members, under their exact names, where the
-   shape declares members; its length follows. The operation runs.
+6. Where members were removed or an integer rewritten, the body is written again, compact, with
+   only the declared members under their exact names, in the order the body gave them; its length
+   follows. Otherwise it is passed on byte for byte. The operation runs.
 
 A refusal answers `400` with `Content-Type: application/json` and `{"message": <text>}`, the same
 text for the same request. `<p>` is the member's JSON Pointer (RFC 6901) from the body's root, cut
