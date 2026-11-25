@@ -69,6 +69,10 @@ quarantined under T202).
   `components/requestBodies` is followed; a request body without a schema, or an unknown type
   name, does not fit; the size limit, an empty required body and the body's own type are refusals
   of FR-002.
+- Found while writing the US1 tests (T004): the pinned oapi-codegen cannot generate a `type` list
+  other than one type and `"null"` (`[integer, number]` fails with "unhandled Schema type"). Q:
+  Narrow the fit condition? → A: yes; a type list is allowed only as one type and `"null"`, any
+  other list makes the slice not fit (owner, 2026-11-25; FR-012).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -247,7 +251,7 @@ trials; the review suite reports pass^3 with it counted.
   `type`, `properties`, `required`, `additionalProperties` (`true` or `false`) and `items`; any
   other keyword that constrains which members or items a body has MUST make the slice not fit, and
   the reason MUST name each location. A body without a schema, an unknown type name and `nullable`
-  MUST make the slice not fit too. Value keywords (limits, allowed values, formats, `const`) and
+  MUST make the slice not fit too, and so MUST a type list other than one type and `"null"`. Value keywords (limits, allowed values, formats, `const`) and
   annotations are allowed.
 
 ### Key Entities

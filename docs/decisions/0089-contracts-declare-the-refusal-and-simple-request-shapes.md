@@ -46,7 +46,8 @@ Sources: [Feature 010 research, R4](../../specs/010-strict-requests/research.md)
   `additionalProperties` and `items`, through local `$ref`s; value keywords and annotations are
   allowed; any other key fails (fail closed), `nullable` among them (owner, analyze round 1: a type
   list allows `null`); a body without a schema, a type name other than the seven JSON Schema
-  types, a boolean schema and a YAML anchor or alias fail.
+  types, a type list other than one type and `"null"` (owner, 2026-11-25: the pinned oapi-codegen
+  generates no other), a boolean schema and a YAML anchor or alias fail.
 
 Sources: [Feature 010 research, R4](../../specs/010-strict-requests/research.md).
 

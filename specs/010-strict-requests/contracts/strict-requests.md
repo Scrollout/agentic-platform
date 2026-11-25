@@ -123,7 +123,8 @@ document order.
   and every schema reached from it, through local `$ref`s (with a visited set), has only allowed
   keywords (reason: `<location>: <keyword> is not supported in a request body`); a body with no
   `schema` (`<operation>/requestBody: no schema`) and a `type` naming anything but `null`,
-  `boolean`, `object`, `array`, `number`, `string`, `integer` fail too, as do an empty type list,
+  `boolean`, `object`, `array`, `number`, `string`, `integer` fail too, as do a type list other
+  than one type and `"null"` (the pinned oapi-codegen generates no other), an empty type list,
   a type list item that is not a string (an unquoted YAML `null`: write `"null"`), a boolean
   schema (`items: true`, `schema: false`), and a YAML anchor or alias in a schema. A name of a
   property, or a key under an `x-` extension, is never judged as a keyword. Allowed: `type`, `properties`,

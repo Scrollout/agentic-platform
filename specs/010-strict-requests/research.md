@@ -172,7 +172,9 @@ wrap is in the registration, which every entry point reaches. The clean referenc
   - `RequestBodiesSupported`: every `requestBody`'s `content` has exactly the key
     `application/json`, and its schema, through local `$ref`s, uses as shaping keywords only
     `type`, `properties`, `required`, `additionalProperties` (boolean only) and `items` (a schema);
-    a body with no `schema`, a `type` naming anything but the seven JSON Schema types, `nullable`
+    a body with no `schema`, a `type` naming anything but the seven JSON Schema types, a type
+    list other than one type and `"null"` (oapi-codegen v2.8.2 answers any other with
+    "unhandled Schema type"; found by T004's author, owner 2026-11-25), `nullable`
     (owner, analyze round 1), and any of `allOf`, `anyOf`, `oneOf`, `not`, `if`, `then`, `else`, `dependentSchemas`,
     `dependentRequired`, `patternProperties`, `propertyNames`, `prefixItems`, `contains`,
     `unevaluatedProperties`, `unevaluatedItems`, `$dynamicRef`, a non-boolean

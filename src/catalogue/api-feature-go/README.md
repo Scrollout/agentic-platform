@@ -36,7 +36,8 @@ What the conditions keep out:
 - `RequestBodiesSupported` allows these keys in a request body's schemas, and refuses every other
   (fail closed), `nullable` among them (a type list allows `null`):
   - shaping: `type` (one of `null`, `boolean`, `object`, `array`, `number`, `string`, `integer`,
-    or a non-empty list of them, each written as a string, so `null` is `"null"`), `properties`,
+    or a list of one of them and `"null"`, each written as a string, as `[string, "null"]`; the
+    pinned oapi-codegen generates no other list), `properties`,
     `required`, `additionalProperties` (`true` or `false` only), `items` (a schema, not a
     boolean), `$ref` (local; a `requestBody` that is a `$ref` to `#/components/requestBodies/...`
     is followed);

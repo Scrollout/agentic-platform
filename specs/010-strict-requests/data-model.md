@@ -39,7 +39,7 @@ Nothing of the operation runs, so nothing is changed (FR-002).
 | Condition | Part | Passes when |
 |-----------|------|-------------|
 | `RefusalDeclared` | `contract` | every operation with a `requestBody` declares `400` with an `application/json` schema that is an object requiring exactly `message`, a string with no value keyword |
-| `RequestBodiesSupported` | `contract` | every `requestBody` is `application/json` only with a schema, and its schema shapes the body only with the simple keywords and the seven type names; no `nullable` |
+| `RequestBodiesSupported` | `contract` | every `requestBody` is `application/json` only with a schema, and its schema shapes the body only with the simple keywords and the seven type names, a list only as one type and `"null"`; no `nullable` |
 
 ## Check (added)
 

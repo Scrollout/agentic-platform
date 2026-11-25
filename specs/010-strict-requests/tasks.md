@@ -241,7 +241,8 @@ malformed requests are refused for it (FR-006, FR-007, FR-011, FR-012; research 
   `dependentRequired`, `patternProperties`, `propertyNames`, `prefixItems`, `contains`,
   `unevaluatedProperties`, `unevaluatedItems`, `$dynamicRef`, an unknown key, an
   `additionalProperties` schema, a nested property or `items` using one of them, one reached only
-  through a `$ref`, `nullable: true`, a body with no `schema`, a `type` of `str` or `[string,
+  through a `$ref`, `nullable: true`, `type: [integer, number]` and `[string, integer, "null"]`
+  (only one type and `"null"` may be listed), a body with no `schema`, a `type` of `str` or `[string,
   date]`, a recursive schema and a `$ref` loop (each ends, visited set), and a `content` with
   `text/plain` alone or beside `application/json`, an empty type list, an unquoted YAML `null`
   in a type list, a boolean schema, a YAML anchor or alias; a property named `oneOf` or
