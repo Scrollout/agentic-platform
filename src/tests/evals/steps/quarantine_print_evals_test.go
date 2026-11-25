@@ -36,7 +36,7 @@ func quarantineReps(quarantinedPasses, countedPasses bool) []CaseReport {
 			Trials: []Trial{{N: 1, Passed: pass}, {N: 2, Passed: pass}, {N: 3, Passed: pass}}}
 	}
 	return []CaseReport{
-		mk("review/clean", quarantinedPasses, "T202"),
+		mk("synthetic/quarantined", quarantinedPasses, "T999"),
 		mk("counted-1", true, ""),
 		mk("counted-2", countedPasses, ""),
 	}
@@ -64,8 +64,8 @@ func TestPrintReportIgnoresAFailingQuarantinedCase(t *testing.T) {
 	if len(rep) != 3 {
 		t.Fatalf("report holds %d cases, want 3 (a quarantined case is still reported)", len(rep))
 	}
-	if rep[0]["quarantined_by"] != "T202" {
-		t.Errorf("quarantined case: quarantined_by = %v, want T202", rep[0]["quarantined_by"])
+	if rep[0]["quarantined_by"] != "T999" {
+		t.Errorf("quarantined case: quarantined_by = %v, want T999", rep[0]["quarantined_by"])
 	}
 	if rep[0]["passed"] != false {
 		t.Errorf("the quarantined case's own result must stay recorded as failed, got %v", rep[0]["passed"])
@@ -94,7 +94,7 @@ func TestPrintReportPassesWhenEverythingPasses(t *testing.T) {
 		t.Error("printReport = false, want true")
 	}
 	rep := readQuarantineReport(t, dir)
-	if rep[0]["quarantined_by"] != "T202" {
+	if rep[0]["quarantined_by"] != "T999" {
 		t.Error("a passing quarantined case still carries quarantined_by")
 	}
 	if rep[0]["passed"] != true {
@@ -103,7 +103,7 @@ func TestPrintReportPassesWhenEverythingPasses(t *testing.T) {
 }
 
 func TestPrintReportWithOnlyQuarantinedCasesFailing(t *testing.T) {
-	reps := []CaseReport{{Name: "review/clean", Quarantine: "T202", Trials: []Trial{{N: 1}}}}
+	reps := []CaseReport{{Name: "synthetic/quarantined", Quarantine: "T999", Trials: []Trial{{N: 1}}}}
 	if !printReport(t, reps, t.TempDir()) {
 		t.Error("printReport = false, want true: no counted case failed")
 	}
@@ -113,7 +113,7 @@ func TestPrintReportSaysAQuarantinedCaseIsNotCounted(t *testing.T) {
 	for _, pass := range []bool{false, true} {
 		c := &logCapture{TB: t}
 		printReport(c, quarantineReps(pass, true), t.TempDir())
-		want := "[" + verdictWord(pass) + ", quarantined by T202, not counted] review/clean"
+		want := "[" + verdictWord(pass) + ", quarantined by T999, not counted] synthetic/quarantined"
 		line := ""
 		for _, l := range strings.Split(c.out.String(), "\n") {
 			if strings.Contains(l, want) {
