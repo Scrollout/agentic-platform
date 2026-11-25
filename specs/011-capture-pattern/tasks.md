@@ -169,7 +169,10 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   round-13 fix present; 0 CRITICAL, 0 HIGH; 1 MEDIUM (F1 the parameters' order tested in US1's
   proof lines instead of US2's event lines and the page), 2 LOW (A1 too many entries is the
   schema's 400; A2 the check contract's preamble and `handler.go`'s body limit); fixed at the
-  source (contract draft; T001, T004, T007, T008, T030, T031). Round 15 owed.
+  source (contract draft; T001, T004, T007, T008, T030, T031). Round 15 (fresh Sonnet, at 14e9eb7): every
+  round-14 fix present; 0 CRITICAL, 0 HIGH; 1 MEDIUM (N1 a proof run's replay: Busy and never
+  `ProofRequired`), 1 LOW (N2 the check contract's other preamble sentences and the handler's
+  doc comments); fixed at the source (contract draft; T001, T007, T027). Round 16 owed.
 
 ---
 
@@ -187,7 +190,8 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   `startRun` answers 202 with its operation as before, and `Run` gains `proof` and the pattern
   choice (data model, Run); `startRun`'s description gives the refusal order of the contract
   draft; `x-error-codes` per operation: `startRun` and `replayRun` add `CapturedPatternWithdrawn`
-  and `ProofRequired` (409) and `startRun` NotFound for an unknown `pattern`; each id-addressed captured-pattern call 404 `NotFound`; `captureRun` 404,
+  and `ProofRequired` (409), both add `CapturedPatternBusy` (a proof's start or a proof run's
+  replay), and `startRun` NotFound for an unknown `pattern`; each id-addressed captured-pattern call 404 `NotFound`; `captureRun` 404,
   409 `RunNotDone`, `RunNotCapturable`, `CapturedPatternExists`; `replaceParameters` 409
   `CapturedPatternApproved`, `CapturedPatternWithdrawn`, `CapturedPatternBusy`, operation
   `ParameterRefused`; `makeProofSlice` 409 `CapturedPatternWithdrawn`, `CapturedPatternBusy`,
@@ -213,7 +217,9 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   gains `POST /project-versions/write` (`writeStep`: the contract draft's request, `CallCommon`
   plus `files`, response `{written, removed}` and error codes; the contract's preamble names
   `writeStep` beside `commitStep` for the larger body limit and among the calls safe to
-  repeat). The engine contract gains the
+  repeat, and beside `restoreStep` in its sentences on the project worker's calls, the 404
+  `VersionHistoryNotServed` of the other deployments, `UnreadableProject`, the operations that
+  read `.git`, and the history check). The engine contract gains the
   capture `name` rule (`capture_name` in `slice-defs.schema.json`, `^[a-z0-9]+(-[a-z0-9]+)*$`,
   `maxLength` 40) and `parameter_value` (research R4); `captureRun`'s description names every
   `RunNotCapturable` cause, the base-version mismatch included; `startRun` lists
@@ -361,7 +367,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   `fill` worker in `src/engine/durable/workflow.go` and `src/engine/steps/` (render through
   `engine/captured`, `writeStep`, checks, `commitStep`; the readiness check skips `fill`),
   `writeStep` in `src/engine/checksvc/project.go` and `handler.go` (its body-limit branch covers
-  `writeStep` as it covers `commitStep`), the proof as a run of the
+  `writeStep` as it covers `commitStep`; the `History` and `NewHandler` doc comments name it), the proof as a run of the
   proof slice with `proof: true` (T029 makes the proof slice and the `startRun` branch that
   recognises it; T007 adds the `proof_of` field on `slices.Slice` that branch reads), the `RunStarted` fields `pattern_reason`, `parameters`, `source_run`, `proof` and
   `part_hashes` (written by `StartRun` and `ReplayRun` through `src/engine/api/runs.go` `newRun`,
@@ -391,7 +397,9 @@ proposed and adding the derived value works; the proof ends passed with no model
   state, a `pattern` naming another one or a part not equal to the copy answers
   `PatternDoesNotFit`; its run carries `proof: true`; `deleteSlice` of the proof slice clears
   `proof_slice`, keeps every recorded proof (its run then NotFound) and the template artifacts; a
-  replay of a proof run is a new proof with no reuse; a proof's `startRun` while another of the
+  replay of a proof run is a new proof with no reuse, also when the captured pattern is proposed
+  or unusable (never `ProofRequired`), and answers `CapturedPatternBusy` while another of its
+  operations runs; a proof's `startRun` while another of the
   captured pattern's operations runs answers `CapturedPatternBusy`; `deleteSlice` of the proof
   slice right after its proof run ended, before any read, still keeps that proof; capturing a
   proof run answers

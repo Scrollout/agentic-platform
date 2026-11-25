@@ -42,7 +42,9 @@ PatternDoesNotFit, with the first place the approved slice differs or the value 
 named captured pattern that does not fit;
 WorkersNotReady (a `fill` step needs no worker); RunActive; ProjectExists. `replayRun` of a run
 built from a captured pattern answers `CapturedPatternWithdrawn` or `ProofRequired` when it is not
-usable, and NotFound when it was erased; `resumeRun` and `acceptHandOver` keep the run's
+usable, and NotFound when it was erased; `replayRun` of a proof run follows the proof rule
+instead: a new proof in any state but withdrawn, answering `CapturedPatternWithdrawn` or
+`CapturedPatternBusy`, never `ProofRequired`; `resumeRun` and `acceptHandOver` keep the run's
 pattern.
 
 Additive changes elsewhere: `Operation.target` takes a new `operation_target` rule (a slice, run
