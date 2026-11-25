@@ -95,9 +95,16 @@ asked before T008 is pushed).
   `not implemented` result; `scripts/generate.sh` refreshes the embedded contract copies;
   `scripts/method-digest.py` converges; the contract lint passes; the draft then links to the
   authoritative copies
-- [ ] T002 Owner approvals: ask the owner to approve, by name, each existing test change plan.md
+- [x] T002 Owner approvals: ask the owner to approve, by name, each existing test change plan.md
   lists ("Existing tests expected to change"), and record each approval here with its date; a
-  change not approved is not made, and the task that needs it stops
+  change not approved is not made, and the task that needs it stops. Done: the owner approved all
+  eleven, named one by one (2026-11-25): `fit_test.go` line 34; `pattern_values_test.go`;
+  `pattern_flag_test.go` line 25 and `slices_patternflag_test.go` line 27; `checks_test.go`
+  `patternCases`; `us2_test.go` line 84 and `runs_ops_test.go` lines 449-450;
+  `planted_values_test.go` (the second anchored replacement); `cases.go` (`review/clean`
+  unquarantined); `quarantine_test.go` and `quarantine_print_evals_test.go`; `grade.go` and its
+  README; the analyst mappings; every step set's mappings. Trailer: `Tests-approved-by: Marius
+  Gologan (2026-11-25)`
 
 ---
 
