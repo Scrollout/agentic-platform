@@ -35,7 +35,7 @@
   questions before the draft (Clarifications). The spec names the base pattern
   `api-feature-go` and the repository's catalogue folder only to bound scope (Assumptions), as
   earlier specs do.
-- Defaults the owner may revisit in `/speckit-clarify`: the platform proposes parameter
-  candidates and the developer may only remove them (FR-003); a captured pattern wins over its
-  base pattern, the latest approved over older ones (FR-010); no review step in a captured
-  pattern's run (Assumptions); SC-002's "a quarter of the source run's time".
+- Clarify session 2026-11-25 (3 questions): name case forms (FR-003, FR-009), the developer
+  removes or adds parameters (FR-003), the captured pattern is used automatically with an override
+  (FR-010). All items still pass. Left as defaults: no review step in a captured pattern's run
+  (Assumptions) and SC-002's "a quarter of the source run's time".

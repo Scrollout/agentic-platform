@@ -35,6 +35,16 @@ reused only under the method that judged them), [feature 009](../009-no-hard-cod
 - Q: Who lets a captured pattern into the catalogue? → A: The developer. The platform proposes it
   and proves it; the developer approves it before any run uses it, and the approval is recorded
   (owner; FR-006, FR-007).
+- Q: A name parameter's value appears in the code as `note`, `Note`, `NOTE` and `notes`; how is a
+  new value filled in? → A: in its case forms: the source value written all lower case, with its
+  first letter upper case, and all upper case is each replaced by the new value written the same
+  way; a plural is its own parameter (owner; FR-003, FR-009).
+- Q: Which values may become parameters? → A: the platform proposes the slice's names and
+  declared values; the developer may remove any of them and add another name or declared value of
+  the slice before the proof (owner; FR-003).
+- Q: When an approved slice fits a captured pattern, is it used automatically? → A: yes, the most
+  recently approved fitting captured pattern; the developer may choose the base pattern for a run,
+  and the run's start names the pattern used (owner; FR-010).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -142,8 +152,13 @@ use the captured pattern and says it needs a new proof; proving it again restore
 - A parameter's source value also occurs where it is not meant to be replaced (the word "note" in
   a description and in a name): the proposal shows every place it occurs, and the proof judges
   the rebuild with that value replaced everywhere it was named.
-- Two parameters with the same source value, or one source value inside another (`note` and
-  `notes`): the proposal is refused, naming both, because a fit could not tell them apart.
+- Two parameters with the same source value in any case form: the proposal is refused, naming
+  both, because a fit could not tell them apart.
+- One source value inside another (`note` and its plural `notes`, a separate parameter): the
+  longer value is matched first, and no place is replaced twice.
+- A case form the code writes another way (`NoteID`, `note_id`): the forms named in FR-003 are
+  replaced where they occur inside a word as well; any other spelling is not, and the proof fails
+  on the file it leaves unequal or the check it breaks.
 - A later slice gives two parameters the same value, or a value that breaks a name (a space, a
   reserved word): the run's checks judge the result; a failed check hands the run over (Story 2,
   scenario 4).
@@ -170,8 +185,12 @@ use the captured pattern and says it needs a new proof; proving it again restore
 - **FR-003**: The proposal MUST name each parameter: its name, its source value, and every place
   in the slice, tests and code where the value occurs. Parameters MAY be only the slice's names
   (resource, operation and member names) and its declared values. The platform MUST propose the
-  candidates; the developer MUST be able to remove a parameter before the proof. Two parameters
-  whose source values are equal, or one of which contains the other, MUST be refused.
+  candidates; before the proof the developer MUST be able to remove any parameter and add another
+  of the slice's names or declared values. Each name parameter covers its value's three case forms:
+  all lower case, first letter upper case, all upper case; a plural or other form is a separate
+  parameter. Two parameters whose source values are equal in any case form MUST be refused. Where
+  one source value contains another, the longer MUST be matched first, and no place is replaced
+  twice.
 
 #### Proof and approval
 
@@ -194,12 +213,13 @@ use the captured pattern and says it needs a new proof; proving it again restore
   fit MUST name each parameter's value, and a slice that does not fit MUST be told the first place
   it differs.
 - **FR-009**: A run from a captured pattern MUST fill the parameters' values into the template,
+  each name in the case form its place has (FR-003),
   MUST make no model call, and MUST run every check its captured pattern declares; it MUST end
   done only when all pass, and handed over, naming the failing check, otherwise.
 - **FR-010**: When a slice fits a captured pattern and another pattern, the run MUST use the
   captured pattern unless the developer chose another pattern for that run; when several captured
-  patterns fit, the one approved most recently MUST be used. The run record MUST name the pattern
-  used and why.
+  patterns fit, the one approved most recently MUST be used. The answer to the run's start and the
+  run record MUST name the pattern used and why.
 
 #### Method and record
 
@@ -243,8 +263,7 @@ use the captured pattern and says it needs a new proof; proving it again restore
   it); "no model" covers the build, from the approved slice to the run's outcome.
 - A run from a captured pattern has no review step: its code is the reviewed source code with new
   values, and its checks (including the tests derived from the new slice's examples) decide.
-- The platform proposes parameter candidates from the slice's names and declared values only;
-  turning behaviour (rules or examples that differ in kind) into parameters is out of scope.
+- Parameters are the slice's names and declared values only (FR-003); turning behaviour (rules or examples that differ in kind) into parameters is out of scope.
 - Exact equality in fit and proof means character for character, as feature 001's reuse does.
 - A captured pattern belongs to the developer's catalogue on their installation, like their
   slices; sharing captured patterns between installations or tenants is out of scope.
