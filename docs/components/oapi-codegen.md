@@ -15,10 +15,13 @@ sources:
   - id: research-009
     resource: ../../specs/009-no-hard-coded-values/research.md
     title: Feature 009 research
+  - id: research-010
+    resource: ../../specs/010-strict-requests/research.md
+    title: Feature 010 research
   - id: adr-0004
     resource: /decisions/0004-contract-first-toolchain.md
     title: "ADR 0004: Contract-first toolchain"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-23T20:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-25T12:00:00Z }
 ---
 
 # Responsibility
@@ -58,3 +61,12 @@ generate procedure therefore writes `gen/declared.go` itself
 ([ADR 0084](/decisions/0084-declared-values-live-in-generated-code-and-are-never-repeated.md)).
 
 Sources: [Feature 009 research, E1](../../specs/009-no-hard-coded-values/research.md).
+
+v2.8.2's `output-options.user-templates` replace a built-in template by name, read from a file
+next to the configuration; its `stdhttp/std-http-handler.tmpl` registers every operation in
+`HandlerWithOptions`, which `Handler` and `HandlerFromMux` call. The strict server and the plain
+server both decode JSON with `encoding/json` v1, so member names match without regard to case.
+The catalogue pattern overrides that one template to refuse malformed requests
+([ADR 0087](/decisions/0087-delivered-service-refuses-malformed-requests-before-its-code.md)).
+
+Sources: [Feature 010 research, E1, E4](../../specs/010-strict-requests/research.md).

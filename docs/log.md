@@ -2,6 +2,7 @@
 
 ## 2026-11-25
 
+* **Plan**: Feature 010 (T202): the pattern overrides oapi-codegen's handler template so every operation is wrapped by a generated request check ([ADR 0087](/decisions/0087-delivered-service-refuses-malformed-requests-before-its-code.md)); request shapes are derived into `gen/request_shapes.go` and drift-checked by RequestShapesGenerated ([ADR 0088](/decisions/0088-request-shapes-are-generated-and-drift-checked.md)); two fit conditions, RefusalDeclared and RequestBodiesSupported, keep contracts to a refusal body and simple JSON shapes ([ADR 0089](/decisions/0089-contracts-declare-the-refusal-and-simple-request-shapes.md)). The owner also decided: simple shapes only, JSON bodies only, a name twice is refused. The [oapi-codegen](/components/oapi-codegen.md) component and the [Go JSON reference](/references/go-json-duplicate-names.md) gain what the research found.
 * **Specification**: Feature 010 (backlog T202) specifies that the service the catalogue's pattern delivers refuses a request its contract does not allow: body members are read only by their exact declared names, a missing required member, a wrong type or invalid JSON is answered 400 with a `message`, and other members follow the contract (owner). A new fit condition asks every operation with a request body to declare that 400. The [glossary](/overview/glossary.md) gains Request schema and Refusal; N-051, N-052 and N-055 in the [problem space](/overview/problem-space.md) link the spec.
 
 ## 2026-11-24

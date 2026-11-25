@@ -1,7 +1,7 @@
 ---
 type: Reference
 title: Go JSON duplicate names
-description: How Go's encoding/json (v1) and encoding/json/v2 treat an object that holds a name twice, and where v2 is stable, as read on 2026-11-22 for the analyst's answers.
+description: How Go's encoding/json (v1) and encoding/json/v2 treat an object that holds a name twice or a name in another case, and where v2 is stable, as read on 2026-11-22 and 2026-11-25.
 resource: https://www.rfc-editor.org/rfc/rfc7493#section-2.3
 tags: [references, go, json]
 status: draft
@@ -19,7 +19,10 @@ sources:
   - id: research
     resource: ../../specs/007-analyst-answer-checks/research.md
     title: Feature 007 research, S3 and E1
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-22T22:00:00Z }
+  - id: research-010
+    resource: ../../specs/010-strict-requests/research.md
+    title: Feature 010 research, E2
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-25T12:00:00Z }
 ---
 
 # The standards
@@ -41,3 +44,14 @@ Sources: [RFC 8259, section 4](https://www.rfc-editor.org/rfc/rfc8259#section-4)
   stability promise of its own.
 
 Sources: [Feature 007 research, S3 and E1](../../specs/007-analyst-answer-checks/research.md); [go-json-experiment/json README](https://raw.githubusercontent.com/go-json-experiment/json/master/README.md).
+
+# Names in another case
+
+- `encoding/json` (v1) matches an object's names to struct fields preferring an exact match but
+  accepting one that differs only in case: `{"TEXT":"x"}` fills a field tagged `text`, and of
+  `{"text":"a","TEXT":"b"}` the last, `"b"`, is kept. A missing member leaves the zero value
+  without an error (reproduced with Go 1.27.1).
+- `encoding/json/v2` matches names exactly by default; its sources still carry
+  `//go:build goexperiment.jsonv2` in Go 1.27.1 as installed here.
+
+Sources: [Feature 010 research, E2](../../specs/010-strict-requests/research.md).
