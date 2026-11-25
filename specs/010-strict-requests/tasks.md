@@ -342,7 +342,7 @@ malformed requests are refused for it (FR-006, FR-007, FR-011, FR-012; research 
   Done: tests acee9ee (T009, T011, Sonnet) and 645188a (T010, Sonnet, approved changes), code
   e38bdeb (T012, Opus; T009-T011 and the six packages green but the godog-0-scenarios host
   failures), recordings (T013, coordinating session; old digest 50448f2d, new a3ee7d95)
-- [ ] T014 [US2] Commit (tests, code, recordings in separate commits); push (owner go-ahead; check
+- [x] T014 [US2] Commit (tests, code, recordings in separate commits); push (owner go-ahead; check
   jobs); fix until CI is green but for the step recordings' misses (T017); record the run; fresh
   review of US2; `/speckit-converge` for US2
   Review round 1 (fresh Sonnet, at d6fee60): no blocking finding, so US2's review converged in 1
@@ -352,7 +352,9 @@ malformed requests are refused for it (FR-006, FR-007, FR-011, FR-012; research 
   response the examples show is declared" beside the 400 rule) closed: the new bullet and
   checklist item 5 state the 400's shape; S4 (T009's wording changed in 645188a) closed: no
   requirement changed, an unreadable contract is not fit. Untested cases: T032. Unused
-  `requestShapingKeywords` in `shapes.go` (unused before T012 too): T033
+  `requestShapingKeywords` in `shapes.go` (unused before T012 too): T033. CI 45611941307 at d6fee60
+  (research Runs). `/speckit-converge` for US2 (at 17db455): converged, nothing appended (US2
+  scenarios 1-5, FR-006, FR-007, FR-011, FR-012 met; T031-T033 already hold the review's work)
 - [ ] T031 [US2] Owner approval to make the comment of `src/engine/cmd/engine/pattern_values_test.go`
   lines 3-5 name feature 010's pattern 1.2.0 without citing a data-model section that does not
   exist (S1)
