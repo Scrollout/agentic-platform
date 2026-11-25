@@ -133,7 +133,12 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   slice cannot be created without the analyst after the capture; N4 T013's withdrawn replay needs
   US3), 3 LOW (N5 R7's code list; N6 the approval cell; N7 per-operation error codes in T001);
   fixed at the source (spec FR-001; research R7; data model; contract draft; T001, T005, T006,
-  T013, T014, T018). Round 9 owed.
+  T013, T014, T018). Round 9 (fresh Sonnet, at
+  0d9fc39): every round-8 fix present; 0 CRITICAL, 0 HIGH; 4 MEDIUM (M1 the state table's
+  withdraw, erase and proof-slice cells still in US1 tests; M2 no task wrote `part_hashes`, the
+  machine and durable owners unnamed; M3 a replay's `part_hashes`; M4 the workflow version bump,
+  ADR 0067), 2 LOW (L1 404 per id-addressed call; L2 who computes `usable`); fixed at the source
+  (FR-001; data model; contract draft; plan; T001, T005 to T007, T013). Round 10 owed.
 
 ---
 
@@ -151,7 +156,7 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   `startRun` answers 202 with its operation as before, and `Run` gains `proof` and the pattern
   choice (data model, Run); `startRun`'s description gives the refusal order of the contract
   draft; `x-error-codes` per operation: `startRun` and `replayRun` add `CapturedPatternWithdrawn`
-  and `ProofRequired` (409) and `startRun` NotFound for an unknown `pattern`; `captureRun` 404,
+  and `ProofRequired` (409) and `startRun` NotFound for an unknown `pattern`; each id-addressed captured-pattern call 404 `NotFound`; `captureRun` 404,
   409 `RunNotDone`, `RunNotCapturable`, `CapturedPatternExists`; `replaceParameters` 409
   `CapturedPatternApproved`, `CapturedPatternWithdrawn`, `CapturedPatternBusy`, operation
   `ParameterRefused`; `makeProofSlice` 409 `CapturedPatternWithdrawn`, `CapturedPatternBusy`,
@@ -173,7 +178,7 @@ recordings do not change, so the recorded-model jobs stay green throughout.
   `parameter-value-max-chars: 64` and the matching `maxItems`/`maxLength`; `PUT /parameters`
   takes `{name, value}` per parameter; `parameters` and `not_used` have the data model's shapes;
   `run-event.schema.json` `RunStarted` gains
-  `pattern_reason`, `parameters`, `source_run`, `proof` and `not_used`, additively. `src/check/api/preview/2026-11-13-preview/openapi.yaml`
+  `pattern_reason`, `parameters`, `source_run`, `proof`, `part_hashes` and `not_used`, additively. `src/check/api/preview/2026-11-13-preview/openapi.yaml`
   gains `POST /project-versions/write` (`writeStep`: `{project, step, files}`, each path must
   match one of the step's writable entries, otherwise 400 naming it). New
   `src/engine/captured/captured.go` holds the Go interface of the contract draft (`Propose`,
@@ -251,7 +256,9 @@ proposed and adding the derived value works; the proof ends passed with no model
   it started (a part replaced, or its approval withdrawn) answers `RunNotCapturable` naming the
   part (compared with the part hashes its `RunStarted` records), and a run started before
   feature 011 (no part hashes) answers `RunNotCapturable` too; each call answers per state as the
-  data model's state table says for `proposed` (the proven and approved columns are T006's); new `src/engine/api/captured_limits_contract_test.go`: the limits and
+  data model's state table says for `proposed` in the rows US1 owns at T007 (`replaceParameters`,
+  `approveCapturedPattern`, the busy cases; `makeProofSlice` is T027's, withdrawal and erasure
+  T018's); new `src/engine/api/captured_limits_contract_test.go`: the limits and
   the parameter name rule `engine/captured` uses equal the loaded contract's; a second state change while one of its
   operations runs answers 409 `CapturedPatternBusy`; list is newest first and paginated; a reused Idempotency-Key
   with another body answers as for other calls. Seen failing
@@ -268,10 +275,12 @@ proposed and adding the derived value works; the proof ends passed with no model
   outcome and failures (a hand-over fails it at once naming the check while the run waits;
   expired or cancelled fails naming the end; an interrupted one stays running;
   `getCapturedPattern` read right after the run's end line, and after an engine restart, shows
-  the completed proof); a second proof under the same method reuses no earlier result and runs every step;
+  the completed proof); a recorded workflow history from before the change replays without a
+  nondeterminism error; a second proof under the same method reuses no earlier result and runs every step;
   `PUT /parameters` while a proof's run has not ended (also a failed proof's waiting run)
   answers `CapturedPatternBusy`; `PUT /parameters` moves a proven one back to proposed; the
-  state table's proven and approved columns;
+  state table's proven and approved columns in the `replaceParameters` and
+  `approveCapturedPattern` rows (withdrawal and erasure are T018's);
   a planted template byte change fails it naming the file; a planted
   failing check fails it naming step and check, and a `fill` step is never attempted twice;
   approval before a passing proof, or after one
@@ -290,7 +299,13 @@ proposed and adding the derived value works; the proof ends passed with no model
   `engine/captured`, `writeStep`, checks, `commitStep`; the readiness check skips `fill`),
   `writeStep` in `src/engine/checksvc/project.go` and `handler.go`, the proof as a run of the
   proof slice with `proof: true` (T029 makes the proof slice): the `startRun` branch for a proof
-  slice, the `RunStarted` fields `pattern_reason`, `parameters`, `source_run` and `proof`, the
+  slice, the `RunStarted` fields `pattern_reason`, `parameters`, `source_run`, `proof` and
+  `part_hashes` (written by `StartRun` and `ReplayRun` through `src/engine/api/runs.go` `newRun`,
+  `src/engine/machine/` events and `src/engine/durable/` `RunInput`/`RunStart`; a replay copies
+  the earlier run's `part_hashes`), `usable` computed in the Proof-completion function (T015
+  applies it at `startRun` and `replayRun`), a `workflow.GetVersion` bump for the `fill` path and
+  the new `RunStarted` fields (ADR 0067) so runs in flight replay on the code that started them,
+  the
   Proof record written at acceptance and completed at a hand-over or the run's end (and on read),
   a `no reuse` flag in the run's start for a proof, `PUT /parameters` busy while a proof's run has
   not ended, one Proof-completion function every reader uses, and
@@ -368,7 +383,9 @@ pass, three runs give the same files.
   `fits`, `chosen`), the parameters' values and `source_run`; the refusals come in the contract's
   order; resume and take-over of a captured run keep its pattern and parameters, and a replay
   uses the same captured pattern, refused with `ProofRequired` when its latest proof failed (the
-  withdrawn refusal is T018's), keeping the recorded parameter values with no new fit; capturing a run built
+  withdrawn refusal is T018's), keeping the recorded parameter values with no new fit; capturing a replay
+  whose slice changed after the earlier run started, or a replay of a run with no part hashes,
+  answers `RunNotCapturable`; capturing a run built
   from a captured pattern answers `RunNotCapturable`; two slices that differ only in a value that
   occurs in the goals alone never reuse each other's filled results; a run from a captured pattern makes no agent worker or
   gateway call and ends handed over, naming the failing check, when a filled check fails, with no

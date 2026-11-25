@@ -48,7 +48,7 @@ or captured pattern ID) in place of `slice_or_run_id`; `Operation.result` gains 
 `OperationKind` gains `capture-run`, `replace-parameters`, `make-proof-slice`,
 `approve-captured-pattern`, `withdraw-captured-pattern` and `erase-captured-pattern`; `Run` gains
 `proof` and the pattern choice (`pattern_reason`, `parameters`, `source_run`, `not_used`, read
-from `RunStarted`, which gains the same); `Slice` and `SliceSummary` gain `proof_of`, and the
+from `RunStarted`, which gains the same plus `proof` and `part_hashes`); `Slice` and `SliceSummary` gain `proof_of`, and the
 slice history's kinds gain `made-for-proof`; `ErrorCode` gains the
 new codes. The client and the launcher read `target` as a string and print or match it only where
 it names a run.

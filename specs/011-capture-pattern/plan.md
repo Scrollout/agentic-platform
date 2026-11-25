@@ -47,7 +47,10 @@ terminal client, contracts
 text per captured pattern
 
 **Constraints**: the base pattern, its template, agents and recordings are unchanged; contract
-changes are additive; existing tests change only as the owner approves
+changes are additive; existing tests change only as the owner approves; the Run workflow's new
+commands (the `fill` path, the new `RunStarted` fields) sit behind a `workflow.GetVersion` bump
+so runs in flight replay on the code that started them
+([ADR 0067](../../docs/decisions/0067-a-run-is-one-temporal-workflow.md))
 
 **Scale/Scope**: one engine package, one resource with eight calls, one check-contract call, one
 field on `startRun`, eight terminal commands, one acceptance suite
@@ -146,7 +149,9 @@ src/check/api/preview/2026-11-13-preview/openapi.yaml    # writeStep
 src/engine/captured/                     # new: Propose, Check, Fit, Fill, the declaration from the base pattern
 src/engine/store/                        # captured-pattern records, second artifact holder
 src/engine/api/captured.go               # new: the resource and its operations
-src/engine/api/runs.go                   # pattern choice at startRun (R6)
+src/engine/api/runs.go                   # pattern choice at startRun (R6); part_hashes in newRun; replay
+src/engine/machine/                      # RunStarted's new fields
+src/engine/durable/                      # RunInput/RunStart: part_hashes, no reuse; workflow version bump
 src/engine/durable/workflow.go, steps/   # the fill worker: render, writeStep, checks, commit
 src/engine/checksvc/project.go           # writeStep
 src/engine/slices/                       # the proof slice, made from the captured copy and approved

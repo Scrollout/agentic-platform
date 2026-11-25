@@ -255,7 +255,7 @@ use the captured pattern and says it needs a new proof; proving it again restore
   captured pattern or a proof, naming why (its template was never reviewed), and a run whose
   slice changed after it started (a part's hash differs from the one its start recorded, or a part
   is no longer approved), naming the part; a run whose start recorded no part hashes is refused
-  the same way.
+  the same way; a replay carries the part hashes of the run it replays.
 - **FR-002**: A captured pattern proposal MUST hold the source slice, its accepted tests and code,
   and the names of the source run, the base pattern and the method that accepted it.
 - **FR-003**: The proposal MUST name each parameter: its name, its source value, and every place

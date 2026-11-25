@@ -127,7 +127,8 @@ that clears `proof_slice`, and the next proof request makes a new one. The `Slic
 A resumed or taken-over run keeps its recorded pattern, parameters and source run. A replay of a
 run built from a captured pattern uses that captured pattern again only while it is usable, and is
 refused with `CapturedPatternWithdrawn` or `ProofRequired` otherwise, and NotFound when it was
-erased; it keeps the parameter values the run recorded, with no new fit; a replay of a proof run is
+erased; it keeps the parameter values the run recorded, with no new fit, and copies the earlier
+run's `part_hashes` (none when the earlier run had none, so capturing it is refused); a replay of a proof run is
 a new proof. The readiness check of `startRun`, `resumeRun` and `replayRun` skips `fill` steps.
 
 ## Run (added fields)
