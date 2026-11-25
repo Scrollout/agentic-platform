@@ -444,8 +444,9 @@ proposed and adding the derived value works; the proof ends passed with no model
   or unusable (never `ProofRequired`), and answers `CapturedPatternBusy` while another of its
   operations runs; a proof's `startRun` while another of the
   captured pattern's operations runs answers `CapturedPatternBusy`; `deleteSlice` of the proof
-  slice right after its proof run ended, before any read, still keeps that proof; capturing a
-  proof run answers
+  slice right after its proof run ended, before any read, still keeps that proof; `makeProofSlice` with a
+  worker or page token answers 403; a busy proof start answers `CapturedPatternBusy` before
+  `CapturedPatternNotApproved` and the rest; capturing a proof run answers
   `RunNotCapturable`. Seen failing
 - [ ] T028 [P] [US1] Test author: new `src/tests/lab/captured_prove_test.go` (Docker lab, CI):
   `ap prove <captured pattern> <project>` runs the client's `proof-slice`, then `build-workers`
@@ -517,7 +518,8 @@ pass, three runs give the same files.
   run with the reason and the base pattern is used; `startRun` answers 202 with its operation,
   and the `Run` and `RunStarted` carry `pattern` (`<id>@<version>`), `pattern_reason` (`base`,
   `fits`, `chosen`), the parameters' values and `source_run`; the refusals T015 reaches come in the contract's
-  order; resume and take-over of a captured run keep its pattern and parameters, and a replay
+  order (the Withdrawn and Busy places are T018's and T027's); an approved, unusable captured
+  pattern whose fit fails only for a value is named `refused-value`, not `needs-proof`; resume and take-over of a captured run keep its pattern and parameters, and a replay
   uses the same captured pattern, refused with `ProofRequired` when its latest proof failed (a
   run that is not a proof; a proof run's replay follows the proof rule, T027; the withdrawn
   refusal is T018's), keeping the recorded parameter values with no new fit; capturing a replay
@@ -572,7 +574,10 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   run built from it or its proof has not ended answers 409 `CapturedPatternBusy`; erasing the
   captured pattern removes the artifacts only it holds and its proof slice with that slice's
   runs, and keeps the records of other slices' runs built from it; a replay of a run built from
-  an erased captured pattern answers NotFound naming it; a new capture under an erased captured
+  an erased captured pattern answers NotFound naming it; `withdrawCapturedPattern` and
+  `eraseCapturedPattern` with a worker or page token answer 403 and change nothing; in the
+  refusal order, a withdrawn named captured pattern answers `CapturedPatternWithdrawn` before
+  NotApproved and the rest; a new capture under an erased captured
   pattern's ID answers `CapturedPatternExists`; the state table's withdrawn column (parameters,
   proof slice, approval refused with `CapturedPatternWithdrawn`, withdrawal again changes
   nothing); a replay of a run built from a withdrawn captured pattern, and a replay of a proof
