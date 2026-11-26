@@ -269,7 +269,8 @@ use the captured pattern and says it needs a new proof; proving it again restore
   than the current one, naming both; a run whose start recorded no part hashes is refused
   the same way; a replay carries the part hashes of the run it replays.
 - **FR-002**: A captured pattern proposal MUST hold the source slice, its accepted tests and code,
-  and the names of the source run, the base pattern and the method that accepted it.
+  and the names of the source run, the base pattern and the engine's method at capture (the
+  source run's own events keep the method that accepted each step; owner 2026-11-26, T046).
 - **FR-003**: The proposal MUST name each parameter: its name, its source value, and every place
   in the slice, tests and code where the value occurs, in a file's content or its path. Parameters MAY be the slice's names
   (resource, operation and member names), its declared values and its other literal values (a

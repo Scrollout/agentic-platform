@@ -2186,7 +2186,9 @@ components:
           description: The base pattern it was captured from, the engine's at capture.
         method:
           $ref: slice-defs.schema.json#/$defs/hash
-          description: The method identity at capture.
+          description: >-
+            The engine's method identity at capture; the method that accepted each of the source
+            run's steps is on that run's events.
         source:
           type: object
           required:

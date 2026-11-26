@@ -605,12 +605,14 @@ proposed and adding the derived value works; the proof ends passed with no model
   T045 adds the cases T038 lists
   `/speckit-converge` for US1 2026-11-26 (fresh Sonnet, at 38d2418): one gap, G1 -> T046; every
   other US1 behaviour built or homed in T039 to T045
-- [ ] T046 [US1] (converge US1, G1; FR-002, N-053) the captured pattern names the method that
+- [x] T046 [US1] (converge US1, G1; FR-002, N-053) the captured pattern names the method that
   accepted its source run, not only the method at capture (`api/captured.go` capture stores
   `currentMethod()`; the source run's step events carry the accepting method): decide through
   `/speckit-clarify` (add the accepting method beside the capture-time one, or state in FR-002 and
   the contract that the field is the capture-time method); then contract, test author (new file),
   code author; not blocking US1 (the proof is judged under the current method, FR-004, FR-006)
+  closed: the owner chose the capture-time method (2026-11-26); FR-002 and the contract's
+  `CapturedPattern.method` say so; no code change
 - [x] T037 [US1] Test author (B1): new `src/engine/captured/propose_cap_test.go`: a slice copy
   with more than 32 candidates proposes exactly 32, the first in Propose's order (names in byte
   order, then declared values in the contract's order), each with the places found among the
