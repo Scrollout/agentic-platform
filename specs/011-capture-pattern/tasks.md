@@ -321,7 +321,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   fixture lacks, research E1); `Fill` with each source value gives the input bytes
   back for every file; with `task`/`tasks` gives `NewTask`, `listTasks`, `TASK` where `NOTE` was,
   and `task_id` and `detask` where `note_id` and `denote` were (every occurrence, inside words
-  too); on `limit/` with `100`/`101` every `200` and `201` place carries the new value (SC-006);
+  too); on `limit/` with `100`/`101` every `200` and `201` place carries the new value (fill only; SC-006 is T012's, T039);
   paths are filled too (`cmd/notes/main.go` becomes `cmd/tasks/main.go`, each such place with
   `in: path`), and two template files that would get the same filled path do not fill, naming the
   paths (a filled path outside its step's writable entries is the fit's to refuse, T012). Seen
@@ -468,7 +468,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   test. Also for T011 (analyze at 53635b0): the launcher's own `prove` dispatch (`cmd_prove`'s
   `die 3`/`die 1`) has no test in `scripts/tests` (F5); the open points in the done notes of
   T029, T009, T032 and T033 (F9); `makeProofSlice` of a hand-changed proof slice (re-approve as
-  it is, or restore, or refuse; spec, T027 and the threat model, F10); `src/cli/contract.md` on
+  it is, or restore, or refuse; spec, T027 and the threat model, F10; answered by T039: restore); `src/cli/contract.md` on
   `--add` of an existing name and `--drop` of a missing one (F11)
   closed: judged in T011 round 1; each point has its home in T037 to T045, or was judged not an
   issue (the page escapes as HTML; a replay of a proof uses current values, as the data model says;
@@ -543,7 +543,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   T028's cases (T036) pass or fail on T010's CI run, which T010 and T011 judge. Open for T011: a non-proof `startRun` naming an approved captured
   pattern answers 500 until T015; a replay of a proof uses the captured pattern's current values;
   `makeProofSlice` of a proof slice changed by hand re-approves it as it is (its proof then answers
-  `PatternDoesNotFit`; spec silent); a withdrawn captured pattern at `proof-slice`, proof start or
+  `PatternDoesNotFit`; spec silent; answered by T039 -> T047 to T049); a withdrawn captured pattern at `proof-slice`, proof start or
   replay is untested until T020; `getRun` of a started, unrecorded run after a restart is 404
 - [x] T008 [P] [US1] Test author: new `src/cli/captured_test.go`: `ap capture <run> [--name]`,
   `ap patterns`, `ap pattern <id>` (parameters with places, proofs, state, usable; the
@@ -653,13 +653,19 @@ proposed and adding the derived value works; the proof ends passed with no model
   `src/engine/api/preview/2026-11-12-preview/openapi.yaml` and the `changed` history kind's
   description in `slice.schema.json` state that asking again restores from the copy a part changed
   since the proof slice was made (one `changed` entry naming the restored parts, then one
-  `approved` entry each, after the part checks pass); `scripts/generate.sh`; committed alone
+  `approved` entry per unapproved part, after the part checks pass), and that a restore while a
+  run of the proof slice has not ended answers `CapturedPatternBusy` (data model "Proof slice");
+  `scripts/generate.sh`; committed alone
 - [ ] T048 [US2] Test author (after T047): new `src/engine/slices/proof_restore_test.go` and new
   `src/engine/api/captured_proof_slice_restore_test.go`: a proof slice whose part was replaced by
   hand is restored by `proof-slice` (its parts equal the copy, history `changed` naming exactly the
   restored parts then `approved` each, the same slice ID), after which a proof starts instead of
   `PatternDoesNotFit`; an unchanged proof slice gets no new history entry; a restore whose part
-  checks fail answers `PartFailsChecks` and leaves the slice as it was. Seen failing
+  checks fail answers `PartFailsChecks` and leaves the slice as it was; a restore while a run of
+  the proof slice has not ended answers `CapturedPatternBusy`, and an ask with nothing to restore
+  is then allowed; a part changed by hand and then by a method change withdrawn is restored and
+  approved (one `changed`, then `approved` each unapproved part); a part changed back so it
+  equals the copy but unapproved is approved with no `changed` entry. Seen failing
 - [ ] T049 [US2] Code author (done when T048 passes, no other test changes): the restore in
   `src/engine/slices/proof.go` (`ProofSlice` takes the copy's parts for an existing proof slice)
 - [ ] T040 [US2] (review S1; FR-009) A `fill` step's `writeStep` refusal that cannot succeed on
@@ -704,7 +710,7 @@ another (FR-008 to FR-010; research R4, R6).
 pass, three runs give the same files.
 
 - [ ] T012 [P] [US2] Test author: new `src/engine/captured/fit_test.go` (T003's fixtures): the
-  `task`/`tasks` slice fits with those values, and on a new fixture `testdata/limit-280/` (the `limit/` slice and code with the limit 280 and the derived 281, which equal no other literal; T039) a slice with 100/101 fits and is filled (SC-006);
+  `task`/`tasks` slice fits with those values, and on a new fixture T012 creates, `testdata/limit-280/` (the `limit/` slice and code with the limit 280 and the derived 281, which equal no other literal; T039) a slice with 100/101 fits and is filled (SC-006);
   SC-005's planted set does not fit and names the first place it differs: another rule, another
   example, another member, another operation, another status, two holes of one parameter with
   different values, `note_id` left unchanged where `note` became `task`; a value outside its
@@ -827,7 +833,7 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
 
 ## Dependencies & execution order
 
-- T047 → T048 → T049, before T016's push;
+- T047 → T048 → T049, before T016's push (T016 also waits for T049);
 - T011 round 1 → T037 → T038 → T011 round 2 → converge US1; T041 to T045 do not block US1 done
   (each fixed, or `closed:` by the owner, before the feature is done); T039 before T012; T040
   before T015.

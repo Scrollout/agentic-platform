@@ -315,8 +315,8 @@ use the captured pattern and says it needs a new proof; proving it again restore
   captured pattern declares. A proof is an ordinary run of that slice, marked as a proof; the
   proof slice is made again when it was erased, so a proof works after the source slice is
   erased, and a part of it changed since it was made is restored from the copy and approved again
-  when the proof slice is asked for. The proof MUST pass only when every check passes and every filled file (tests, code,
-  witnesses) equals the source run's accepted one; generated code is judged by its checks, as in
+  when the proof slice is asked for (refused while a proof run has not ended). The proof MUST
+  pass only when every check passes and every filled file (tests, code, witnesses) equals the source run's accepted one; generated code is judged by its checks, as in
   every build. The proof shows that the captured pattern
   reproduces its source under the current method; whether other values work is judged by each
   later run's checks.

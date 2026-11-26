@@ -128,10 +128,13 @@ added to the kind enum (an owner-approved exception, ADR 0100), then one `approv
 gives the existing proof slice while every part is approved under the current method; after a
 method change withdrew a part's approval, it checks the parts again and approves them (one
 `approved` history entry per part), or fails with `PartFailsChecks` and leaves the slice as it
-is. A part changed since the slice was made (it no longer equals the copy) is restored from the
-copy, recorded as one `changed` entry (`refs` the restored parts) and then one `approved` entry
-per restored part, after the part checks pass (*owner*, 2026-11-26, T039); so asking again always
-gives a slice equal to the copy. `createSlice` never reuses it.
+is. A part changed since the slice was made is restored from the copy (*owner*, 2026-11-26,
+T039): every part is compared with the copy, each that differs is put back, recorded as one
+`changed` entry (`refs` the restored parts), and then every part that is not approved is approved
+after the part checks pass, one `approved` entry each; a failing check fails the operation with
+`PartFailsChecks` and leaves the slice as it was. A restore that would change a part while a run
+of the proof slice has not ended answers `CapturedPatternBusy` (asking with nothing to restore is
+allowed). So asking again always gives a slice equal to the copy. `createSlice` never reuses it.
 A `startRun` of it is a proof: it always uses that captured pattern, with the source values,
 whatever its state except withdrawn (`CapturedPatternWithdrawn`); a `pattern` naming another one,
 or a part changed since it was made (so it no longer equals the copy), is `PatternDoesNotFit`. Its
