@@ -774,12 +774,16 @@ pass, three runs give the same files.
   replaced) through the slice API, which calls no analyst; `ap build` ends done; the gateway's
   access log has no request from the capture to the build's end (SC-001); three builds give equal file hashes (SC-004); `--pattern api-feature-go` runs
   the agents. Seen failing (owner go-ahead for the stack)
-- [ ] T030 [P] [US2] Test author: new `src/cli/captured_build_test.go`: `ap build --pattern`
+- [x] T030 [P] [US2] Test author: new `src/cli/captured_build_test.go`: `ap build --pattern`
   sends `pattern`; `build`'s first line, the `RunStarted` event line, the `run` header and the
   `Not used:` lines (from the run's `not_used`) print as `src/cli/contract.md` states, the
   parameters in byte order of their names (a case with two parameters whose declared order
   differs from byte order); refusals print their code and reason. Seen
   failing
+  Tests 2026-11-26 (Sonnet, 5291166): 6 tests fail at 4c7c381 (`build` takes no `--pattern`; no
+  `Not used:` lines), 7 pass as guards of US1's lines; `ParameterRefused` is no `startRun`
+  refusal (contract), so not tested. Open for T017: `not_used` on a run with no `pattern_reason`
+  (contract silent); `--pattern=<id>` and flag order (contract states the trailing form only)
 - [ ] T015 [US2] Code author (done when T012, T013 and T030 pass, and T014 on the CI run T016
   records; an approved but unusable captured pattern is still judged for fit, to be named
   `needs-proof`): `Fit` in `src/engine/captured/`, applying the `usable` value T007
