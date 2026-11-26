@@ -597,6 +597,12 @@ proposed and adding the derived value works; the proof ends passed with no model
   S2, S3 -> T041; S4 -> T042; S5 -> T043; S6 -> T039 (owner: a US2 task); S7, S9 -> T044; S8
   closed: US3's T019/T020 add the client's `withdraw-pattern` and `erase-pattern`; S10 -> T039's
   clarify; T035's points judged (see T035)
+  Round 2 2026-11-26 (same reviewer, at 14c20a2, B1 and the changed lines only): B1 fixed (S2
+  resolved too: an added value's kind and source come from `Candidates`); no new blocking finding;
+  round-1 homes accepted. Suggestions: the contract's "a kept one left with no place" cannot occur
+  through Propose (T039's clarify may drop it); names before declared values can displace
+  meaningful declared values in a small slice of generic words (T039's clarify may revisit);
+  T045 adds the cases T038 lists
 - [x] T037 [US1] Test author (B1): new `src/engine/captured/propose_cap_test.go`: a slice copy
   with more than 32 candidates proposes exactly 32, the first in Propose's order (names in byte
   order, then declared values in the contract's order), each with the places found among the
@@ -624,6 +630,8 @@ proposed and adding the derived value works; the proof ends passed with no model
   values (a parameter cannot exclude places); decide (another fixture limit, or excluding places)
   and fix the spec, data model and fixture; also decide `makeProofSlice` of a hand-changed proof
   slice (re-approve as it is, restore from the copy, or refuse; review S10, T027, threat model)
+  and two round-2 suggestions: the contract's "a kept one left with no place" (unreachable through
+  Propose), and whether names should come before declared values in the cut
 - [ ] T040 [US2] (review S1; FR-009) A `fill` step's `writeStep` refusal that cannot succeed on
   resume (400 outside the writable entries, 422 `StepFilesTooLarge`, `InputHashMismatch`, an
   unreadable template, a refused fill) ends the run interrupted then expired; make it a
@@ -650,7 +658,9 @@ proposed and adding the derived value works; the proof ends passed with no model
   restart between a capture's artifact hold and its record; two parameters whose source values
   overlap without containment; a one-character string literal as a parameter; `kindOf` of a name
   Propose dropped; a filled output over `step-files-max-bytes`; the client's lost-answer lines of
-  the new commands and its `pattern_id`/`parameter_name` forms against the contract
+  the new commands and its `pattern_id`/`parameter_name` forms against the contract; T038's untested cases (an added left-out declared value's
+  source; an added left-out name overlapping a kept longer value; several kept ones losing their
+  places in later rounds)
 
 ---
 
