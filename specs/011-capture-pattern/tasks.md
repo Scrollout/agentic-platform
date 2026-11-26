@@ -866,9 +866,10 @@ pass, three runs give the same files.
   starts (refuse as `PatternDoesNotFit` or fit again)
 - [ ] T056 [US2] (review S4; suggestion) "approved most recently" is by `approval.at` wall clock;
   a clock step back changes the order: keep an approval sequence, or `closed:` by the owner
-- [ ] T057 [US2] (review S5; docs) FR-009 "runs every check": a later build of the same slice and
+- [x] T057 [US2] (review S5; docs) FR-009 "runs every check": a later build of the same slice and
   values reuses the kept results (the reuse rule), so no check runs; state it in the spec's
   Assumptions (a clarification, owner)
+  Done 2026-11-26: owner chose to state reuse; spec Clarifications 2026-11-26 and FR-009
 - [ ] T058 [US2] (review S7 and untested cases; Findings have a home) for a test author, each a new
   file: `fit_test.go`'s `writable` as the declaration gives it; `not_used`'s order (newest
   approval first) with three patterns; two parameters whose first places touch; an unreadable

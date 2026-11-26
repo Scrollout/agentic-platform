@@ -118,6 +118,11 @@ reused only under the method that judged them), [feature 009](../009-no-hard-cod
   every input (owner; FR-003).
 - Q (T039, round-2 suggestion): names before declared values in the cut? → A: keep names first;
   the developer may add a left-out declared value after removing a name (owner; FR-003).
+- Q (T017 review S5, T057): FR-009 says a run from a captured pattern runs every check, but a
+  later build of the same slice and values reuses the results kept for it, so no check runs; is
+  that allowed? → A: yes: a step whose result is reused (the same pattern, parameter values,
+  inputs and method) runs no check again, as for any pattern; FR-009's checks apply to the steps
+  that are filled (owner; FR-009).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -340,7 +345,8 @@ use the captured pattern and says it needs a new proof; proving it again restore
   differs or the value refused and why.
 - **FR-009**: A run from a captured pattern MUST fill the parameters' values into the template's
   contents and paths, each name in the case form its place has (FR-003),
-  MUST make no model call, and MUST run every check its captured pattern declares; it MUST end
+  MUST make no model call, and MUST run every check its captured pattern declares on each step it
+  fills (a step whose result is reused runs none again, Clarifications 2026-11-26); it MUST end
   done only when all pass, and handed over, naming the failing check, otherwise.
 - **FR-010**: When a slice fits a captured pattern and another pattern, the run MUST use the
   captured pattern unless the developer chose another pattern for that run; when several captured
