@@ -157,11 +157,44 @@ func declaredName(pointer string) string {
 // case changes) and each value its contract declares, as a parameter with every place it occurs,
 // longest first and never overlapping. No status code is proposed.
 //
-// A candidate is left out when its value is not of its kind's form, equals an earlier
-// candidate's in a case form, or (with every other candidate's places taken first) has no place
-// in the slice or more than PlacesMax places. Names come first in byte order, then declared values
-// in the contract's order. An unreadable contract part is an error.
+// Candidates come in this order: names in byte order, then declared values in the contract's
+// order. A candidate whose value is not of its kind's form, or equals an earlier candidate's in a
+// case form, is left out; of the rest, only the first ParametersMax are kept, and the others are
+// left out without an error. Places are found among the kept candidates only, so a left-out one
+// takes no place from them; a kept one that then has no place in the slice, or more than
+// PlacesMax places, is left out as well, and the proposal may hold fewer than ParametersMax. An
+// unreadable contract part is an error.
 func Propose(src Copy, template Template) ([]Parameter, error) {
+	cands, err := Candidates(src)
+	if err != nil {
+		return nil, err
+	}
+	cands = cands[:min(len(cands), ParametersMax)]
+	// A candidate taken whole by longer ones, or over the places limit, is dropped, and the
+	// others' places found again without it.
+	for {
+		kinds, values := kindsValues(cands)
+		places, inSlice := locate(src, template, kinds, values)
+		kept := cands[:0:0]
+		for i := range cands {
+			if inSlice[i] > 0 && len(places[i]) <= PlacesMax {
+				c := cands[i]
+				c.Places = places[i]
+				kept = append(kept, c)
+			}
+		}
+		if len(kept) == len(cands) {
+			return kept, nil
+		}
+		cands = kept
+	}
+}
+
+// Candidates gives every candidate of a slice copy that Propose chooses from, in Propose's
+// order and before its cut at ParametersMax, without places: each name and declared value of its
+// kind's form and not equal to an earlier one in a case form. An unreadable contract part is an
+// error.
+func Candidates(src Copy) ([]Parameter, error) {
 	text, err := contractText(src)
 	if err != nil {
 		return nil, err
@@ -203,24 +236,7 @@ func Propose(src Copy, template Template) ([]Parameter, error) {
 		}
 		addCand(Parameter{Name: declaredName(d.Pointer), Kind: kind, Value: d.Text, Source: SourceDeclaredValue, Origin: OriginProposed})
 	}
-	// A candidate taken whole by longer ones, or over the places limit, is dropped, and the
-	// others' places found again without it.
-	for {
-		kinds, values := kindsValues(cands)
-		places, inSlice := locate(src, template, kinds, values)
-		kept := cands[:0:0]
-		for i := range cands {
-			if inSlice[i] > 0 && len(places[i]) <= PlacesMax {
-				c := cands[i]
-				c.Places = places[i]
-				kept = append(kept, c)
-			}
-		}
-		if len(kept) == len(cands) {
-			return kept, nil
-		}
-		cands = kept
-	}
+	return cands, nil
 }
 
 func kindsValues(ps []Parameter) ([]Kind, []string) {

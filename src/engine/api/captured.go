@@ -396,10 +396,6 @@ func (s *sliceServer) capture(rec store.OperationRecord, body []byte) (WorkResul
 	if r.Parameters, err = captured.Propose(r.src(), tmpl); err != nil {
 		return WorkResult{}, err
 	}
-	if n := len(r.Parameters); n > captured.ParametersMax {
-		return WorkResult{}, &WorkError{Code: gen.ErrorCodeOperationFailed,
-			Detail: fmt.Sprintf("run %s proposes %d parameters, more than %d", req.Run, n, captured.ParametersMax)}
-	}
 	s.cmu.Lock()
 	defer s.cmu.Unlock()
 	all, err := s.allCaptured()
@@ -828,7 +824,7 @@ func (s *sliceServer) replaceParameters(id string, body []byte) (WorkResult, err
 	if err != nil {
 		return WorkResult{}, err
 	}
-	cands, err := captured.Propose(src, tmpl)
+	cands, err := captured.Candidates(src)
 	if err != nil {
 		return WorkResult{}, err
 	}
@@ -871,9 +867,10 @@ func (s *sliceServer) replaceParameters(id string, body []byte) (WorkResult, err
 	return WorkResult{CapturedPattern: id}, nil
 }
 
-// kindOf gives a value's kind and source: a proposed candidate's when the value is one (a name of
-// the slice, or a value its contract declares), else a literal number when the value has the
-// number form engine/captured judges, else a literal string.
+// kindOf gives a value's kind and source: a candidate's when the value is one (a name of the
+// slice, or a value its contract declares, proposed or left out by Propose's cut), else a
+// literal number when the value has the number form engine/captured judges, else a literal
+// string.
 func kindOf(cands []captured.Parameter, value string) (captured.Kind, captured.Source) {
 	if i := slices.IndexFunc(cands, func(c captured.Parameter) bool { return c.Value == value }); i >= 0 {
 		return cands[i].Kind, cands[i].Source
