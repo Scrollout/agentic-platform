@@ -123,6 +123,14 @@ reused only under the method that judged them), [feature 009](../009-no-hard-cod
   that allowed? → A: yes: a step whose result is reused (the same pattern, parameter values,
   inputs and method) runs no check again, as for any pattern; FR-009's checks apply to the steps
   that are filled (owner; FR-009).
+- Q (T040, review S1 of US1): a filled step's write into the project is refused; is the run
+  interrupted or handed over? → A: a refusal only the developer can fix hands the run over,
+  naming the step and the refusal: the write outside the step's writable files, its files too
+  large or not matching their hashes, an unreadable project folder, a version history changed
+  under the run, an unknown project or an unauthorised call, a response too large, files read
+  back that differ from those written, an unreadable template or a refused fill; a refusal a
+  repeat can pass interrupts the run (resumable): the project not in the state the run left it,
+  rate limited, busy, a time limit, a failed write, a lost connection (owner; FR-009).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -172,7 +180,8 @@ approves it into the catalogue.
 
 A later slice that equals a captured pattern's source slice except for its parameters' values
 fits the captured pattern. Its run fills the new values into the template and runs only the
-checks. No agent step runs, and the run ends done or handed over by the checks alone.
+checks of the steps it fills (a step whose result is reused runs none again). No agent step runs,
+and the run ends done or handed over by the checks alone.
 
 **Why this priority**: this is the reuse the capture exists for (N-052); it depends on Story 1.
 
@@ -191,7 +200,8 @@ slice with another limit and derived value fits and is filled with them.
    rule, example, member or operation), **When** its fit is judged, **Then** it does not fit the
    captured pattern, and the reason names the first place it differs.
 3. **Given** a slice that fits, **When** its run starts, **Then** the run makes no model call,
-   runs every check the captured pattern declares, and ends done only when all pass.
+   runs every check the captured pattern declares on each step it fills (a reused result runs
+   none again), and ends done only when all pass.
 4. **Given** a slice whose new values make a check fail (a limit its examples contradict), **When**
    the run's checks run, **Then** the run is handed over with the failing check named, and no
    agent step is started to repair it.
@@ -320,7 +330,7 @@ use the captured pattern and says it needs a new proof; proving it again restore
   captured pattern declares. A proof is an ordinary run of that slice, marked as a proof; the
   proof slice is made again when it was erased, so a proof works after the source slice is
   erased, and a part of it changed since it was made is restored from the copy and approved again
-  when the proof slice is asked for (refused while a proof run has not ended). The proof MUST
+  when the proof slice is asked for (a restore is refused while a proof run has not ended). The proof MUST
   pass only when every check passes and every filled file (tests, code, witnesses) equals the source run's accepted one; generated code is judged by its checks, as in
   every build. The proof shows that the captured pattern
   reproduces its source under the current method; whether other values work is judged by each
@@ -342,12 +352,15 @@ use the captured pattern and says it needs a new proof; proving it again restore
   value with one value per parameter turns the source slice into the approved slice exactly, and
   every value is of its parameter's form and differs from every other parameter's value. The fit
   MUST name each parameter's value, and a slice that does not fit MUST be told the first place it
-  differs or the value refused and why.
+  differs or the value refused and why: a place first (in the order goals, rules, contract), a
+  value only when every part otherwise matches, then the filled paths.
 - **FR-009**: A run from a captured pattern MUST fill the parameters' values into the template's
   contents and paths, each name in the case form its place has (FR-003),
   MUST make no model call, and MUST run every check its captured pattern declares on each step it
   fills (a step whose result is reused runs none again, Clarifications 2026-11-26); it MUST end
-  done only when all pass, and handed over, naming the failing check, otherwise.
+  done only when all pass, and handed over, naming the failing check, otherwise; a filled step
+  whose write the developer must fix hands the run over naming the step and the refusal, and one
+  a repeat can pass interrupts it (Clarifications 2026-11-26, T040).
 - **FR-010**: When a slice fits a captured pattern and another pattern, the run MUST use the
   captured pattern unless the developer chose another pattern for that run; when several captured
   patterns fit, the one approved most recently MUST be used. The run and its record MUST name the

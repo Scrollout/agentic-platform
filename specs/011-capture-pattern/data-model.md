@@ -101,7 +101,9 @@ any --(erase, confirmed)--> erased
 
 Every call, and a proof's `startRun` (never another slice's `startRun`), answers
 `CapturedPatternBusy` while another of its operations runs; `replaceParameters`
-and erasure also while a proof's run (or, for erasure, a run built from it) has not ended.
+and erasure also while a proof's run (or, for erasure, a run built from it) has not ended;
+`makeProofSlice` when a restore would change a part while a run of the proof slice has not ended,
+at once or, when found inside the operation's work, as the operation's failure (T050).
 `approveCapturedPattern` on an approved one changes nothing whatever its proofs.
 
 A captured pattern is **usable** when it is `approved` and its latest proof passed under the

@@ -868,7 +868,7 @@ pass, three runs give the same files.
   a clock step back changes the order: keep an approval sequence, or `closed:` by the owner
 - [x] T057 [US2] (review S5; docs) FR-009 "runs every check": a later build of the same slice and
   values reuses the kept results (the reuse rule), so no check runs; state it in the spec's
-  Assumptions (a clarification, owner)
+  Assumptions (a clarification, owner; recorded as a Clarification and in FR-009 instead)
   Done 2026-11-26: owner chose to state reuse; spec Clarifications 2026-11-26 and FR-009
 - [ ] T058 [US2] (review S7 and untested cases; Findings have a home) for a test author, each a new
   file: `fit_test.go`'s `writable` as the declaration gives it; `not_used`'s order (newest
@@ -947,6 +947,10 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
 - T011 round 1 → T037 → T038 → T011 round 2 → converge US1; T041 to T045 do not block US1 done
   (each fixed, or `closed:` by the owner, before the feature is done); T039 before T012; T040
   before T015.
+- T017 round 1 → T051 → T052 → a CI run recorded as T016's → T017 round 2 (B1 and the changed
+  lines) → converge US2; T053 to T056 and T058 do not block US2 done (each fixed, or `closed:` by
+  the owner, before the feature is done), as T041 to T045; T040's rule is in the spec's
+  Clarifications 2026-11-26 and FR-009.
 - T001 → T002 → US1 (T003-T006, T027, T028 in parallel → T007 → T033 → T029 → T036; T008 → T009; T031 → T032;
   T007, T009, T029, T032 and T036 → T010 → T011) → US2 (T012-T014, T030 in parallel → T015 → T016 → T017) → US3 (T018-T019 in parallel → T020 → T021 → T022) → T023 →
   T024 → T025 → T026.
