@@ -149,43 +149,12 @@ type Refusal struct {
 	Detail    string
 }
 
-// ErrNotImplemented is what each function answers until feature 011's T007 and T015 give it its
-// work.
+// ErrNotImplemented is what Fit answers until feature 011's T015 gives it its work.
 var ErrNotImplemented = errors.New("captured: not implemented yet")
-
-// Propose gives the parameter candidates of a done run's slice copy and template: each of the
-// slice's names (schema property names, and the words of operation IDs and schema names split at
-// case changes) and each value its contract declares, as a parameter with every place it occurs,
-// longest first and never overlapping. No status code is proposed.
-func Propose(src Copy, template Template) ([]Parameter, error) {
-	return nil, ErrNotImplemented
-}
-
-// Check judges a captured pattern's parameters against its copy and template before they are
-// kept: each value of its kind's form, no two equal in any case form, each occurring in src,
-// at most ParametersMax parameters and PlacesMax places each. A refusal is a *Refused.
-func Check(src Copy, template Template, parameters []Parameter) error {
-	return ErrNotImplemented
-}
 
 // Fit says whether approved fits a captured pattern whose source is src: the values (by
 // parameter name) that fill src into exactly approved, or ok false with the refusal. writable
 // gives each template output's step's writable entries, which every filled path must match.
 func Fit(src Copy, template Template, writable map[string][]string, parameters []Parameter, approved Copy) (values map[string]string, ok bool, refusal Refusal) {
 	return nil, false, Refusal{Detail: ErrNotImplemented.Error()}
-}
-
-// Fill gives files with every place of every parameter replaced by its value in values, in its
-// case form, in contents and paths, longest source form first. An empty set fills to no file. It
-// refuses two files that would get the same filled path, naming them.
-func Fill(files []canonical.File, parameters []Parameter, values map[string]string) ([]canonical.File, error) {
-	return nil, ErrNotImplemented
-}
-
-// Declaration gives a captured pattern's declaration from its base pattern's (pattern.yaml, valid
-// against pattern.schema.json): each agent step's worker `procedure:fill`, `limits.attempts` and
-// `limits.review_rounds` 1, the review step without FindingsCarryEvidence and
-// NoBlockingFindingOpen and with outputs `[witnesses]`, everything else equal.
-func Declaration(base []byte) ([]byte, error) {
-	return nil, ErrNotImplemented
 }

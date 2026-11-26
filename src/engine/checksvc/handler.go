@@ -2,8 +2,9 @@
 // pattern's step checks (engine/checks) over a project folder it only reads and returns the files
 // an agent step left; a procedure step's worker, which runs that step's fixed procedure
 // (engine/procedures) and writes its files into the project; and the project worker, which keeps
-// each project's version history, one git commit per accepted step, and restores the project to
-// its last commit before each attempt (history.go). One program, cmd/check, serves each
+// each project's version history, one git commit per accepted step, restores the project to its
+// last commit before each attempt, and writes a filled step's files before they are judged
+// (history.go). One program, cmd/check, serves each
 // deployment (research D29, D30).
 //
 // Every request passes the same checks, in this order: its token (401; a request without an
@@ -57,8 +58,8 @@ type Config struct {
 	OapiCodegen, Template string
 	// History is the project worker's own folder, outside every project, where it keeps its record
 	// of each project's last commit (the contract's history guard). Non-empty makes this
-	// deployment the project worker: it serves commitStep and restoreStep only. Empty, this
-	// deployment answers both with 404 VersionHistoryNotServed.
+	// deployment the project worker: it serves commitStep, restoreStep and writeStep only. Empty,
+	// this deployment answers the three with 404 VersionHistoryNotServed.
 	History string
 	// Git is the git binary the project worker runs; empty means `git` on PATH.
 	Git string
@@ -74,10 +75,10 @@ type Config struct {
 }
 
 // NewHandler returns the deployment's whole HTTP handler. With History set it is the project
-// worker (commitStep, restoreStep); with Procedure set it serves that one procedure for Step
-// (runProcedure); with neither it is the check service (runCheck, readStepFiles). It panics on a
-// Config without a Token or Project, with only one of Procedure and Step, or with both History and
-// Procedure.
+// worker (commitStep, restoreStep, writeStep); with Procedure set it serves that one procedure for
+// Step (runProcedure); with neither it is the check service (runCheck, readStepFiles). It panics
+// on a Config without a Token or Project, with only one of Procedure and Step, or with both
+// History and Procedure.
 func NewHandler(c Config) http.Handler {
 	if c.Token == "" || c.Project == "" || (c.Procedure == "") != (c.Step == "") || (c.History != "" && c.Procedure != "") {
 		panic("checksvc: Config needs Token and Project, Procedure and Step together, and not both History and Procedure")
@@ -117,6 +118,7 @@ var routes = map[string]string{
 	"POST /procedures/{procedureName}/run": opRunProcedure,
 	"POST /project-versions/commit":        opCommitStep,
 	"POST /project-versions/restore":       opRestoreStep,
+	"POST /project-versions/write":         opWriteStep,
 }
 
 type front struct {
@@ -189,7 +191,7 @@ func (f *front) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	bodyMax := f.contract.limits.RequestBodyMax
-	if op == opCommitStep {
+	if op == opCommitStep || op == opWriteStep {
 		bodyMax = f.contract.limits.CommitBodyMax
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, bodyMax))

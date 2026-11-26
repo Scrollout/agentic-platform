@@ -107,7 +107,7 @@ func loadContract() (contract, error) {
 	}
 	c := contract{version: doc.Info.Version, limits: l, bodies: map[string]*jsonschema.Schema{}}
 	for op, schema := range map[string]string{opRunCheck: "CheckRequest", opReadStepFiles: "StepFilesRequest", opRunProcedure: "ProcedureRequest",
-		opCommitStep: "CommitRequest", opRestoreStep: "RestoreRequest"} {
+		opCommitStep: "CommitRequest", opRestoreStep: "RestoreRequest", opWriteStep: "WriteRequest"} {
 		s, err := comp.Compile(self + "#/components/schemas/" + schema)
 		if err != nil {
 			return contract{}, fmt.Errorf("%s: %w", schema, err)
@@ -185,6 +185,7 @@ const (
 	opRunProcedure  = "runProcedure"
 	opCommitStep    = "commitStep"
 	opRestoreStep   = "restoreStep"
+	opWriteStep     = "writeStep"
 )
 
 // checkBody checks a request body against the operation's schema: exactly one JSON value the

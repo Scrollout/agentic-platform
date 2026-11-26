@@ -2,9 +2,10 @@ package checksvc
 
 // The project worker (research D30, ADR 0032): commitStep records an accepted step as one git
 // commit on the branch `main` in the project's `.git`, and restoreStep makes the project folder
-// hold its last commit's files again before an attempt. The contract's info.description (Version
-// history, The project worker's record) and the two operations give the rules; this file follows
-// them in their order.
+// hold its last commit's files again before an attempt, and writeStep makes a filled step's
+// writable files exactly the files the engine sends, without committing. The contract's
+// info.description (Version history, The project worker's record) and the three operations give
+// the rules; this file follows them in their order.
 //
 // Git runs only as the plumbing below, with every option fixed here (gitOptions, gitEnv): no
 // system or global configuration, no replace objects, no fsmonitor, no hooks, no automatic gc, no
@@ -1070,11 +1071,142 @@ func sortedKeys(m map[string]string) []string {
 
 // ---- writeStep ----
 
-// WriteStep is declared in the check contract (a captured pattern's fill steps); its work comes
-// with feature 011's T007. Until then the front answers it 404 like any route it does not map, and
-// a direct call answers 500.
-func (s *service) WriteStep(context.Context, gen.WriteStepRequestObject) (gen.WriteStepResponseObject, error) {
-	return nil, errors.New("writeStep is not implemented yet")
+func (s *service) WriteStep(ctx context.Context, req gen.WriteStepRequestObject) (gen.WriteStepResponseObject, error) {
+	if s.cfg.History == "" {
+		return nil, notServed()
+	}
+	body := *req.Body
+	// (1) Every path matches one of the step's writable entries, each sent once; nothing is read
+	// before.
+	seen := map[string]bool{}
+	for _, f := range body.Files {
+		switch {
+		case !procedures.IsProjectPath(f.Path):
+			return nil, fault(400, gen.ErrorCodeInvalidRequest, fmt.Sprintf("the file %q is not a project path", f.Path))
+		case !checks.MatchGlob(body.Step.Writable, f.Path):
+			return nil, fault(400, gen.ErrorCodeInvalidRequest, fmt.Sprintf("the file %s matches none of the step %s's writable entries", f.Path, body.Step.Name))
+		case seen[f.Path]:
+			return nil, fault(400, gen.ErrorCodeInvalidRequest, fmt.Sprintf("the file %s is sent twice", f.Path))
+		}
+		seen[f.Path] = true
+	}
+	return bounded(ctx, body.TimeLimitSeconds, func(ctx context.Context) (gen.WriteStepResponseObject, error) {
+		unlock, err := s.lockProject(ctx, body.Project)
+		if err != nil {
+			return nil, err
+		}
+		defer unlock()
+		v, err := s.writeStep(ctx, body)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			return nil, err
+		}
+		return gen.WriteStep200JSONResponse(v), nil
+	})
+}
+
+func (s *service) writeStep(ctx context.Context, body gen.WriteRequest) (gen.WrittenFiles, error) {
+	var none gen.WrittenFiles
+	dir, err := s.projectDir(body.Project)
+	if err != nil {
+		return none, err
+	}
+	rec, err := s.loadRecord(body.Project)
+	if err != nil {
+		return none, err
+	}
+	if rec != nil && rec.claimed() {
+		rec = nil // a claimed record follows the no-record rules
+	}
+	r := s.repo(ctx, dir, 0)
+	defer r.close()
+	max := s.limits.ProjectFileMax
+	cantRead := func() error { return unreadable("the version history of %s cannot be read", body.Project) }
+
+	// (2) The history check, then (3) the last commit holds before.
+	head := ""
+	if rec != nil {
+		if head, err = s.guard(r, rec, nil); err != nil {
+			return none, err
+		}
+	}
+	if head == "" {
+		if len(body.Before) > 0 {
+			return none, stateDiffers("the project has no commit, so it holds none of the files before lists")
+		}
+	} else {
+		c, err := r.commit(head)
+		if err != nil {
+			return none, cantRead()
+		}
+		ok, diff, err := r.holds(c.tree, body.Before, max)
+		switch {
+		case err != nil:
+			return none, cantRead()
+		case !ok:
+			return none, stateDiffers("the last commit does not hold the files before lists: %s differs", diff)
+		}
+	}
+	// (3) Every file outside the step's writable entries equals before's.
+	p, err := readProject(ctx, dir, body.Project, s.limits)
+	if err != nil {
+		return none, err
+	}
+	if err := p.strict(body.Project); err != nil {
+		return none, err
+	}
+	writable := body.Step.Writable
+	outside := func(list gen.ProjectFiles) gen.ProjectFiles {
+		out := gen.ProjectFiles{}
+		for _, f := range list {
+			if !checks.MatchGlob(writable, f.Path) {
+				out = append(out, f)
+			}
+		}
+		return out
+	}
+	if diff := firstDiff(outside(p.list()), outside(body.Before)); diff != "" {
+		return none, stateDiffers("the folder's files outside the step's writable entries differ from before: %s differs; nothing was changed", diff)
+	}
+
+	// (4) Every content has its sha256, and all fit the step's files limit, before anything is
+	// written.
+	var size int64
+	files := make([]canonical.File, 0, len(body.Files))
+	sent := map[string]bool{}
+	for _, f := range body.Files {
+		sent[f.Path] = true
+		if sum(f.Content) != f.HashValue {
+			return none, fault(422, gen.ErrorCodeInputHashMismatch, "the file "+f.Path+"'s content does not have its sha256")
+		}
+		size += int64(len(f.Content))
+		files = append(files, canonical.File{Path: f.Path, Content: f.Content})
+	}
+	if size > s.limits.StepFilesMax {
+		return none, fault(422, gen.ErrorCodeStepFilesTooLarge, fmt.Sprintf("the files hold %d bytes together, more than %d", size, s.limits.StepFilesMax))
+	}
+
+	// (5) The step's writable files become exactly files.
+	if path, err := writeOutputs(ctx, p, writable, files); err != nil {
+		if ctx.Err() != nil {
+			return none, ctx.Err()
+		}
+		return none, historyWriteFailed("writing or removing %s failed; the folder may hold partly written files, and a repeat converges them", path)
+	}
+	v := gen.WrittenFiles{Written: []gen.ProjectPath{}, Removed: []gen.ProjectPath{}}
+	for _, f := range files {
+		v.Written = append(v.Written, f.Path)
+	}
+	sort.Strings(v.Written)
+	for _, f := range body.Before {
+		if checks.MatchGlob(writable, f.Path) && !sent[f.Path] {
+			v.Removed = append(v.Removed, f.Path)
+		}
+	}
+	sort.Strings(v.Removed)
+	return v, nil
 }
 
 // ---- restoreStep ----
