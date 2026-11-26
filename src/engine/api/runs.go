@@ -743,14 +743,20 @@ func (s *sliceServer) signal(ctx context.Context, run, name string) error {
 // StartRun refuses in the contract's order, the first that applies, before any operation exists:
 // an unknown slice, or a `pattern` naming no pattern (NotFound); a pattern condition that fails, a
 // part not approved at its current hash (Buildable); for a proof slice, its captured pattern's
-// refusals (proofStart), and for another slice a named captured pattern's (namedRefusal); then
+// refusals (proofStart), and for another slice a named captured pattern's (namedStart:
+// CapturedPatternWithdrawn, CapturedPatternNotApproved, ProofRequired, then PatternDoesNotFit for
+// a slice that does not fit it); then
 // WorkersNotReady while a step of the pattern that needs a worker has none registered for the
 // slice; then RunActive while any run, of any slice, has not ended (FR-021); then ProjectExists
 // when the project's folder exists under the projects folder or a recorded run builds into it. A
 // start that passes them all is WorkersNotReady while the engine cannot start a run (canRun), and
 // 503 while the durable service cannot be reached. Otherwise the run's workflow is started
 // (newRun); the folder is not touched here. A run of a proof slice is a proof: under its captured
-// pattern with the source values, `chosen`, `proof: true`, reusing no earlier result.
+// pattern with the source values, `chosen`, `proof: true`, reusing no earlier result. A run naming
+// a captured pattern uses it with the values its fit read (`chosen`), one naming the base pattern
+// uses that (`chosen`); one naming none uses the most recently approved usable captured pattern
+// that fits (`fits`), else the base pattern (`base`), naming the captured patterns judged and not
+// used (chosenStart). The readiness check skips a captured pattern's `fill` steps.
 func (s *sliceServer) StartRun(ctx context.Context, req gen.StartRunRequestObject) (gen.StartRunResponseObject, error) {
 	id := req.SliceIdParameter
 	proofOf, err := s.svc.ProofOf(id)
@@ -779,8 +785,19 @@ func (s *sliceServer) StartRun(ctx context.Context, req gen.StartRunRequestObjec
 			return nil, err
 		}
 	case named != nil:
-		if err := namedRefusal(named); err != nil {
+		if start, err = s.namedStart(id, named); err != nil {
 			return s.refuse("startRun", err)
+		}
+	case req.Body.Pattern != nil: // the base pattern, named
+		start.PatternReason = string(gen.PatternReasonChosen)
+	default:
+		if start, err = s.chosenStart(id); err != nil {
+			return s.refuse("startRun", err)
+		}
+	}
+	if start.Fill != nil && !start.Proof {
+		if steps, err = s.workerSteps(start.Definition.ID + "@" + start.Definition.Version); err != nil {
+			return nil, err
 		}
 	}
 	if err := s.ready(id, steps); err != nil {
@@ -875,9 +892,10 @@ func (s *sliceServer) ResumeRun(ctx context.Context, req gen.ResumeRunRequestObj
 // earlier run recorded none) and refs, `replay_of` and pattern_reason `chosen`; it reuses every
 // result accepted under the same reuse key. A replay of a proof run is a new proof (proofReplay:
 // NotFound, CapturedPatternWithdrawn or CapturedPatternBusy before WorkersNotReady): under the
-// captured pattern with its current source values, reusing no earlier result. A run of a
-// captured pattern that is no proof is not replayed yet (feature 011's T015): an error, and
-// nothing is started.
+// captured pattern with its current source values, reusing no earlier result. A replay of a run
+// of a captured pattern that is no proof uses that captured pattern again with the values the run
+// recorded, with no new fit (capturedReplay: NotFound when it was erased, CapturedPatternWithdrawn,
+// ProofRequired while it is not usable, before WorkersNotReady).
 func (s *sliceServer) ReplayRun(ctx context.Context, req gen.ReplayRunRequestObject) (gen.ReplayRunResponseObject, error) {
 	id := req.RunIdParameter
 	if err := s.badParameter([]string{id}, ""); err != nil {
@@ -908,8 +926,13 @@ func (s *sliceServer) ReplayRun(ctx context.Context, req gen.ReplayRunRequestObj
 		if steps, err = s.workerSteps(start.Definition.ID + "@" + start.Definition.Version); err != nil {
 			return nil, err
 		}
-	case first.SourceRun != "":
-		return nil, fmt.Errorf("run %s was built from the captured pattern %s: replaying it is not implemented yet", id, first.Pattern)
+	case first.SourceRun != "" || first.Parameters != nil:
+		if start, err = s.capturedReplay(first); err != nil {
+			return s.refuse("replayRun", err)
+		}
+		if steps, err = s.workerSteps(start.Definition.ID + "@" + start.Definition.Version); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.ready(run.Slice, steps); err != nil {
 		return s.refuse("replayRun", err)

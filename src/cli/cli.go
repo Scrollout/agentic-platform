@@ -100,6 +100,7 @@ const usageText = `usage:
   cancel <run|operation>               cancel a run or other running work
   delete <slice> [--yes]               erase a slice and its records after confirmation
   build <slice> <project>              build the slice into the new project folder and follow the run
+  build <slice> <project> --pattern <id> build with the named pattern (the base pattern or a captured one)
   resume <run>                         continue an interrupted run and follow it
   replay <run> <project>               replay an ended run into the new project folder and follow it
   take-over <run>                      accept the hand-over of a run waiting for the developer

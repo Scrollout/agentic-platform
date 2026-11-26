@@ -149,12 +149,6 @@ type Refusal struct {
 	Detail    string
 }
 
-// ErrNotImplemented is what Fit answers until feature 011's T015 gives it its work.
+// ErrNotImplemented was the answer of a function before its feature gave it its work; no
+// function answers it now. Tests use it to tell a stub's answer from the interface's own.
 var ErrNotImplemented = errors.New("captured: not implemented yet")
-
-// Fit says whether approved fits a captured pattern whose source is src: the values (by
-// parameter name) that fill src into exactly approved, or ok false with the refusal. writable
-// gives each template output's step's writable entries, which every filled path must match.
-func Fit(src Copy, template Template, writable map[string][]string, parameters []Parameter, approved Copy) (values map[string]string, ok bool, refusal Refusal) {
-	return nil, false, Refusal{Detail: ErrNotImplemented.Error()}
-}

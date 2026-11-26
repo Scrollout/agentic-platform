@@ -9,9 +9,13 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
+// FillWorker is the worker of a captured pattern's `fill` steps: the engine fills the step's files
+// from the template, with no step worker and no model. The API, the run workflow and the
+// declaration name it from here.
+const FillWorker = "procedure:fill"
+
 // The base pattern's facts the declaration changes (research R1).
 const (
-	fillWorker = "procedure:fill"
 	// reviewCheck marks the review step, the one run in rounds; reviewChecks are the checks that
 	// judge findings, which no fill step writes.
 	reviewCheck     = "NoBlockingFindingOpen"
@@ -57,7 +61,7 @@ func Declaration(base []byte) ([]byte, error) {
 			return nil, fmt.Errorf("captured: step %d of the base pattern has no worker", i+1)
 		}
 		if strings.HasPrefix(w.Value, "agent:") {
-			set(st, "worker", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: fillWorker})
+			set(st, "worker", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: FillWorker})
 			remove(st, "agent_digest")
 		}
 		checks := value(st, "checks")

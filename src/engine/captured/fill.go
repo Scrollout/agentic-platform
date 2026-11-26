@@ -2,7 +2,6 @@ package captured
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/agentic-platform/engine/canonical"
 )
@@ -37,22 +36,7 @@ func Fill(files []canonical.File, parameters []Parameter, values map[string]stri
 	if len(files) == 0 {
 		return nil, nil
 	}
-	kinds, sources := kindsValues(parameters)
-	m := newMatcher(kinds, sources)
-	fill := func(text string) string {
-		var b strings.Builder
-		last := 0
-		m.scan(text, func(h hit) {
-			b.WriteString(text[last:h.off])
-			b.WriteString(in(h.form.form, values[parameters[h.form.param].Name]))
-			last = h.off + len(h.form.text)
-		})
-		if last == 0 {
-			return text
-		}
-		b.WriteString(text[last:])
-		return b.String()
-	}
+	fill := filler(parameters, values)
 	out := make([]canonical.File, 0, len(files))
 	from := map[string]string{}
 	for _, f := range files {

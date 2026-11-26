@@ -527,7 +527,17 @@ func (s *session) followRun(ctx context.Context, id string, known *gen.Run) erro
 
 // ---- build, resume, replay ----
 
+// parseBuild reads `build <slice> <project> [--pattern <id>]`: the pattern named goes to startRun
+// as `pattern`; without it the engine chooses.
 func parseBuild(args []string) (func(context.Context, *session) error, error) {
+	var pattern *gen.PatternId
+	if len(args) >= 3 && args[2] == "--pattern" {
+		if len(args) != 4 {
+			return nil, usagef("build: --pattern takes one pattern ID")
+		}
+		p := args[3]
+		pattern, args = &p, args[:2]
+	}
 	if len(args) != 2 {
 		return nil, usagef("build: want a slice and a project")
 	}
@@ -538,7 +548,7 @@ func parseBuild(args []string) (func(context.Context, *session) error, error) {
 	return func(ctx context.Context, s *session) error {
 		op, err := mutate(ctx, s, "startRun", func(ctx context.Context, key *string) (*http.Response, error) {
 			return s.api.StartRun(ctx, slice, &gen.StartRunParams{ApiVersion: APIVersion, IdempotencyKey: key},
-				gen.StartRunRequest{Project: project})
+				gen.StartRunRequest{Project: project, Pattern: pattern})
 		}, wrap(gen.ParseStartRunResponse, func(r *gen.StartRunResponse) startRun { return startRun{r} }))
 		if err != nil {
 			return err
@@ -559,6 +569,17 @@ func parseBuild(args []string) (func(context.Context, *session) error, error) {
 		}
 		if err := s.print("%s started: building %s into %s%s (operation %s)\n", id, slice, esc(project), with, op.Id); err != nil {
 			return err
+		}
+		if run.NotUsed != nil {
+			for _, n := range *run.NotUsed {
+				reason := n.Detail
+				if n.Reason == gen.NotUsedReasonRefusedValue && n.Parameter != nil {
+					reason = *n.Parameter + ": " + n.Detail
+				}
+				if err := s.print("Not used: %s: %s\n", esc(n.Pattern), esc(reason)); err != nil {
+					return err
+				}
+			}
 		}
 		return s.followRun(ctx, id, run)
 	}, nil

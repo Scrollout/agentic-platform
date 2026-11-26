@@ -12,6 +12,7 @@ import (
 
 	"github.com/agentic-platform/engine/api"
 	"github.com/agentic-platform/engine/canonical"
+	"github.com/agentic-platform/engine/captured"
 	"github.com/agentic-platform/engine/machine"
 	"github.com/agentic-platform/retry"
 	enumspb "go.temporal.io/api/enums/v1"
@@ -67,7 +68,7 @@ const (
 
 // fillWorker is the worker of a captured pattern's `fill` steps (feature 011): the engine fills
 // the step's files from the captured template; no step worker and no model is called.
-const fillWorker = "procedure:fill"
+const fillWorker = captured.FillWorker
 
 var hashRE = regexp.MustCompile(`^[0-9a-f]{64}$`)
 

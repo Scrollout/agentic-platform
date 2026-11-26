@@ -2,9 +2,7 @@ package api
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"maps"
 	"net/http"
 	"strings"
 
@@ -184,28 +182,9 @@ func (s *sliceServer) proofReplay(started string) (RunStart, error) {
 // proofRun is the start of a proof of r: its declaration, `chosen`, its source values and source
 // run, `proof`, no reuse, and the fill of its `fill` steps from its template with those values.
 func proofRun(r *capturedRecord) (RunStart, error) {
-	p, err := r.pattern()
-	if err != nil {
-		return RunStart{}, err
-	}
-	values := r.values()
-	return RunStart{Definition: p, PatternReason: string(gen.PatternReasonChosen), Parameters: values, SourceRun: r.SourceRun,
-		Proof: true, NoReuse: true, Fill: &RunFill{Captured: r.ID, Template: maps.Clone(r.Template), Values: maps.Clone(values)}}, nil
-}
-
-// namedRefusal refuses a run of a slice other than a proof slice that names the captured pattern
-// r: CapturedPatternWithdrawn, or CapturedPatternNotApproved while it is proposed or proven. An
-// approved one is used only once the usable rule and the fit exist (feature 011's T015): until
-// then the start is the engine's fault, and nothing starts.
-func namedRefusal(r *capturedRecord) error {
-	switch r.State {
-	case gen.CapturedPatternStateWithdrawn:
-		return stateRefusal(r)
-	case gen.CapturedPatternStateProposed, gen.CapturedPatternStateProven:
-		return &sl.Error{Code: string(gen.ErrorCodeCapturedPatternNotApproved),
-			Detail: fmt.Sprintf("captured pattern %s is %s, not approved", r.ID, r.State)}
-	}
-	return errors.New("a run of an approved captured pattern is not implemented yet: " + r.ID)
+	start, err := capturedRun(r, gen.PatternReasonChosen, r.values())
+	start.Proof, start.NoReuse = true, true
+	return start, err
 }
 
 // completeBeforeErasure completes the proofs of the captured pattern of from the runs of its proof

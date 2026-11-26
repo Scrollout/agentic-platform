@@ -36,7 +36,7 @@ import (
 var errNotImplemented = errors.New("captured patterns are not implemented yet")
 
 // fillWorker is the worker of a captured pattern's `fill` steps, which need no step worker.
-const fillWorker = "procedure:fill"
+const fillWorker = captured.FillWorker
 
 // capturedVersion is every captured pattern's version: an approved one never changes.
 const capturedVersion = "1.0.0"
@@ -524,7 +524,7 @@ func capturedView(r *capturedRecord, m string) gen.CapturedPattern {
 	v := gen.CapturedPattern{Id: r.ID, Version: capturedVersion, Base: r.Base, Method: r.Method, CreatedAt: r.CreatedAt,
 		Parts: gen.PartHashes{Goals: r.Parts.Goals, Rules: r.Parts.Rules, Contract: r.Parts.Contract}, State: r.State,
 		Parameters: make([]gen.Parameter, len(r.Parameters)), Proofs: slices.Clone(r.Proofs), Approval: r.Approval,
-		ProofSlice: opt(r.ProofSlice), Usable: r.State == gen.CapturedPatternStateApproved && r.provenUnder(m)}
+		ProofSlice: opt(r.ProofSlice), Usable: r.usable(m)}
 	if v.Proofs == nil {
 		v.Proofs = []gen.Proof{}
 	}
