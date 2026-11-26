@@ -809,13 +809,23 @@ pass, three runs give the same files.
   `Not used:` lines), 7 pass as guards of US1's lines; `ParameterRefused` is no `startRun`
   refusal (contract), so not tested. Open for T017: `not_used` on a run with no `pattern_reason`
   (contract silent); `--pattern=<id>` and flag order (contract states the trailing form only)
-- [ ] T015 [US2] Code author (done when T012, T013 and T030 pass, and T014 on the CI run T016
+- [x] T015 [US2] Code author (done when T012, T013 and T030 pass, and T014 on the CI run T016
   records; an approved but unusable captured pattern is still judged for fit, to be named
   `needs-proof`): `Fit` in `src/engine/captured/`, applying the `usable` value T007
   computes in the Proof-completion function, the choice for a fitting captured
   pattern and a named one in `src/engine/api/runs.go` (`StartRun`; `ReplayRun`'s usable rule for runs that are not proofs, leaving a proof run's
   replay to T029's proof rule;
   a captured-pattern run chosen at `startRun`, which capture then refuses by T007's rule), the `Run`'s pattern choice and `not_used`, `ap build --pattern` and the output lines in `src/cli/`
+  Done 2026-11-26 (Opus, 93fbb7e; T014 judged on T016's CI run): captured, cli, machine, steps,
+  durable and the whole api package pass (api 245 s). Two T013 tests were wrong, fixed with the
+  owner's approval in the next commit: `generate` may reuse a result an earlier run of the same
+  pattern kept (the rig's contract-check gives one artifact for every slice); the events are read
+  after the run ended (listRunEvents keeps a page token until then). Settled open points: a
+  place's Column is the first differing character; parts compared goals, rules, contract; value
+  form, then equality, then paths; a nil `writable` with files refused; textual numbers (`100`
+  is not `100.0`); `not_used` newest approval first; a named base pattern is `chosen`; `Not
+  used:` lines whenever `not_used` is present; `--pattern` only after `<slice> <project>`.
+  T041's `FillWorker` half done; its `kindOf` half open
 - [ ] T016 [US2] Commit; fast lint; push (owner go-ahead); record the CI run
 - [ ] T017 [US2] Fresh review of US2 judging T016's CI run; `/speckit-converge` for US2
 

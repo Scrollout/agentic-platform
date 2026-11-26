@@ -531,8 +531,11 @@ func TestSRUnnamedStartUsesTheApprovedFittingCapturedPatternAndNoAgentStep(t *te
 		t.Errorf("the run is of slice %s, want %s", v.Slice, later)
 	}
 	s.noAgentCalls(calls, "the run")
-	if got := s.w.callCount() - calls; got != 2 {
-		t.Errorf("the run made %d worker calls, want 2 (contract-check and generate)", got)
+	// contract-check and generate are each worked or reused (owner-approved 2026-11-26: the rig's
+	// contract-check gives one artifact for every slice, so generate may reuse a result an earlier
+	// run of the same pattern kept; R4 adds the values hash only to fill steps)
+	if got, reused := s.w.callCount()-calls, len(s.kinds(run.ID, "ResultReused")); got+reused != 2 || got < 1 {
+		t.Errorf("the run made %d worker calls and reused %d results, want 2 in all (contract-check and generate)", got, reused)
 	}
 	h := s.acceptedHashes(run.ID)
 	if w := srFilled("tests/task_test.go", "package tests // task\n"); h["tests"] != w {
@@ -1181,6 +1184,11 @@ func TestSRAFilledCheckThatFailsHandsTheRunOverWithNoAgentStep(t *testing.T) {
 		t.Errorf("a run waiting for the developer has a reason: %+v", v)
 	}
 	s.wantChoice(op.Target, id+"@"+string(cp.Version), gen.PatternReasonFits, srWant(cp, srTaskRepl), cp.Source.Run)
+	s.noAgentCalls(calls, "the handed-over run")
+	// the events are read once the run has ended (owner-approved 2026-11-26): until then
+	// listRunEvents keeps a next_page_token on its last page (contract)
+	s.opBody(s.do("POST", apiPath("/runs/"+op.Target+"/hand-over"), ""), 202)
+	s.waitEnded(op.Target, "handed-over")
 	var failed []string
 	for _, e := range s.allEvents(op.Target) {
 		if e.Kind == "CheckFailed" && e.Check != nil {
@@ -1199,8 +1207,5 @@ func TestSRAFilledCheckThatFailsHandsTheRunOverWithNoAgentStep(t *testing.T) {
 	if n > 1 {
 		t.Errorf("%d attempts were made of the filled step tests, want at most 1: a fill step is never attempted twice", n)
 	}
-	s.noAgentCalls(calls, "the handed-over run")
-	s.opBody(s.do("POST", apiPath("/runs/"+op.Target+"/hand-over"), ""), 202)
-	s.waitEnded(op.Target, "handed-over")
 	s.noAgentCalls(calls, "the run after its take-over")
 }
