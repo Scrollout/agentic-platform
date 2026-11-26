@@ -747,16 +747,25 @@ func (s *sliceServer) capturedBusy(r *capturedRecord, proofRuns bool) error {
 			return &sl.Error{Code: string(gen.ErrorCodeCapturedPatternBusy), Detail: fmt.Sprintf("operation %s of captured pattern %s has not ended", o.ID, r.ID)}
 		}
 	}
-	if !proofRuns || r.ProofSlice == "" || s.runs == nil {
+	if !proofRuns {
 		return nil
 	}
-	run, err := s.runs.active(r.ProofSlice)
+	return s.proofRunBusy(r.ProofSlice)
+}
+
+// proofRunBusy is CapturedPatternBusy while a run of the proof slice is starting (accepted, its
+// RunStarted not yet recorded) or has not ended, nil for no proof slice ("").
+func (s *sliceServer) proofRunBusy(slice string) error {
+	if slice == "" || s.runs == nil {
+		return nil
+	}
+	run, err := s.runs.active(slice)
 	switch {
 	case err != nil:
 		return err
 	case run != "":
 		return &sl.Error{Code: string(gen.ErrorCodeCapturedPatternBusy),
-			Detail: fmt.Sprintf("run %s of its proof slice %s has not ended", run, r.ProofSlice)}
+			Detail: fmt.Sprintf("run %s of its proof slice %s has not ended", run, slice)}
 	}
 	return nil
 }

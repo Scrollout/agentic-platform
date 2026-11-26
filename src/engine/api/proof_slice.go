@@ -18,8 +18,9 @@ import (
 // reuses no earlier result.
 
 // MakeProofSlice refuses at once, before any operation exists: an unknown captured pattern
-// (NotFound), a withdrawn one (CapturedPatternWithdrawn) and one with another operation that has
-// not ended (CapturedPatternBusy). Otherwise it accepts the request, whose target is the captured
+// (NotFound), a withdrawn one (CapturedPatternWithdrawn), one with another operation that has not
+// ended, and one whose proof slice differs from the copy while a run of that slice has not ended
+// (CapturedPatternBusy: asking would restore a part under the run). Otherwise it accepts the request, whose target is the captured
 // pattern; the operation's result names the proof slice.
 func (s *sliceServer) MakeProofSlice(ctx context.Context, req gen.MakeProofSliceRequestObject) (gen.MakeProofSliceResponseObject, error) {
 	if _, err := s.capturedStore(); err != nil {
@@ -37,6 +38,12 @@ func (s *sliceServer) MakeProofSlice(ctx context.Context, req gen.MakeProofSlice
 	if err := s.capturedBusy(r, false); err != nil {
 		return s.refuse("makeProofSlice", err)
 	}
+	// An unreadable copy is left to the operation, which fails on it the same way.
+	if ps, differs, err := s.svc.ProofSliceDiffers(r.ID, copyParts(r)); err == nil && differs {
+		if err := s.proofRunBusy(ps); err != nil {
+			return s.refuse("makeProofSlice", err)
+		}
+	}
 	op, err := s.ops.accept(ctx, "makeProofSlice", r.ID)
 	if err != nil {
 		return unavailableFor(err), nil
@@ -45,8 +52,11 @@ func (s *sliceServer) MakeProofSlice(ctx context.Context, req gen.MakeProofSlice
 }
 
 // makeProofSlice is the work of makeProofSlice: the slices service gives the proof slice, made
-// from the captured copy when there is none (PartFailsChecks when a part fails a check), and the
-// captured pattern records it as its proof slice. A repeat gives the same slice.
+// from the captured copy when there is none and restored to it when a part differs
+// (PartFailsChecks when a part fails a check), and the captured pattern records it as its proof
+// slice. A repeat gives the same slice. No proof starts while this operation is open
+// (proofStart), but a part changed after the acceptance while a run of the proof slice has not
+// ended is not restored: the operation fails with the busy refusal's detail.
 func (s *sliceServer) makeProofSlice(ctx context.Context, id string) (WorkResult, error) {
 	s.cmu.Lock()
 	r, err := s.readCaptured(id)
@@ -57,8 +67,7 @@ func (s *sliceServer) makeProofSlice(ctx context.Context, id string) (WorkResult
 	if r.State == gen.CapturedPatternStateWithdrawn {
 		return WorkResult{}, s.workError("makeProofSlice", stateRefusal(r))
 	}
-	parts := map[string][]byte{"goals": []byte(r.Copy.Goals), "rules": []byte(r.Copy.Rules), "contract": []byte(r.Copy.Contract)}
-	slc, err := s.svc.ProofSlice(ctx, r.ID, parts)
+	slc, err := s.svc.ProofSliceUnlessBusy(ctx, r.ID, copyParts(r), s.proofRunBusy)
 	if err != nil {
 		return WorkResult{}, s.workError("makeProofSlice", err)
 	}
@@ -74,6 +83,12 @@ func (s *sliceServer) makeProofSlice(ctx context.Context, id string) (WorkResult
 		}
 	}
 	return WorkResult{Slice: slc.ID}, nil
+}
+
+// copyParts is the captured pattern's copy of its source slice's parts, as the slices service
+// takes them for a proof slice.
+func copyParts(r *capturedRecord) map[string][]byte {
+	return map[string][]byte{"goals": []byte(r.Copy.Goals), "rules": []byte(r.Copy.Rules), "contract": []byte(r.Copy.Contract)}
 }
 
 // namedPattern resolves startRun's `pattern`: nil for none or the engine's base pattern, else the
