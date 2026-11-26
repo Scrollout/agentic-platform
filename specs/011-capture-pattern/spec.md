@@ -131,10 +131,12 @@ reused only under the method that judged them), [feature 009](../009-no-hard-cod
   back that differ from those written, an unreadable template or a refused fill; a refusal a
   repeat can pass interrupts the run (resumable): the project not in the state the run left it,
   rate limited, busy, a time limit, a failed write, a lost connection (owner; FR-009).
-- Q (converge US2, T061): which words are reserved (US2 scenario 5)? → A: the Go keywords: a
+- Q (converge US2, T061, 2026-11-27): which words are reserved (US2 scenario 5)? → A: the 25
+  keywords of the Go specification: a
   later slice's name value equal to one does not fit, refused where the fit reads the value,
   naming the parameter and the word; the proposal, the check and changing the parameters refuse
-  none, and a longer word or another case form (`types`, `Type`) is not reserved (owner; FR-008,
+  none, and a longer word (`types`) is not reserved; another case form (`Type`) is outside the
+  name form, refused for its form as before (owner; FR-008,
   FR-010).
 
 ## User Scenarios & Testing *(mandatory)*
@@ -211,7 +213,8 @@ slice with another limit and derived value fits and is filled with them.
    the run's checks run, **Then** the run is handed over with the failing check named, and no
    agent step is started to repair it.
 5. **Given** a slice that would fit except that a value is outside its parameter's form (a space
-   in a name, a reserved word, a name where a number was), **When** its run starts, **Then** it
+   in a name, a reserved word (a Go keyword, at the fit only; Clarifications 2026-11-26), a name
+   where a number was), **When** its run starts, **Then** it
    does not fit that captured pattern, and the run names the captured pattern, the
    parameter and why; the run uses another pattern as for any slice that does not fit.
 6. **Given** a slice that fits both a captured pattern and its base pattern, **When** its run

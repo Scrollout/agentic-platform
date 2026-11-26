@@ -146,7 +146,7 @@
               "needs-proof",
               "refused-value"
             ],
-            "description": "`needs-proof`: it fits, but it is approved and not usable (its latest proof did not pass under the current method); `refused-value`: it would fit but for a value outside its parameter's form, a name value that is a Go keyword (such as `func` or `type`; a longer word or another case form, such as `types` or `Type`, is not one), or a value equal to another parameter's in a case form."
+            "description": "`needs-proof`: it fits, but it is approved and not usable (its latest proof did not pass under the current method); `refused-value`: it would fit but for a value outside its parameter's form, a name value that is a Go keyword (such as `func` or `type`; a longer word, such as `types`, is not one), or a value equal to another parameter's in a case form."
           },
           "parameter": {
             "$ref": "#/$defs/parameter_name",
