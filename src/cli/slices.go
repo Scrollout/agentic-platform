@@ -306,6 +306,11 @@ func parseShow(args []string) (func(context.Context, *session) error, error) {
 			return nil
 		}
 		fmt.Fprintf(s.out, "%s  %s  (%s)\n", sl.Id, sl.Title, sl.State)
+		if sl.ProofOf != nil && *sl.ProofOf != "" {
+			if err := s.print("proof of %s\n", esc(*sl.ProofOf)); err != nil {
+				return err
+			}
+		}
 		fmt.Fprintf(s.out, "description:\n")
 		writeIndented(s.out, sl.Description)
 		for _, p := range parts {
@@ -533,15 +538,25 @@ func parseSlices(args []string) (func(context.Context, *session) error, error) {
 			return nil
 		}
 		tw := tabwriter.NewWriter(s.out, 0, 4, 2, ' ', 0)
-		fmt.Fprintln(tw, "SLICE\tSTATE\tLATEST RUN\tTITLE")
+		p := &printer{w: tw}
+		p.f("SLICE\tSTATE\tLATEST RUN\tPROOF OF\tTITLE\n")
 		for _, it := range items {
-			run := "-"
+			run, proofOf := "-", "-"
 			if it.LatestRun != nil {
 				run = *it.LatestRun
 			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", it.Id, it.State, run, it.Title)
+			if it.ProofOf != nil && *it.ProofOf != "" {
+				proofOf = esc(*it.ProofOf)
+			}
+			p.f("%s\t%s\t%s\t%s\t%s\n", it.Id, it.State, run, proofOf, it.Title)
 		}
-		return tw.Flush()
+		if err := p.done(); err != nil {
+			return err
+		}
+		if err := tw.Flush(); err != nil {
+			return failf(exitFailed, "writing standard output: %v", err)
+		}
+		return nil
 	}, nil
 }
 

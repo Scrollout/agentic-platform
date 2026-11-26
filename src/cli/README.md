@@ -15,6 +15,11 @@ times after 1, 2 and 4 s with jitter; following reads every page of `listRunEven
 per event and an end line, and exits by the run's state; store text is printed with its control
 characters escaped, except `artifact`, which writes the raw bytes.
 
+`captured.go` holds the captured-pattern commands (`capture`, `patterns`, `pattern` with `--drop`
+and `--add`, `proof-slice`, `approve-pattern`), each mutating call with its own `Idempotency-Key`,
+and the proof outcome line that `build`, `replay`, `resume` and `run` print after a proof run's end
+line (`Proof of <id>: passed`, `failed: ...` with exit 1, or `running`).
+
 Signals reach `Run` through `Env.Signals`, which `main` fills with `signal.Notify` for SIGINT and
 SIGTERM: the first one stops following, never the work, prints how to follow or cancel it, and
 exits 130 or 143.

@@ -333,7 +333,11 @@ the one exception: it writes the content unchanged, for a pipe or a file.
 
 Each invocation of `build`, `resume`, `replay` and `take-over` makes one `Idempotency-Key`: 32
 lowercase hex digits from the operating system's random source. It sends that key with its one
-mutating call (`startRun`, `resumeRun`, `replayRun` or `acceptHandOver`).
+mutating call (`startRun`, `resumeRun`, `replayRun` or `acceptHandOver`). The captured-pattern
+commands do the same: `capture` (`captureRun`), `pattern --drop` and `--add`
+(`replaceParameters`), `proof-slice` (`makeProofSlice`) and `approve-pattern`
+(`approveCapturedPattern`), each with the retry rule below; their lost-answer message ends `see
+patterns` (`capture`) or `see pattern <id>` instead of `see runs`.
 
 When that call gets no answer (a connection error or the client's 2-minute timeout), or answers
 502, 503 or 504, the client sends the same request with the same key and body again, as the

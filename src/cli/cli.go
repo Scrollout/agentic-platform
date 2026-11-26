@@ -106,7 +106,14 @@ const usageText = `usage:
   runs                                 list runs
   run <run>                            show a run's record and follow it while it runs
   compare <run> <other>                show the differences between two runs
-  artifact <run> <hash>                write an artifact's content to standard output`
+  artifact <run> <hash>                write an artifact's content to standard output
+  capture <run> [--name <name>]        capture a done run as a pattern and print its parameters
+  patterns                             list captured patterns
+  pattern <id>                         show a captured pattern: parameters and their places, proofs, state, usable
+  pattern <id> --drop <parameter>      remove a parameter
+  pattern <id> --add [<name>=]<value>  add a parameter (the name is the value when none is given)
+  proof-slice <id>                     make or give the captured pattern's proof slice and print its ID
+  approve-pattern <id>                 approve a proven captured pattern`
 
 // Run runs one command and returns its exit code.
 func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, stderr io.Writer) int {
@@ -209,6 +216,16 @@ func run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout io
 		do, err = parseCompare(rest)
 	case "artifact":
 		do, err = parseArtifact(rest)
+	case "capture":
+		do, err = parseCapture(rest)
+	case "patterns":
+		do, err = parsePatterns(rest)
+	case "pattern":
+		do, err = parsePattern(rest)
+	case "proof-slice":
+		do, err = parseProofSlice(rest)
+	case "approve-pattern":
+		do, err = parseApprovePattern(rest)
 	default:
 		return usagef("unknown command %q", cmd)
 	}
@@ -238,6 +255,35 @@ func newSession(env Env, stdin io.Reader, stdout io.Writer, detach *string) (*se
 	}
 	return &session{api: api, env: env, in: bufio.NewReader(stdin), stdin: stdin, out: stdout,
 		follow: 100 * time.Millisecond, detach: detach}, nil
+}
+
+// printer writes a command's output and keeps the first write error, which done reports, so a
+// command whose output could not be written does not exit 0.
+type printer struct {
+	w   io.Writer
+	err error
+}
+
+// f writes one formatted piece of output, unless an earlier write failed.
+func (p *printer) f(format string, a ...any) {
+	if p.err == nil {
+		_, p.err = fmt.Fprintf(p.w, format, a...)
+	}
+}
+
+// done is the first write error as the command's failure (exit 1), or nil.
+func (p *printer) done() error {
+	if p.err != nil {
+		return failf(exitFailed, "writing standard output: %v", p.err)
+	}
+	return nil
+}
+
+// print writes one formatted piece of the command's output and reports a write error as its failure.
+func (s *session) print(format string, a ...any) error {
+	p := &printer{w: s.out}
+	p.f(format, a...)
+	return p.done()
 }
 
 // response is what every generated response offers.

@@ -11,6 +11,7 @@ import (
 	mrand "math/rand/v2"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -28,9 +29,11 @@ const (
 	exitDiffer  = 7
 )
 
-const (
-	recordedStop = "stopped; the request may have been recorded: see runs"
-)
+// recordedStop is what a signal prints while a mutating call's answer has not arrived; see names
+// the command that shows whether it was recorded.
+func recordedStop(see string) string {
+	return "stopped; the request may have been recorded: see " + see
+}
 
 var artifactHash = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
@@ -163,22 +166,31 @@ func newKey() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// mutate sends a run command's one mutating call with one Idempotency-Key, resent unchanged after a
-// lost answer, and returns the accepted operation.
-func mutate[T interface {
+type accepts interface {
 	response
 	accepted() *gen.Operation
-}](ctx context.Context, s *session, op string, do func(context.Context, *string) (*http.Response, error),
+}
+
+// mutate sends a run command's one mutating call with one Idempotency-Key, resent unchanged after a
+// lost answer, and returns the accepted operation.
+func mutate[T accepts](ctx context.Context, s *session, op string, do func(context.Context, *string) (*http.Response, error),
+	parse func(*http.Response) (T, error)) (*gen.Operation, error) {
+	return mutateSee(ctx, s, op, "runs", do, parse)
+}
+
+// mutateSee is mutate for any command; see names the command that shows whether a call whose
+// answer was lost was recorded.
+func mutateSee[T accepts](ctx context.Context, s *session, op, see string, do func(context.Context, *string) (*http.Response, error),
 	parse func(*http.Response) (T, error)) (*gen.Operation, error) {
 	key, err := newKey()
 	if err != nil {
 		return nil, err
 	}
-	*s.detach = recordedStop
+	*s.detach = recordedStop(see)
 	r, err := call(ctx, s, op, http.StatusAccepted, func(ctx context.Context) (*http.Response, error) { return do(ctx, &key) }, parse)
 	var lost *lostError
 	if errors.As(err, &lost) {
-		return nil, failf(exitFailed, "engine: no answer to %s after %d tries (Idempotency-Key %s); it may have been recorded: see runs", op, tries(), key)
+		return nil, failf(exitFailed, "engine: no answer to %s after %d tries (Idempotency-Key %s); it may have been recorded: see %s", op, tries(), key, see)
 	}
 	if err != nil {
 		return nil, err
@@ -304,6 +316,16 @@ func eventLine(e gen.RunEventSchema) string {
 	case "RunStarted":
 		str("slice ", e.Slice)
 		str("pattern ", e.Pattern)
+		if e.PatternReason != nil && *e.PatternReason != "" {
+			add("reason %s", esc(string(*e.PatternReason)))
+		}
+		if e.Proof != nil && bool(*e.Proof) {
+			add("proof")
+		}
+		str("source ", e.SourceRun)
+		if e.Parameters != nil && len(*e.Parameters) > 0 {
+			add("parameters %s", parameterList(*e.Parameters))
+		}
 	case "AttemptMade":
 		attempt()
 		usage()
@@ -351,6 +373,36 @@ func eventLine(e gen.RunEventSchema) string {
 		str("", t)
 	}
 	return strings.Join(f, "  ")
+}
+
+// parameterList is a run's parameter values as `<name>=<value>,...`, in byte order of their names.
+func parameterList(ps gen.ParameterValues) string {
+	names := make([]string, 0, len(ps))
+	for n := range ps {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	l := make([]string, len(names))
+	for i, n := range names {
+		l[i] = esc(n) + "=" + esc(ps[n])
+	}
+	return strings.Join(l, ",")
+}
+
+// patternFields are the run's `pattern` and, when recorded, `reason`, `proof` and `source`
+// fields, as the run's header prints them.
+func patternFields(r *gen.Run) string {
+	f := "pattern " + esc(r.Pattern)
+	if r.PatternReason != nil && *r.PatternReason != "" {
+		f += "  reason " + esc(string(*r.PatternReason))
+	}
+	if r.Proof != nil && bool(*r.Proof) {
+		f += "  proof"
+	}
+	if r.SourceRun != nil && *r.SourceRun != "" {
+		f += "  source " + esc(*r.SourceRun)
+	}
+	return f
 }
 
 // endLine is the run's end line and the exit code of its state.
@@ -462,6 +514,11 @@ func (s *session) followRun(ctx context.Context, id string, known *gen.Run) erro
 	}
 	line, code := endLine(run)
 	fmt.Fprintln(s.out, line)
+	if run.Proof != nil && bool(*run.Proof) {
+		if code, err = s.proofLine(ctx, run, code); err != nil {
+			return lost(err)
+		}
+	}
 	if code == exitOK {
 		return nil
 	}
@@ -486,8 +543,24 @@ func parseBuild(args []string) (func(context.Context, *session) error, error) {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(s.out, "%s started: building %s into %s (operation %s)\n", op.Target, slice, esc(project), op.Id)
-		return s.followRun(ctx, op.Target, nil)
+		id := op.Target
+		*s.detach = fmt.Sprintf("stopped following %s; it continues. Follow it with run %s, cancel it with cancel %s.", id, id, id)
+		run, err := s.getRun(ctx, id)
+		var l *lostError
+		if errors.As(err, &l) {
+			return failf(exitFailed, "engine: lost the engine while following %s (%v); the run goes on or is interrupted: see run %s", id, l.err, id)
+		}
+		if err != nil {
+			return err
+		}
+		with := ""
+		if run.PatternReason != nil && *run.PatternReason != "" {
+			with = fmt.Sprintf(" with %s (%s)", esc(run.Pattern), esc(string(*run.PatternReason)))
+		}
+		if err := s.print("%s started: building %s into %s%s (operation %s)\n", id, slice, esc(project), with, op.Id); err != nil {
+			return err
+		}
+		return s.followRun(ctx, id, run)
 	}, nil
 }
 
@@ -634,8 +707,8 @@ func parseRun(args []string) (func(context.Context, *session) error, error) {
 		if err != nil {
 			return err
 		}
-		header := fmt.Sprintf("%s  slice %s  pattern %s  project %s  operation %s  created %s",
-			run.Id, esc(run.Slice), esc(run.Pattern), esc(run.Project), esc(run.Operation), stamp(run.CreatedAt))
+		header := fmt.Sprintf("%s  slice %s  %s  project %s  operation %s  created %s",
+			run.Id, esc(run.Slice), patternFields(run), esc(run.Project), esc(run.Operation), stamp(run.CreatedAt))
 		if run.ReplayOf != nil && *run.ReplayOf != "" {
 			header += "  replay of " + esc(*run.ReplayOf)
 		}

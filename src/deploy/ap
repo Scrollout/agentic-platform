@@ -3,7 +3,7 @@
 #
 # Runs on the host and calls nothing but `docker` (Compose) and POSIX utilities, except `test`, which
 # also runs a test binary it built in the pinned Go container (ADR 0037). Its own commands
-# are start, up, down, build-workers, page, test and registry; build, resume and replay first make the slice's
+# are start, up, down, build-workers, page, test and registry; build, resume, replay and prove first make the slice's
 # workers ready; every other command goes unchanged to the terminal client container, and its exit
 # code is returned. Exit codes are the terminal contract's: 3 is a usage error or a command that is
 # not available yet; 1 is a failed start or stop.
@@ -1580,6 +1580,21 @@ cmd_replay() {
   build_workers "$run_slice" "$project"
 }
 
+# `prove <captured pattern> <project>` (feature 011): the client's `proof-slice` gives the captured
+# pattern's proof slice, printing only its ID on standard output; then as `build <proof slice>
+# <project>`: build-workers first, then the client's build, which prints the proof's outcome after
+# the run's end line. A refusal of proof-slice (an unknown captured pattern is exit 4, NotFound)
+# ends it with that code, before anything is made or started.
+cmd_prove() {
+  captured=$1 project=$2
+  is_project "$project" || die 3 "prove: '$project' is not a project name (lowercase letters, digits and hyphens, at most 63)"
+  # No terminal for this one: its standard output is read here, and a terminal would add carriage returns.
+  proof_slice=$(compose_run cli proof-slice "$captured" </dev/null) || exit $?
+  is_slice_id "$proof_slice" || die 1 "prove: proof-slice printed '$proof_slice', not a slice ID; nothing was built"
+  build_workers "$proof_slice" "$project" || exit $?
+  compose_run cli build "$proof_slice" "$project"
+}
+
 # The test harness (src/cli/contract.md "The test harness", research D33, ADR 0037). `test <suite>`
 # builds the acceptance suite's test binary in the pinned golang container, offline, with the module
 # cache in ${XDG_CACHE_HOME:-~/.cache}/agentic-platform/go (as scripts/check.sh builds its docker
@@ -1733,5 +1748,6 @@ case $cmd in
   build) [ $# -ge 2 ] || usage; load; build_workers "$1" "$2" || exit $?; compose_run cli build "$@" ;;
   resume) [ $# -eq 1 ] || usage; load; cmd_resume "$1" ;;
   replay) [ $# -ge 2 ] || usage; load; cmd_replay "$1" "$2" || exit $?; compose_run cli replay "$@" ;;
+  prove) [ $# -eq 2 ] || usage; load; cmd_prove "$1" "$2" ;;
   *) load; compose_run cli "$cmd" "$@" ;;
 esac
