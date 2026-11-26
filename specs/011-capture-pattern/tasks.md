@@ -733,7 +733,7 @@ another (FR-008 to FR-010; research R4, R6).
 **Independent Test**: T012-T014, T030 pass; quickstart 3: the `tasks` slice is built done from the captured notes pattern, the gateway sees no request, the derived tests
 pass, three runs give the same files.
 
-- [ ] T012 [P] [US2] Test author: new `src/engine/captured/fit_test.go` (T003's fixtures): the
+- [x] T012 [P] [US2] Test author: new `src/engine/captured/fit_test.go` (T003's fixtures): the
   `task`/`tasks` slice fits with those values, and on a new fixture T012 creates, `testdata/limit-280/` (the `limit/` slice and code with the limit 280 and the derived 281, which equal no other literal; T039) a slice with 100/101 fits and is filled (SC-006);
   SC-005's planted set does not fit and names the first place it differs: another rule, another
   example, another member, another operation, another status, two holes of one parameter with
@@ -743,6 +743,11 @@ pass, three runs give the same files.
   template files the same filled path, or a filled path outside its step's writable entries, do
   not fit, naming the paths; a captured pattern with no parameter fits only the identical slice; matching is
   linear (a 1 MiB slice with 32 parameters fits in under 1 s). Seen failing
+  Tests 2026-11-26 (Sonnet, a429130): 20 tests fail on the stub; a throwaway reference `Fit`
+  passed all 20. Open for T015/T017 (unspecified, not tested): the place's Column (the differing
+  text or its hole's start); which part is first when two differ; the order of a value, place
+  and path refusal when several apply; a nil `writable`; a path clash across two outputs; a
+  parameter with places only in the template; numeric equality (`100` and `100.0`)
 - [ ] T013 [P] [US2] Test author: new `src/engine/api/captured_startrun_test.go`: `startRun`
   without `pattern` uses the most recently approved usable fitting captured pattern, otherwise the
   base pattern; with `pattern` naming the base pattern or a usable captured one, that one; a
