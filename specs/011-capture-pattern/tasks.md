@@ -609,10 +609,15 @@ proposed and adding the derived value works; the proof ends passed with no model
   Done 2026-11-26 (Sonnet, 6dc35df): 7 Propose tests and 3 API tests, seen failing (no cut; the
   capture fails OperationFailed); a kept candidate with no place at all cannot be built through
   Propose (each name's key is its own place), so the places-limit case stands for that rule
-- [ ] T038 [US1] Code author (done when T037 passes, no other test changes): the cut in
+- [x] T038 [US1] Code author (done when T037 passes, no other test changes): the cut in
   `src/engine/captured/propose.go` (the existing `ParametersMax`, kept equal to the contract by
   `captured_limits_contract_test.go`), after the form and case-form checks, the places found after
   the cut; `src/engine/api/captured.go`'s capture no longer fails for too many candidates
+  Done 2026-11-26 (Opus): `captured.Candidates` (every candidate, no cut, no places) and the cut
+  in `Propose`; `replaceParameters` takes an added value's kind and source from `Candidates`, so a
+  left-out candidate added back keeps its kind (T037's API case needs it); `method.sha256`
+  40caf4b3. Untested (T045): an added left-out declared value's source; an added left-out name
+  overlapping a kept longer value; several kept ones losing their places in later rounds
 - [ ] T039 [US2] Before T012 (owner: a US2 task, decided through `/speckit-clarify`): SC-006's
   limit fixture (`testdata/limit`) has the limit 200 and the derived 201 also as the HTTP statuses
   `"200"` and `"201"`, so a slice with another limit cannot equal the source filled with its

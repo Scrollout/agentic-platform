@@ -83,6 +83,8 @@ captured pattern's template hashes (data model, Proof); a hand-over fails it at 
   its order (names in byte order, then declared values in the contract's order) among those of
   their kind's form and unique in every case form; the places are found among the kept candidates
   only, and a kept one left with no place or over `parameter-places-max` is left out too.
+- `Candidates(slice) -> []Parameter`: every candidate in Propose's order, form and case-form
+  refusals dropped, no cut and no places: the kind and source of a value `PUT /parameters` adds.
 - `Check(copy, template, parameters) error`: value forms, uniqueness in any case form, each value
   occurring in the copy, the declared limits.
 - `Fit(copy, template, writable, parameters, approved) -> (values, ok, refusal)`, `refusal`
