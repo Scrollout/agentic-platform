@@ -458,7 +458,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   Done 2026-11-26: the owner approved; `newPSRig` sets `psWork` (each output but the findings a
   framed one-file set inside the step's first writable entry); every T027 capture now succeeds
   and each case fails only at `proof-slice` (500, T029)
-- [ ] T035 [US1] Open points from T007, for the US1 fresh review (T011): a `fill` step records
+- [x] T035 [US1] Open points from T007, for the US1 fresh review (T011): a `fill` step records
   no `agent_digest` (data model "everything else equal"); `engine/captured` has no function that
   gives a sent value's kind and source (the API derives it from `Propose` and `Fill`'s form
   check); a capture with more than 32 candidates fails closed (spec silent); a failed
@@ -470,6 +470,9 @@ proposed and adding the derived value works; the proof ends passed with no model
   T029, T009, T032 and T033 (F9); `makeProofSlice` of a hand-changed proof slice (re-approve as
   it is, or restore, or refuse; spec, T027 and the threat model, F10); `src/cli/contract.md` on
   `--add` of an existing name and `--drop` of a missing one (F11)
+  closed: judged in T011 round 1; each point has its home in T037 to T045, or was judged not an
+  issue (the page escapes as HTML; a replay of a proof uses current values, as the data model says;
+  `getRun` after a restart awaits the recorded start)
 - [x] T033 [US1] Test author (after T007 lands its types; owner-approved T002, commit with
   `Tests-approved-by: Marius Gologan (2026-11-26)`): the `durable_service_test.go` change T002
   records, and new `src/engine/api/captured_proof_seams_test.go` with T006's cases its first
@@ -588,6 +591,55 @@ proposed and adding the derived value works; the proof ends passed with no model
   pending (T024 before merge)
 - [ ] T011 [US1] Fresh review of US1 judging T010's CI run; findings fixed as new tasks or
   recorded; `/speckit-converge` for US1
+  Round 1 2026-11-26 (fresh Sonnet, at ddb0393, judging CI 45830105349): B1 blocking (a capture
+  with more than 32 candidates fails, FR-001, Principle XVIII Sound) -> owner: cut at 32 by a rule
+  (spec Clarifications 2026-11-26, FR-003, contract `captureRun`) -> T037, T038; S1 -> T040;
+  S2, S3 -> T041; S4 -> T042; S5 -> T043; S6 -> T039 (owner: a US2 task); S7, S9 -> T044; S8
+  closed: US3's T019/T020 add the client's `withdraw-pattern` and `erase-pattern`; S10 -> T039's
+  clarify; T035's points judged (see T035)
+- [ ] T037 [US1] Test author (B1): new `src/engine/captured/propose_cap_test.go`: a slice copy
+  with more than 32 candidates proposes exactly 32, the first in Propose's order (names in byte
+  order, then declared values in the contract's order), each with the places found among the
+  kept ones only (a left-out candidate takes no place from a kept one); exactly 32 and 33
+  candidates (the boundary); and new `src/engine/api/captured_capture_cap_test.go`: such a
+  capture succeeds with 32 parameters, and `PUT /parameters` may then drop one and add a
+  left-out one. Seen failing
+- [ ] T038 [US1] Code author (done when T037 passes, no other test changes): the cut in
+  `src/engine/captured/propose.go` (`ParametersMax`, from the contract), the places computed after
+  the cut; `src/engine/api/captured.go`'s capture no longer fails for too many candidates
+- [ ] T039 [US2] Before T012 (owner: a US2 task, decided through `/speckit-clarify`): SC-006's
+  limit fixture (`testdata/limit`) has the limit 200 and the derived 201 also as the HTTP statuses
+  `"200"` and `"201"`, so a slice with another limit cannot equal the source filled with its
+  values (a parameter cannot exclude places); decide (another fixture limit, or excluding places)
+  and fix the spec, data model and fixture; also decide `makeProofSlice` of a hand-changed proof
+  slice (re-approve as it is, restore from the copy, or refuse; review S10, T027, threat model)
+- [ ] T040 [US2] (review S1; FR-009) A `fill` step's `writeStep` refusal that cannot succeed on
+  resume (400 outside the writable entries, 422 `StepFilesTooLarge`, `InputHashMismatch`, an
+  unreadable template, a refused fill) ends the run interrupted then expired; make it a
+  hand-over, keeping interrupt for 503, 504 and `ProjectStateDiffers`: test author, then code
+  author, in US2 before T015
+- [ ] T041 [US1] (review S2, S3; Single owner for rules; suggestion) one function in
+  `engine/captured` that gives a sent value's kind and source (the API's `kindOf` derives it from
+  Propose's survivors and `Fill(nil, ...)`); the literal `procedure:fill` in one place
+  (`captured.FillWorker`); do with US2's T015 or leave: not blocking
+- [ ] T042 [US1] (review S4) data model "Declaration": a `fill` step keeps no `agent_digest`; fix
+  "everything else equal" (docs, with T023)
+- [ ] T043 [US1] (review S5, T033's open point; suggestion) a proof start reads the parameter
+  values, then releases the captured lock before `StartRun` takes the runs lock, so a `PUT
+  /parameters` accepted in the gap gives a proof of old values (fails closed: it does not count);
+  and `newRun` holds the runs lock through `recordWait`, so a `PUT /parameters` then waits up to
+  10 s before answering Busy; test author, then code author, or `closed:` by the owner
+- [ ] T044 [US1] (review S7, S9, T035 F5/F11; suggestion) a launcher test in `scripts/tests` for
+  `ap prove`'s dispatch (`die 3` for a bad project name, `die 1` for a bad slice ID, the exit code
+  passed through); `src/cli/contract.md` states `--add` of an existing name (replaces it) and
+  `--drop` of a missing one (exit 3); the acceptance proof asserts no model request (SC-001)
+- [ ] T045 [US1] (review round 1, untested cases; Findings have a home) for a test author, each
+  a new file: `steps` History's `Write` (project and check calls, the files read back, an error);
+  `store.openCaptured` after a restart and `PutCapturedPattern` with a missing artifact; an engine
+  restart between a capture's artifact hold and its record; two parameters whose source values
+  overlap without containment; a one-character string literal as a parameter; `kindOf` of a name
+  Propose dropped; a filled output over `step-files-max-bytes`; the client's lost-answer lines of
+  the new commands and its `pattern_id`/`parameter_name` forms against the contract
 
 ---
 

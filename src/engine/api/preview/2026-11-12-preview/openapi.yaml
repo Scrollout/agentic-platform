@@ -873,7 +873,10 @@ paths:
         `name` defaulting to the run's slice ID in lowercase (`s-3`); its version is always
         `1.0.0`. It holds the source slice's approved parts, its parameters with every place they
         occur (names in their lowercase, capitalised and uppercase forms, and declared values,
-        found longest first and never overlapping), and is `proposed` until a proof passes.
+        found longest first and never overlapping), and is `proposed` until a proof passes. When
+        the slice gives more candidates than `x-limits.captured-pattern-parameters-max`, the first
+        that many are proposed (the names in byte order, then the declared values in the
+        contract's order) and the others are left out; replaceParameters may add one of them.
         Refusals come at once, and no operation is created: a body outside CaptureRequest is
         InvalidRequest; an unknown run NotFound; a run that has not ended `done` (still running,
         interrupted, waiting for the developer, handed over, expired or cancelled) RunNotDone,

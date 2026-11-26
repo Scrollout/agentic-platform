@@ -79,7 +79,9 @@ captured pattern's template hashes (data model, Proof); a hand-over fails it at 
 ## Fit and fill (package `engine/captured`)
 
 - `Propose(slice, files) -> []Parameter`: candidates from the slice's names and declared values,
-  each with every place it occurs.
+  each with every place it occurs; at most `captured-pattern-parameters-max` (32): the first in
+  its order (names in byte order, then declared values in the contract's order), the places
+  found among the kept candidates only.
 - `Check(copy, template, parameters) error`: value forms, uniqueness in any case form, each value
   occurring in the copy, the declared limits.
 - `Fit(copy, template, writable, parameters, approved) -> (values, ok, refusal)`, `refusal`

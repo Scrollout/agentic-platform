@@ -97,6 +97,14 @@ reused only under the method that judged them), [feature 009](../009-no-hard-cod
   number in the examples (a text of 201 characters), since a literal over 64 characters cannot be
   a parameter (FR-001, FR-006, SC-006).
 
+### Session 2026-11-26
+
+- Q (US1 fresh review round 1, B1): a done run whose slice gives more than 32 candidates (the
+  parameters limit) failed to be captured; what then? → A: the proposal keeps the first 32
+  candidates in its order (the names in byte order, then the declared values in the contract's
+  order) and leaves the others out; the developer may add a left-out one after removing another
+  (owner; FR-001, FR-003).
+
 ## User Scenarios & Testing *(mandatory)*
 
 The user is a developer who has built a slice with the platform: the run ended done, so its
@@ -264,6 +272,9 @@ use the captured pattern and says it needs a new proof; proving it again restore
   in the slice, tests and code where the value occurs, in a file's content or its path. Parameters MAY be the slice's names
   (resource, operation and member names), its declared values and its other literal values (a
   number or a string). The platform MUST propose the names and declared values as candidates;
+  when there are more than the parameters limit (32), it MUST propose the first 32 in that order
+  (the names in byte order, then the declared values in the contract's order) and leave the others
+  out, so a capture never fails for having too many;
   before the proof the developer MUST be able to remove any parameter and add another of the
   slice's names, declared values or literal values. A number is matched only as a whole number,
   never inside a longer one. Each name parameter covers its value's three case forms:
