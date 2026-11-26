@@ -531,8 +531,13 @@ proposed and adding the derived value works; the proof ends passed with no model
   for passed; 1 for failed, whether the run was handed
   over, expired, cancelled or ended done with differing files), `ap slices` shows `PROOF OF` and `ap show` its `proof of`
   line; errors print their code and reason. Seen failing
-- [ ] T009 [US1] Code author: the commands in `src/cli/` (generated client only), except
+- [x] T009 [US1] Code author: the commands in `src/cli/` (generated client only), except
   `proof-slice`, the proof outcome line, the `PROOF OF` column and the `proof of` line (T029)
+  Done 2026-11-26 with T029's client part (Opus, 1b0f426): T008 passes, `src/cli` and the launcher
+  tests pass; `contract.md` names the captured-pattern commands under "Idempotency and the run
+  ID". Untested (for T011): `--add` of an existing name replaces it, `--drop` of a missing one is
+  exit 3 (contract silent); the lost-answer lines of the new commands; `ap prove`'s build path
+  (T028 lab, CI only); `pattern_id`/`parameter_name` forms copied by hand into the client
 - [x] T031 [P] [US1] Test author: new `src/page/run_started_fields_test.go`: the run page shows a
   `RunStarted`'s `reason`, `proof`, `source` and `parameters` as the terminal's event line gives
   them, the parameters in byte order of their names (two parameters declared in the other
