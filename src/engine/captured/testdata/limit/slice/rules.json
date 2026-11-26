@@ -1,0 +1,6 @@
+[
+  {"id": "R-1", "goal": "G-1", "pattern": "ubiquitous", "system": "the notes service", "response": "shall return every note in creation order", "terms": []},
+  {"id": "R-2", "goal": "G-1", "pattern": "event", "trigger": "the user creates a note", "system": "the notes service", "response": "shall give the note the next id, the first being 1", "terms": []},
+  {"id": "R-3", "goal": "G-1", "pattern": "unwanted", "trigger": "the text of a new note is empty", "system": "the notes service", "response": "shall refuse the note with a 400", "terms": []},
+  {"id": "R-4", "goal": "G-1", "pattern": "unwanted", "trigger": "the text of a new note is longer than 200 characters", "system": "the notes service", "response": "shall refuse the note with a 400", "terms": []}
+]
