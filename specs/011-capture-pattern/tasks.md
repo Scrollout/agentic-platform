@@ -834,6 +834,39 @@ pass, three runs give the same files.
   workers; fixed f771855) and 45877543492 (case 6 passed; case 7: later builds reuse every result,
   no CheckPassed; fixed fbc09aa); both fixes owner-approved, Tests-approved-by
 - [ ] T017 [US2] Fresh review of US2 judging T016's CI run; `/speckit-converge` for US2
+  Round 1 2026-11-26 (fresh Sonnet, read-only worktree at ff9815b, judging CI 45882363812): B1
+  blocking -> T051, T052; suggestions S1 -> T053, S2 and S6 -> T054, S3 -> T055, S4 -> T056,
+  S5 -> T057, S7 and the untested cases -> T058. Open notes of T012, T013, T030 and T015's
+  settled points judged not an issue except the refusal order (B1)
+- [ ] T051 [US2] (review B1; FR-010, contract `not_used` reason `refused-value`: "did not fit only
+  because of a refused value") Test author: new `src/engine/captured/fit_refused_value_test.go`
+  and a `startRun` case in a new `src/engine/api/captured_notused_test.go`: a value outside its
+  form, or equal to another parameter's, plus a later difference in goals, rules or contract does
+  not fit at that place (a `Place` refusal, not a `Parameter` one), so an unnamed start names no
+  `refused-value` for it; with the value refusal alone it is still `refused-value`. Seen failing
+- [ ] T052 [US2] Code author (done when T051 and every existing test pass): `Fit` keeps reading
+  after a refused value (taking the text read as the value) and returns the value refusal only
+  when the rest of the slice matches
+- [ ] T053 [US2] (review S1; suggestion) `Fit`'s reading refuses a value that contains the
+  literal after its hole (`class` before `s`) although a reading exists: try later positions, or
+  state it in the contract as a limit; test author, then code author, or `closed:` by the owner
+- [ ] T054 [US2] (review S2, S6; suggestion) an unreadable template of one approved captured
+  pattern fails every unnamed `startRun` (500): read templates only for a part-level fit; a
+  stored parameter set that fails `checkSet` is an engine fault, not `refused-value`
+- [ ] T055 [US2] (review S3; suggestion) the fit reads the approved parts under the captured lock
+  and `StartRun` reads the part hashes again later: a part replaced and approved in between
+  gives a run whose filled values were read from the old text; compare the hashes before the run
+  starts (refuse as `PatternDoesNotFit` or fit again)
+- [ ] T056 [US2] (review S4; suggestion) "approved most recently" is by `approval.at` wall clock;
+  a clock step back changes the order: keep an approval sequence, or `closed:` by the owner
+- [ ] T057 [US2] (review S5; docs) FR-009 "runs every check": a later build of the same slice and
+  values reuses the kept results (the reuse rule), so no check runs; state it in the spec's
+  Assumptions (a clarification, owner)
+- [ ] T058 [US2] (review S7 and untested cases; Findings have a home) for a test author, each a new
+  file: `fit_test.go`'s `writable` as the declaration gives it; `not_used`'s order (newest
+  approval first) with three patterns; two parameters whose first places touch; an unreadable
+  template at an unnamed start; a restart between the choice and the workflow start; SC-006
+  through `startRun` (the limit-280 slice built done); a failing filled check on the stack
 
 ---
 
