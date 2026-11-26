@@ -283,6 +283,11 @@ with its `x-operation-name`; `captureRun` 404,
   stops
   Done 2026-11-26: the owner approved the Principle XII row (2026-11-26) and the Principle XV row
   (2026-11-26, ADR 0100); T001 broke no existing test, so no test change needed approval
+  The owner approved (2026-11-26) a change to the existing helper
+  `src/engine/api/durable_service_test.go`, which T006's and T027's proof cases need (T033):
+  register `WriteProject`; pass the new `RunStart` fields into `durable.RunInput`; `noHistory`
+  implements `machine.Writer` and `Activities` gets the captured-pattern parameter source; a seam
+  that holds a run before its first recorded event, and one that alters written bytes
 
 ---
 
@@ -435,6 +440,14 @@ proposed and adding the derived value works; the proof ends passed with no model
   a `no reuse` flag in the run's start for a proof, `PUT /parameters` busy while a proof's run has
   not ended, one Proof-completion function every reader uses, and
   `ready` skipping `fill` in `StartRun`, `ResumeRun` and `ReplayRun`; no test is changed. `scripts/method-digest.py` converges
+- [ ] T033 [US1] Test author (after T007 lands its types; owner-approved T002, commit with
+  `Tests-approved-by: Marius Gologan (2026-11-26)`): the `durable_service_test.go` change T002
+  records, and new `src/engine/api/captured_proof_seams_test.go` with T006's cases its first
+  author could not reach: a lost start answer (`startedAnyway`) keeps exactly one Proof; a
+  `proof: true` run with no Proof gets one on read; `PUT /parameters` between a proof start's
+  202 and its recorded `RunStarted` answers `CapturedPatternBusy`; a planted template byte change
+  fails the proof naming the file; a proof under another method does not count for approval.
+  Seen failing before T029
 - [ ] T027 [P] [US1] Test author: new `src/engine/api/captured_proof_slice_test.go` (engine rig,
   no model): `POST /captured-patterns/{id}/proof-slice` makes an approved slice from the captured
   copy (its parts equal the copy, its description is `Proof of <captured pattern>`, `getSlice` and
@@ -466,7 +479,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   cancelled or differing files); running it again into another project builds again.
   Seen failing
   (owner go-ahead for the lab)
-- [ ] T029 [US1] Code author (after T007, on its store changes; done when T006's proof cases,
+- [ ] T029 [US1] Code author (after T007, on its store changes; done when T006's proof cases, T033,
   T027 and T008's proof cases pass, and T028 on the CI run T010 records): the proof slice in `src/engine/slices/` (made by the engine, the `startRun` branch for a proof slice, history
   `made-for-proof`, `proof_of`, never reused by `createSlice`, `deleteSlice` clears
   `proof_slice`), the `proof-slice` call in new `src/engine/api/proof_slice.go`, the proof side of
@@ -629,7 +642,7 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
 
 ## Dependencies & execution order
 
-- T001 → T002 → US1 (T003-T006, T027, T028 in parallel → T007 → T029; T008 → T009; T031 → T032;
+- T001 → T002 → US1 (T003-T006, T027, T028 in parallel → T007 → T033 → T029; T008 → T009; T031 → T032;
   T007, T009, T029 and T032 → T010 → T011) → US2 (T012-T014, T030 in parallel → T015 → T016 → T017) → US3 (T018-T019 in parallel → T020 → T021 → T022) → T023 →
   T024 → T025 → T026.
 - US2 needs US1's captured patterns and fill worker; US3 needs US2's choice at `startRun`.
