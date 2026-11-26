@@ -843,6 +843,11 @@ pass, three runs give the same files.
   Round 2 2026-11-26 (fresh Sonnet, read-only worktree at 7f3888f): B1 fixed; R1 blocking
   regression (an empty value panics `Fit`) -> T060; T059 no regression; S1 (suggestion: a panic in
   `bounded`'s work skips cancel and release, as before; the process ends anyway) not an issue
+  Round 3 2026-11-26 (fresh Sonnet, at f02ae3b, judging CI 45897403896 26/26 green): R1 fixed, no
+  regression, no new finding: review converged. Converge US2 (fresh Sonnet, at f02ae3b): one gap,
+  a reserved word as a value (T061-T063); T055 also covers the pattern's state (approved,
+  withdrawn, method) read before `newRun`; everything else delivered or homed in T041-T045,
+  T053-T056, T058. T017 is done when T061 is decided and, for option A, T062 and T063 pass
 - [x] T051 [US2] (review B1; FR-010, contract `not_used` reason `refused-value`: "did not fit only
   because of a refused value") Test author: new `src/engine/captured/fit_refused_value_test.go`
   and a `startRun` case in a new `src/engine/api/captured_notused_test.go`: a value outside its
@@ -870,6 +875,20 @@ pass, three runs give the same files.
   after sending the answer, so the next sequential call could find it taken under load: release
   it before the answer. Not reproduced on the host (20 race runs pass before and after); judged
   by the next CI run
+- [ ] T061 [US2] (converge US2; US2 scenario 5 "a reserved word", Clarifications 2026-11-25,
+  FR-008) Owner decision, recorded as a Clarification: which words are reserved. research R4's
+  value forms exclude none, so a name value such as `func` or `type` fits and fails at the checks
+  instead of at the fit. Option A: the Go keywords, refused only as a later slice's `name` value
+  read by `Fit` (a `Parameter` refusal naming the word), not in `Propose`, `Check` or
+  `PUT /parameters`. Option B: drop "a reserved word" from scenario 5 and the Clarification (then
+  T062 and T063 `closed: owner chose B`)
+- [ ] T062 [P] [US2] Test author (after T061 option A): new `captured/fit_reserved_value_test.go`
+  and a `startRun` case in a new `api/captured_reserved_test.go`: a name value `func`, `type` or
+  `go` does not fit (a `Parameter` refusal naming the parameter and the word; a place difference
+  elsewhere still wins); an unnamed start names it `refused-value`; a named start answers
+  `PatternDoesNotFit`; `Propose` still offers a source value `type`; `types` and `Type` still fit
+- [ ] T063 [US2] Code author (done when T062 passes): the keyword set one named value in
+  `captured/match.go`, applied only where `Fit` reads a value
 - [ ] T053 [US2] (review S1; suggestion) `Fit`'s reading refuses a value that contains the
   literal after its hole (`class` before `s`) although a reading exists: try later positions, or
   state it in the contract as a limit; test author, then code author, or `closed:` by the owner
