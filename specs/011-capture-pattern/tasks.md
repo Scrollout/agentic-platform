@@ -411,7 +411,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   `WriteResult`, `durable.WriteProject`, `WriteCall`, `FillInput`, `RunInput.Fill`/`NoReuse` and
   `Activities.Captured` in its header and are committed with T007; the cases it could not reach
   are T033's
-- [ ] T007 [US1] Code author (done when T003 to T005 and T006's `fill` cases pass, the `fill`
+- [x] T007 [US1] Code author (done when T003 to T005 and T006's `fill` cases pass, the `fill`
   steps' reuse keys taking the parameter values' hash; T006's proof
   cases and T027 pass after T029): `src/engine/captured/` (Propose, Check, Fill, the declaration),
   captured-pattern records and the second artifact holder in `src/engine/store/`, the resource in
@@ -445,6 +445,24 @@ proposed and adding the derived value works; the proof ends passed with no model
   a `no reuse` flag in the run's start for a proof, `PUT /parameters` busy while a proof's run has
   not ended, one Proof-completion function every reader uses, and
   `ready` skipping `fill` in `StartRun`, `ResumeRun` and `ReplayRun`; no test is changed. `scripts/method-digest.py` converges
+  Done 2026-11-26 by four code authors (Opus): d5a359b (`engine/captured`, `writeStep`),
+  b765c91 (the `fill` worker, `workflowVersion` 2), 5ea7007 (the resource, store records,
+  `RunStarted` fields, `method.sha256` converged); owner-approved test fixes 5d994d5 (T003),
+  362b8b3 (T006 file committed), 1013ba1 (T005, `skeleton_test.go`'s target rule). T003, T004,
+  T005 (21 tests) and T006's `fill` cases pass; T006's proof cases and T027 wait for T029;
+  replaying a captured or proof run answers 500 until T015/T029 (T029's brief says so)
+- [ ] T034 [US1] Before T029 (owner approval needed): T027's rig (`newPSRig`) uses runsRig's
+  `fakeStepWorker.produce`, whose outputs are not framed file sets, so every capture in
+  `captured_proof_slice_test.go` fails closed on an unreadable template; propose the change
+  (a framed-file worker as T005's `capRig.work`) to the owner
+- [ ] T035 [US1] Open points from T007, for the US1 fresh review (T011): a `fill` step records
+  no `agent_digest` (data model "everything else equal"); `engine/captured` has no function that
+  gives a sent value's kind and source (the API derives it from `Propose` and `Fill`'s form
+  check); a capture with more than 32 candidates fails closed (spec silent); a failed
+  `writeStep` ends the run interrupted then expired, not handed over (spec silent); the review
+  step's rule (`NoBlockingFindingOpen`) and the literal `procedure:fill` live in more than one
+  package; `steps` History's `Write` and the store's second holder after a slice erasure have no
+  test
 - [ ] T033 [US1] Test author (after T007 lands its types; owner-approved T002, commit with
   `Tests-approved-by: Marius Gologan (2026-11-26)`): the `durable_service_test.go` change T002
   records, and new `src/engine/api/captured_proof_seams_test.go` with T006's cases its first
