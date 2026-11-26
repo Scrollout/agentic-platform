@@ -175,7 +175,7 @@
         "properties": {
           "kind": {
             "type": "string",
-            "description": "proposed: the analyst's first proposal; revised: its revision after answers; answered: questions answered; changed: a part replaced, which withdraws that part's approval; approved: a part approved; withdrawn: approvals of the parts in refs withdrawn because a change elsewhere made those parts fail a check; made-for-proof: the slice was made by the engine from a captured pattern's copy, as its proof slice (no model; refs its parts), the first entry of a proof slice, followed by one approved entry per part.",
+            "description": "proposed: the analyst's first proposal; revised: its revision after answers; answered: questions answered; changed: a part replaced, which withdraws that part's approval (on a proof slice, also makeProofSlice restoring from the captured pattern's copy the parts in refs that differ from it); approved: a part approved; withdrawn: approvals of the parts in refs withdrawn because a change elsewhere made those parts fail a check; made-for-proof: the slice was made by the engine from a captured pattern's copy, as its proof slice (no model; refs its parts), the first entry of a proof slice, followed by one approved entry per part.",
             "enum": [
               "proposed",
               "revised",

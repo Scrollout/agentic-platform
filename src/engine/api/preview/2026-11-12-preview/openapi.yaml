@@ -1116,11 +1116,18 @@ paths:
         by the engine after the part checks pass under the current method. It takes the next
         slice ID and works after the source slice and its runs are erased. Asked again, it gives
         the same slice while every part is approved under the current method; after a method
-        change withdrew a part's approval, it checks and approves the parts again. A part that
-        fails a check fails the operation with PartFailsChecks, listing the failures, and makes
-        or changes no slice. A proof is then `startRun` of that slice into a new project folder.
-        Refused at once with CapturedPatternWithdrawn for a withdrawn one and CapturedPatternBusy
-        while another of its operations runs; allowed in every other state. The operation's
+        change withdrew a part's approval, it checks and approves the parts again. A part changed
+        since the slice was made is restored from the copy: every part is compared with the copy,
+        each that differs is put back, recorded as one `changed` history entry whose `refs` name
+        exactly the restored parts, and then every part that is not approved is approved after
+        the part checks pass, one `approved` entry each; an unchanged, approved slice gets no new
+        entry. So asking again always gives a slice equal to the copy, with the same slice ID. A
+        part that fails a check fails the operation with PartFailsChecks, listing the failures,
+        and makes or changes no slice. A proof is then `startRun` of that slice into a new project
+        folder. Refused at once with CapturedPatternWithdrawn for a withdrawn one and
+        CapturedPatternBusy while another of its operations runs; a restore that would change a
+        part while a run of the proof slice has not ended also answers CapturedPatternBusy
+        (asking with nothing to restore is then allowed); allowed in every other state. The operation's
         target is the captured pattern; its result's `slice` is the proof slice.
       security:
       - clientToken: []
