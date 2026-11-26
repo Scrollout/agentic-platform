@@ -186,7 +186,8 @@ type ContractLint interface {
 }
 
 // HistoryEntry is one change to the slice. Kind is proposed, revised, answered, changed,
-// approved or withdrawn (approvals of the parts in Refs withdrawn because they now fail a check); a proposal or revision names its model and agent digest; Refs are the parts it
+// approved, withdrawn (approvals of the parts in Refs withdrawn because they now fail a check) or
+// made-for-proof (a proof slice made by the engine, no model, the first entry); a proposal or revision names its model and agent digest; Refs are the parts it
 // concerns, or for answered the questions answered.
 type HistoryEntry struct {
 	Kind        string

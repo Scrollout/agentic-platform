@@ -403,7 +403,8 @@ func (s *Service) unusable(sl *Slice, questions []QuestionDraft) (faults, links 
 	return out, links, nil
 }
 
-// approvedFor returns the approved slice of exactly this description, if there is one.
+// approvedFor returns the approved slice of exactly this description, if there is one; a proof
+// slice is never one.
 func (s *Service) approvedFor(description string) (Slice, bool) {
 	s.mu.Lock()
 	var same []string
@@ -419,7 +420,7 @@ func (s *Service) approvedFor(description string) (Slice, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, r := range s.slices {
-		if r.slice.Description == description && r.slice.State == "approved" {
+		if r.slice.Description == description && r.slice.State == "approved" && r.slice.ProofOf == "" { // a proof slice is never reused
 			return clone(r.slice), true
 		}
 	}

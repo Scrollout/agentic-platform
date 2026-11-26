@@ -68,6 +68,8 @@ type (
 		Approvals   []diskApproval `json:"approvals"`
 		Checks      []diskCheck    `json:"checks"`
 		History     []diskHistory  `json:"history"`
+		// ProofOf names the captured pattern a proof slice proves; absent for any other slice.
+		ProofOf string `json:"proof_of,omitempty"`
 	}
 	diskQuestion struct {
 		ID         string      `json:"id"`
@@ -145,7 +147,7 @@ func encodeRecord(r *record) ([]byte, error) {
 	d := diskRecord{Format: recordFormat, Baseline: r.baseline, Compat: toDiskChecks(r.compat), Lint: toDiskChecks(r.lint),
 		Dropped: maps.Clone(r.dropped), ExamplesBase: &r.examplesBase, ChecksMethod: sl.ChecksMethod,
 		Slice: diskSlice{ID: sl.ID, Description: sl.Description, State: sl.State, Goals: sl.Goals, Terms: sl.Terms,
-			Rules: sl.Rules, Examples: sl.Examples, Contract: sl.Contract, Checks: toDiskChecks(sl.Checks),
+			Rules: sl.Rules, Examples: sl.Examples, Contract: sl.Contract, Checks: toDiskChecks(sl.Checks), ProofOf: sl.ProofOf,
 			Parts: diskParts{Goals: sl.Parts.Goals, Rules: sl.Parts.Rules, Contract: sl.Parts.Contract}}}
 	if sl.Questions != nil {
 		d.Slice.Questions = make([]diskQuestion, len(sl.Questions))
@@ -196,7 +198,7 @@ func (s *Service) decodeRecord(id string, b []byte) (*record, error) {
 	}
 	sl := Slice{ID: d.Slice.ID, Description: d.Slice.Description, State: d.Slice.State, Goals: d.Slice.Goals,
 		Terms: d.Slice.Terms, Rules: d.Slice.Rules, Examples: d.Slice.Examples, Contract: d.Slice.Contract,
-		Checks: fromDiskChecks(d.Slice.Checks)}
+		Checks: fromDiskChecks(d.Slice.Checks), ProofOf: d.Slice.ProofOf}
 	if d.Slice.Questions != nil {
 		sl.Questions = make([]Question, len(d.Slice.Questions))
 	}

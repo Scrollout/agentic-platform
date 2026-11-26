@@ -29,8 +29,8 @@ import (
 // pattern that builds later slices of the same kind with no model call, change its parameters
 // and approve it once a proof passed. Its rules (candidates, forms, places) are package
 // engine/captured's; this file keeps the records, judges the states and runs the operations.
-// makeProofSlice, withdrawal and erasure come with feature 011's T029 and T020: until then each
-// answers 500 with errNotImplemented.
+// makeProofSlice and the proofs' runs are in proof_slice.go. Withdrawal and erasure come with
+// feature 011's T020: until then each answers 500 with errNotImplemented.
 
 // errNotImplemented is what a captured-pattern call answers until its work exists.
 var errNotImplemented = errors.New("captured patterns are not implemented yet")
@@ -562,7 +562,8 @@ func (s *sliceServer) completeAndSave(r *capturedRecord, m string) error {
 // through (data model, "Proof"): each run of the captured pattern's proof slice whose RunStarted
 // has `proof: true` and names the captured pattern gets a Proof (`running`, under the run's
 // method, with the values it proves) when it has none; a running Proof whose run was handed over
-// or has ended is completed: a hand-over fails it naming the failing check, an end other than
+// or has ended is completed: a hand-over fails it naming the failing check (and, once the run
+// then expired or was cancelled, that end too, also on a Proof completed before), an end other than
 // done fails it naming the end, and done passes it when the filled outputs' hashes equal the
 // template's, else fails it naming each differing file; an interrupted or running run leaves it
 // running. A proof that passes with the current parameters makes a proposed captured pattern
@@ -592,7 +593,7 @@ func (s *sliceServer) completeProofs(r *capturedRecord, m string) (bool, error) 
 				Parameters: values, Failures: []gen.ProofFailure{}})
 			i, changed = len(r.Proofs)-1, true
 		}
-		if r.Proofs[i].Outcome != gen.ProofOutcomeRunning {
+		if r.Proofs[i].Outcome != gen.ProofOutcomeRunning && !endUnnamed(r.Proofs[i], events) {
 			continue
 		}
 		outcome, failures, err := s.proofEnd(r, events)
@@ -624,26 +625,50 @@ func methodOf(events []machine.Event, m string) string {
 	return m
 }
 
+// endUnnamed reports whether a proof that failed at its run's hand-over does not yet name the
+// end its run came to since (expired or cancelled), which completing it again adds.
+func endUnnamed(p gen.Proof, events []machine.Event) bool {
+	reason, ok := runEnd(machine.StateOf(events))
+	return ok && p.Outcome == gen.ProofOutcomeFailed && !slices.ContainsFunc(p.Failures, func(f gen.ProofFailure) bool { return f.Reason == reason })
+}
+
+// runEnd is the failure reason that names the end of a run that ended other than done or handed
+// over (expired, cancelled); ok is false for any other run.
+func runEnd(v machine.Run) (reason string, ok bool) {
+	if v.Status != machine.StatusEnded || v.Outcome == machine.OutcomeDone || v.Outcome == machine.OutcomeHandedOver {
+		return "", false
+	}
+	return "the run ended " + string(v.Outcome), true
+}
+
 // proofEnd judges a proof run's record: its outcome (running while it has not been handed over
-// or ended) and, when it failed, why.
+// or ended) and, when it failed, why: a hand-over names the failing check, followed by the end
+// the run came to after it (expired, cancelled) once it has.
 func (s *sliceServer) proofEnd(r *capturedRecord, events []machine.Event) (gen.ProofOutcome, []gen.ProofFailure, error) {
+	v := machine.StateOf(events)
 	for i, e := range events {
 		if e.Kind != "RunHandedOver" {
 			continue
 		}
-		for j := i - 1; j >= 0; j-- {
+		var failures []gen.ProofFailure
+		for j := i - 1; j >= 0 && failures == nil; j-- {
 			if c := events[j]; c.Kind == "CheckFailed" && c.Check != nil {
 				step, check := c.Step, c.Check.Name
-				return gen.ProofOutcomeFailed, []gen.ProofFailure{{Step: &step, Check: &check, Reason: c.Check.Reason}}, nil
+				failures = []gen.ProofFailure{{Step: &step, Check: &check, Reason: c.Check.Reason}}
 			}
 		}
-		reason := "the run was handed over"
-		if e.Detail != "" {
-			reason += ": " + e.Detail
+		if failures == nil {
+			reason := "the run was handed over"
+			if e.Detail != "" {
+				reason += ": " + e.Detail
+			}
+			failures = []gen.ProofFailure{{Reason: reason}}
 		}
-		return gen.ProofOutcomeFailed, []gen.ProofFailure{{Reason: reason}}, nil
+		if reason, ok := runEnd(v); ok {
+			failures = append(failures, gen.ProofFailure{Reason: reason})
+		}
+		return gen.ProofOutcomeFailed, failures, nil
 	}
-	v := machine.StateOf(events)
 	switch {
 	case v.Status != machine.StatusEnded:
 		return gen.ProofOutcomeRunning, nil, nil
@@ -941,7 +966,7 @@ func (s *sliceServer) approve(id string) (WorkResult, error) {
 // ---- operations ----
 
 // capturedWork does a captured-pattern operation's work from its record and body.
-func (s *sliceServer) capturedWork(rec store.OperationRecord, body []byte) (WorkResult, error) {
+func (s *sliceServer) capturedWork(ctx context.Context, rec store.OperationRecord, body []byte) (WorkResult, error) {
 	if _, err := s.capturedStore(); err != nil {
 		return WorkResult{}, err
 	}
@@ -952,6 +977,8 @@ func (s *sliceServer) capturedWork(rec store.OperationRecord, body []byte) (Work
 		return s.replaceParameters(rec.Target, body)
 	case "approveCapturedPattern":
 		return s.approve(rec.Target)
+	case "makeProofSlice":
+		return s.makeProofSlice(ctx, rec.Target)
 	}
 	return WorkResult{}, fmt.Errorf("operation %s: no work for the kind %s yet", rec.ID, rec.Kind)
 }

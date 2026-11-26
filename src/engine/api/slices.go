@@ -95,7 +95,7 @@ func (s *sliceServer) work(ctx context.Context, rec store.OperationRecord, body 
 		return s.follow(ctx, rec.Target)
 	}
 	if isCapturedKind(rec.Kind) {
-		return s.capturedWork(rec, body)
+		return s.capturedWork(ctx, rec, body)
 	}
 	if rec.Kind != "deleteSlice" && len(body) == 0 {
 		return WorkResult{}, fmt.Errorf("operation %s has no request body", rec.ID)
@@ -242,13 +242,15 @@ func (s *sliceServer) DeleteSlice(ctx context.Context, req gen.DeleteSliceReques
 // The stored records go first: erasing them again is harmless, so a retry after a failed
 // erasure completes it, and the slice disappears only once its records are gone. The work holds
 // the runs' lock and checks again, so no run starts, resumes or records between the check and
-// the erasure. Before the store, the durable service forgets the slice: each run's workflow,
+// the erasure. A proof slice's captured pattern completes its proofs first, so a finished proof
+// is kept, and forgets the slice as its proof slice last; it keeps its proofs and template. Before
+// the store, the durable service forgets the slice: each run's workflow,
 // and each other operation's workflow and then its record (data model, "Erasing a slice"); own,
 // the erasing operation, is left to the retention.
 func (s *sliceServer) deleteSlice(ctx context.Context, id, own string) error {
 	var e *slices.Error
 	if _, err := s.svc.Get(id); errors.As(err, &e) && e.Code == string(gen.ErrorCodeNotFound) {
-		return nil
+		return s.forgetProofSlice(id)
 	}
 	if s.runs != nil {
 		s.runs.mu.Lock()
@@ -256,6 +258,15 @@ func (s *sliceServer) deleteSlice(ctx context.Context, id, own string) error {
 	}
 	if err := s.activeRun(id); err != nil {
 		return err
+	}
+	of, err := s.svc.ProofOf(id)
+	if err != nil {
+		return err
+	}
+	if of != "" {
+		if err := s.completeBeforeErasure(of, id); err != nil {
+			return err
+		}
 	}
 	if err := s.eraseDurable(ctx, id, own); err != nil {
 		return err
@@ -267,7 +278,10 @@ func (s *sliceServer) deleteSlice(ctx context.Context, id, own string) error {
 	if s.runs != nil {
 		s.runs.forget(id)
 	}
-	return s.svc.Delete(ctx, id)
+	if err := s.svc.Delete(ctx, id); err != nil {
+		return err
+	}
+	return s.forgetProofSlice(id)
 }
 
 // eraseDurable deletes the workflows of the slice's runs, then the workflow and the record of
