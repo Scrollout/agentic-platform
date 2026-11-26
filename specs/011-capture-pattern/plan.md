@@ -69,7 +69,7 @@ field on `startRun`, eight terminal commands, one acceptance suite
 | VI. Adopt mature OSS | Pass | gonew, Copier, Cookiecutter and `text/template` evaluated; none derives a template from an accepted project (research R4); the custom engine is justified there |
 | VII. Providers | Pass | The rule that chooses between fitting patterns is specified (R6) |
 | VIII. Containers | Pass | No new image |
-| IX. Knowledge stays true | Pass | ADR 0090 to 0099, the reference "Project template tools", the architecture overview and the log at implementation |
+| IX. Knowledge stays true | Pass | ADR 0090 to 0100, the reference "Project template tools", the architecture overview and the log at implementation |
 | X. No silent loss | Pass | A captured run and a proof are ordinary runs: recorded before 202, one terminal state, checkpointed steps |
 | XI. Privacy | Pass | A captured pattern holds the developer's slice and code like a slice does; erasing it is an operation; telemetry names IDs and hashes only |
 | XII. Tenants | Not applicable | One developer by scope (feature 001 FR-021), as for slices; Complexity Tracking |

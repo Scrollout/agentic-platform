@@ -465,7 +465,11 @@ proposed and adding the derived value works; the proof ends passed with no model
   `writeStep` ends the run interrupted then expired, not handed over (spec silent); the review
   step's rule (`NoBlockingFindingOpen`) and the literal `procedure:fill` live in more than one
   package; `steps` History's `Write` and the store's second holder after a slice erasure have no
-  test
+  test. Also for T011 (analyze at 53635b0): the launcher's own `prove` dispatch (`cmd_prove`'s
+  `die 3`/`die 1`) has no test in `scripts/tests` (F5); the open points in the done notes of
+  T029, T009, T032 and T033 (F9); `makeProofSlice` of a hand-changed proof slice (re-approve as
+  it is, or restore, or refuse; spec, T027 and the threat model, F10); `src/cli/contract.md` on
+  `--add` of an existing name and `--drop` of a missing one (F11)
 - [x] T033 [US1] Test author (after T007 lands its types; owner-approved T002, commit with
   `Tests-approved-by: Marius Gologan (2026-11-26)`): the `durable_service_test.go` change T002
   records, and new `src/engine/api/captured_proof_seams_test.go` with T006's cases its first
@@ -505,7 +509,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   worker or page token answers 403; a busy proof start answers `CapturedPatternBusy` before
   `CapturedPatternNotApproved` and the rest; capturing a proof run answers
   `RunNotCapturable`. Seen failing
-- [ ] T028 [P] [US1] Test author: new `src/tests/lab/captured_prove_test.go` (Docker lab, CI):
+- [x] T028 [P] [US1] Test author: new `src/tests/lab/captured_prove_test.go` (Docker lab, CI):
   `ap prove <captured pattern> <project>` runs the client's `proof-slice`, then `build-workers`
   and `build` for the proof slice into `<project>`; an unknown captured pattern is exit 4
   NotFound and starts nothing; after the run's end line it prints `Proof of <id>: passed` or the
@@ -519,7 +523,8 @@ proposed and adding the derived value works; the proof ends passed with no model
   2026-11-26 (CI run 45819156622): no CI job runs it. `scripts/check.sh`'s docker step builds
   only the suites `recorded`, `lint`, `acceptance` and `contract`; `src/tests/lab` is their helper
   package, and the Go unit job runs it without the `docker` tag. The owner chose (2026-11-26) to
-  move its cases to the acceptance suite: T036
+  move its cases to the acceptance suite: T036; closed: moved to T036, which carries this case list
+  unchanged
 - [x] T029 [US1] Code author (after T007, on its store changes; done when T006's proof cases, T033,
   T027 and T008's proof cases pass, and T028's cases (T036) on the CI run T010 records): the proof slice in `src/engine/slices/` (made by the engine, the `startRun` branch for a proof slice, history
   `made-for-proof`, `proof_of`, never reused by `createSlice`, `deleteSlice` clears
@@ -532,7 +537,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   later end, `getRun` answers a started run before its `RunStarted` is recorded;
   `method.sha256` 16fb9c3f), client 1b0f426 (with T009); owner-approved fixes to three T027 cases
   29cfb33. T006, T027, T033 and T008 pass; `./api/`, `./slices/`, `./durable/` pass (4 min 34 s);
-  T028 waits for T010's CI run. Open for T011: a non-proof `startRun` naming an approved captured
+  T028's cases (T036) pass or fail on T010's CI run, which T010 and T011 judge. Open for T011: a non-proof `startRun` naming an approved captured
   pattern answers 500 until T015; a replay of a proof uses the captured pattern's current values;
   `makeProofSlice` of a proof slice changed by hand re-approves it as it is (its proof then answers
   `PatternDoesNotFit`; spec silent); a withdrawn captured pattern at `proof-slice`, proof start or
@@ -550,8 +555,9 @@ proposed and adding the derived value works; the proof ends passed with no model
   `src/tests/lab/captured_prove_test.go`; commit with `Tests-approved-by: Marius Gologan
   (2026-11-26)`): T028's cases as new `src/tests/acceptance/captured_prove_test.go` (package
   `acceptance`, built by the docker step, run by the "Service tests with Docker (recorded model)"
-  job, whose `AP_ACCEPTANCE_SKIP` does not name it), using the `lab` package's exported helpers
-  only; remove the lab file in the same commit. The code (T029, T009) landed before any CI job ran
+  job, whose `AP_ACCEPTANCE_SKIP` does not name it; about 35 min more in that job), using the `lab`
+  package's exported helpers only, plus `Lab.ProjectsDir()` (owner-approved 2026-11-26, the one
+  change to `src/tests/lab/lab.go`, for T028's project-folder checks); remove the lab file in the same commit. The code (T029, T009) landed before any CI job ran
   these cases, so they cannot be seen failing first (plan Exceptions); they must pass on the CI run
   that T010 records, and the test author vets them and names a planted change they would catch
 - [x] T009 [US1] Code author: the commands in `src/cli/` (generated client only), except
@@ -569,7 +575,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   `src/page/`; no test is changed
   Done 2026-11-26 (Sonnet, 1bb6569): T031 and `src/page`'s tests pass. Untested (for T011): the
   page does not escape control characters or invalid UTF-8 in values as the terminal's `esc` does
-- [ ] T010 [US1] (after T007, T009, T029 and T032) Commit (tests and code in separate commits); fast lint; ask the owner before
+- [ ] T010 [US1] (after T007, T009, T029, T032 and T036) Commit (tests and code in separate commits); fast lint; ask the owner before
   pushing (every check job runs); record the CI run here
 - [ ] T011 [US1] Fresh review of US1 judging T010's CI run; findings fixed as new tasks or
   recorded; `/speckit-converge` for US1
@@ -693,7 +699,7 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
 ## Phase 5: Polish & cross-cutting
 
 - [ ] T023 Docs: `docs/architecture/overview.md` (captured patterns, the fill worker, `writeStep`,
-  the pattern choice, the proof slice, ADR 0090 to 0099 in its Decisions), `src/catalogue/README.md`
+  the pattern choice, the proof slice, ADR 0090 to 0100 in its Decisions), `src/catalogue/README.md`
   (captured patterns beside the base patterns), `src/engine/README.md`, `src/deploy/README.md`
   (`prove`), `docs/apis/engine-api.md` and
   `docs/apis/check-api.md`, N-052 in `docs/overview/problem-space.md` (state), `docs/log.md`
@@ -709,14 +715,14 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
 
 ## Dependencies & execution order
 
-- T001 → T002 → US1 (T003-T006, T027, T028 in parallel → T007 → T033 → T029; T008 → T009; T031 → T032;
-  T007, T009, T029 and T032 → T010 → T011) → US2 (T012-T014, T030 in parallel → T015 → T016 → T017) → US3 (T018-T019 in parallel → T020 → T021 → T022) → T023 →
+- T001 → T002 → US1 (T003-T006, T027, T028 in parallel → T007 → T033 → T029 → T036; T008 → T009; T031 → T032;
+  T007, T009, T029, T032 and T036 → T010 → T011) → US2 (T012-T014, T030 in parallel → T015 → T016 → T017) → US3 (T018-T019 in parallel → T020 → T021 → T022) → T023 →
   T024 → T025 → T026.
 - US2 needs US1's captured patterns and fill worker; US3 needs US2's choice at `startRun`.
 
 ## Parallel examples
 
-- US1: T003, T004, T005, T006, T027 and T028 by separate test-author sessions (different
+- US1: T003, T004, T005, T006, T027 and T028 (now T036) by separate test-author sessions (different
   files); T008 after T001.
 - US2: T012, T013, T014 and T030 by separate test-author sessions.
 
