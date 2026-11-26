@@ -597,7 +597,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   S2, S3 -> T041; S4 -> T042; S5 -> T043; S6 -> T039 (owner: a US2 task); S7, S9 -> T044; S8
   closed: US3's T019/T020 add the client's `withdraw-pattern` and `erase-pattern`; S10 -> T039's
   clarify; T035's points judged (see T035)
-- [ ] T037 [US1] Test author (B1): new `src/engine/captured/propose_cap_test.go`: a slice copy
+- [x] T037 [US1] Test author (B1): new `src/engine/captured/propose_cap_test.go`: a slice copy
   with more than 32 candidates proposes exactly 32, the first in Propose's order (names in byte
   order, then declared values in the contract's order), each with the places found among the
   kept ones only (a left-out candidate takes no place from a kept one, e.g. a left-out long name
@@ -606,6 +606,9 @@ proposed and adding the derived value works; the proof ends passed with no model
   (fewer than 32), with no `ParameterRefused` and no error; and new `src/engine/api/captured_capture_cap_test.go`: such a
   capture succeeds with 32 parameters, and `PUT /parameters` may then drop one and add a
   left-out one. Seen failing
+  Done 2026-11-26 (Sonnet, 6dc35df): 7 Propose tests and 3 API tests, seen failing (no cut; the
+  capture fails OperationFailed); a kept candidate with no place at all cannot be built through
+  Propose (each name's key is its own place), so the places-limit case stands for that rule
 - [ ] T038 [US1] Code author (done when T037 passes, no other test changes): the cut in
   `src/engine/captured/propose.go` (the existing `ParametersMax`, kept equal to the contract by
   `captured_limits_contract_test.go`), after the form and case-form checks, the places found after
