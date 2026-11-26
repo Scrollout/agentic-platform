@@ -302,7 +302,7 @@ the developer approves only a proven one (FR-001 to FR-007, FR-014; research R1 
 proposed and adding the derived value works; the proof ends passed with no model request; approval before a passing proof answers
 `ProofRequired`.
 
-- [ ] T003 [P] [US1] Test author: new `src/engine/captured/propose_test.go` and
+- [x] T003 [P] [US1] Test author: new `src/engine/captured/propose_test.go` and
   `src/engine/captured/fill_test.go` over a fixture copied from
   `src/tests/evals/steps/testdata/ref` and `testdata/slice` into
   `src/engine/captured/testdata/notes/`, and a second fixture `testdata/limit/` (the notes slice
@@ -326,7 +326,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   `in: path`), and two template files that would get the same filled path do not fill, naming the
   paths (a filled path outside its step's writable entries is the fit's to refuse, T012). Seen
   failing
-- [ ] T004 [P] [US1] Test author: new `src/engine/checksvc/write_step_test.go`: `writeStep`
+- [x] T004 [P] [US1] Test author: new `src/engine/checksvc/write_step_test.go`: `writeStep`
   with no files writes nothing and answers 200 with empty `written` and `removed`; a folder that
   does not hold `before` outside the writable entries, or whose last commit does not hold
   `before`, answers 409 `ProjectStateDiffers`; a repeated request answers the same and leaves the
@@ -336,7 +336,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   step's writable entries only, refuses a path outside them with 400
   naming it (also `..`, absolute paths, a symlinked folder), commits nothing, and `restoreStep`
   afterwards removes what it wrote; an unknown project or step is refused. Seen failing
-- [ ] T005 [P] [US1] Test author: new `src/engine/api/captured_capture_test.go` (engine rig, no
+- [x] T005 [P] [US1] Test author: new `src/engine/api/captured_capture_test.go` (engine rig, no
   model): `POST /captured-patterns` on a run that ended handed over, expired, cancelled or still
   running fails `RunNotDone` naming the state; on a done run it yields a proposed captured pattern
   `<base id>-<name>` (`pattern_id` `^[a-z0-9-]+$`; without a name, the slice ID in lower case,
@@ -406,6 +406,11 @@ proposed and adding the derived value works; the proof ends passed with no model
   proof; an approved
   captured pattern refuses `PUT /parameters` with 409; a proof interrupted by an engine restart
   continues and is never marked passed without its recorded end. Seen failing
+  2026-11-26: the proof cases (`captured_proof_test.go`, 4a15de6) fail on the stubs; the `fill`
+  cases (`durable/fill_proof_test.go`, untracked) pin `machine.Writer`, `WriteRequest`,
+  `WriteResult`, `durable.WriteProject`, `WriteCall`, `FillInput`, `RunInput.Fill`/`NoReuse` and
+  `Activities.Captured` in its header and are committed with T007; the cases it could not reach
+  are T033's
 - [ ] T007 [US1] Code author (done when T003 to T005 and T006's `fill` cases pass, the `fill`
   steps' reuse keys taking the parameter values' hash; T006's proof
   cases and T027 pass after T029): `src/engine/captured/` (Propose, Check, Fill, the declaration),
@@ -448,7 +453,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   202 and its recorded `RunStarted` answers `CapturedPatternBusy`; a planted template byte change
   fails the proof naming the file; a proof under another method does not count for approval.
   Seen failing before T029
-- [ ] T027 [P] [US1] Test author: new `src/engine/api/captured_proof_slice_test.go` (engine rig,
+- [x] T027 [P] [US1] Test author: new `src/engine/api/captured_proof_slice_test.go` (engine rig,
   no model): `POST /captured-patterns/{id}/proof-slice` makes an approved slice from the captured
   copy (its parts equal the copy, its description is `Proof of <captured pattern>`, `getSlice` and
   `listSlices` show `proof_of`, its history starts `made-for-proof`, then one `approved` per part) and its result names
@@ -479,13 +484,16 @@ proposed and adding the derived value works; the proof ends passed with no model
   cancelled or differing files); running it again into another project builds again.
   Seen failing
   (owner go-ahead for the lab)
+  2026-11-26: written (4a15de6), vetted only; the lab stands in for the launcher's `prove`
+  wiring (`proof-slice`, `build-workers`, `build`), the failed case is a cancelled proof; seen
+  failing on the CI run T010 records
 - [ ] T029 [US1] Code author (after T007, on its store changes; done when T006's proof cases, T033,
   T027 and T008's proof cases pass, and T028 on the CI run T010 records): the proof slice in `src/engine/slices/` (made by the engine, the `startRun` branch for a proof slice, history
   `made-for-proof`, `proof_of`, never reused by `createSlice`, `deleteSlice` clears
   `proof_slice`), the `proof-slice` call in new `src/engine/api/proof_slice.go`, the proof side of
   `ReplayRun` (a replay of a proof run is a new proof, no reuse), `proof-slice`, the proof outcome line and its exit code in
   `src/cli/`, `prove` in `src/deploy/ap`; no test is changed
-- [ ] T008 [P] [US1] Test author: new `src/cli/captured_test.go`: `ap capture <run> [--name]`,
+- [x] T008 [P] [US1] Test author: new `src/cli/captured_test.go`: `ap capture <run> [--name]`,
   `ap patterns`, `ap pattern <id>` (parameters with places, proofs, state, usable; the
   `No parameters` line for a captured pattern with none), `--drop` and
   `--add`, `ap proof-slice <id>`, `ap approve-pattern` call the contract's operations, follow them and print
@@ -496,7 +504,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   line; errors print their code and reason. Seen failing
 - [ ] T009 [US1] Code author: the commands in `src/cli/` (generated client only), except
   `proof-slice`, the proof outcome line, the `PROOF OF` column and the `proof of` line (T029)
-- [ ] T031 [P] [US1] Test author: new `src/page/run_started_fields_test.go`: the run page shows a
+- [x] T031 [P] [US1] Test author: new `src/page/run_started_fields_test.go`: the run page shows a
   `RunStarted`'s `reason`, `proof`, `source` and `parameters` as the terminal's event line gives
   them, the parameters in byte order of their names (two parameters declared in the other
   order). Seen failing
