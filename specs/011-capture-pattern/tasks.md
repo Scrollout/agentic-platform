@@ -368,7 +368,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   under another base pattern version answers `RunNotCapturable` naming both; a second state change while one of its
   operations runs answers 409 `CapturedPatternBusy`; list is newest first and paginated; a reused Idempotency-Key
   with another body answers as for other calls. Seen failing
-- [ ] T006 [P] [US1] Test author (two groups: the `fill` cases, in
+- [x] T006 [P] [US1] Test author (two groups: the `fill` cases, in
   `src/engine/durable/fill_proof_test.go`, are the workflow-level ones: a `fill` step needs no
   worker, renders, calls `writeStep`, runs its checks, commits, makes no model call, writes nothing
   for an empty output, is never attempted twice, and the recorded histories replay; every other
@@ -516,12 +516,23 @@ proposed and adding the derived value works; the proof ends passed with no model
   2026-11-26: written (4a15de6), vetted only; the lab stands in for the launcher's `prove`
   wiring (`proof-slice`, `build-workers`, `build`), the failed case is a cancelled proof; seen
   failing on the CI run T010 records
-- [ ] T029 [US1] Code author (after T007, on its store changes; done when T006's proof cases, T033,
+- [x] T029 [US1] Code author (after T007, on its store changes; done when T006's proof cases, T033,
   T027 and T008's proof cases pass, and T028 on the CI run T010 records): the proof slice in `src/engine/slices/` (made by the engine, the `startRun` branch for a proof slice, history
   `made-for-proof`, `proof_of`, never reused by `createSlice`, `deleteSlice` clears
   `proof_slice`), the `proof-slice` call in new `src/engine/api/proof_slice.go`, the proof side of
   `ReplayRun` (a replay of a proof run is a new proof, no reuse), `proof-slice`, the proof outcome line and its exit code in
   `src/cli/`, `prove` in `src/deploy/ap`; no test is changed
+  Done 2026-11-26 by two code authors (Opus): engine 3ad1428 (`slices/proof.go`,
+  `api/proof_slice.go`, the proof branch of `startRun` and `ReplayRun`, `deleteSlice` of a proof
+  slice; fixes in T007's code: a proof failed at a hand-over is completed again to name the run's
+  later end, `getRun` answers a started run before its `RunStarted` is recorded;
+  `method.sha256` 16fb9c3f), client 1b0f426 (with T009); owner-approved fixes to three T027 cases
+  29cfb33. T006, T027, T033 and T008 pass; `./api/`, `./slices/`, `./durable/` pass (4 min 34 s);
+  T028 waits for T010's CI run. Open for T011: a non-proof `startRun` naming an approved captured
+  pattern answers 500 until T015; a replay of a proof uses the captured pattern's current values;
+  `makeProofSlice` of a proof slice changed by hand re-approves it as it is (its proof then answers
+  `PatternDoesNotFit`; spec silent); a withdrawn captured pattern at `proof-slice`, proof start or
+  replay is untested until T020; `getRun` of a started, unrecorded run after a restart is 404
 - [x] T008 [P] [US1] Test author: new `src/cli/captured_test.go`: `ap capture <run> [--name]`,
   `ap patterns`, `ap pattern <id>` (parameters with places, proofs, state, usable; the
   `No parameters` line for a captured pattern with none), `--drop` and
