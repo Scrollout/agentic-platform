@@ -323,6 +323,7 @@ func TestMCWithdrawalStopsItsChoiceAndANamedUseAnswersWithdrawn(t *testing.T) {
 			}
 			p := s.refused(later, "tasks-app", id, 409, gen.ErrorCodeCapturedPatternWithdrawn)
 			s.mcWantDetailNaming(p, id)
+			registerAll(t, s.r, later)               // the base pattern needs a worker for every step (owner-approved fix)
 			op := s.startRun(later, "tasks-two", "") // unnamed: the base pattern, the withdrawn one not named
 			s.wantChoice(op.Target, s.getRunView(op.Target).Pattern, gen.PatternReasonBase, nil, "")
 			if strings.Contains(s.getRunView(op.Target).Pattern, id) {
@@ -606,6 +607,7 @@ func TestMCEraseRemovesThePatternItsProofSliceAndProofRunsAndKeepsOtherRunsRecor
 	}
 
 	// no use of it, and its ID is never given again
+	registerAll(t, s.r, later) // the base pattern needs a worker for every step (owner-approved fix)
 	op := s.startRun(later, "tasks-two", "")
 	if got := s.getRunView(op.Target).Pattern; strings.Contains(got, id) {
 		t.Errorf("a run uses %s after the erasure", got)
