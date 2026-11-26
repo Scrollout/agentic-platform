@@ -840,6 +840,9 @@ pass, three runs give the same files.
   settled points judged not an issue except the refusal order (B1)
   Fixes' CI run 2026-11-26: 45892170365 at 2ed1d09, 26/26 green (T052, T057's spec text, T059;
   45889661212 at f40f353 failed only on T059's race)
+  Round 2 2026-11-26 (fresh Sonnet, read-only worktree at 7f3888f): B1 fixed; R1 blocking
+  regression (an empty value panics `Fit`) -> T060; T059 no regression; S1 (suggestion: a panic in
+  `bounded`'s work skips cancel and release, as before; the process ends anyway) not an issue
 - [x] T051 [US2] (review B1; FR-010, contract `not_used` reason `refused-value`: "did not fit only
   because of a refused value") Test author: new `src/engine/captured/fit_refused_value_test.go`
   and a `startRun` case in a new `src/engine/api/captured_notused_test.go`: a value outside its
@@ -856,6 +859,11 @@ pass, three runs give the same files.
   Done 2026-11-26 (Opus, next commit; method 9d1b9d29): the first refused value in reading order
   is kept; order of refusals place, value, paths (a value refusal wins over a path one, untested);
   captured and the whole api package pass (239 s)
+- [ ] T060 [US2] (T017 round 2, R1, blocking; FR-008, FR-010) T052 reads an empty refused value
+  on, and a later place of that parameter in its capitalised form panics in `in` (value[:1]):
+  the slice must get the value refusal (or a later place refusal), never a panic. Test (new file
+  `captured/fit_empty_value_test.go`, coordinator, seen failing at 7f3888f: both cases panic),
+  then code author
 - [x] T059 [US2] (CI 45889661212, Go unit tests: `checksvc` `TestRateLimitPerToken` got 503 Busy on
   a call made after the previous one answered; Fix the cause) `bounded` released a call's slot
   after sending the answer, so the next sequential call could find it taken under load: release
