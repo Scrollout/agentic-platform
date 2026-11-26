@@ -25,6 +25,26 @@ var (
 	paramName  = regexp.MustCompile(ParameterNamePattern)
 )
 
+// goKeywords are the 25 keywords of the Go specification: a later slice's name value equal to one
+// is refused where Fit reads it (spec FR-008, Clarification "Q (converge US2, T061)").
+var goKeywords = map[string]bool{
+	"break": true, "case": true, "chan": true, "const": true, "continue": true, "default": true,
+	"defer": true, "else": true, "fallthrough": true, "for": true, "func": true, "go": true,
+	"goto": true, "if": true, "import": true, "interface": true, "map": true, "package": true,
+	"range": true, "return": true, "select": true, "struct": true, "switch": true, "type": true,
+	"var": true,
+}
+
+// reservedRefusal says why value, of kind's form, is reserved for a parameter whose source value
+// is source, or "" when it is not: a name equal to a Go keyword, unless it is the source value
+// itself, which the source run passed every check with (Clarification "Q (T062)").
+func reservedRefusal(kind Kind, value, source string) string {
+	if kind == KindName && value != source && goKeywords[value] {
+		return fmt.Sprintf("the name %q is a Go keyword", value)
+	}
+	return ""
+}
+
 // valueRefusal says why value is not of kind's form, or "" when it is.
 func valueRefusal(kind Kind, value string) string {
 	if value == "" {

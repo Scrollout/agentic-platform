@@ -23,9 +23,10 @@ const readMaxBytes = 4 * (ValueMaxChars + 1)
 // places of the parameters' source values, found as Propose and Fill find them. Each literal must
 // equal the approved part's text where it falls; at a parameter's first place its value is read
 // from the approved part (the text up to where the following literal starts) in that place's case
-// form, and must be of the parameter's kind's form and differ from every other parameter's value
-// in every case form; at each later place the approved part must hold that value in the place's
-// case form. The filled template paths must then be distinct (two template files with different
+// form, and must be of the parameter's kind's form, not be a Go keyword (a name; its own source
+// value excepted, which the source run passed every check with), and differ from every other
+// parameter's value in every case form; at each later place the approved part must hold that
+// value in the place's case form. The filled template paths must then be distinct (two template files with different
 // paths filled to one path) and each inside its output's writable entries; an output with files
 // and no entry in writable has no path inside.
 //
@@ -129,6 +130,8 @@ func (f *fitter) part(name, s, a string) (Refusal, bool) {
 				fmt.Sprintf("the approved slice differs from the captured pattern's source: %q is not the %s form of a value of %s", t, h.form.form, f.ps[p].Name)), true
 		}
 		if why := valueRefusal(f.ps[p].Kind, v); why != "" {
+			f.refuse(p, why)
+		} else if why := reservedRefusal(f.ps[p].Kind, v, f.ps[p].Value); why != "" {
 			f.refuse(p, why)
 		}
 		for q := range f.ps {
