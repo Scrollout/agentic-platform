@@ -10,6 +10,7 @@ import (
 	"html/template"
 	"net"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -224,6 +225,27 @@ func record(e gen.RunEventSchema) string {
 	}
 	if e.Pattern != nil {
 		add("pattern", *e.Pattern)
+	}
+	if e.PatternReason != nil && *e.PatternReason != "" {
+		add("reason", string(*e.PatternReason))
+	}
+	if e.Proof != nil && bool(*e.Proof) {
+		f = append(f, "proof")
+	}
+	if e.SourceRun != nil {
+		add("source", *e.SourceRun)
+	}
+	if e.Parameters != nil && len(*e.Parameters) > 0 {
+		names := make([]string, 0, len(*e.Parameters))
+		for n := range *e.Parameters {
+			names = append(names, n)
+		}
+		sort.Strings(names) // byte order, as the terminal's line gives them
+		pairs := make([]string, len(names))
+		for i, n := range names {
+			pairs[i] = n + "=" + string((*e.Parameters)[n])
+		}
+		add("parameters", strings.Join(pairs, ","))
 	}
 	if e.Worker != nil {
 		add("worker", *e.Worker)
