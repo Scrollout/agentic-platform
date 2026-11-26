@@ -684,6 +684,11 @@ proposed and adding the derived value works; the proof ends passed with no model
   contract lists only `PartFailsChecks` as its operation error: add `CapturedPatternBusy` to its
   `operation` codes (additive; contract, test author, code author) or accept `OperationFailed`
   for this race (`closed:` by the owner)
+  Owner 2026-11-26: add it. Contract: `makeProofSlice`'s `operation` codes gain
+  `CapturedPatternBusy` and its description says so (committed alone); test author: new
+  `src/engine/api/captured_proof_slice_busy_work_test.go` (a part changed by hand after the 202
+  while a proof run has not ended fails the operation with `CapturedPatternBusy`, slice
+  unchanged); code author maps the work's busy refusal to that code
 - [ ] T040 [US2] (review S1; FR-009) A `fill` step's `writeStep` refusal that cannot succeed on
   resume (400 outside the writable entries, 422 `StepFilesTooLarge`, `InputHashMismatch`, an
   unreadable template, a refused fill) ends the run interrupted then expired; make it a

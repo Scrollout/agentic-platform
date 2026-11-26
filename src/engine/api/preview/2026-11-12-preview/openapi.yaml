@@ -1127,7 +1127,8 @@ paths:
         folder. Refused at once with CapturedPatternWithdrawn for a withdrawn one and
         CapturedPatternBusy while another of its operations runs; a restore that would change a
         part while a run of the proof slice has not ended also answers CapturedPatternBusy
-        (asking with nothing to restore is then allowed); allowed in every other state. The operation's
+        (asking with nothing to restore is then allowed), at once, or as the operation's error
+        when a part changed after the request was accepted; allowed in every other state. The operation's
         target is the captured pattern; its result's `slice` is the proof slice.
       security:
       - clientToken: []
@@ -1139,7 +1140,7 @@ paths:
         '409': [CapturedPatternWithdrawn, CapturedPatternBusy, IdempotencyKeyReused]
         '429': [RateLimited]
         '503': [Unavailable]
-        operation: [PartFailsChecks]
+        operation: [PartFailsChecks, CapturedPatternBusy]
       parameters:
       - $ref: '#/components/parameters/ApiVersion'
       - $ref: '#/components/parameters/CapturedPatternId'
