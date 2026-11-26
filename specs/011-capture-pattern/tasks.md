@@ -748,7 +748,7 @@ pass, three runs give the same files.
   text or its hole's start); which part is first when two differ; the order of a value, place
   and path refusal when several apply; a nil `writable`; a path clash across two outputs; a
   parameter with places only in the template; numeric equality (`100` and `100.0`)
-- [ ] T013 [P] [US2] Test author: new `src/engine/api/captured_startrun_test.go`: `startRun`
+- [x] T013 [P] [US2] Test author: new `src/engine/api/captured_startrun_test.go`: `startRun`
   without `pattern` uses the most recently approved usable fitting captured pattern, otherwise the
   base pattern; with `pattern` naming the base pattern or a usable captured one, that one; a
   `pattern` naming a proposed or proven captured pattern answers `CapturedPatternNotApproved` and
@@ -772,6 +772,11 @@ pass, three runs give the same files.
   occurs in the goals alone never reuse each other's filled results; a run from a captured pattern makes no agent worker or
   gateway call and ends handed over, naming the failing check, when a filled check fails, with no
   agent step started; the base pattern's fit conditions still run. Seen failing
+  Tests 2026-11-26 (Sonnet, see git log): 13 tests fail at the missing choice, 4 pass as guards.
+  Open for T015/T017: an unnamed start while a proof runs answers RunActive, so its `not_used`
+  is unseen (asserted after the proof ends); `not_used` compared as a set (contract: "the order
+  judged"); a named base pattern is `chosen`; a no-parameter pattern's `parameters` is `{}`;
+  ties of approval time, erasure then replay and a restart mid-start untested
 - [ ] T014 [P] [US2] Test author: new `src/tests/acceptance/captured_test.go` (Compose stack,
   recorded model): create the `tasks` slice first, from a recorded analyst answer kept as test
   data, then build the notes slice from the recorded happy set until done; capture; prove;
