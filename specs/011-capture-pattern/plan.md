@@ -47,7 +47,7 @@ terminal client, contracts
 text per captured pattern
 
 **Constraints**: the base pattern, its template, agents and recordings are unchanged; contract
-changes are additive; existing tests change only as the owner approves; the Run workflow's new
+changes are additive except the new enum values (ADR 0100); existing tests change only as the owner approves; the Run workflow's new
 commands (the `fill` path, the new `RunStarted` fields) sit behind a `workflow.GetVersion` bump
 so runs in flight replay on the code that started them
 ([ADR 0067](../../docs/decisions/0067-a-run-is-one-temporal-workflow.md))

@@ -122,7 +122,7 @@ An approved slice (research R5) made by the slices service from the captured pat
 described `Proof of <captured pattern>`, with `proof_of` naming the captured pattern, and each
 part approved by the engine after the part checks pass under the current method. Its history
 (`slice.schema.json`) starts with a new kind, `made-for-proof` (no model, `refs` its parts),
-added to the kind enum additively, then one `approved` entry per part; a failing check fails the operation with
+added to the kind enum (an owner-approved exception, ADR 0100), then one `approved` entry per part; a failing check fails the operation with
 `PartFailsChecks` and makes no slice. It takes the next `S-<n>`. Asked again, `proof-slice`
 gives the existing proof slice while every part is approved under the current method; after a
 method change withdrew a part's approval, it checks the parts again and approves them (one

@@ -20,7 +20,7 @@ recordings do not change, so the recorded-model jobs stay green throughout.
 
 ## Rules for every task
 
-- **Contract first**: T001 extends the engine and check contracts additively, as
+- **Contract first**: T001 extends the engine and check contracts additively (except the new enum values, ADR 0100), as
   [contracts/captured-patterns.md](contracts/captured-patterns.md) states, and is committed alone,
   before any test or code; `scripts/generate.sh` regenerates the server, client and types; the
   generated code is never edited by hand.

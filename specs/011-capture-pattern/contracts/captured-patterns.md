@@ -2,7 +2,7 @@
 
 A draft for the first consumer (the terminal client). The authoritative copies are the engine
 contract (`src/engine/api/preview/2026-11-12-preview/openapi.yaml`) and the check contract
-(`src/check/api/preview/2026-11-13-preview/openapi.yaml`), extended additively before any code
+(`src/check/api/preview/2026-11-13-preview/openapi.yaml`), extended additively before any code, except the new enum values ([ADR 0100](../../../docs/decisions/0100-preview-contract-gains-enum-values-in-place.md))
 (Contract-first). Fields are in the [data model](../data-model.md).
 
 ## Engine API: `/captured-patterns`
@@ -51,7 +51,7 @@ instead: a new proof in any state but withdrawn, answering `CapturedPatternWithd
 `CapturedPatternBusy`, never `ProofRequired`; `resumeRun` and `acceptHandOver` keep the run's
 pattern.
 
-Additive changes elsewhere: `Operation.target` takes a new `operation_target` rule (a slice, run
+Changes elsewhere, additive except the new enum values of `OperationKind`, `ErrorCode` and the slice history kinds (ADR 0100): `Operation.target` takes a new `operation_target` rule (a slice, run
 or captured pattern ID) in place of `slice_or_run_id`; `Operation.result` gains `captured_pattern`;
 `OperationKind` gains `capture-run`, `replace-parameters`, `make-proof-slice`,
 `approve-captured-pattern`, `withdraw-captured-pattern` and `erase-captured-pattern`; `Run` gains

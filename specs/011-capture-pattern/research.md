@@ -288,7 +288,7 @@ that did not fit only because of a refused value, with the reason (*owner*).
 
 ## R7. Interface: contract, operations and CLI (FR-014)
 
-**Decision**: the engine contract gains, additively, the resource `/captured-patterns`: `POST`
+**Decision**: the engine contract gains, additively (except the new enum values, E2), the resource `/captured-patterns`: `POST`
 (capture a run: an operation), `GET` (list, paginated), `GET /{id}`, `PUT /{id}/parameters`
 (before approval), `POST /{id}/proof-slice`, `POST /{id}/approval`, `POST /{id}/withdrawal` and
 `DELETE /{id}` (erase, confirmed), each state change an operation with an Idempotency-Key;
