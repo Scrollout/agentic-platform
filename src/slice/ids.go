@@ -17,9 +17,15 @@ type RunID struct{ s string }
 // rule).
 type Hash struct{ s string }
 
+// PatternID is a pattern's ID, made only by Schemas.ParsePatternID (the contract's pattern_id
+// rule): a base pattern's or a captured pattern's.
+type PatternID struct{ s string }
+
 func (id ID) String() string    { return id.s }
 func (id RunID) String() string { return id.s }
 func (h Hash) String() string   { return h.s }
+
+func (id PatternID) String() string { return id.s }
 
 // IsZero reports whether id was never parsed.
 func (id ID) IsZero() bool { return id.s == "" }
@@ -34,7 +40,7 @@ func (h Hash) IsZero() bool { return h.s == "" }
 // definitions themselves are the rule: they are compiled and applied as the schemas apply them,
 // so no pattern is repeated here.
 type idRules struct {
-	slice, run, hash *jsonschema.Schema
+	slice, run, hash, pattern *jsonschema.Schema
 }
 
 func compileIDRules(c *jsonschema.Compiler, defs string) (idRules, error) {
@@ -42,7 +48,7 @@ func compileIDRules(c *jsonschema.Compiler, defs string) (idRules, error) {
 	for _, d := range []struct {
 		name string
 		to   **jsonschema.Schema
-	}{{"slice_id", &r.slice}, {"run_id", &r.run}, {"hash", &r.hash}} {
+	}{{"slice_id", &r.slice}, {"run_id", &r.run}, {"hash", &r.hash}, {"pattern_id", &r.pattern}} {
 		s, err := c.Compile(defs + "#/$defs/" + d.name)
 		if err != nil {
 			return idRules{}, err
@@ -74,6 +80,15 @@ func (s *Schemas) ParseHash(v string) (Hash, error) {
 		return Hash{}, err
 	}
 	return Hash{v}, nil
+}
+
+// ParsePatternID returns v as a pattern ID, or an error if v breaks the contract's pattern_id
+// rule.
+func (s *Schemas) ParsePatternID(v string) (PatternID, error) {
+	if err := parse(s.ids.pattern, "pattern ID", v); err != nil {
+		return PatternID{}, err
+	}
+	return PatternID{v}, nil
 }
 
 func parse(rule *jsonschema.Schema, what, v string) error {

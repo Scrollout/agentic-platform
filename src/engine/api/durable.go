@@ -38,7 +38,13 @@ type Runs interface {
 // RunStart starts a run: its ID, slice and project; the pattern as "<id>@<version>" and the
 // pattern itself (Definition) with the model its agent steps use (part of their reuse keys, ""
 // for none); the slice's part hashes by input name and its refs; the operation that follows it
-// and the run it replays, both recorded on its RunStarted.
+// and the run it replays, both recorded on its RunStarted. When Inputs holds all of the slice's
+// parts (machine.PartHashesOf), RunStarted records them as part_hashes.
+//
+// The pattern choice is recorded on RunStarted too: PatternReason (`base`, `fits`, `chosen`);
+// for a run of a captured pattern, Parameters (its values by parameter name), SourceRun and Fill,
+// what its `fill` steps are filled from; Proof for a proof, which reuses no earlier result
+// (NoReuse); NotUsed, the captured patterns the start judged and did not use.
 type RunStart struct {
 	Run, Slice, Project, ReplayOf string
 	Operation                     string
@@ -49,6 +55,23 @@ type RunStart struct {
 	Refs                          []string
 	TaskQueue                     string
 	RejectDuplicate               bool
+
+	PatternReason string
+	Parameters    map[string]string
+	SourceRun     string
+	Proof         bool
+	NotUsed       []machine.NotUsed
+	Fill          *RunFill
+	NoReuse       bool
+}
+
+// RunFill is what a run of a captured pattern's `fill` steps is filled from: the captured
+// pattern's ID, its template (output name -> hash of the files the source run ended with) and
+// the values this run fills in (parameter name -> value).
+type RunFill struct {
+	Captured string
+	Template map[string]string
+	Values   map[string]string
 }
 
 // The signals a run's workflow takes (data model, "Execution state in Temporal").

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/agentic-platform/engine/api/gen"
 	"github.com/agentic-platform/engine/slices"
@@ -39,6 +40,10 @@ type sliceServer struct {
 	// run record.
 	projects string
 	runs     *runs
+	// captured keeps the captured patterns (captured.go), nil when Store keeps none; cmu
+	// serialises their acceptance checks and record changes.
+	captured CapturedStore
+	cmu      sync.Mutex
 }
 
 var _ gen.StrictServerInterface = (*sliceServer)(nil)
@@ -88,6 +93,9 @@ func (s *sliceServer) useOperations() {
 func (s *sliceServer) work(ctx context.Context, rec store.OperationRecord, body []byte) (WorkResult, error) {
 	if isRunKind(rec.Kind) {
 		return s.follow(ctx, rec.Target)
+	}
+	if isCapturedKind(rec.Kind) {
+		return s.capturedWork(rec, body)
 	}
 	if rec.Kind != "deleteSlice" && len(body) == 0 {
 		return WorkResult{}, fmt.Errorf("operation %s has no request body", rec.ID)
@@ -179,7 +187,8 @@ func (s *sliceServer) ListSlices(_ context.Context, req gen.ListSlicesRequestObj
 	}
 	list := gen.SliceList{Items: make([]gen.SliceSummary, 0, to-from), NextPageToken: next}
 	for _, sl := range all[from:to] {
-		list.Items = append(list.Items, gen.SliceSummary{Id: sl.ID, Title: title(sl), State: gen.State(sl.State), LatestRun: s.latestRun(sl.ID)})
+		list.Items = append(list.Items, gen.SliceSummary{Id: sl.ID, Title: title(sl), State: gen.State(sl.State), LatestRun: s.latestRun(sl.ID),
+			ProofOf: opt(sl.ProofOf)})
 	}
 	return gen.ListSlices200JSONResponse{SliceListJSONResponse: gen.SliceListJSONResponse{Body: list}}, nil
 }
@@ -599,6 +608,7 @@ func sliceView(sl slices.Slice, artifactCount int) gen.Slice {
 		m := sl.ChecksMethod
 		v.ChecksMethod = &m
 	}
+	v.ProofOf = opt(sl.ProofOf)
 	for i, g := range sl.Goals {
 		v.Goals[i] = gen.Goal{Id: g.ID, Text: g.Text}
 	}

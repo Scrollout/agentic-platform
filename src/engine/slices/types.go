@@ -215,6 +215,9 @@ type Slice struct {
 	// check could not run, or for a record written before feature 006. A service under another
 	// method runs the checks again before it shows them (ADR 0080).
 	ChecksMethod string
+	// ProofOf names the captured pattern a proof slice proves (feature 011); "" for any other
+	// slice.
+	ProofOf string
 	// ArtifactCount is the number of distinct artifacts stored for the slice's runs. The service
 	// does not keep runs; whoever serves the slice fills it from the run store.
 	ArtifactCount int `json:"artifact_count"`

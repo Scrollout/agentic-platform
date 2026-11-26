@@ -79,8 +79,9 @@ type contract struct {
 	retry          retry.Rule            // the retry rule of x-limits
 	keyMin, keyMax int                   // Idempotency-Key length
 	// runID and hash are the contract's rules for a run ID and an artifact hash, which the run
-	// operations take as path and query parameters.
-	runID, hash *jsonschema.Schema
+	// operations take as path and query parameters; patternID for a captured pattern's ID, which
+	// the captured-pattern operations take as a path parameter.
+	runID, hash, patternID *jsonschema.Schema
 }
 
 var engineContract = mustLoadContract()
@@ -218,7 +219,7 @@ func (c *contract) compileBodies(files fs.FS, dir string, openapi []byte) error 
 	for _, r := range []struct {
 		dst **jsonschema.Schema
 		def string
-	}{{&c.runID, "run_id"}, {&c.hash, "hash"}} {
+	}{{&c.runID, "run_id"}, {&c.hash, "hash"}, {&c.patternID, "pattern_id"}} {
 		if *r.dst, err = comp.Compile(schemaBase + "slice-defs.schema.json#/$defs/" + r.def); err != nil {
 			return fmt.Errorf("the rule %s: %w", r.def, err)
 		}

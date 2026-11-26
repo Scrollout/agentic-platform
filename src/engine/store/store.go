@@ -72,9 +72,10 @@ type Store struct {
 	root      string
 	artifacts string
 	slices    string
-	events    map[slice.RunID][]Event          // run -> events in Seq order
-	runSlice  map[slice.RunID]slice.ID         // run -> slice
-	owned     map[slice.ID]map[slice.Hash]bool // slice -> hashes it stored
+	events    map[slice.RunID][]Event                 // run -> events in Seq order
+	runSlice  map[slice.RunID]slice.ID                // run -> slice
+	owned     map[slice.ID]map[slice.Hash]bool        // slice -> hashes it stored
+	held      map[slice.PatternID]map[slice.Hash]bool // captured pattern -> hashes it holds (captured.go)
 }
 
 // Open opens the store in dir, creating it if needed, and continues any records already there.
@@ -103,7 +104,7 @@ func Open(dir string, ids *slice.Schemas) (*Store, error) {
 	// rename were never acknowledged.
 	var tmps []string
 	for _, pattern := range []string{filepath.Join(s.artifacts, tmpPrefix+"*"), filepath.Join(dir, tmpPrefix+"*"),
-		filepath.Join(s.slices, "*", tmpPrefix+"*")} {
+		filepath.Join(s.slices, "*", tmpPrefix+"*"), filepath.Join(dir, capturedDir, "*", tmpPrefix+"*")} {
 		m, _ := filepath.Glob(pattern)
 		tmps = append(tmps, m...)
 	}
@@ -113,6 +114,9 @@ func Open(dir string, ids *slice.Schemas) (*Store, error) {
 		}
 	}
 	if err := s.openOperations(); err != nil {
+		return nil, err
+	}
+	if err := s.openCaptured(); err != nil {
 		return nil, err
 	}
 	entries, err := os.ReadDir(s.slices)
@@ -362,6 +366,9 @@ func (s *Store) own(sl slice.ID, hash slice.Hash) {
 }
 
 func (s *Store) heldElsewhere(sl slice.ID, hash slice.Hash) bool {
+	if s.heldByCaptured(hash) {
+		return true
+	}
 	for other, hashes := range s.owned {
 		if other != sl && hashes[hash] {
 			return true
@@ -376,6 +383,11 @@ func (s *Store) appendLine(sl slice.ID, name string, line []byte) error {
 	if err != nil {
 		return err
 	}
+	return appendTo(dir, name, line)
+}
+
+// appendTo appends line to dir/name and syncs it, and on creation dir.
+func appendTo(dir, name string, line []byte) error {
 	path := filepath.Join(dir, name)
 	_, statErr := os.Stat(path)
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)

@@ -263,7 +263,7 @@ func setupWith(getenv func(string) string, d durableLinks) (http.Handler, func()
 	}
 	if d.Serve != nil {
 		stop, err := d.Serve(&durable.Activities{Worker: cfg.StepWorker, Checker: cfg.StepChecker, History: cfg.History,
-			Results: rec.Results(), Artifacts: st, Events: rec, Method: id})
+			Results: rec.Results(), Artifacts: st, Events: rec, Method: id, Captured: api.CapturedParameters{Store: st}})
 		if err != nil {
 			cancel()
 			return nil, nil, errors.Join(err, st.Close())

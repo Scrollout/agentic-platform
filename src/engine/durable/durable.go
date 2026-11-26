@@ -64,6 +64,15 @@ type RunInput struct {
 	Fill *FillInput
 	// NoReuse: the run reuses no earlier result (a proof), so every step and check runs.
 	NoReuse bool
+	// The pattern choice RunStarted records (api.RunStart): why the run uses its pattern; for a
+	// captured pattern's run its parameters' values and source run; whether it is a proof; the
+	// captured patterns its start did not use. Its part_hashes come from Inputs
+	// (machine.PartHashesOf).
+	PatternReason string
+	Parameters    map[string]string
+	SourceRun     string
+	Proof         bool
+	NotUsed       []machine.NotUsed
 }
 
 // FillInput is what a run of a captured pattern's `fill` steps needs; RunInput.Fill is nil for

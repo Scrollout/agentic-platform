@@ -274,11 +274,56 @@ type Event struct {
 	Check        *EventCheck `json:"check,omitempty"`
 	Finding      *Finding    `json:"finding,omitempty"`
 	Detail       string      `json:"detail,omitempty"`
+	// The pattern choice, on RunStarted only (feature 011): why the run uses its pattern
+	// (`base`, `fits`, `chosen`); for a captured pattern's run its parameters' values and the run
+	// it was captured from (Parameters is kept even when empty); Proof for a proof of a captured
+	// pattern; the hashes of the slice's approved parts it started on; and the captured patterns
+	// its start judged and did not use.
+	PatternReason string            `json:"pattern_reason,omitempty"`
+	Parameters    map[string]string `json:"parameters,omitzero"`
+	SourceRun     string            `json:"source_run,omitempty"`
+	Proof         bool              `json:"proof,omitempty"`
+	PartHashes    *PartHashes       `json:"part_hashes,omitempty"`
+	NotUsed       []NotUsed         `json:"not_used,omitempty"`
 	// Project, on RunStarted, is the run's project folder, and Files, on StepAccepted and
 	// ResultReused, the project's files after the step. Neither is part of the run-event
 	// contract: an Events sink keeps them beside the event, so a run read back still has them.
 	Project string `json:"-"`
 	Files   []File `json:"-"`
+}
+
+// PartHashes are the hashes of a slice's approved parts (run-event.schema.json part_hashes).
+type PartHashes struct {
+	Goals    string `json:"goals"`
+	Rules    string `json:"rules"`
+	Contract string `json:"contract"`
+}
+
+// The run inputs that carry a slice's approved parts by hash.
+const (
+	InputGoals    = "slice/goals"
+	InputRules    = "slice/rules"
+	InputContract = "slice/contract"
+)
+
+// PartHashesOf gives the part hashes a run's inputs hold, nil unless they hold all three parts
+// (InputGoals, InputRules, InputContract): what a RunStarted records as part_hashes.
+func PartHashesOf(inputs map[string]string) *PartHashes {
+	p := PartHashes{Goals: inputs[InputGoals], Rules: inputs[InputRules], Contract: inputs[InputContract]}
+	if p.Goals == "" || p.Rules == "" || p.Contract == "" {
+		return nil
+	}
+	return &p
+}
+
+// NotUsed is a captured pattern a run's start judged and did not use (run-event.schema.json
+// not_used): Reason `needs-proof` or `refused-value`, Parameter the refused one (with
+// `refused-value` only), Detail why in words.
+type NotUsed struct {
+	Pattern   string `json:"pattern"`
+	Reason    string `json:"reason"`
+	Parameter string `json:"parameter,omitempty"`
+	Detail    string `json:"detail"`
 }
 
 // MarshalJSON keeps `inputs` and `artifacts` present, even empty, on the kinds that require them.

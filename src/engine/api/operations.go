@@ -25,12 +25,12 @@ import (
 // Job is one unit of work behind a state-changing call.
 type Job struct {
 	Kind   gen.OperationKind // the operation's kind, e.g. propose-slice
-	Target string            // slice or run ID the operation concerns (S-<n> or RUN-<n>)
+	Target string            // slice, run or captured pattern ID the operation concerns (S-<n>, RUN-<n> or a pattern ID)
 	Body   []byte            // the request body as received
 }
 
 // WorkResult is the result of a succeeded job; exactly one field is set.
-type WorkResult struct{ Slice, Run, ReusedSlice string }
+type WorkResult struct{ Slice, Run, ReusedSlice, CapturedPattern string }
 
 // WorkError ends the operation `failed` at once, without retries; its Code and Detail become
 // the operation's `error` problem.
@@ -140,9 +140,23 @@ var operationKinds = map[string]gen.OperationKind{
 	"replaceContract": gen.OperationKindReplaceContract, "answerQuestions": gen.OperationKindAnswerQuestions,
 	"approvePart": gen.OperationKindApprovePart, "startRun": gen.OperationKindRun, "replayRun": gen.OperationKindRun,
 	"resumeRun": gen.OperationKindRun, "acceptHandOver": gen.OperationKindRun,
+	"captureRun": gen.OperationKindCaptureRun, "replaceParameters": gen.OperationKindReplaceParameters,
+	"makeProofSlice": gen.OperationKindMakeProofSlice, "approveCapturedPattern": gen.OperationKindApproveCapturedPattern,
+	"withdrawCapturedPattern": gen.OperationKindWithdrawCapturedPattern, "eraseCapturedPattern": gen.OperationKindEraseCapturedPattern,
 }
 
 func isRunKind(kind string) bool { return operationKinds[kind] == gen.OperationKindRun }
+
+// isCapturedKind reports whether the contract operation kind accepts an operation on a captured
+// pattern, whose target is the captured pattern's ID.
+func isCapturedKind(kind string) bool {
+	switch operationKinds[kind] {
+	case gen.OperationKindCaptureRun, gen.OperationKindReplaceParameters, gen.OperationKindMakeProofSlice,
+		gen.OperationKindApproveCapturedPattern, gen.OperationKindWithdrawCapturedPattern, gen.OperationKindEraseCapturedPattern:
+		return true
+	}
+	return false
+}
 
 // sweepEvery is how often the outbox and the sweep run after the engine's start.
 const sweepEvery = time.Minute
@@ -523,7 +537,7 @@ func runOnce(ctx context.Context, work func(ctx context.Context) (WorkResult, er
 	for _, f := range []struct {
 		v   string
 		dst **string
-	}{{wr.Slice, &res.Slice}, {wr.Run, &res.Run}, {wr.ReusedSlice, &res.ReusedSlice}} {
+	}{{wr.Slice, &res.Slice}, {wr.Run, &res.Run}, {wr.ReusedSlice, &res.ReusedSlice}, {wr.CapturedPattern, &res.CapturedPattern}} {
 		if f.v != "" {
 			v := f.v
 			*f.dst = &v

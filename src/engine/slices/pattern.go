@@ -48,6 +48,9 @@ type Pattern struct {
 	Steps []PatternStep `yaml:"steps"`
 }
 
+// PatternDeclaration returns the pattern.yaml the service was made with, nil when it has none.
+func (s *Service) PatternDeclaration() []byte { return slices.Clone(s.pattern) }
+
 // Pattern returns the pattern's run view, read from the pattern.yaml the service was made with, its
 // one home. A missing or unreadable pattern, or one without an ID, a version, steps or step names,
 // is an error (fail closed: no run can start).

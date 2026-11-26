@@ -40,7 +40,11 @@ func (r *Runs) Start(ctx context.Context, s api.RunStart) error {
 		opts.WorkflowIDConflictPolicy = enumspb.WORKFLOW_ID_CONFLICT_POLICY_FAIL
 	}
 	in := RunInput{Run: s.Run, Slice: s.Slice, Project: s.Project, Pattern: s.Definition, Model: s.Model, Inputs: s.Inputs,
-		Refs: s.Refs, ReplayOf: s.ReplayOf, Operation: s.Operation}
+		Refs: s.Refs, ReplayOf: s.ReplayOf, Operation: s.Operation, NoReuse: s.NoReuse, PatternReason: s.PatternReason,
+		Parameters: s.Parameters, SourceRun: s.SourceRun, Proof: s.Proof, NotUsed: s.NotUsed}
+	if f := s.Fill; f != nil {
+		in.Fill = &FillInput{Captured: f.Captured, Template: f.Template, Values: f.Values}
+	}
 	ctx, cancel := context.WithTimeout(ctx, callTimeout)
 	defer cancel()
 	_, err := r.c.ExecuteWorkflow(ctx, opts, "Run", in)

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -444,10 +445,9 @@ func projectHolds(dir string) (string, error) {
 	return held, err
 }
 
-// ready refuses WorkersNotReady while a step of the pattern has no registered worker for the
-// slice, or the engine cannot run a step at all.
-func (s *sliceServer) ready(slice string) error {
-	steps := s.svc.Steps()
+// ready refuses WorkersNotReady while a step among steps (the run's pattern's steps that need a
+// worker) has no registered worker for the slice, or the engine cannot run a step at all.
+func (s *sliceServer) ready(slice string, steps []string) error {
 	if len(steps) == 0 {
 		return &sl.Error{Code: string(gen.ErrorCodeWorkersNotReady), Detail: "the pattern declares no steps that a worker could run"}
 	}
@@ -566,14 +566,15 @@ func (s *sliceServer) removeRecord(id string) {
 	}
 }
 
-// newRun starts a new run of the slice as a workflow of the durable service: the run ID is given
-// out by the record, the operation of the contract operation opID recorded, the run's workflow
-// started with both (it records RunStarted, with the project, the operation and replay_of, as its
-// first event), then the operation's workflow. The caller holds s.runs.mu and has checked every
-// refusal. A failed start whose workflow exists anyway is accepted (startedAnyway). An error
-// wrapping ErrUnavailable or errNotRecorded accepted nothing, unless whether the workflow exists
-// could not be told: then the operation's record stays.
-func (s *sliceServer) newRun(ctx context.Context, opID, slice, project, replayOf string, inputs map[string]string, refs []string) (gen.Operation, error) {
+// newRun starts a new run of start's slice as a workflow of the durable service: the run ID is
+// given out by the record, the operation of the contract operation opID recorded, the run's
+// workflow started with both (it records RunStarted, with the project, the operation, replay_of
+// and the pattern choice start names, as its first event), then the operation's workflow. The
+// run follows start.Definition, the engine's base pattern when it has none. The caller holds
+// s.runs.mu and has checked every refusal. A failed start whose workflow exists anyway is
+// accepted (startedAnyway). An error wrapping ErrUnavailable or errNotRecorded accepted nothing,
+// unless whether the workflow exists could not be told: then the operation's record stays.
+func (s *sliceServer) newRun(ctx context.Context, opID string, start RunStart) (gen.Operation, error) {
 	id, err := s.runs.st.NextRunID()
 	if err != nil {
 		log.Printf("engine: a run ID: %v", err)
@@ -583,15 +584,18 @@ func (s *sliceServer) newRun(ctx context.Context, opID, slice, project, replayOf
 	if err != nil {
 		return gen.Operation{}, err
 	}
-	p := s.runs.pattern
-	err = s.runs.durable.Start(ctx, RunStart{Run: id, Slice: slice, Project: project, ReplayOf: replayOf, Operation: rec.ID,
-		Pattern: p.ID + "@" + p.Version, Definition: p, Model: s.runs.model, Inputs: inputs, Refs: refs,
-		TaskQueue: RunsQueue, RejectDuplicate: true})
+	if start.Definition.ID == "" {
+		start.Definition = s.runs.pattern
+	}
+	p := start.Definition
+	start.Run, start.Operation, start.Pattern, start.Model = id, rec.ID, p.ID+"@"+p.Version, s.runs.model
+	start.TaskQueue, start.RejectDuplicate = RunsQueue, true
+	err = s.runs.durable.Start(ctx, start)
 	if err != nil && !s.startedAnyway(ctx, id, rec.ID, err) {
 		return gen.Operation{}, err
 	}
 	s.runs.vmu.Lock()
-	s.runs.starting[id] = slice
+	s.runs.starting[id] = start.Slice
 	s.runs.current[id] = rec.ID
 	s.runs.vmu.Unlock()
 	if s.runs.awaitStart {
@@ -741,7 +745,7 @@ func (s *sliceServer) StartRun(ctx context.Context, req gen.StartRunRequestObjec
 	if err := s.svc.Buildable(id); err != nil {
 		return s.refuse("startRun", err)
 	}
-	if err := s.ready(id); err != nil {
+	if err := s.ready(id, s.svc.Steps()); err != nil {
 		return s.refuse("startRun", err)
 	}
 	if s.runs != nil {
@@ -761,7 +765,7 @@ func (s *sliceServer) StartRun(ctx context.Context, req gen.StartRunRequestObjec
 	if err != nil {
 		return s.refuse("startRun", err)
 	}
-	inputs := map[string]string{"slice/goals": slc.Parts.Goals, "slice/rules": slc.Parts.Rules, "slice/contract": slc.Parts.Contract}
+	inputs := map[string]string{machine.InputGoals: slc.Parts.Goals, machine.InputRules: slc.Parts.Rules, machine.InputContract: slc.Parts.Contract}
 	var refs []string
 	for _, g := range slc.Goals {
 		refs = append(refs, g.ID)
@@ -769,7 +773,8 @@ func (s *sliceServer) StartRun(ctx context.Context, req gen.StartRunRequestObjec
 	for _, r := range slc.Rules {
 		refs = append(refs, r.ID)
 	}
-	op, err := s.newRun(ctx, "startRun", id, req.Body.Project, "", inputs, refs)
+	op, err := s.newRun(ctx, "startRun", RunStart{Slice: id, Project: req.Body.Project, Inputs: inputs, Refs: refs,
+		PatternReason: string(gen.PatternReasonBase)})
 	switch {
 	case notAccepted(err):
 		return unavailableFor(err), nil
@@ -803,7 +808,11 @@ func (s *sliceServer) ResumeRun(ctx context.Context, req gen.ResumeRunRequestObj
 	case run.Status != machine.StatusInterrupted:
 		return s.refuse("resumeRun", &sl.Error{Code: string(gen.ErrorCodeRunNotInterrupted), Detail: fmt.Sprintf("run %s is %s", id, describe(run))})
 	}
-	if err := s.ready(run.Slice); err != nil {
+	steps, err := s.workerSteps(run.Pattern)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.ready(run.Slice, steps); err != nil {
 		return s.refuse("resumeRun", err)
 	}
 	if err := s.canRun(); err != nil {
@@ -824,8 +833,10 @@ func (s *sliceServer) ResumeRun(ctx context.Context, req gen.ResumeRunRequestObj
 
 // ReplayRun refuses an unknown run (NotFound), then one that has not ended (RunNotEnded), then
 // WorkersNotReady, RunActive (any run of any slice) and ProjectExists as startRun does, for the
-// earlier run's slice. The new run has the earlier run's inputs and refs and `replay_of`; it
-// reuses every result accepted under the same reuse key.
+// earlier run's slice. The new run has the earlier run's inputs, part hashes (none when the
+// earlier run recorded none) and refs, `replay_of` and pattern_reason `chosen`; it reuses every
+// result accepted under the same reuse key. A run of a captured pattern, or a proof, is not
+// replayed yet (feature 011's T015 and T029): an error, and nothing is started.
 func (s *sliceServer) ReplayRun(ctx context.Context, req gen.ReplayRunRequestObject) (gen.ReplayRunResponseObject, error) {
 	id := req.RunIdParameter
 	if err := s.badParameter([]string{id}, ""); err != nil {
@@ -845,7 +856,11 @@ func (s *sliceServer) ReplayRun(ctx context.Context, req gen.ReplayRunRequestObj
 	case run.Status != machine.StatusEnded:
 		return s.refuse("replayRun", &sl.Error{Code: string(gen.ErrorCodeRunNotEnded), Detail: fmt.Sprintf("run %s is %s", id, describe(run))})
 	}
-	if err := s.ready(run.Slice); err != nil {
+	first := events[0]
+	if first.Proof || first.SourceRun != "" {
+		return nil, fmt.Errorf("run %s was built from the captured pattern %s: replaying it is not implemented yet", id, first.Pattern)
+	}
+	if err := s.ready(run.Slice, s.svc.Steps()); err != nil {
 		return s.refuse("replayRun", err)
 	}
 	if err := s.noOtherActiveRun(""); err != nil {
@@ -857,7 +872,6 @@ func (s *sliceServer) ReplayRun(ctx context.Context, req gen.ReplayRunRequestObj
 	if err := s.canRun(); err != nil {
 		return s.refuse("replayRun", err)
 	}
-	first := events[0]
 	names := s.runs.pattern.SliceInputs()
 	if len(names) != len(first.Inputs) {
 		return nil, fmt.Errorf("run %s: RunStarted names %d inputs, the pattern %d", id, len(first.Inputs), len(names))
@@ -866,7 +880,11 @@ func (s *sliceServer) ReplayRun(ctx context.Context, req gen.ReplayRunRequestObj
 	for i, n := range names {
 		inputs[n] = first.Inputs[i]
 	}
-	op, err := s.newRun(ctx, "replayRun", run.Slice, req.Body.Project, id, inputs, first.Refs)
+	if h := first.PartHashes; h != nil {
+		inputs[machine.InputGoals], inputs[machine.InputRules], inputs[machine.InputContract] = h.Goals, h.Rules, h.Contract
+	}
+	op, err := s.newRun(ctx, "replayRun", RunStart{Slice: run.Slice, Project: req.Body.Project, ReplayOf: id, Inputs: inputs,
+		Refs: first.Refs, PatternReason: string(gen.PatternReasonChosen)})
 	switch {
 	case notAccepted(err):
 		return unavailableFor(err), nil
@@ -978,6 +996,7 @@ func (s *sliceServer) runView(id string) (gen.Run, bool, error) {
 		r := info.ReplayOf
 		v.ReplayOf = &r
 	}
+	choiceView(&v, first)
 	if run.Status == machine.StatusEnded {
 		o, at := gen.RunOutcome(run.Outcome), last.At
 		v.Outcome, v.EndedAt = &o, &at
@@ -996,6 +1015,31 @@ func (s *sliceServer) runView(id string) (gen.Run, bool, error) {
 		v.WaitsFor = &w
 	}
 	return v, true, nil
+}
+
+// choiceView sets the run's pattern choice from its RunStarted (feature 011).
+func choiceView(v *gen.Run, started machine.Event) {
+	if started.PatternReason != "" {
+		r := gen.PatternReason(started.PatternReason)
+		v.PatternReason = &r
+	}
+	if started.Parameters != nil {
+		p := gen.ParameterValues(maps.Clone(started.Parameters))
+		v.Parameters = &p
+	}
+	v.SourceRun = opt(started.SourceRun)
+	if started.Proof {
+		p := gen.RunProof(true)
+		v.Proof = &p
+	}
+	if len(started.NotUsed) > 0 {
+		var nu gen.NotUsed
+		sized(&nu, len(started.NotUsed))
+		for i, n := range started.NotUsed {
+			nu[i].Pattern, nu[i].Reason, nu[i].Parameter, nu[i].Detail = n.Pattern, gen.NotUsedReason(n.Reason), opt(n.Parameter), n.Detail
+		}
+		v.NotUsed = &nu
+	}
 }
 
 // ListRunEvents returns the record in seq order, eventsPageSize per page. A page token names how

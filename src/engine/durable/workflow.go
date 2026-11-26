@@ -58,7 +58,8 @@ const (
 // workflowVersion is the Run workflow's code version: a change to the commands a run issues
 // bumps it behind workflow.GetVersion, so runs in flight replay on the code that started them.
 // Version 2 (feature 011) adds a captured pattern's `fill` steps and RunInput.NoReuse; under
-// version 1 a `fill` step is a worker step and every kept result is reused.
+// version 1 a `fill` step is a worker step and every kept result is reused. Version 2 also
+// records the pattern choice and the part hashes on RunStarted.
 const (
 	workflowVersion = 2
 	fillVersion     = 2
@@ -145,8 +146,13 @@ func Run(ctx workflow.Context, in RunInput) (RunResult, error) {
 	if err := r.checkFill(); err != nil {
 		return RunResult{}, temporal.NewNonRetryableApplicationError(err.Error(), "InvalidRun", nil)
 	}
-	err := r.record(&EventRecord{Event: machine.Event{Kind: "RunStarted", Slice: in.Slice, Pattern: r.ref, Inputs: hashes,
-		Refs: in.Refs}, Project: in.Project, Operation: in.Operation, ReplayOf: in.ReplayOf})
+	started := machine.Event{Kind: "RunStarted", Slice: in.Slice, Pattern: r.ref, Inputs: hashes, Refs: in.Refs}
+	if r.fills { // the pattern choice is recorded from the same code version as the `fill` steps
+		started.PatternReason, started.SourceRun, started.Proof = in.PatternReason, in.SourceRun, in.Proof
+		started.Parameters, started.NotUsed = maps.Clone(in.Parameters), slices.Clone(in.NotUsed)
+		started.PartHashes = machine.PartHashesOf(in.Inputs)
+	}
+	err := r.record(&EventRecord{Event: started, Project: in.Project, Operation: in.Operation, ReplayOf: in.ReplayOf})
 	for err == nil || errors.Is(err, errAgain) {
 		err = r.steps()
 	}
