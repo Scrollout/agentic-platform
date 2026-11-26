@@ -882,8 +882,7 @@ pass, three runs give the same files.
   read by `Fit` (a `Parameter` refusal naming the word), not in `Propose`, `Check` or
   `PUT /parameters`. Option B: drop "a reserved word" from scenario 5 and the Clarification (then
   T062 and T063 `closed: owner chose B`)
-  Decided 2026-11-27: option A, the 25 Go keywords (owner); spec Clarification "Q (converge US2,
-  T061)", research R4 "Reserved words"
+  Decided 2026-11-27: option A, the 25 Go keywords (owner); spec Clarifications 2026-11-27, research R4 "Reserved words"
 - [x] T062 [P] [US2] Test author (after T061 option A): new `captured/fit_reserved_value_test.go`
   and a `startRun` case in a new `api/captured_reserved_test.go`: a name value `func`, `type` or
   `go` does not fit (a `Parameter` refusal naming the parameter and the word; a place difference
@@ -895,8 +894,11 @@ pass, three runs give the same files.
   8fb9496 (captured: 50 keyword rows, two keywords, the source-value refusals; api: unnamed start
   `fits` instead of `refused-value`, named start 202); guards pass. Left open: which refusal wins
   for a keyword equal to the other value (asserted only a value refusal); the detail's wording
-- [ ] T063 [US2] Code author (done when T062 passes): the keyword set one named value in
+- [x] T063 [US2] Code author (done when T062 passes): the keyword set one named value in
   `captured/match.go`, applied only where `Fit` reads a value
+  Done 2026-11-27 (Opus; method a7b1fa67): `goKeywords` and `reservedRefusal` in `match.go`,
+  checked in `Fit`'s `part` after the form, before the equal values (a keyword equal to the other
+  value is told as the keyword); captured and the whole api package pass (261 s); fast lint 0
 - [ ] T053 [US2] (review S1; suggestion) `Fit`'s reading refuses a value that contains the
   literal after its hole (`class` before `s`) although a reading exists: try later positions, or
   state it in the contract as a limit; test author, then code author, or `closed:` by the owner

@@ -53,7 +53,8 @@ reused only under the method that judged them), [feature 009](../009-no-hard-cod
 - Analyze round 1 (fresh Sonnet, at 3b74d73). C1: research E1 was wrong: the evals' notes slice
   declares no limit (its `200` is a status), so Story 2's independent test and SC-004 use another
   resource only; another limit with its derived values is proven on a fixture that declares one
-  (SC-006). Q: A parameter value outside its form (a space, a reserved word)? → A: the slice does
+  (SC-006). Q: A parameter value outside its form (a space, a reserved word; which words: Session
+  2026-11-27)? → A: the slice does
   not fit that captured pattern, and the run's start says why; nothing reaches code (owner;
   FR-008, FR-010). Q: What does the proof prove? → A: that the captured pattern rebuilds the
   source slice with no model call, every check it declares passes, and the filled and generated
@@ -131,17 +132,17 @@ reused only under the method that judged them), [feature 009](../009-no-hard-cod
   back that differ from those written, an unreadable template or a refused fill; a refusal a
   repeat can pass interrupts the run (resumable): the project not in the state the run left it,
   rate limited, busy, a time limit, a failed write, a lost connection (owner; FR-009).
-- Q (converge US2, T061, 2026-11-27): which words are reserved (US2 scenario 5)? → A: the 25
-  keywords of the Go specification: a
-  later slice's name value equal to one does not fit, refused where the fit reads the value,
-  naming the parameter and the word; the proposal, the check and changing the parameters refuse
-  none, and a longer word (`types`) is not reserved; another case form (`Type`) is outside the
-  name form, refused for its form as before (owner; FR-008,
-  FR-010).
-- Q (T062, 2026-11-27): a captured pattern whose source value is itself a Go keyword (the
-  proposal offers it)? → A: a later value equal to that parameter's own source value is not
-  refused as a keyword, since the source run passed every check with it; any other keyword value
-  is (owner; FR-008).
+
+### Session 2026-11-27
+
+- Q (converge US2, T061): which words are reserved (US2 scenario 5)? → A: the 25 keywords of the
+  Go specification: a later slice's name value equal to one does not fit, refused where the fit
+  reads the value, naming the parameter and the word; the proposal, the check and changing the
+  parameters refuse none, and a longer word (`types`) is not reserved; another case form (`Type`)
+  is outside the name form, refused for its form as before (owner; FR-008, FR-010).
+- Q (T062): a captured pattern whose source value is itself a Go keyword (the proposal offers
+  it)? → A: a later value equal to that parameter's own source value is not refused as a keyword,
+  since the source run passed every check with it; any other keyword value is (owner; FR-008).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -217,7 +218,7 @@ slice with another limit and derived value fits and is filled with them.
    the run's checks run, **Then** the run is handed over with the failing check named, and no
    agent step is started to repair it.
 5. **Given** a slice that would fit except that a value is outside its parameter's form (a space
-   in a name, a reserved word (a Go keyword, at the fit only; Clarifications 2026-11-26), a name
+   in a name, a reserved word (a Go keyword, at the fit only; Clarifications 2026-11-27), a name
    where a number was), **When** its run starts, **Then** it
    does not fit that captured pattern, and the run names the captured pattern, the
    parameter and why; the run uses another pattern as for any slice that does not fit.
@@ -271,7 +272,8 @@ use the captured pattern and says it needs a new proof; proving it again restore
   build is judged by its checks.
 - A later slice gives two parameters the same value: the fit refuses it, naming both parameters,
   because filling them would not be reversible.
-- A later slice gives a value outside its parameter's form: it does not fit (Story 2, scenario 5).
+- A later slice gives a value outside its parameter's form, or a name value that is a Go keyword
+  other than its parameter's source value: it does not fit (Story 2, scenario 5).
 - A captured pattern with no parameter: only a slice identical to the source fits it, which the
   proposal states.
 - The source run's slice is later erased: the captured pattern keeps its own copy of what it
@@ -362,7 +364,8 @@ use the captured pattern and says it needs a new proof; proving it again restore
 
 - **FR-008**: A slice MUST fit a captured pattern only when replacing each parameter's source
   value with one value per parameter turns the source slice into the approved slice exactly, and
-  every value is of its parameter's form and differs from every other parameter's value. The fit
+  every value is of its parameter's form, is not a Go keyword (a name other than its source
+  value; Clarifications 2026-11-27), and differs from every other parameter's value. The fit
   MUST name each parameter's value, and a slice that does not fit MUST be told the first place it
   differs or the value refused and why: a place first (in the order goals, rules, contract), a
   value only when every part otherwise matches, then the filled paths.

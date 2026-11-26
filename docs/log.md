@@ -2,7 +2,8 @@
 
 ## 2026-11-27
 
-* **Specification**: Feature 011, T061 clarify (owner): a later slice's name value that is a Go keyword (`func`, `type`, `go`) does not fit a captured pattern, refused at the fit naming the parameter and the word; the proposal, the check and changing the parameters refuse none. The engine contract's `refused-value` description says so.
+* **Specification**: Feature 011, T061 clarify (owner): a later slice's name value that is a Go keyword (`func`, `type`, `go`) does not fit a captured pattern, refused at the fit naming the parameter and the word; the proposal, the check and changing the parameters refuse none. The engine contract's `refused-value` description says so; a later value equal to its parameter's own source value is not refused as a keyword (owner, T062).
+* **Implementation**: Feature 011 (T063): the fit refuses a Go keyword as a later name value (`refused-value`, or `PatternDoesNotFit` for a named start).
 
 ## 2026-11-26
 

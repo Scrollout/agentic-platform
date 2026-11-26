@@ -26,7 +26,7 @@ artifacts in its content-addressed store.
 |-------|---------|------|
 | `name` | the parameter's name | `^[a-z][a-z0-9-]*$`, unique in the captured pattern |
 | `kind` | `name`, `number` or `string` | a later value must be of the same kind (research R4) |
-| `value` | the source value | of its kind's form, at most 64 characters: `name` `[a-z][a-z0-9]*` with at least two letters (the lower form); a number an integer or decimal without a sign; a string letters, digits, `_`, `-` and spaces (research R4) |
+| `value` | the source value | of its kind's form, at most 64 characters: `name` `[a-z][a-z0-9]*` with at least two letters (the lower form); a number an integer or decimal without a sign; a string letters, digits, `_`, `-` and spaces; a later slice's `name` value that is a Go keyword, other than this source value, is refused at the fit (research R4) |
 | `places` | each occurrence: part (`slice`, a step's file path), `in` (`content` or `path`), line and column (for a path, line 1 and the column in the path), case form | found longest first, never overlapping; paths are filled like contents, and two files that would get the same filled path make the slice not fit (research R4) |
 | `source` | `name`, `declared-value` or `literal`: where the value came from | |
 | `origin` | `proposed` or `added` | added only from the slice's names, declared values or literal values (*owner*) |
