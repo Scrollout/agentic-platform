@@ -600,12 +600,15 @@ proposed and adding the derived value works; the proof ends passed with no model
 - [ ] T037 [US1] Test author (B1): new `src/engine/captured/propose_cap_test.go`: a slice copy
   with more than 32 candidates proposes exactly 32, the first in Propose's order (names in byte
   order, then declared values in the contract's order), each with the places found among the
-  kept ones only (a left-out candidate takes no place from a kept one); exactly 32 and 33
-  candidates (the boundary); and new `src/engine/api/captured_capture_cap_test.go`: such a
+  kept ones only (a left-out candidate takes no place from a kept one, e.g. a left-out long name
+  frees places for a kept shorter one); exactly 32 and 33 candidates (the boundary); 33 where one
+  is refused by form or case form (all 32 proposed); a kept one left with no place is left out
+  (fewer than 32), with no `ParameterRefused` and no error; and new `src/engine/api/captured_capture_cap_test.go`: such a
   capture succeeds with 32 parameters, and `PUT /parameters` may then drop one and add a
   left-out one. Seen failing
 - [ ] T038 [US1] Code author (done when T037 passes, no other test changes): the cut in
-  `src/engine/captured/propose.go` (`ParametersMax`, from the contract), the places computed after
+  `src/engine/captured/propose.go` (the existing `ParametersMax`, kept equal to the contract by
+  `captured_limits_contract_test.go`), after the form and case-form checks, the places found after
   the cut; `src/engine/api/captured.go`'s capture no longer fails for too many candidates
 - [ ] T039 [US2] Before T012 (owner: a US2 task, decided through `/speckit-clarify`): SC-006's
   limit fixture (`testdata/limit`) has the limit 200 and the derived 201 also as the HTTP statuses
@@ -776,6 +779,9 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
 
 ## Dependencies & execution order
 
+- T011 round 1 → T037 → T038 → T011 round 2 → converge US1; T041 to T045 do not block US1 done
+  (each fixed, or `closed:` by the owner, before the feature is done); T039 before T012; T040
+  before T015.
 - T001 → T002 → US1 (T003-T006, T027, T028 in parallel → T007 → T033 → T029 → T036; T008 → T009; T031 → T032;
   T007, T009, T029, T032 and T036 → T010 → T011) → US2 (T012-T014, T030 in parallel → T015 → T016 → T017) → US3 (T018-T019 in parallel → T020 → T021 → T022) → T023 →
   T024 → T025 → T026.

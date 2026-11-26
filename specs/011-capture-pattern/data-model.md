@@ -45,7 +45,8 @@ from different versions), a run of a captured pattern, a proof run,
 and a run whose slice changed after it started (a part's hash differs from the
 part hash its `RunStarted` records, or a part is no longer approved), naming the part; a run
 whose `RunStarted` has no part hashes (started before this feature) is refused the same way. The limits (32 parameters, 10000 places, 64 characters) are the contract's integer
-`x-limits` keys.
+`x-limits` keys. A capture whose slice gives more than 32 candidates proposes the first 32 in
+Propose's order (names in byte order, then declared values in the contract's order), the cut comes after the form and case-form checks and before the places are found, so a left-out candidate takes no place from a kept one; a kept candidate then left with no place, or with more than the places limit, is left out too, so a proposal may hold fewer than 32; `PUT /parameters` may add a left-out one (`origin` `added`) (*owner*, 2026-11-26).
 
 ## Proof
 

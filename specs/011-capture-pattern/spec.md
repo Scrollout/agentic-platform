@@ -103,7 +103,7 @@ reused only under the method that judged them), [feature 009](../009-no-hard-cod
   parameters limit) failed to be captured; what then? → A: the proposal keeps the first 32
   candidates in its order (the names in byte order, then the declared values in the contract's
   order) and leaves the others out; the developer may add a left-out one after removing another
-  (owner; FR-001, FR-003).
+  (owner; FR-003).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -214,6 +214,8 @@ use the captured pattern and says it needs a new proof; proving it again restore
 
 ### Edge Cases
 
+- A slice gives more than 32 candidates: the first 32 in the proposal's order are proposed and the
+  others left out; the developer may add a left-out one after removing another (FR-003).
 - A parameter's source value also occurs where it is not meant to be replaced (the word "note" in
   a description and in a name): the proposal shows every place it occurs, and the proof judges
   the rebuild with that value replaced everywhere it was named.
@@ -274,7 +276,9 @@ use the captured pattern and says it needs a new proof; proving it again restore
   number or a string). The platform MUST propose the names and declared values as candidates;
   when there are more than the parameters limit (32), it MUST propose the first 32 in that order
   (the names in byte order, then the declared values in the contract's order) and leave the others
-  out, so a capture never fails for having too many;
+  out, so a capture never fails for having too many (the cut comes after the form and case-form
+  checks and before the places are found, so a left-out candidate takes no place from a kept one; a
+  kept candidate then left with no place is left out too);
   before the proof the developer MUST be able to remove any parameter and add another of the
   slice's names, declared values or literal values. A number is matched only as a whole number,
   never inside a longer one. Each name parameter covers its value's three case forms:

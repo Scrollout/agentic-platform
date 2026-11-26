@@ -876,7 +876,9 @@ paths:
         found longest first and never overlapping), and is `proposed` until a proof passes. When
         the slice gives more candidates than `x-limits.captured-pattern-parameters-max`, the first
         that many are proposed (the names in byte order, then the declared values in the
-        contract's order) and the others are left out; replaceParameters may add one of them.
+        contract's order, among those of their kind's form and unique in every case form) and the
+        others are left out, taking no place from the kept ones; a kept one then left with no
+        place is left out too; replaceParameters may add one of them.
         Refusals come at once, and no operation is created: a body outside CaptureRequest is
         InvalidRequest; an unknown run NotFound; a run that has not ended `done` (still running,
         interrupted, waiting for the developer, handed over, expired or cancelled) RunNotDone,
