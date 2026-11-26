@@ -972,13 +972,22 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   pattern, its proof slice and proof runs are tested); an unconfirmed answer exits non-zero and
   says "nothing" on stderr (exit code not fixed by the contract); no `--yes` for erase-pattern;
   no Idempotency-Key named for either command
-- [ ] T020 [US3] Code author (done when T018 and T019 pass): withdrawal and erasure in
+- [x] T020 [US3] Code author (done when T018 and T019 pass): withdrawal and erasure in
   `src/engine/api/` and `src/engine/store/` (`withdrawCapturedPattern`, `eraseCapturedPattern`,
   the `CapturedPatternWithdrawn` refusals at `startRun` (a named use and the proof-slice branch),
   `replayRun`, `makeProofSlice`, `replaceParameters` and `approveCapturedPattern`, busy while a run built from it or its proof
   has not ended, the proof slice erased with it, erased IDs never given again, `ReplayRun`'s
   NotFound for an erased captured pattern); the method rule's
   remaining cases (T015 applies the `usable` value T007 computes); the commands in `src/cli/`
+  Done 2026-11-27 (2c85122, method 756a0255; Opus): T018 and T019 pass; whole `./api` 235 s
+  green after the owner-approved T018 fix (two unnamed starts lacked base-pattern workers;
+  Tests-approved-by 2026-11-27). Erasure: the proof slice and its runs, then an `erased` marker
+  (every read 404, the ID never given again), then the record and the artifacts only it holds; a
+  retry completes a crash after the marker. Readings for T022: `erase-pattern` shows the template
+  hashes no slice or other captured pattern holds, the proof slice and its runs; a wrong answer
+  exits 1 (as `delete`); Busy found inside the erase work is `OperationFailed`; `startRun` and
+  `replayRun` answer NotFound for a pattern erased between the choice and the runs' lock; both
+  commands send an Idempotency-Key
 - [ ] T021 [US3] Commit; fast lint; push (owner go-ahead); record the CI run
 - [ ] T022 [US3] Fresh review of US3 judging T021's CI run; `/speckit-converge` for US3
 
