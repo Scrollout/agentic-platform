@@ -466,7 +466,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   step's rule (`NoBlockingFindingOpen`) and the literal `procedure:fill` live in more than one
   package; `steps` History's `Write` and the store's second holder after a slice erasure have no
   test
-- [ ] T033 [US1] Test author (after T007 lands its types; owner-approved T002, commit with
+- [x] T033 [US1] Test author (after T007 lands its types; owner-approved T002, commit with
   `Tests-approved-by: Marius Gologan (2026-11-26)`): the `durable_service_test.go` change T002
   records, and new `src/engine/api/captured_proof_seams_test.go` with T006's cases its first
   author could not reach: a lost start answer (`startedAnyway`) keeps exactly one Proof; a
@@ -474,6 +474,14 @@ proposed and adding the derived value works; the proof ends passed with no model
   202 and its recorded `RunStarted` answers `CapturedPatternBusy`; a planted template byte change
   fails the proof naming the file; a proof under another method does not count for approval.
   Seen failing before T029
+  Done 2026-11-26 (Sonnet test author): the T002 change to `durable_service_test.go` (`WriteProject`
+  registered, the new `RunStart` fields passed, `noHistory.Write`, `Activities.Captured`, seams
+  `DurableHoldRun` and `DurableAlterFilled`), no existing test's result changed (616 pass, the 28
+  T006/T027 proof cases fail as before); the five cases in `captured_proof_seams_test.go` fail at
+  `proof-slice` (500, T029), so their later steps are unproven until T029. Open for T011: the busy
+  case pays `recordWait` (10 s, real time), and `newRun` holds `s.runs.mu` during that wait, so a
+  `PUT /parameters` sent then blocks rather than answers busy (spec silent); the other-method case
+  edits the stored Proof's `method` (the rig's events carry none)
 - [x] T027 [P] [US1] Test author: new `src/engine/api/captured_proof_slice_test.go` (engine rig,
   no model): `POST /captured-patterns/{id}/proof-slice` makes an approved slice from the captured
   copy (its parts equal the copy, its description is `Proof of <captured pattern>`, `getSlice` and
