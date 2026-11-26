@@ -88,6 +88,7 @@ const (
 	workerFailed
 	findingsOpen
 	overBudget
+	writeRefused // a `fill` step's write a repeat cannot pass (WorkerResult.Refused): the run hands over
 )
 
 // run is a run's workflow state: what Temporal keeps of a run (data model, "Execution state").
@@ -384,6 +385,8 @@ func (r *run) step(s machine.Step, round int, open []Finding, changed []machine.
 			return res, v, nil
 		case overBudget:
 			return res, v, r.handOver(why, nil)
+		case writeRefused:
+			return res, v, r.handOver(fmt.Sprintf("the write of step %s was refused: %s", s.Name, why), nil)
 		case workerFailed:
 			failures++
 		}
@@ -535,6 +538,9 @@ func (r *run) attempt(s machine.Step, at attemptOf) (WorkerResult, verdict, stri
 		}
 		if budget != "" {
 			return res, overBudget, budget, nil
+		}
+		if err == nil && res.Refused {
+			return res, writeRefused, res.Failure, nil
 		}
 		return res, workerFailed, why, nil
 	}

@@ -692,7 +692,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   Done 2026-11-26: contract 3a542a7; test (Sonnet) passes at 3a542a7 with no code change, as the
   API's `workError` maps a slices error to any code the contract's `operation` list names; seen
   failing against 3a542a7~1's contract (`OperationFailed`); its history is logged, not asserted
-- [ ] T040 [US2] (review S1; FR-009) A `fill` step's `writeStep` refusal that cannot succeed on
+- [x] T040 [US2] (review S1; FR-009) A `fill` step's `writeStep` refusal that cannot succeed on
   resume (400 outside the writable entries, 422 `StepFilesTooLarge`, `InputHashMismatch`, an
   unreadable template, a refused fill) ends the run interrupted then expired; make it a
   hand-over, keeping interrupt for 503, 504 and `ProjectStateDiffers`: test author, then code
@@ -705,6 +705,13 @@ proposed and adding the derived value works; the proof ends passed with no model
   `steps`' `Write` for the hand-over answers and by `WriteProject` for an unreadable template or a
   refused fill, carried to the workflow as a `Refused` flag on the attempt's result; a History
   that is no `Writer`, or no captured patterns known, stays an interrupt (an engine defect)
+  Done 2026-11-26: tests 7c27706 (Sonnet, seen failing at e69f4d9), code (Opus) in the next
+  commit (method 69e09ce5): `steps.writeRefused` is the rule's one home; a `readStepFiles` answer
+  that is not 200 follows the same rule (coordinator); `Captured.Parameters` and `PutArtifact`
+  failures, a template with no entry for an output (refused before any activity as an invalid
+  run) and a read-back whose files do not decode stay interrupts; no workflow version gate (an
+  old history has no `Refused`). steps and durable pass in full; api `Captured|Fill|Proof|Write`
+  passes but for T013's 13 `TestSR` cases that wait for T015
 - [ ] T041 [US1] (review S2, S3; Single owner for rules; suggestion) one function in
   `engine/captured` that gives a sent value's kind and source (the API's `kindOf` derives it from
   Propose's survivors and `Fill(nil, ...)`); the literal `procedure:fill` in one place

@@ -2,6 +2,7 @@ package steps
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -104,7 +105,8 @@ func (h *history) Commit(ctx context.Context, r machine.CommitRequest) (bool, er
 
 // Write makes the step's writable files exactly r.Files with writeStep at the project worker, then
 // reads them back with readStepFiles at the check service, and returns the project's files. The
-// files read back must be the ones written; any other answer is an error.
+// files read back must be the ones written; any other answer is an error, wrapping
+// machine.ErrWriteRefused when a repeat cannot pass it (writeRefused, or a read-back that differs).
 func (h *history) Write(ctx context.Context, r machine.WriteRequest) (machine.WriteResult, error) {
 	if h.project == nil {
 		return machine.WriteResult{}, errors.New("writeStep: no project worker URL")
@@ -124,7 +126,7 @@ func (h *history) Write(ctx context.Context, r machine.WriteRequest) (machine.Wr
 		return machine.WriteResult{}, fmt.Errorf("writeStep: %w", err)
 	}
 	if resp.StatusCode() != http.StatusOK || resp.JSON200 == nil {
-		return machine.WriteResult{}, fmt.Errorf("writeStep: %s", refusal(resp.StatusCode(), resp.Body))
+		return machine.WriteResult{}, writeRefusal("writeStep", resp.StatusCode(), resp.Body)
 	}
 	read, err := h.check.ReadStepFilesWithResponse(ctx, &gen.ReadStepFilesParams{ApiVersion: checksvc.APIVersion()},
 		gen.CallCommon{Run: r.Run, Project: r.Project, Step: facts(r.Step), Attempt: r.Attempt, Round: roundOf(r.Round),
@@ -133,15 +135,52 @@ func (h *history) Write(ctx context.Context, r machine.WriteRequest) (machine.Wr
 		return machine.WriteResult{}, fmt.Errorf("readStepFiles: %w", err)
 	}
 	if read.StatusCode() != http.StatusOK || read.JSON200 == nil {
-		return machine.WriteResult{}, fmt.Errorf("readStepFiles: %s", refusal(read.StatusCode(), read.Body))
+		return machine.WriteResult{}, writeRefusal("readStepFiles", read.StatusCode(), read.Body)
 	}
 	got, err := contentFiles(read.JSON200.Files)
 	if err != nil {
 		return machine.WriteResult{}, fmt.Errorf("readStepFiles: %w", err)
 	}
 	if canonical.FramedHash(got) != canonical.FramedHash(r.Files) {
-		return machine.WriteResult{}, errors.New("readStepFiles: the step's files are not the ones writeStep was given")
+		return machine.WriteResult{}, fmt.Errorf("readStepFiles: the step's files are not the ones writeStep was given: %w",
+			machine.ErrWriteRefused)
 	}
 	return machine.WriteResult{Written: nonNil(resp.JSON200.Written), Removed: nonNil(resp.JSON200.Removed),
 		ProjectFiles: machineFiles(read.JSON200.ProjectFiles)}, nil
+}
+
+// writeRefusal is the error of a writeStep or readStepFiles answer that is not a 200 for the
+// request's files: it names the status and the problem code, and wraps machine.ErrWriteRefused
+// when writeRefused says a repeat cannot pass it.
+func writeRefusal(call string, status int, body []byte) error {
+	if writeRefused(status, body) {
+		return fmt.Errorf("%s: %s: %w", call, refusal(status, body), machine.ErrWriteRefused)
+	}
+	return fmt.Errorf("%s: %s", call, refusal(status, body))
+}
+
+// writeRefused says whether a write's answer is one the developer must fix, so a repeat cannot
+// pass it (T040, the owner's decision of 2026-11-26): 400, 401, 404 and 422 (any code), 409
+// HistoryChanged and 500 ResponseTooLarge. Every other answer (409 ProjectStateDiffers, 429,
+// 500 WriteFailed, 503, 504, a 409 or 500 with no problem code, any other status) is one a repeat
+// can pass.
+func writeRefused(status int, body []byte) bool {
+	switch status {
+	case http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound, http.StatusUnprocessableEntity:
+		return true
+	case http.StatusConflict:
+		return problemCode(body) == "HistoryChanged"
+	case http.StatusInternalServerError:
+		return problemCode(body) == "ResponseTooLarge"
+	}
+	return false
+}
+
+// problemCode is the code of a Problem body, "" when the body is none.
+func problemCode(body []byte) string {
+	var p gen.Problem
+	if json.Unmarshal(body, &p) != nil {
+		return ""
+	}
+	return string(p.Code)
 }

@@ -131,9 +131,13 @@ func (a *Activities) CallWorker(ctx context.Context, c WorkerCall) (WorkerResult
 // artifact store, fills them with c.Values over the captured pattern's parameters, stores the
 // filled files and makes the project's writable files exactly them (the History's Writer). It
 // returns each output's hash, the project's files after the write and c.Before; it reaches no
-// model, so the result has no Model and no Usage. A template that cannot be read or filled, or a
-// History that cannot write, is an error and nothing is written; a write that fails is a result
-// whose Failure is the reason, with how long it ran.
+// model, so the result has no Model and no Usage. A refusal a repeat cannot pass (a template
+// output that cannot be read or is not a set of files, a fill captured.Fill refuses, two outputs
+// filling one path, or a write refused with machine.ErrWriteRefused) is a result whose Failure is
+// the reason, with Refused set: nothing is written (the run hands over). A write that fails
+// otherwise is a result whose Failure is the reason, with how long it ran (the run is
+// interrupted). A History that cannot write, no captured patterns, parameters that cannot be read,
+// a template with no such output or a filled output that cannot be stored is an error.
 func (a *Activities) WriteProject(ctx context.Context, c WriteCall) (WorkerResult, error) {
 	w, ok := a.History.(machine.Writer)
 	if !ok {
@@ -146,6 +150,7 @@ func (a *Activities) WriteProject(ctx context.Context, c WriteCall) (WorkerResul
 	if err != nil {
 		return WorkerResult{}, failed("WriteFailed", fmt.Errorf("captured pattern %s: %w", c.Captured, err))
 	}
+	refused := func(err error) (WorkerResult, error) { return WorkerResult{Failure: err.Error(), Refused: true}, nil }
 	var files []canonical.File
 	paths := map[string]string{} // filled path -> output
 	outputs := map[string]string{}
@@ -156,19 +161,19 @@ func (a *Activities) WriteProject(ctx context.Context, c WriteCall) (WorkerResul
 		}
 		b, err := a.Artifacts.Artifact(h)
 		if err != nil {
-			return WorkerResult{}, failed("WriteFailed", fmt.Errorf("template output %s: %w", o, err))
+			return refused(fmt.Errorf("template output %s cannot be read: %w", o, err))
 		}
 		tmpl, err := canonical.Unframe(b)
 		if err != nil {
-			return WorkerResult{}, failed("WriteFailed", fmt.Errorf("template output %s is not a set of files: %w", o, err))
+			return refused(fmt.Errorf("template output %s is not a set of files: %w", o, err))
 		}
 		filled, err := captured.Fill(tmpl, params, c.Values)
 		if err != nil {
-			return WorkerResult{}, failed("WriteFailed", fmt.Errorf("template output %s: %w", o, err))
+			return refused(fmt.Errorf("template output %s: %w", o, err))
 		}
 		for _, f := range filled {
 			if other, dup := paths[f.Path]; dup {
-				return WorkerResult{}, failed("WriteFailed", fmt.Errorf("outputs %s and %s both fill the path %s", other, o, f.Path))
+				return refused(fmt.Errorf("outputs %s and %s both fill the path %s", other, o, f.Path))
 			}
 			paths[f.Path] = o
 		}
@@ -184,7 +189,7 @@ func (a *Activities) WriteProject(ctx context.Context, c WriteCall) (WorkerResul
 	case err != nil && ctx.Err() != nil: // the activity itself ended (a stop or a cancel)
 		return WorkerResult{}, failed("WriteFailed", err)
 	case err != nil:
-		return WorkerResult{Took: took, Failure: err.Error()}, nil
+		return WorkerResult{Took: took, Failure: err.Error(), Refused: errors.Is(err, machine.ErrWriteRefused)}, nil
 	}
 	return WorkerResult{Outputs: outputs, Before: c.Before, ProjectFiles: res.ProjectFiles, Took: took}, nil
 }
