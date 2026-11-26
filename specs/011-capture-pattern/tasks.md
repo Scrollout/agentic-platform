@@ -657,7 +657,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   run of the proof slice has not ended answers `CapturedPatternBusy` (data model "Proof slice");
   `scripts/generate.sh`; committed alone
   Done 2026-11-26 (2436a13): description-only; Spectral clean; `method.sha256` 2363d850
-- [ ] T048 [US2] Test author (after T047): new `src/engine/slices/proof_restore_test.go` and new
+- [x] T048 [US2] Test author (after T047): new `src/engine/slices/proof_restore_test.go` and new
   `src/engine/api/captured_proof_slice_restore_test.go`: a proof slice whose part was replaced by
   hand is restored by `proof-slice` (its parts equal the copy, history `changed` naming exactly the
   restored parts then `approved` each, the same slice ID), after which a proof starts instead of
@@ -667,8 +667,23 @@ proposed and adding the derived value works; the proof ends passed with no model
   is then allowed; a part changed by hand and then by a method change withdrawn is restored and
   approved (one `changed`, then `approved` each unapproved part); a part changed back so it
   equals the copy but unapproved is approved with no `changed` entry. Seen failing
-- [ ] T049 [US2] Code author (done when T048 passes, no other test changes): the restore in
+  Done 2026-11-26 (Sonnet, a3a2524): 7 cases fail at 2436a13 for the missing restore; 3 regression
+  guards pass (unchanged slice, a part changed back, nothing to restore while a run is active).
+  Busy may be an immediate 409 or a failed operation. Open for T017: approving only (no restore)
+  while a proof run has not ended is untested; `changed` refs compared as a set
+- [x] T049 [US2] Code author (done when T048 passes, no other test changes): the restore in
   `src/engine/slices/proof.go` (`ProofSlice` takes the copy's parts for an existing proof slice)
+  Done 2026-11-26 (Opus): T048 passes, `./api/` whole package ok (4 min 18 s), `./slices/`,
+  `./captured/` ok; busy is an immediate 409 (`ProofSliceDiffers`, `proofRunBusy` shared with `PUT
+  /parameters`), judged again inside the work; a restored contract is checked as at the proof
+  slice's making (no earlier baseline); `method.sha256` 27a24649. Open -> T050; untested (for
+  T017): approve-only while a proof run has not ended, a restore of rules that drops or brings
+  back example IDs
+- [ ] T050 [US2] (T049; owner decision) a busy found inside `makeProofSlice`'s work (a hand change
+  after the 202 while a proof run is active) fails the operation `OperationFailed`, since the
+  contract lists only `PartFailsChecks` as its operation error: add `CapturedPatternBusy` to its
+  `operation` codes (additive; contract, test author, code author) or accept `OperationFailed`
+  for this race (`closed:` by the owner)
 - [ ] T040 [US2] (review S1; FR-009) A `fill` step's `writeStep` refusal that cannot succeed on
   resume (400 outside the writable entries, 422 `StepFilesTooLarge`, `InputHashMismatch`, an
   unreadable template, a refused fill) ends the run interrupted then expired; make it a
