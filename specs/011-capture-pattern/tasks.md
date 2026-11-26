@@ -838,12 +838,16 @@ pass, three runs give the same files.
   blocking -> T051, T052; suggestions S1 -> T053, S2 and S6 -> T054, S3 -> T055, S4 -> T056,
   S5 -> T057, S7 and the untested cases -> T058. Open notes of T012, T013, T030 and T015's
   settled points judged not an issue except the refusal order (B1)
-- [ ] T051 [US2] (review B1; FR-010, contract `not_used` reason `refused-value`: "did not fit only
+- [x] T051 [US2] (review B1; FR-010, contract `not_used` reason `refused-value`: "did not fit only
   because of a refused value") Test author: new `src/engine/captured/fit_refused_value_test.go`
   and a `startRun` case in a new `src/engine/api/captured_notused_test.go`: a value outside its
   form, or equal to another parameter's, plus a later difference in goals, rules or contract does
   not fit at that place (a `Place` refusal, not a `Parameter` one), so an unnamed start names no
   `refused-value` for it; with the value refusal alone it is still `refused-value`. Seen failing
+  Tests 2026-11-26 (Sonnet, see git log): fit: 3 tests fail (54 + 6 + 1 rows) at the early value
+  refusal, 4 pass (guards, and a difference inside the literal after the value); api: 2 fail
+  (`not_used` names `refused-value`; a named start's detail names the parameter), 1 guard
+  passes. Left open: a bad value plus a path refusal (which wins); Number and String kinds
 - [ ] T052 [US2] Code author (done when T051 and every existing test pass): `Fit` keeps reading
   after a refused value (taking the text read as the value) and returns the value refusal only
   when the rest of the slice matches
