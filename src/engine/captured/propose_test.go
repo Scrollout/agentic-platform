@@ -197,6 +197,9 @@ type t3Cand struct {
 func t3Cands(specs []t3Spec) []t3Cand {
 	var out []t3Cand
 	for i, s := range specs {
+		if s.Value == "" { // an empty value occurs nowhere
+			continue
+		}
 		if s.Kind != captured.KindName {
 			out = append(out, t3Cand{i, captured.FormExact, s.Value})
 			continue
@@ -819,18 +822,22 @@ func TestCheckRefusesValueNotInTheSlice(t *testing.T) {
 	}
 }
 
-// T003, FR-001, SC-006: a number is matched only as a whole number, so `200` is not in a slice
-// that holds only `2001`, `1.200`, `200ms`, `v200`, `200.5`, `_200`, `200_`, `a200` and `200a`, and
-// is in `-200` and `"200"`.
+// T003, FR-001, SC-006: a number is matched only as a whole number, so `4242` is not in a slice
+// that holds only `42421`, `1.4242`, `4242ms`, `v4242`, `4242.5`, `_4242`, `4242_`, `a4242` and
+// `4242a`, and is in `-4242` and `"4242"`. (4242, not 200: the notes contract holds the status
+// `"200"` as a whole number.)
 func TestCheckNumberOccursOnlyAsWholeNumber(t *testing.T) {
 	f := t3Load(t, "notes")
-	spec := []t3Spec{{"limit", captured.KindNumber, "200"}}
-	not := t3Tokens(t, f, "2001", "1.200", "200ms", "v200", "200.5", "_200", "200_", "a200", "200a")
-	t3Refused(t, "200 only inside other numbers and words", captured.Check(not, f.template, t3Params(not, f.template, spec)), "limit")
-	for _, tok := range []string{"-200", `"200"`, "200.", "(200)"} {
+	spec := []t3Spec{{"limit", captured.KindNumber, "4242"}}
+	if n := len(t3Places(f.src, captured.Template{}, spec)[0]); n != 0 {
+		t.Fatalf("test bug: 4242 occurs %d times in the notes slice", n)
+	}
+	not := t3Tokens(t, f, "42421", "1.4242", "4242ms", "v4242", "4242.5", "_4242", "4242_", "a4242", "4242a")
+	t3Refused(t, "4242 only inside other numbers and words", captured.Check(not, f.template, t3Params(not, f.template, spec)), "limit")
+	for _, tok := range []string{"-4242", `"4242"`, "4242.", "(4242)"} {
 		src := t3Tokens(t, f, tok)
 		if err := captured.Check(src, f.template, t3Params(src, f.template, spec)); err != nil {
-			t.Errorf("200 in %q: %v", tok, err)
+			t.Errorf("4242 in %q: %v", tok, err)
 		}
 	}
 }
