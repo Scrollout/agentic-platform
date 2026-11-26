@@ -264,13 +264,14 @@ with its `x-operation-name`; `captureRun` 404,
   answer as not implemented, and `src/engine/checksvc/` the same for `writeStep`, so every module
   builds; a client line whose generated name changed (`startRun`'s body) is adjusted; no other
   code changes.
-  `scripts/generate.sh` regenerates; `scripts/method-digest.py` converges; the contract lint and
-  oasdiff (no breaking change) pass, run as `oasdiff breaking` from `main`'s copy of each contract
+  `scripts/generate.sh` regenerates; `scripts/method-digest.py` converges; the contract lint
+  passes and oasdiff reports no breaking change other than the enum values research E2 lists (the
+  owner's exception, ADR 0100), run as `oasdiff breaking` from `main`'s copy of each contract
   to the new one (the preview has one version, so `scripts/contract-diff.sh` compares nothing),
   its output recorded in research; the draft then links to the authoritative copies.
   `src/cli/contract.md` gains the command rows and output lines of the draft
 - [ ] T002 Owner approvals: the plan's Complexity Tracking row (Principle XII not applicable, one
-  developer); and the code author of T001 lists every existing test that fails or no
+  developer; the Principle XV row was approved 2026-11-26, ADR 0100); and the code author of T001 lists every existing test that fails or no
   longer compiles after T001 (expected: tests that list the contract's paths, operation kinds,
   error codes, `RunStarted`'s, `Run`'s or a slice record's fields exactly, and launcher tests
   that list the commands it intercepts); ask the owner to approve each by name and record

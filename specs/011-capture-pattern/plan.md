@@ -75,7 +75,7 @@ field on `startRun`, eight terminal commands, one acceptance suite
 | XII. Tenants | Not applicable | One developer by scope (feature 001 FR-021), as for slices; Complexity Tracking |
 | XIII. Supply chain | Pass | No dependency |
 | XIV. Safe defaults | Pass | Unusable without a passing proof under the current method; values outside their form refused; a failed check hands the run over, never repaired by a model |
-| XV. Compatible APIs | Pass | Additive resource, field and error codes in the preview contracts; paginated list; Idempotency-Key on every state change |
+| XV. Compatible APIs | Exception | Additive resource and fields in the preview contracts; paginated list; Idempotency-Key on every state change; the new enum values are an owner-approved exception (Complexity Tracking, ADR 0100) |
 | XVI. Human control | Pass | The developer approves; the owner merges |
 | XVII. Declare, derive, converge | Pass | The captured declaration is derived from the base pattern; `gen/**` derived from the contract; one generic substitution engine |
 | XVIII. Abstractions say what | Pass | `Propose`, `Fit`, `Fill`; `/captured-patterns`; each named for what it does |
@@ -104,6 +104,7 @@ Each decision that outlives the feature has a record in `docs/decisions/`.
 | A proof is an ordinary build of the captured pattern's proof slice, an approved slice made from its copy; the captured pattern keeps the expected output hashes | R2, R5, S17, S18 | [ADR 0097](../../docs/decisions/0097-proof-builds-a-slice-made-from-the-captured-copy.md) (supersedes ADR 0096) |
 | A proof slice is marked (`Proof of <captured pattern>`, `proof_of`) and never reused; a proof reuses no result; resume and take-over keep the pattern; a replay follows the usable rule and a replayed proof is a new proof | R5 | [ADR 0098](../../docs/decisions/0098-proof-slice-marked-and-runs-keep-their-pattern.md) |
 | A proof compares only the filled outputs (`tests`, `code`, `witnesses`) with the template; a hand-over fails it at once; template paths are filled like contents | R4, R5 | [ADR 0099](../../docs/decisions/0099-proof-compares-filled-outputs-and-paths-are-filled.md) |
+| The engine's preview contract gains the new enum values in place, an exception to Principle XV | E2, R7 | [ADR 0100](../../docs/decisions/0100-preview-contract-gains-enum-values-in-place.md) |
 
 ## Threat model
 
@@ -188,3 +189,4 @@ None.
 | Violation | Why needed | Simpler alternative rejected because |
 |-----------|------------|--------------------------------------|
 | Principle XII: captured patterns have no tenant scope | One developer by scope (feature 001 FR-021) | Not applicable until the hosted version, as for slices (feature 001's row); the owner approves this row with T002 |
+| Principle XV: the engine contract's `2026-11-12-preview` gains 9 `ErrorCode` values, 6 `OperationKind` values and the slice history kind `made-for-proof` in place, which the pinned oasdiff reports as breaking (`response-property-enum-value-added`, research E2) | `getOperation` and `startRun` must return the new kinds and codes, so a separate problem schema (feature 002) does not fit; every client is generated from this contract in the same commit and prints any code | A new preview version needs a deprecation period, the engine serving two versions and a change to `scripts/contract-diff.sh`; extensible enums drop the generated Go constants across the modules. Approved by the owner 2026-11-26 ([ADR 0100](../../docs/decisions/0100-preview-contract-gains-enum-values-in-place.md)) |

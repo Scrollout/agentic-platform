@@ -47,6 +47,25 @@ are the case of feature 009's planted contract (`src/tests/acceptance/planted_va
 `maxLength: 200`); that case is why the developer may add any literal value as a parameter
 (*owner*, spec Clarifications), and SC-006 is proven on a unit fixture that declares a limit.
 
+## E2. Compatibility of the contract changes (T001)
+
+Reproduced 2026-11-26 with the pinned oasdiff (v1.37.0, `breaking --fail-on ERR`), from `main`'s
+copy of each contract to the branch's T001 draft:
+
+- Engine contract: 1258 errors, all `response-property-enum-value-added` (the 9 new `ErrorCode`
+  values on every problem response and every operation's `error`, the 6 new `OperationKind`
+  values, the slice history kind `made-for-proof`), and 13 warnings,
+  `response-property-pattern-changed` (`Operation.target` widened to `operation_target`). No other
+  finding: the new paths, fields and schemas are additive.
+- Check contract (`writeStep`): no finding.
+
+Feature 002 met the same rule and gave its new code a separate problem schema (its research R6);
+here the new codes and kinds must come from existing operations (`getOperation`, `startRun`,
+`replayRun`). **Decision** (*owner*, 2026-11-26): extend `2026-11-12-preview` in place as an
+exception to Principle XV (plan, Complexity Tracking;
+[ADR 0100](../../docs/decisions/0100-preview-contract-gains-enum-values-in-place.md)). T001 records
+the final report.
+
 ## R1. What a captured pattern is (FR-002, FR-007, FR-009)
 
 **Decision**: a captured pattern is its base pattern with each agent step's worker replaced by the
