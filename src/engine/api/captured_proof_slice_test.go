@@ -655,10 +655,15 @@ func TestPSCreateSliceNeverReturnsTheProofSlice(t *testing.T) { // T027, "create
 			if got.Status != "succeeded" {
 				t.Fatalf("createSlice: %+v", got)
 			}
-			if got.Result["slice"] == ps {
+			// createSlice answers a new slice as `slice` or an approved one it reuses as `reused_slice`.
+			given := got.Result["slice"]
+			if given == "" {
+				given = got.Result["reused_slice"]
+			}
+			if given == ps {
 				t.Errorf("createSlice returned the proof slice %s", ps)
 			}
-			if s := p.psGetSlice(got.Result["slice"]); s.raw["proof_of"] != nil {
+			if s := p.psGetSlice(given); s.raw["proof_of"] != nil {
 				t.Errorf("the slice createSlice returned has proof_of %s", s.raw["proof_of"])
 			}
 		})
@@ -857,6 +862,7 @@ func TestPSStartRunOfTheProofSliceIsAProofUnderTheCapturedPattern(t *testing.T) 
 	}
 	same(t, "parameters", v.Parameters, c.values())
 
+	p.psEnd(run) // a running run's events always have a next page; read them once it has ended
 	evs := p.rawEvents(run)
 	if len(evs) == 0 || evs[0]["kind"] != "RunStarted" || evs[0]["proof"] != true || evs[0]["pattern"] != id+"@1.0.0" ||
 		evs[0]["pattern_reason"] != "chosen" || evs[0]["source_run"] != source {
@@ -865,7 +871,6 @@ func TestPSStartRunOfTheProofSliceIsAProofUnderTheCapturedPattern(t *testing.T) 
 	if evs[0]["part_hashes"] == nil {
 		t.Errorf("RunStarted of a proof records no part_hashes")
 	}
-	p.psEnd(run)
 
 	// An ordinary run of the source slice is no proof.
 	if v := p.psGetRun(source); v.Proof != nil && *v.Proof {
@@ -943,10 +948,18 @@ func TestPSAProofStartAndAProofReplayWhileAnotherOperationRunsAreBusy(t *testing
 		t.Errorf("%d runs, want %d: a refused start or replay makes no run", n, runs)
 	}
 
-	// When the operation has ended, a proof starts again.
+	// When the operation has ended, a proof starts again. Until the released operation ends, an
+	// ask still answers CapturedPatternBusy, so wait for that end first (as above, at most 10 s).
 	release()
-	if ps2 := p.psProofSliceOK(id); ps2 != ps {
-		t.Fatalf("gave %s, want %s", ps2, ps)
+	path := "/captured-patterns/" + id + "/proof-slice"
+	r := p.psAs(clientToken, "POST", path, "")
+	for end := time.Now().Add(10 * time.Second); r.Code == http.StatusConflict && time.Now().Before(end); {
+		r.problem(t, 409, "CapturedPatternBusy")
+		time.Sleep(10 * time.Millisecond)
+		r = p.psAs(clientToken, "POST", path, "")
+	}
+	if op := p.psAccepted(r, "make-proof-slice", id); op.Status != "succeeded" || op.Result["slice"] != ps {
+		t.Fatalf("makeProofSlice after the release: %+v (error %+v), want succeeded giving %s", op, op.Error, ps)
 	}
 	p.psEnd(p.psStartProof(ps, "proof-f"))
 }
