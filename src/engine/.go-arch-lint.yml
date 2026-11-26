@@ -46,6 +46,7 @@ components:
   api: { in: api }
   api-gen: { in: api/gen }
   canonical: { in: canonical }
+  captured: { in: captured }
   checks: { in: checks }
   checksvc: { in: checksvc }
   cmd-check: { in: cmd/check }
@@ -66,10 +67,15 @@ deps:
     # api_test runs the real run workflow in Temporal's testsuite). go-arch-lint cannot tell test
     # files from code, so api's code must not use them: api defines the ports durable implements
     # (data model). Owner-approved 2026-11-19.
-    mayDependOn: [api, api-gen, durable, machine, method, slices, store]
+    # canonical and captured: the captured-pattern resource (feature 011, owner-approved 2026-11-26).
+    mayDependOn: [api, api-gen, canonical, captured, durable, machine, method, slices, store]
     canUse: [jsonschema, retry-module, slice-module, temporal, temporal-testsuite, yaml]
   api-gen:
     canUse: [oapi-runtime]
+  captured:
+    # feature 011: candidates, fit and fill of captured patterns (owner-approved 2026-11-26).
+    mayDependOn: [canonical, captured, checks]
+    canUse: [yaml]
   checks:
     mayDependOn: [canonical, checks]
     canUse: [gherkin, messages, modfile, slice-module, yaml]
@@ -90,14 +96,17 @@ deps:
     canUse: [kin-openapi, oasdiff]
   durable:
     # api for the retry rule of the engine contract (api.RetryRule); api defines the ports durable implements.
-    mayDependOn: [api, machine, method, store]
-    canUse: [retry-module, temporal]
+    # canonical and captured for the `fill` worker (feature 011); durable and temporal-testsuite for
+    # its external test fill_proof_test.go only, as for api and machine (owner-approved 2026-11-26).
+    mayDependOn: [api, canonical, captured, durable, machine, method, store]
+    canUse: [retry-module, temporal, temporal-testsuite]
   method:
     # itself only: its external test package (method_test) imports it.
     mayDependOn: [method]
   machine:
     # durable, retry-module, temporal, temporal-testsuite and yaml for the run workflow's tests (T012).
-    mayDependOn: [durable, machine, method]
+    # canonical for writer.go's file type (feature 011, owner-approved 2026-11-26).
+    mayDependOn: [canonical, durable, machine, method]
     canUse: [jsonschema, retry-module, temporal, temporal-testsuite, yaml]
   procedures:
     mayDependOn: [canonical, checks, procedures]
