@@ -838,6 +838,8 @@ pass, three runs give the same files.
   blocking -> T051, T052; suggestions S1 -> T053, S2 and S6 -> T054, S3 -> T055, S4 -> T056,
   S5 -> T057, S7 and the untested cases -> T058. Open notes of T012, T013, T030 and T015's
   settled points judged not an issue except the refusal order (B1)
+  Fixes' CI run 2026-11-26: 45892170365 at 2ed1d09, 26/26 green (T052, T057's spec text, T059;
+  45889661212 at f40f353 failed only on T059's race)
 - [x] T051 [US2] (review B1; FR-010, contract `not_used` reason `refused-value`: "did not fit only
   because of a refused value") Test author: new `src/engine/captured/fit_refused_value_test.go`
   and a `startRun` case in a new `src/engine/api/captured_notused_test.go`: a value outside its
