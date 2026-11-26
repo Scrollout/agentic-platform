@@ -159,7 +159,8 @@ the fit and the fill:
   characters. A number is matched only as a whole number: the characters around it are not
   digits, letters or `_`, and not a `.` followed by a digit (`200` is not in `2001`, `1.200`,
   `200ms` or `v200`; it is in `-200` and `"200"`). A value outside its form is refused at the proposal and at the fit,
-  before any substitution.
+  before any substitution. A later slice's name value that is a Go keyword (`func`, `type`, `go`)
+  is refused at the fit only (*owner*, T061); the proposal keeps a source value such as `type`.
 - **Case forms** (*owner*): a name covers its lower (`note`), capitalised (`Note`) and upper
   (`NOTE`) forms, each replaced wherever it occurs, inside longer words too (`NewNote`,
   `note_id`, `denote`); a plural is its own parameter.

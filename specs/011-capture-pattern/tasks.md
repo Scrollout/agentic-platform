@@ -875,13 +875,14 @@ pass, three runs give the same files.
   after sending the answer, so the next sequential call could find it taken under load: release
   it before the answer. Not reproduced on the host (20 race runs pass before and after); judged
   by the next CI run
-- [ ] T061 [US2] (converge US2; US2 scenario 5 "a reserved word", Clarifications 2026-11-25,
+- [x] T061 [US2] (converge US2; US2 scenario 5 "a reserved word", Clarifications 2026-11-25,
   FR-008) Owner decision, recorded as a Clarification: which words are reserved. research R4's
   value forms exclude none, so a name value such as `func` or `type` fits and fails at the checks
   instead of at the fit. Option A: the Go keywords, refused only as a later slice's `name` value
   read by `Fit` (a `Parameter` refusal naming the word), not in `Propose`, `Check` or
   `PUT /parameters`. Option B: drop "a reserved word" from scenario 5 and the Clarification (then
   T062 and T063 `closed: owner chose B`)
+  Decided 2026-11-27: option A (owner); spec Clarification 2026-11-26 list, research R4
 - [ ] T062 [P] [US2] Test author (after T061 option A): new `captured/fit_reserved_value_test.go`
   and a `startRun` case in a new `api/captured_reserved_test.go`: a name value `func`, `type` or
   `go` does not fit (a `Parameter` refusal naming the parameter and the word; a place difference

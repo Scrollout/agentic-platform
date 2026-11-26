@@ -131,6 +131,11 @@ reused only under the method that judged them), [feature 009](../009-no-hard-cod
   back that differ from those written, an unreadable template or a refused fill; a refusal a
   repeat can pass interrupts the run (resumable): the project not in the state the run left it,
   rate limited, busy, a time limit, a failed write, a lost connection (owner; FR-009).
+- Q (converge US2, T061): which words are reserved (US2 scenario 5)? → A: the Go keywords: a
+  later slice's name value equal to one does not fit, refused where the fit reads the value,
+  naming the parameter and the word; the proposal, the check and changing the parameters refuse
+  none, and a longer word or another case form (`types`, `Type`) is not reserved (owner; FR-008,
+  FR-010).
 
 ## User Scenarios & Testing *(mandatory)*
 

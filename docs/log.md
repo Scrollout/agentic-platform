@@ -1,5 +1,9 @@
 # Directory Update Log
 
+## 2026-11-27
+
+* **Specification**: Feature 011, T061 clarify (owner): a later slice's name value that is a Go keyword (`func`, `type`, `go`) does not fit a captured pattern, refused at the fit naming the parameter and the word; the proposal, the check and changing the parameters refuse none. The engine contract's `refused-value` description says so.
+
 ## 2026-11-26
 
 * **Specification**: Feature 011, T039 clarify (owner): asking for a captured pattern's proof slice again restores from the captured copy any part changed by hand and approves it again; a parameter's value that is also another literal of the slice (a limit of 200 and the status `200`) is replaced there too, so SC-006 is proven on a fixture whose limit equals no other literal; the cut keeps names before declared values.
