@@ -884,12 +884,17 @@ pass, three runs give the same files.
   T062 and T063 `closed: owner chose B`)
   Decided 2026-11-27: option A, the 25 Go keywords (owner); spec Clarification "Q (converge US2,
   T061)", research R4 "Reserved words"
-- [ ] T062 [P] [US2] Test author (after T061 option A): new `captured/fit_reserved_value_test.go`
+- [x] T062 [P] [US2] Test author (after T061 option A): new `captured/fit_reserved_value_test.go`
   and a `startRun` case in a new `api/captured_reserved_test.go`: a name value `func`, `type` or
   `go` does not fit (a `Parameter` refusal naming the parameter and the word; a place difference
   elsewhere still wins); an unnamed start names it `refused-value`; a named start answers
-  `PatternDoesNotFit`; `Propose` still offers a source value `type`; `types` still fits; `Type` is refused for its form as before, not as a keyword; a source value
-  that is a keyword, kept by a later slice, fits (Clarification "Q (T062)")
+  `PatternDoesNotFit`; `Propose` still offers a source value `type`; `types` still fits; `Type`
+  is refused for its form as before, not as a keyword; a source value that is a keyword, kept by a
+  later slice, fits (Clarification "Q (T062)")
+  Tests 2026-11-27 (Sonnet; source-value case by the coordinator; e0127ad): seen failing at
+  8fb9496 (captured: 50 keyword rows, two keywords, the source-value refusals; api: unnamed start
+  `fits` instead of `refused-value`, named start 202); guards pass. Left open: which refusal wins
+  for a keyword equal to the other value (asserted only a value refusal); the detail's wording
 - [ ] T063 [US2] Code author (done when T062 passes): the keyword set one named value in
   `captured/match.go`, applied only where `Fit` reads a value
 - [ ] T053 [US2] (review S1; suggestion) `Fit`'s reading refuses a value that contains the
