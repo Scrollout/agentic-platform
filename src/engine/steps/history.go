@@ -9,12 +9,14 @@ import (
 	"time"
 
 	"github.com/agentic-platform/check/api/gen"
+	"github.com/agentic-platform/engine/canonical"
 	"github.com/agentic-platform/engine/checksvc"
 	"github.com/agentic-platform/engine/machine"
 )
 
 // NewHistory returns the machine's History: restoreStep and commitStep at the project worker
-// (Config.ProjectURL, called with Config.ProjectToken). A reused result's outputs are loaded with
+// (Config.ProjectURL, called with Config.ProjectToken). It is also a machine.Writer: writeStep at
+// the project worker, then readStepFiles at the check service (Config.CheckURL). A reused result's outputs are loaded with
 // Config.Load and checked against their hashes before anything is sent. Every answer but a 200
 // for the request's files is an error naming the HTTP status and the problem code.
 func NewHistory(c Config) machine.History {
@@ -98,4 +100,48 @@ func (h *history) Commit(ctx context.Context, r machine.CommitRequest) (bool, er
 		return false, errors.New("commitStep: the project worker answered with other project files than the step's")
 	}
 	return resp.JSON200.Created, nil
+}
+
+// Write makes the step's writable files exactly r.Files with writeStep at the project worker, then
+// reads them back with readStepFiles at the check service, and returns the project's files. The
+// files read back must be the ones written; any other answer is an error.
+func (h *history) Write(ctx context.Context, r machine.WriteRequest) (machine.WriteResult, error) {
+	if h.project == nil {
+		return machine.WriteResult{}, errors.New("writeStep: no project worker URL")
+	}
+	if h.check == nil {
+		return machine.WriteResult{}, errors.New("readStepFiles: no check service URL")
+	}
+	files := make([]gen.FileContent, 0, len(r.Files))
+	for _, f := range r.Files {
+		files = append(files, gen.FileContent{Path: f.Path, Content: f.Content, HashValue: sum(f.Content)})
+	}
+	limit := historyTimeLimit(r.TimeLimit)
+	resp, err := h.project.WriteStepWithResponse(ctx, &gen.WriteStepParams{ApiVersion: checksvc.APIVersion()},
+		gen.WriteRequest{Run: r.Run, Project: r.Project, Step: facts(r.Step), Attempt: r.Attempt, Round: roundOf(r.Round),
+			Before: projectFiles(r.Before), Files: files, TimeLimitSeconds: limit})
+	if err != nil {
+		return machine.WriteResult{}, fmt.Errorf("writeStep: %w", err)
+	}
+	if resp.StatusCode() != http.StatusOK || resp.JSON200 == nil {
+		return machine.WriteResult{}, fmt.Errorf("writeStep: %s", refusal(resp.StatusCode(), resp.Body))
+	}
+	read, err := h.check.ReadStepFilesWithResponse(ctx, &gen.ReadStepFilesParams{ApiVersion: checksvc.APIVersion()},
+		gen.CallCommon{Run: r.Run, Project: r.Project, Step: facts(r.Step), Attempt: r.Attempt, Round: roundOf(r.Round),
+			Before: projectFiles(r.Before), TimeLimitSeconds: limit})
+	if err != nil {
+		return machine.WriteResult{}, fmt.Errorf("readStepFiles: %w", err)
+	}
+	if read.StatusCode() != http.StatusOK || read.JSON200 == nil {
+		return machine.WriteResult{}, fmt.Errorf("readStepFiles: %s", refusal(read.StatusCode(), read.Body))
+	}
+	got, err := contentFiles(read.JSON200.Files)
+	if err != nil {
+		return machine.WriteResult{}, fmt.Errorf("readStepFiles: %w", err)
+	}
+	if canonical.FramedHash(got) != canonical.FramedHash(r.Files) {
+		return machine.WriteResult{}, errors.New("readStepFiles: the step's files are not the ones writeStep was given")
+	}
+	return machine.WriteResult{Written: nonNil(resp.JSON200.Written), Removed: nonNil(resp.JSON200.Removed),
+		ProjectFiles: machineFiles(read.JSON200.ProjectFiles)}, nil
 }

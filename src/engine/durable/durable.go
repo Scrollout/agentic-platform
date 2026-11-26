@@ -30,6 +30,7 @@ const (
 	LookupReuse    = "LookupReuse"
 	PutResult      = "PutResult"
 	RecordEvent    = "RecordEvent"
+	WriteProject   = "WriteProject" // a captured pattern's `fill` step: its filled files into the project
 )
 
 // The activities' application error types.
@@ -59,6 +60,18 @@ type RunInput struct {
 	Refs                []string          // the slice's refs, on every event without refs of its own
 	ReplayOf            string            // "" for a run that is not a replay
 	Operation           string            // the operation following the run, recorded on RunStarted
+	// Fill is what the run's `fill` steps are filled from; nil for a run without them.
+	Fill *FillInput
+	// NoReuse: the run reuses no earlier result (a proof), so every step and check runs.
+	NoReuse bool
+}
+
+// FillInput is what a run of a captured pattern's `fill` steps needs; RunInput.Fill is nil for
+// any other run.
+type FillInput struct {
+	Captured string            // the captured pattern's ID
+	Template map[string]string // output name -> hash of the files the source run ended with
+	Values   map[string]string // parameter name -> the value this run fills in
 }
 
 // RunResult is an ended run's outcome.
@@ -88,6 +101,15 @@ type WorkerCall struct {
 	Before              []machine.File
 	Artifacts           map[string]string
 	TimeLimit           time.Duration // the call's time limit
+}
+
+// WriteCall is one attempt of a `fill` step: the fields of CallWorker's call and the captured
+// pattern, its template and the values the step is filled with.
+type WriteCall struct {
+	WorkerCall
+	Captured string
+	Template map[string]string
+	Values   map[string]string
 }
 
 // WorkerResult is machine.Result without content: outputs by hash, findings by hash.

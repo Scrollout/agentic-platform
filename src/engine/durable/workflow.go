@@ -3,6 +3,7 @@ package durable
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand/v2"
 	"regexp"
 	"slices"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/agentic-platform/engine/api"
+	"github.com/agentic-platform/engine/canonical"
 	"github.com/agentic-platform/engine/machine"
 	"github.com/agentic-platform/retry"
 	enumspb "go.temporal.io/api/enums/v1"
@@ -55,7 +57,16 @@ const (
 
 // workflowVersion is the Run workflow's code version: a change to the commands a run issues
 // bumps it behind workflow.GetVersion, so runs in flight replay on the code that started them.
-const workflowVersion = 1
+// Version 2 (feature 011) adds a captured pattern's `fill` steps and RunInput.NoReuse; under
+// version 1 a `fill` step is a worker step and every kept result is reused.
+const (
+	workflowVersion = 2
+	fillVersion     = 2
+)
+
+// fillWorker is the worker of a captured pattern's `fill` steps (feature 011): the engine fills
+// the step's files from the captured template; no step worker and no model is called.
+const fillWorker = "procedure:fill"
 
 var hashRE = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
@@ -99,14 +110,18 @@ type run struct {
 	before    []machine.File         // the project's files after the last accepted step
 	commit    *machine.CommitRequest // the last accepted step's commit, nil before the first
 	committed bool
+
+	fills  bool   // the run's code version has `fill` steps and NoReuse (fillVersion)
+	values string // the hash of the Fill values, a `fill` step's extra reuse-key input
 }
 
 // Run runs one run to its outcome. A run that waits (a hand-over, an interruption, the step
 // workers) keeps the workflow open until a signal or its expiry ends or continues it. An error is
 // a defect: the run's record could not be written as the run holds it.
 func Run(ctx workflow.Context, in RunInput) (RunResult, error) {
-	_ = workflow.GetVersion(ctx, "run", workflow.DefaultVersion, workflowVersion)
-	r := &run{in: in, ref: in.Pattern.ID + "@" + in.Pattern.Version, rule: api.RetryRule(), artifacts: map[string]string{}}
+	version := workflow.GetVersion(ctx, "run", workflow.DefaultVersion, workflowVersion)
+	r := &run{in: in, ref: in.Pattern.ID + "@" + in.Pattern.Version, rule: api.RetryRule(), artifacts: map[string]string{},
+		fills: version >= fillVersion}
 	r.root, _ = workflow.NewDisconnectedContext(ctx)
 	var cancel workflow.CancelFunc
 	r.ctx, cancel = workflow.WithCancel(ctx)
@@ -127,6 +142,9 @@ func Run(ctx workflow.Context, in RunInput) (RunResult, error) {
 		hashes[i] = in.Inputs[n]
 		r.artifacts[n] = hashes[i]
 	}
+	if err := r.checkFill(); err != nil {
+		return RunResult{}, temporal.NewNonRetryableApplicationError(err.Error(), "InvalidRun", nil)
+	}
 	err := r.record(&EventRecord{Event: machine.Event{Kind: "RunStarted", Slice: in.Slice, Pattern: r.ref, Inputs: hashes,
 		Refs: in.Refs}, Project: in.Project, Operation: in.Operation, ReplayOf: in.ReplayOf})
 	for err == nil || errors.Is(err, errAgain) {
@@ -144,6 +162,40 @@ func Run(ctx workflow.Context, in RunInput) (RunResult, error) {
 func (r *run) pattern() machine.Pattern { return r.in.Pattern }
 
 func isAgent(s machine.Step) bool { return strings.HasPrefix(s.Worker, "agent:") }
+
+// isFill reports whether s is a captured pattern's `fill` step under the run's code version.
+func (r *run) isFill(s machine.Step) bool { return r.fills && s.Worker == fillWorker }
+
+// checkFill refuses a run whose `fill` steps it cannot fill: no Fill input, or an output the
+// template has no SHA-256 hash for. It sets the values' hash a `fill` step's reuse key takes.
+func (r *run) checkFill() error {
+	for _, s := range r.pattern().Steps {
+		if !r.isFill(s) {
+			continue
+		}
+		if r.in.Fill == nil {
+			return fmt.Errorf("step %s is a fill step and the run has no captured pattern to fill it from", s.Name)
+		}
+		for _, o := range s.Outputs {
+			if !hashRE.MatchString(r.in.Fill.Template[o]) {
+				return fmt.Errorf("the template of step %s's output %s is missing or not a SHA-256 hash", s.Name, o)
+			}
+		}
+	}
+	if r.in.Fill == nil {
+		return nil
+	}
+	values := canonical.Object{}
+	for k, v := range r.in.Fill.Values {
+		values[k] = v
+	}
+	h, err := canonical.Hash(values)
+	if err != nil {
+		return fmt.Errorf("the run's parameter values: %w", err)
+	}
+	r.values = h
+	return nil
+}
 
 // steps runs the pattern's steps from the one the run is in, then ends the run done.
 func (r *run) steps() error {
@@ -240,6 +292,9 @@ func (r *run) stepKey(s machine.Step, round int, inputs []string, open []Finding
 	}
 	parts := machine.KeyParts{PatternVersion: r.ref, Step: s.Name, Inputs: slices.Clone(inputs), AgentDigest: s.AgentDigest,
 		Model: model, Round: round}
+	if r.isFill(s) { // two runs that differ only in a value never share a filled result
+		parts.Inputs = append(parts.Inputs, r.values)
+	}
 	l = ReuseLookup{Slice: r.in.Slice, Parts: parts, Open: slices.Clone(open), Changed: slices.Clone(changed)}
 	if len(open) > 0 {
 		return l, slices.Clone(inputs), ""
@@ -273,7 +328,7 @@ func (r *run) step(s machine.Step, round int, open []Finding, changed []machine.
 	if a.Key != "" { // the lookup's key: it covers the open findings' text and the method (feature 006)
 		keyInputs, key, method = a.Inputs, a.Key, a.Method
 	}
-	found := a.Found && len(a.Artifacts) == len(s.Outputs)
+	found := a.Found && len(a.Artifacts) == len(s.Outputs) && (!r.fills || !r.in.NoReuse)
 	if found && a.Open && s.Reviews() { // a review round left open in an earlier run (research D36)
 		return r.reuseOpenRound(s, round, keyInputs, key, method, a)
 	}
@@ -299,6 +354,9 @@ func (r *run) step(s machine.Step, round int, open []Finding, changed []machine.
 		return WorkerResult{}, rejected, err
 	}
 	attempts := max(r.pattern().Attempts, 1)
+	if r.isFill(s) { // a filled step gives the same files again: it is never attempted twice
+		attempts = 1
+	}
 	var last string
 	failures := 0
 	for n := 1; n <= attempts; {
@@ -423,7 +481,14 @@ func (r *run) attempt(s machine.Step, at attemptOf) (WorkerResult, verdict, stri
 	call := WorkerCall{Run: r.in.Run, Slice: r.in.Slice, Project: r.in.Project, Step: s,
 		Attempt: at.n, Round: at.round, Inputs: slices.Clone(at.inputs), Open: slices.Clone(at.open),
 		ChangedLines: slices.Clone(at.changed), Before: slices.Clone(r.before), Artifacts: r.artifactsCopy(), TimeLimit: limit}
-	err := r.exec(r.ctx, CallWorker, limit, call, &res)
+	var err error
+	if r.isFill(s) {
+		f := r.in.Fill
+		err = r.exec(r.ctx, WriteProject, limit, WriteCall{WorkerCall: call, Captured: f.Captured,
+			Template: maps.Clone(f.Template), Values: maps.Clone(f.Values)}, &res)
+	} else {
+		err = r.exec(r.ctx, CallWorker, limit, call, &res)
+	}
 	// A worker that cannot be reached (WorkersNotReady, such as one restarting) is called again by
 	// the declared retry rule, recording nothing, before the run waits for its workers (R10).
 	for try := 0; err != nil && errType(err) == WorkersNotReady && r.ctx.Err() == nil && try < r.rule.Retries; try++ {
@@ -450,7 +515,9 @@ func (r *run) attempt(s machine.Step, at attemptOf) (WorkerResult, verdict, stri
 	base := machine.Event{Step: s.Name, Attempt: at.n, Round: at.round, Refs: r.in.Refs}
 	// the attempt's use goes on its AttemptMade, or on its StepRejected when it made none
 	used := base
-	used.Usage = &use
+	if !r.isFill(s) { // a filled step reaches no model: its events carry no usage
+		used.Usage = &use
+	}
 
 	if err != nil || res.Failure != "" { // a failed call's use counts (above), as in feature 001 (T057)
 		why := "the worker failed: " + res.Failure

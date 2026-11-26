@@ -26,7 +26,7 @@ func NewRunsWorker(c client.Client, a *Activities) worker.Worker {
 	w.RegisterWorkflowWithOptions(Run, workflow.RegisterOptions{Name: "Run"})
 	for name, fn := range map[string]any{
 		CallWorker: a.CallWorker, RunCheck: a.RunCheck, RestoreProject: a.RestoreProject, CommitStep: a.CommitStep,
-		LookupReuse: a.LookupReuse, PutResult: a.PutResult, RecordEvent: a.RecordEvent,
+		LookupReuse: a.LookupReuse, PutResult: a.PutResult, RecordEvent: a.RecordEvent, WriteProject: a.WriteProject,
 	} {
 		w.RegisterActivityWithOptions(fn, activity.RegisterOptions{Name: name})
 	}
