@@ -792,13 +792,15 @@ pass, three runs give the same files.
   is unseen (asserted after the proof ends); `not_used` compared as a set (contract: "the order
   judged"); a named base pattern is `chosen`; a no-parameter pattern's `parameters` is `{}`;
   ties of approval time, erasure then replay and a restart mid-start untested
-- [ ] T014 [P] [US2] Test author: new `src/tests/acceptance/captured_test.go` (Compose stack,
+- [x] T014 [P] [US2] Test author: new `src/tests/acceptance/captured_test.go` (Compose stack,
   recorded model): create the `tasks` slice first, from a recorded analyst answer kept as test
   data, then build the notes slice from the recorded happy set until done; capture; prove;
   approve; replace and approve the `tasks` slice's parts (the notes slice with `note`/`notes`
   replaced) through the slice API, which calls no analyst; `ap build` ends done; the gateway's
   access log has no request from the capture to the build's end (SC-001); three builds give equal file hashes (SC-004); `--pattern api-feature-go` runs
   the agents. Seen failing (owner go-ahead for the stack)
+  Tests 2026-11-26 (Sonnet, 0bdb5fe): seen failing on CI 45873468758 at case 6 (cases 1-5 passed);
+  passes on CI 45882363812 after two owner-approved test fixes (T016)
 - [x] T030 [P] [US2] Test author: new `src/cli/captured_build_test.go`: `ap build --pattern`
   sends `pattern`; `build`'s first line, the `RunStarted` event line, the `run` header and the
   `Not used:` lines (from the run's `not_used`) print as `src/cli/contract.md` states, the
@@ -826,7 +828,11 @@ pass, three runs give the same files.
   is not `100.0`); `not_used` newest approval first; a named base pattern is `chosen`; `Not
   used:` lines whenever `not_used` is present; `--pattern` only after `<slice> <project>`.
   T041's `FillWorker` half done; its `kindOf` half open
-- [ ] T016 [US2] Commit; fast lint; push (owner go-ahead); record the CI run
+- [x] T016 [US2] Commit; fast lint; push (owner go-ahead); record the CI run
+  Done 2026-11-26: CI 45882363812 at fbc09aa, 26/26 green (Service tests 38 min, T014 included).
+  Earlier runs: 45873468758 (T014 case 6 refused WorkersNotReady: the test started no step
+  workers; fixed f771855) and 45877543492 (case 6 passed; case 7: later builds reuse every result,
+  no CheckPassed; fixed fbc09aa); both fixes owner-approved, Tests-approved-by
 - [ ] T017 [US2] Fresh review of US2 judging T016's CI run; `/speckit-converge` for US2
 
 ---
