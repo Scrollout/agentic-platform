@@ -516,8 +516,12 @@ proposed and adding the derived value works; the proof ends passed with no model
   2026-11-26: written (4a15de6), vetted only; the lab stands in for the launcher's `prove`
   wiring (`proof-slice`, `build-workers`, `build`), the failed case is a cancelled proof; seen
   failing on the CI run T010 records
+  2026-11-26 (CI run 45819156622): no CI job runs it. `scripts/check.sh`'s docker step builds
+  only the suites `recorded`, `lint`, `acceptance` and `contract`; `src/tests/lab` is their helper
+  package, and the Go unit job runs it without the `docker` tag. The owner chose (2026-11-26) to
+  move its cases to the acceptance suite: T036
 - [x] T029 [US1] Code author (after T007, on its store changes; done when T006's proof cases, T033,
-  T027 and T008's proof cases pass, and T028 on the CI run T010 records): the proof slice in `src/engine/slices/` (made by the engine, the `startRun` branch for a proof slice, history
+  T027 and T008's proof cases pass, and T028's cases (T036) on the CI run T010 records): the proof slice in `src/engine/slices/` (made by the engine, the `startRun` branch for a proof slice, history
   `made-for-proof`, `proof_of`, never reused by `createSlice`, `deleteSlice` clears
   `proof_slice`), the `proof-slice` call in new `src/engine/api/proof_slice.go`, the proof side of
   `ReplayRun` (a replay of a proof run is a new proof, no reuse), `proof-slice`, the proof outcome line and its exit code in
@@ -542,6 +546,14 @@ proposed and adding the derived value works; the proof ends passed with no model
   for passed; 1 for failed, whether the run was handed
   over, expired, cancelled or ended done with differing files), `ap slices` shows `PROOF OF` and `ap show` its `proof of`
   line; errors print their code and reason. Seen failing
+- [ ] T036 [US1] Test author (owner-approved 2026-11-26: removing the existing
+  `src/tests/lab/captured_prove_test.go`; commit with `Tests-approved-by: Marius Gologan
+  (2026-11-26)`): T028's cases as new `src/tests/acceptance/captured_prove_test.go` (package
+  `acceptance`, built by the docker step, run by the "Service tests with Docker (recorded model)"
+  job, whose `AP_ACCEPTANCE_SKIP` does not name it), using the `lab` package's exported helpers
+  only; remove the lab file in the same commit. The code (T029, T009) landed before any CI job ran
+  these cases, so they cannot be seen failing first (plan Exceptions); they must pass on the CI run
+  that T010 records, and the test author vets them and names a planted change they would catch
 - [x] T009 [US1] Code author: the commands in `src/cli/` (generated client only), except
   `proof-slice`, the proof outcome line, the `PROOF OF` column and the `proof of` line (T029)
   Done 2026-11-26 with T029's client part (Opus, 1b0f426): T008 passes, `src/cli` and the launcher

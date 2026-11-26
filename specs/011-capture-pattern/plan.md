@@ -182,7 +182,9 @@ commit; any other is stopped and asked for):
 
 ## Exceptions
 
-None.
+| Rule | Location | Reason |
+|------|----------|--------|
+| Outside-in, test-first: acceptance tests are seen failing before the code | `src/tests/acceptance/captured_prove_test.go` (T036) | T028 wrote the `ap prove` cases in `src/tests/lab`, which no CI job runs (CI run 45819156622), so T029 and T009 landed before the cases ever ran; they move to the acceptance suite after the code, and pass or fail on T010's CI run. Recorded 2026-11-26 with the owner's choice |
 
 ## Complexity Tracking
 
