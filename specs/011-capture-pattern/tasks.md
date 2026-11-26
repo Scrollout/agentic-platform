@@ -888,7 +888,8 @@ pass, three runs give the same files.
   and a `startRun` case in a new `api/captured_reserved_test.go`: a name value `func`, `type` or
   `go` does not fit (a `Parameter` refusal naming the parameter and the word; a place difference
   elsewhere still wins); an unnamed start names it `refused-value`; a named start answers
-  `PatternDoesNotFit`; `Propose` still offers a source value `type`; `types` still fits; `Type` is refused for its form as before, not as a keyword
+  `PatternDoesNotFit`; `Propose` still offers a source value `type`; `types` still fits; `Type` is refused for its form as before, not as a keyword; a source value
+  that is a keyword, kept by a later slice, fits (Clarification "Q (T062)")
 - [ ] T063 [US2] Code author (done when T062 passes): the keyword set one named value in
   `captured/match.go`, applied only where `Fit` reads a value
 - [ ] T053 [US2] (review S1; suggestion) `Fit`'s reading refuses a value that contains the

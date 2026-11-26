@@ -138,6 +138,10 @@ reused only under the method that judged them), [feature 009](../009-no-hard-cod
   none, and a longer word (`types`) is not reserved; another case form (`Type`) is outside the
   name form, refused for its form as before (owner; FR-008,
   FR-010).
+- Q (T062, 2026-11-27): a captured pattern whose source value is itself a Go keyword (the
+  proposal offers it)? → A: a later value equal to that parameter's own source value is not
+  refused as a keyword, since the source run passed every check with it; any other keyword value
+  is (owner; FR-008).
 
 ## User Scenarios & Testing *(mandatory)*
 

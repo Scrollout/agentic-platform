@@ -162,7 +162,8 @@ the fit and the fill:
   before any substitution.
 - **Reserved words** (*owner*, T061): a later slice's name value that is one of the 25 Go
   keywords (`func`, `type`, `go`) is refused at the fit only; the proposal keeps a source value
-  such as `type`; a longer word (`types`) is not reserved.
+  such as `type`, and a later value equal to its parameter's own source value is not refused as a
+  keyword (*owner*, T062); a longer word (`types`) is not reserved.
 - **Case forms** (*owner*): a name covers its lower (`note`), capitalised (`Note`) and upper
   (`NOTE`) forms, each replaced wherever it occurs, inside longer words too (`NewNote`,
   `note_id`, `denote`); a plural is its own parameter.
