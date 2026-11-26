@@ -1,36 +1,41 @@
 //go:build docker
 
-package lab
+package acceptance
 
-// T028 (feature 011, US1; spec FR-004, FR-005, FR-011; src/cli/contract.md, the launcher's `prove`
+// T036 (feature 011, US1; spec FR-004, FR-005, FR-011; src/cli/contract.md, the launcher's `prove`
 // paragraph, "End lines", "Run states and exit codes"; contracts/captured-patterns.md, `ap prove`):
+// T028's cases, moved here from src/tests/lab (the lab package is no CI job's test; this suite
+// is built by the docker step and run by "Service tests with Docker (recorded model)").
+//
 // `ap prove <captured pattern> <project>` runs the client's `proof-slice`, then `build-workers`
 // and `build` for the proof slice into <project>, and after the run's end line prints `Proof of
 // <id>: passed` (exit 0) or `Proof of <id>: failed: ...` (exit 1, over the run state's own code).
 //
 // The lab does not run the launcher (it needs a Compose session). cpvProve does what the
-// contract says the launcher does, with the real terminal client binary (src/cli/cmd/cli, run in
-// a container on the lab network, as acceptance/us2_test.go does) and the lab's own stand-in for
-// `ap build-workers` (l.StepWorkers): `proof-slice <id>` (its stdout is the proof slice's ID and a
-// line feed, read here as the launcher reads it; its exit code ends the launcher), StepWorkers,
-// `build <proof slice> <project>`. What the launcher script alone adds (the dispatch of the word
-// `prove` in src/deploy/ap) is outside this file and needs a Compose session (reported to the
-// owner with the task).
+// contract says the launcher does, with the real terminal client binary (buildCLI, run in a
+// container on the lab network) and the lab's own stand-in for `ap build-workers`
+// (l.StepWorkers): `proof-slice <id>` (its stdout is the proof slice's ID and a line feed; its exit
+// code ends the launcher), StepWorkers, `build <proof slice> <project>`. What the launcher script
+// alone adds (the dispatch of the word `prove` in src/deploy/ap) is outside this file.
 //
 // One lab, one source build with the scripted step model, one capture; the cases run in order and
 // share them: unknown captured pattern, passed proof, a second proof into another project, a failed
-// proof (the run cancelled with `cancel`, reachable through the client and the API alone).
-// The step set is a copy of `happy`: the scripted model writes the exchanges it answers into its
-// set when the lab ends, and the committed set must not change.
+// proof (the run cancelled with `cancel`, reachable through the client and the API alone). The
+// step set is a copy of `happy`: the scripted model writes the exchanges it answers into its set
+// when the lab ends, and the committed set must not change.
 //
-// Fails today because `proof-slice` and `prove` do not exist: the client answers "unknown command"
-// (exit 3), `POST /captured-patterns/{id}/proof-slice` is a stub, and no `Proof of` line is printed.
+// The checks that read the lab's projects folder (no folder `never` for an unknown pattern;
+// proof-a and proof-b hold the files the source run wrote) use Lab.ProjectsDir (owner-approved
+// 2026-11-26, T036).
+//
+// The code landed before any CI job ran these cases, so they were not seen failing (plan
+// Exceptions). Planted changes each case would catch are named at the cases.
 // Expected time: lab with images ~5 min, source build ~10 min, each proof 3 to 10 min; ~35 min.
 
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"net/url"
 	"os"
 	"os/exec"
@@ -40,7 +45,44 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/agentic-platform/tests/lab"
 )
+
+// cpvCopyFiles copies the files of from (not its subfolders) into to; a missing from copies
+// nothing. A file already in to is refused.
+func cpvCopyFiles(from, to string) error {
+	es, err := os.ReadDir(from)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(to, 0o755); err != nil {
+		return err
+	}
+	for _, e := range es {
+		if !e.Type().IsRegular() {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(from, e.Name()))
+		if err != nil {
+			return err
+		}
+		dst, err := os.OpenFile(filepath.Join(to, e.Name()), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644) //nolint:gosec // G302: the scripted model's container reads the set as another user, as lab.copyFiles writes it
+		if err != nil {
+			return err
+		}
+		if _, err := dst.Write(data); err != nil {
+			return errors.Join(err, dst.Close())
+		}
+		if err := dst.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // cpvRun is a run as far as this test reads it.
 type cpvRun struct {
@@ -63,9 +105,9 @@ type cpvCaptured struct {
 	} `json:"proofs"`
 }
 
-func cpvGet(t testing.TB, l *Lab, path string, into any) int {
+func cpvGet(t testing.TB, l *lab.Lab, path string, into any) int {
 	t.Helper()
-	st, _, b := l.Do("GET", path, ClientToken, nil, nil)
+	st, _, b := l.Do("GET", path, lab.ClientToken, nil, nil)
 	if st == 200 {
 		if err := json.Unmarshal(b, into); err != nil {
 			t.Fatalf("GET %s: %v: %s", path, err, b)
@@ -74,7 +116,7 @@ func cpvGet(t testing.TB, l *Lab, path string, into any) int {
 	return st
 }
 
-func cpvRuns(t testing.TB, l *Lab) []cpvRun {
+func cpvRuns(t testing.TB, l *lab.Lab) []cpvRun {
 	t.Helper()
 	var list struct {
 		Items []cpvRun `json:"items"`
@@ -85,7 +127,7 @@ func cpvRuns(t testing.TB, l *Lab) []cpvRun {
 	return list.Items
 }
 
-func cpvSliceCount(t testing.TB, l *Lab) int {
+func cpvSliceCount(t testing.TB, l *lab.Lab) int {
 	t.Helper()
 	var list struct {
 		Items []json.RawMessage `json:"items"`
@@ -97,7 +139,7 @@ func cpvSliceCount(t testing.TB, l *Lab) int {
 }
 
 // cpvWaitEnded polls a run until it is not running, within limit.
-func cpvWaitEnded(t testing.TB, l *Lab, id string, limit time.Duration) cpvRun {
+func cpvWaitEnded(t testing.TB, l *lab.Lab, id string, limit time.Duration) cpvRun {
 	t.Helper()
 	deadline := time.Now().Add(limit)
 	var r cpvRun
@@ -114,40 +156,16 @@ func cpvWaitEnded(t testing.TB, l *Lab, id string, limit time.Duration) cpvRun {
 	return r
 }
 
-// cpvBuildCLI builds the terminal client with the pinned Go image, offline (as acceptance's
-// buildCLI does), into a folder the client container mounts.
-func cpvBuildCLI(t *testing.T) string {
-	t.Helper()
-	bin := t.TempDir()
-	if err := os.Chmod(bin, 0o755); err != nil { //nolint:gosec // G302: the client container, another user, reads the folder
-		t.Fatal(err)
-	}
-	cache := filepath.Join(cacheHome(), "agentic-platform", "go")
-	if err := os.MkdirAll(cache, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	out, err := exec.Command("docker", "run", "--rm", "--network", "none",
-		"-v", filepath.Join(Root(t), "src")+":/src", "-w", "/src/cli", "-v", cache+":/gopath", "-v", bin+":/out",
-		"--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()),
-		"-e", "GOPATH=/gopath", "-e", "GOCACHE=/gopath/cache", "-e", "GOTOOLCHAIN=local", "-e", "GOPROXY=off",
-		"-e", "GOFLAGS=-mod=readonly", "-e", "CGO_ENABLED=0", "-e", "GOOS=linux",
-		Pin(t, "golang"), "go", "build", "-trimpath", "-o", "/out/cli", "./cmd/cli").CombinedOutput()
-	if err != nil {
-		t.Fatalf("building the terminal client: %v: %s", err, out)
-	}
-	return bin
-}
-
 // cpvCmd is the terminal client run in a container on the lab network.
-func cpvCmd(t testing.TB, l *Lab, bin string, args ...string) *exec.Cmd {
+func cpvCmd(t testing.TB, l *lab.Lab, bin string, args ...string) *exec.Cmd {
 	a := []string{"run", "--rm", "--network", l.Net, "--read-only", "--user", "65532:65532", "--cap-drop", "ALL",
 		"--security-opt", "no-new-privileges", "-v", bin + ":/c:ro",
-		"-e", "ENGINE_URL=" + l.BaseURL(), "-e", "ENGINE_TOKEN=" + ClientToken, Pin(t, "alpine"), "/c/cli"}
+		"-e", "ENGINE_URL=" + l.BaseURL(), "-e", "ENGINE_TOKEN=" + lab.ClientToken, lab.Pin(t, "alpine"), "/c/cli"}
 	return exec.Command("docker", append(a, args...)...)
 }
 
 // cpvCLI runs the client to its end and returns standard output, standard error and the exit code.
-func cpvCLI(t testing.TB, l *Lab, bin string, args ...string) (string, string, int) {
+func cpvCLI(t testing.TB, l *lab.Lab, bin string, args ...string) (string, string, int) {
 	t.Helper()
 	cmd := cpvCmd(t, l, bin, args...)
 	var so, se bytes.Buffer
@@ -173,7 +191,7 @@ var cpvSliceLine = regexp.MustCompile(`^S-[0-9]+\n$`)
 // build-workers (l.StepWorkers), then build. during, when not nil, runs while `build` runs. It
 // returns the proof slice (empty when proof-slice failed), build's standard output, and the exit
 // code (proof-slice's own code when it failed). The step workers are removed when it returns.
-func cpvProve(t *testing.T, l *Lab, bin, id, project string, during func()) (slice, out, errOut string, code int) {
+func cpvProve(t *testing.T, l *lab.Lab, bin, id, project string, during func()) (slice, out, errOut string, code int) {
 	t.Helper()
 	so, se, code := cpvCLI(t, l, bin, "proof-slice", id)
 	if code != 0 {
@@ -241,20 +259,29 @@ var cpvTemplateFiles = map[string]string{
 func TestCapturedProveBuildsTheProofSliceAndSaysWhetherItPassed(t *testing.T) {
 	// The scripted step model over a copy of `happy` (see the header).
 	set := t.TempDir()
-	happy := filepath.Join(Root(t), "src", "tests", "recorded", "steps", "happy")
+	happy := filepath.Join(lab.Root(t), "src", "tests", "recorded", "steps", "happy")
 	for _, c := range []struct{ from, to string }{{happy, set}, {filepath.Join(happy, "files"), filepath.Join(set, "files")}} {
-		if err := copyFiles(c.from, c.to); err != nil {
+		if err := cpvCopyFiles(c.from, c.to); err != nil {
 			t.Fatal(err)
 		}
 	}
+	requirePrerequisites(t)
 	t.Setenv("AP_LAB_MODEL", "scripted")
-	bin := cpvBuildCLI(t)
-	l := Start(t, Build(), Steps(set))
+	bin := buildCLI(t)
+	l := lab.Start(t, lab.Build(), lab.Steps(set))
 
 	// A done run to capture: the example slice built into `notes`, by the engine's API.
-	slice := approvedExample(t, l)
+	slice := l.Create(t, lab.Example)
+	answerExample(t, l, slice)
+	for _, p := range []string{"goals", "rules", "contract"} {
+		l.Approve(t, slice, p)
+	}
+	if d := l.Get(t, slice); d.State != "approved" {
+		t.Fatalf("the example slice is %q after its three approvals, want approved", d.State)
+	}
+	const labProject = "notes"
 	l.StepWorkers(t, slice, labProject)
-	source := l.startRun(t, slice)
+	source := startRun(t, l, slice, labProject).Target
 	if r := cpvWaitEnded(t, l, source, 30*time.Minute); r.Status != "ended" || r.Outcome != "done" {
 		t.Fatalf("the source run is %+v, want ended done", r)
 	}
@@ -266,6 +293,8 @@ func TestCapturedProveBuildsTheProofSliceAndSaysWhetherItPassed(t *testing.T) {
 	id := op.Target
 
 	// FR-004, contract.md "prove": an unknown captured pattern is exit 4 (NotFound) and starts nothing.
+	// Planted change: the proof-slice handler makes a slice (or the CLI exits 1 instead of 4) for an
+	// id that is not a captured pattern.
 	t.Run("an unknown captured pattern is exit 4 NotFound and starts nothing", func(t *testing.T) {
 		slices, runs := cpvSliceCount(t, l), len(cpvRuns(t, l))
 		got, out, errOut, code := cpvProve(t, l, bin, "no-such-pattern", "never", nil)
@@ -278,7 +307,7 @@ func TestCapturedProveBuildsTheProofSliceAndSaysWhetherItPassed(t *testing.T) {
 		if n := len(cpvRuns(t, l)); n != runs {
 			t.Errorf("%d runs after, %d before: a run was started", n, runs)
 		}
-		if _, err := os.Stat(filepath.Join(l.projects, "never")); err == nil {
+		if _, err := os.Stat(filepath.Join(l.ProjectsDir(), "never")); err == nil {
 			t.Error("a project folder `never` was made")
 		}
 	})
@@ -286,6 +315,8 @@ func TestCapturedProveBuildsTheProofSliceAndSaysWhetherItPassed(t *testing.T) {
 	// FR-004, FR-005, FR-011: a passed proof; the proof slice's run into <project>, the end line,
 	// then `Proof of <id>: passed`, exit 0.
 	var proofSlice string
+	// Planted change: the CLI prints the proof line before the run's end line, or exits 1 on a
+	// passed proof; or the engine does not record the proof (proofs empty, wrong proof_slice).
 	t.Run("a passed proof prints Proof passed after the end line and exits 0", func(t *testing.T) {
 		got, out, errOut, code := cpvProve(t, l, bin, id, "proof-a", nil)
 		proofSlice = got
@@ -310,13 +341,14 @@ func TestCapturedProveBuildsTheProofSliceAndSaysWhetherItPassed(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if have, err := os.ReadFile(filepath.Join(l.projects, "proof-a", rel)); err != nil || !bytes.Equal(have, want) {
+			if have, err := os.ReadFile(filepath.Join(l.ProjectsDir(), "proof-a", rel)); err != nil || !bytes.Equal(have, want) {
 				t.Errorf("proof-a/%s: %v; differs from the source run's file: %v", rel, err, err == nil)
 			}
 		}
 	})
 
 	// Contract.md: running it again into another project builds again (a new proof, a new run).
+	// Planted change: the engine reuses the first proof's run (or makes a second proof slice).
 	t.Run("running it again into another project builds again", func(t *testing.T) {
 		got, out, errOut, code := cpvProve(t, l, bin, id, "proof-b", nil)
 		if code != 0 {
@@ -335,7 +367,7 @@ func TestCapturedProveBuildsTheProofSliceAndSaysWhetherItPassed(t *testing.T) {
 			t.Errorf("the second proof's run is %+v, want a proof run into proof-b", r)
 		}
 		for rel := range cpvTemplateFiles {
-			if _, err := os.Stat(filepath.Join(l.projects, "proof-b", rel)); err != nil {
+			if _, err := os.Stat(filepath.Join(l.ProjectsDir(), "proof-b", rel)); err != nil {
 				t.Errorf("proof-b/%s: %v", rel, err)
 			}
 		}
@@ -344,6 +376,8 @@ func TestCapturedProveBuildsTheProofSliceAndSaysWhetherItPassed(t *testing.T) {
 	// A failed proof exits 1 over the run state's own code and says why. The failure made here is
 	// a cancelled run (`cancel RUN-n` while it runs): reachable through the client alone. Handed
 	// over, expired and differing files are not made here (see the report).
+	// Planted change: the CLI returns the cancelled state's own exit code 6 for a failed proof, or
+	// prints `Proof ... passed` for a cancelled run.
 	t.Run("a failed proof prints Proof failed after the end line and exits 1", func(t *testing.T) {
 		cancelled := ""
 		_, out, errOut, code := cpvProve(t, l, bin, id, "proof-c", func() {

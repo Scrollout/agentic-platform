@@ -123,6 +123,9 @@ type Lab struct {
 	model *labModel // the model switch: replay or scripted (AP_LAB_MODEL)
 }
 
+// ProjectsDir is the host folder that holds the lab's projects, one subfolder per project.
+func (l *Lab) ProjectsDir() string { return l.projects }
+
 // BaseURL is the engine's address on the lab network.
 func (l *Lab) BaseURL() string { return "http://" + l.EngineIP + ":8080" }
 

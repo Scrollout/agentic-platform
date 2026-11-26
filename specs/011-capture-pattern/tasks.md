@@ -551,7 +551,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   for passed; 1 for failed, whether the run was handed
   over, expired, cancelled or ended done with differing files), `ap slices` shows `PROOF OF` and `ap show` its `proof of`
   line; errors print their code and reason. Seen failing
-- [ ] T036 [US1] Test author (owner-approved 2026-11-26: removing the existing
+- [x] T036 [US1] Test author (owner-approved 2026-11-26: removing the existing
   `src/tests/lab/captured_prove_test.go`; commit with `Tests-approved-by: Marius Gologan
   (2026-11-26)`): T028's cases as new `src/tests/acceptance/captured_prove_test.go` (package
   `acceptance`, built by the docker step, run by the "Service tests with Docker (recorded model)"
@@ -560,6 +560,9 @@ proposed and adding the derived value works; the proof ends passed with no model
   change to `src/tests/lab/lab.go`, for T028's project-folder checks); remove the lab file in the same commit. The code (T029, T009) landed before any CI job ran
   these cases, so they cannot be seen failing first (plan Exceptions); they must pass on the CI run
   that T010 records, and the test author vets them and names a planted change they would catch
+  Done 2026-11-26 (Sonnet test author; the coordinator added `Lab.ProjectsDir()` and restored
+  T028's three folder checks after the owner's approval): vetted with `-tags docker`; each case
+  names its planted change; passes or fails on T010's CI run
 - [x] T009 [US1] Code author: the commands in `src/cli/` (generated client only), except
   `proof-slice`, the proof outcome line, the `PROOF OF` column and the `proof of` line (T029)
   Done 2026-11-26 with T029's client part (Opus, 1b0f426): T008 passes, `src/cli` and the launcher
