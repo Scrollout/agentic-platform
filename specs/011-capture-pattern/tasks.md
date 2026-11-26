@@ -697,6 +697,14 @@ proposed and adding the derived value works; the proof ends passed with no model
   unreadable template, a refused fill) ends the run interrupted then expired; make it a
   hand-over, keeping interrupt for 503, 504 and `ProjectStateDiffers`: test author, then code
   author, in US2 before T015
+  Owner 2026-11-26 (the answers not listed above): a refusal the developer must fix hands over,
+  so also 422 `UnreadableProject`, 409 `HistoryChanged`, 401, 404, 500 `ResponseTooLarge` and a
+  read-back (`readStepFiles`) that differs from the files written; one a repeat can pass
+  interrupts, so also 429, 500 `WriteFailed` and a transport error. Seam: the sentinel
+  `machine.ErrWriteRefused` in the `Writer` contract (`machine/writer.go`), wrapped by
+  `steps`' `Write` for the hand-over answers and by `WriteProject` for an unreadable template or a
+  refused fill, carried to the workflow as a `Refused` flag on the attempt's result; a History
+  that is no `Writer`, or no captured patterns known, stays an interrupt (an engine defect)
 - [ ] T041 [US1] (review S2, S3; Single owner for rules; suggestion) one function in
   `engine/captured` that gives a sent value's kind and source (the API's `kindOf` derives it from
   Propose's survivors and `Fill(nil, ...)`); the literal `procedure:fill` in one place
