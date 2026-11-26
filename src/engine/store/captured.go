@@ -14,11 +14,13 @@ import (
 // record, replaced atomically like a slice's, and captured/<id>/artifacts the hashes of the
 // artifacts it holds, one per line, which only grows. A captured pattern is the second holder of
 // an artifact besides the slices: an artifact it holds stays when the slice that stored it is
-// erased. The store keeps the record's bytes; the engine API owns their format.
+// erased. The store keeps the record's bytes; the engine API owns their format. An erased captured
+// pattern keeps only captured/<id>/erased, so its ID is never given again (EraseCapturedPattern).
 const (
-	capturedDir  = "captured"
-	recordFile   = "record.json"
-	capturedHeld = "artifacts"
+	capturedDir    = "captured"
+	recordFile     = "record.json"
+	capturedHeld   = "artifacts"
+	capturedErased = "erased"
 )
 
 // openCaptured reads which artifacts each captured pattern holds. The caller is Open.
@@ -35,6 +37,11 @@ func (s *Store) openCaptured() error {
 		id, err := s.ids.ParsePatternID(d.Name())
 		if err != nil {
 			return fmt.Errorf("store: unexpected entry in %s: %w", capturedDir, err)
+		}
+		if erased, err := exists(filepath.Join(s.root, capturedDir, id.String(), capturedErased)); err != nil {
+			return err
+		} else if erased {
+			continue // an erasure in progress: what it still lists is held by no one
 		}
 		lines, err := readLines(filepath.Join(s.root, capturedDir, id.String(), capturedHeld))
 		if err != nil {
@@ -79,6 +86,11 @@ func (s *Store) PutCapturedPattern(capturedID string, record []byte, holds []str
 	if err != nil {
 		return err
 	}
+	if erased, err := exists(filepath.Join(dir, capturedErased)); err != nil {
+		return err
+	} else if erased {
+		return fmt.Errorf("store: captured pattern %s was erased: its ID is never given again", id)
+	}
 	for _, h := range hashes {
 		if s.held[id][h] {
 			continue
@@ -106,11 +118,104 @@ func (s *Store) CapturedPattern(capturedID string) ([]byte, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	b, err := os.ReadFile(filepath.Join(s.root, capturedDir, id.String(), recordFile))
+	dir := filepath.Join(s.root, capturedDir, id.String())
+	if erased, err := exists(filepath.Join(dir, capturedErased)); err != nil {
+		return nil, err
+	} else if erased {
+		return nil, fmt.Errorf("captured pattern %s was erased: %w", id, ErrNotFound)
+	}
+	b, err := os.ReadFile(filepath.Clean(filepath.Join(dir, recordFile)))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("captured pattern %s: %w", id, ErrNotFound)
 	}
 	return b, err
+}
+
+// CapturedPatternErased reports whether the captured pattern was erased, or its erasure begun: its
+// ID is then never given again.
+func (s *Store) CapturedPatternErased(capturedID string) (bool, error) {
+	id, err := s.ids.ParsePatternID(capturedID)
+	if err != nil {
+		return false, fmt.Errorf("store: %w", err)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return exists(filepath.Join(s.root, capturedDir, id.String(), capturedErased))
+}
+
+// EraseCapturedPattern erases the captured pattern's record and every artifact it holds that no
+// slice stored and no other captured pattern holds, and keeps its ID taken for good. The steps, in
+// order, each durable before the next: the `erased` mark (from then on no reader finds the
+// captured pattern and no record can be written under its ID), the record, the artifacts only it
+// holds, then the list of what it held. A crash part way leaves the mark and the list, so calling
+// it again completes the erasure; erasing an erased or unknown captured pattern only leaves the
+// mark.
+func (s *Store) EraseCapturedPattern(capturedID string) error {
+	id, err := s.ids.ParsePatternID(capturedID)
+	if err != nil {
+		return fmt.Errorf("store: %w", err)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	dir, err := s.capturedFolder(id)
+	if err != nil {
+		return err
+	}
+	if err := writeAtomic(dir, capturedErased, nil); err != nil {
+		return err
+	}
+	if err := os.Remove(filepath.Join(dir, recordFile)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	if err := syncDir(dir); err != nil {
+		return err
+	}
+	lines, err := readLines(filepath.Join(dir, capturedHeld))
+	if err != nil {
+		return err
+	}
+	delete(s.held, id) // its holds no longer keep an artifact
+	for _, l := range lines {
+		h, err := s.ids.ParseHash(string(l))
+		if err != nil {
+			return fmt.Errorf("store: captured pattern %s: bad artifact hash: %w", id, err)
+		}
+		if s.heldByCaptured(h) || s.ownedBySlice(h) {
+			continue
+		}
+		if err := os.Remove(filepath.Join(s.artifacts, h.String())); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+	}
+	if err := syncDir(s.artifacts); err != nil {
+		return err
+	}
+	if err := os.Remove(filepath.Join(dir, capturedHeld)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return syncDir(dir)
+}
+
+// ownedBySlice reports whether a slice stored the artifact. The caller holds s.mu.
+func (s *Store) ownedBySlice(h slice.Hash) bool {
+	for _, hashes := range s.owned {
+		if hashes[h] {
+			return true
+		}
+	}
+	return false
+}
+
+// exists reports whether path exists.
+func exists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	switch {
+	case err == nil:
+		return true, nil
+	case errors.Is(err, fs.ErrNotExist):
+		return false, nil
+	}
+	return false, err
 }
 
 // CapturedPatterns returns the record of every captured pattern that has one, by ID.
@@ -129,6 +234,11 @@ func (s *Store) CapturedPatterns() (map[string][]byte, error) {
 		id, err := s.ids.ParsePatternID(d.Name())
 		if err != nil {
 			return nil, fmt.Errorf("store: unexpected entry in %s: %w", capturedDir, err)
+		}
+		if erased, err := exists(filepath.Join(s.root, capturedDir, id.String(), capturedErased)); err != nil {
+			return nil, err
+		} else if erased {
+			continue
 		}
 		b, err := os.ReadFile(filepath.Join(s.root, capturedDir, id.String(), recordFile))
 		if errors.Is(err, fs.ErrNotExist) {

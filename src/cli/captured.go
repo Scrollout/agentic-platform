@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -33,11 +34,21 @@ type makeProofSlice struct{ *gen.MakeProofSliceResponse }
 type approveCapturedPattern struct {
 	*gen.ApproveCapturedPatternResponse
 }
+type withdrawCapturedPattern struct {
+	*gen.WithdrawCapturedPatternResponse
+}
+type eraseCapturedPattern struct {
+	*gen.EraseCapturedPatternResponse
+}
 
 func (r captureRun) accepted() *gen.Operation             { return r.JSON202 }
 func (r replaceParameters) accepted() *gen.Operation      { return r.JSON202 }
 func (r makeProofSlice) accepted() *gen.Operation         { return r.JSON202 }
 func (r approveCapturedPattern) accepted() *gen.Operation { return r.JSON202 }
+func (r withdrawCapturedPattern) accepted() *gen.Operation {
+	return r.JSON202
+}
+func (r eraseCapturedPattern) accepted() *gen.Operation { return r.JSON202 }
 
 func (s *session) getCapturedPattern(ctx context.Context, id string) (*gen.CapturedPattern, error) {
 	r, err := call(ctx, s, "getCapturedPattern", http.StatusOK, func(ctx context.Context) (*http.Response, error) {
@@ -374,6 +385,88 @@ func parseApprovePattern(args []string) (func(context.Context, *session) error, 
 			return err
 		}
 		return s.print("%s is approved (operation %s).\n", esc(patternOf(op)), op.Id)
+	}, nil
+}
+
+// ---- withdraw-pattern ----
+
+func parseWithdrawPattern(args []string) (func(context.Context, *session) error, error) {
+	if len(args) != 1 {
+		return nil, usagef("withdraw-pattern: want exactly one captured pattern")
+	}
+	id := args[0]
+	if err := needPattern("withdraw-pattern", id); err != nil {
+		return nil, err
+	}
+	return func(ctx context.Context, s *session) error {
+		op, err := mutateSee(ctx, s, "withdrawCapturedPattern", "pattern "+id, func(ctx context.Context, key *string) (*http.Response, error) {
+			return s.api.WithdrawCapturedPattern(ctx, id, &gen.WithdrawCapturedPatternParams{ApiVersion: APIVersion, IdempotencyKey: key})
+		}, wrap(gen.ParseWithdrawCapturedPatternResponse, func(r *gen.WithdrawCapturedPatternResponse) withdrawCapturedPattern {
+			return withdrawCapturedPattern{r}
+		}))
+		if err != nil {
+			return err
+		}
+		if op, err = s.finish(ctx, op); err != nil {
+			return err
+		}
+		return s.print("%s is withdrawn: no new run uses it (operation %s).\n", esc(patternOf(op)), op.Id)
+	}, nil
+}
+
+// ---- erase-pattern ----
+
+// parseErasePattern reads the captured pattern, shows what its erasure removes, and erases it only
+// when the developer types its ID exactly; any other answer, or none, erases nothing.
+func parseErasePattern(args []string) (func(context.Context, *session) error, error) {
+	if len(args) != 1 {
+		return nil, usagef("erase-pattern: want exactly one captured pattern")
+	}
+	id := args[0]
+	if err := needPattern("erase-pattern", id); err != nil {
+		return nil, err
+	}
+	return func(ctx context.Context, s *session) error {
+		cp, err := s.getCapturedPattern(ctx, id)
+		if err != nil {
+			return err
+		}
+		p := &printer{w: s.out}
+		p.f("This erases the captured pattern %s (%s):\n", esc(cp.Id), esc(string(cp.State)))
+		p.f("  its template artifacts (tests %s, code %s, witnesses %s), unless a slice or another captured pattern also holds them\n",
+			esc(cp.Template.Tests), esc(cp.Template.Code), esc(cp.Template.Witnesses))
+		if cp.ProofSlice != nil && *cp.ProofSlice != "" {
+			p.f("  its proof slice %s and that slice's runs:\n", esc(*cp.ProofSlice))
+			if len(cp.Proofs) == 0 {
+				p.f("    none\n")
+			}
+			for _, pr := range cp.Proofs {
+				p.f("    run %s (proof %s)\n", esc(pr.Run), proofOutcome(pr))
+			}
+		} else {
+			p.f("  no proof slice\n")
+		}
+		p.f("Runs of other slices built from it keep their records. Its ID is never given again.\n")
+		p.f("Type the captured pattern's ID (%s) to erase it: ", esc(id))
+		if err := p.done(); err != nil {
+			return err
+		}
+		if answer, _ := s.readLine(); answer != id {
+			_, _ = fmt.Fprintln(s.out)
+			return failf(exitFailed, "erase-pattern: the answer was not %s; nothing was erased", id)
+		}
+		op, err := mutateSee(ctx, s, "eraseCapturedPattern", "patterns", func(ctx context.Context, key *string) (*http.Response, error) {
+			return s.api.EraseCapturedPattern(ctx, id, &gen.EraseCapturedPatternParams{ApiVersion: APIVersion, IdempotencyKey: key})
+		}, wrap(gen.ParseEraseCapturedPatternResponse, func(r *gen.EraseCapturedPatternResponse) eraseCapturedPattern {
+			return eraseCapturedPattern{r}
+		}))
+		if err != nil {
+			return err
+		}
+		if op, err = s.finish(ctx, op); err != nil {
+			return err
+		}
+		return s.print("Erased %s (operation %s).\n", esc(id), op.Id)
 	}, nil
 }
 

@@ -91,6 +91,14 @@ func (s *Service) ProofSliceDiffers(of string, parts map[string][]byte) (string,
 	return id, len(differing(&s.slices[id].slice, &cp)) > 0, nil
 }
 
+// ProofSliceOf returns the ID of the proof slice of the captured pattern named of, "" when there is
+// none. It changes nothing and runs no check.
+func (s *Service) ProofSliceOf(of string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.proofSliceLocked(of)
+}
+
 // differing lists, in part order, the parts of sl whose hash differs from the copy cp's.
 func differing(sl, cp *Slice) []Part {
 	var out []Part

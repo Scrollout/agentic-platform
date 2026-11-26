@@ -29,10 +29,10 @@ import (
 // pattern that builds later slices of the same kind with no model call, change its parameters
 // and approve it once a proof passed. Its rules (candidates, forms, places) are package
 // engine/captured's; this file keeps the records, judges the states and runs the operations.
-// makeProofSlice and the proofs' runs are in proof_slice.go. Withdrawal and erasure come with
-// feature 011's T020: until then each answers 500 with errNotImplemented.
+// makeProofSlice and the proofs' runs are in proof_slice.go, withdrawal and erasure in
+// captured_erase.go.
 
-// errNotImplemented is what a captured-pattern call answers until its work exists.
+// errNotImplemented is what a captured-pattern call answers on an engine that keeps no slices.
 var errNotImplemented = errors.New("captured patterns are not implemented yet")
 
 // fillWorker is the worker of a captured pattern's `fill` steps, which need no step worker.
@@ -55,6 +55,11 @@ type CapturedStore interface {
 	CapturedPattern(id string) ([]byte, error)
 	// CapturedPatterns returns every record by ID.
 	CapturedPatterns() (map[string][]byte, error)
+	// EraseCapturedPattern erases the record and the artifacts only it holds, keeping the ID taken
+	// for good; calling it again completes an interrupted erasure.
+	EraseCapturedPattern(id string) error
+	// CapturedPatternErased reports whether the ID was erased (or its erasure begun).
+	CapturedPatternErased(id string) (bool, error)
 }
 
 // capturedRecord is a captured pattern as the engine keeps it (data model, "Captured pattern").
@@ -277,6 +282,12 @@ func (s *sliceServer) capturable(run, name string) (string, error) {
 	case !errors.Is(err, store.ErrNotFound):
 		return "", err
 	}
+	switch erased, err := s.captured.CapturedPatternErased(id); {
+	case err != nil:
+		return "", err
+	case erased:
+		return "", &sl.Error{Code: string(gen.ErrorCodeCapturedPatternExists), Detail: "captured pattern " + id + " was erased: its ID is never given again"}
+	}
 	open, err := s.ops.records.OpenOperations()
 	if err != nil {
 		return "", err
@@ -407,6 +418,12 @@ func (s *sliceServer) capture(rec store.OperationRecord, body []byte) (WorkResul
 		if o.ID == id {
 			return WorkResult{}, &WorkError{Code: gen.ErrorCodeOperationFailed, Detail: "captured pattern " + id + " exists"}
 		}
+	}
+	switch erased, err := s.captured.CapturedPatternErased(id); {
+	case err != nil:
+		return WorkResult{}, err
+	case erased:
+		return WorkResult{}, &WorkError{Code: gen.ErrorCodeOperationFailed, Detail: "captured pattern " + id + " was erased: its ID is never given again"}
 	}
 	r.Number++
 	r.CreatedAt = s.ops.now().UTC()
@@ -738,19 +755,28 @@ func (s *sliceServer) differing(want, got string) ([]string, error) {
 // has not ended, and, with proofRuns, while a run of its proof slice is starting or has not
 // ended. The caller holds s.cmu.
 func (s *sliceServer) capturedBusy(r *capturedRecord, proofRuns bool) error {
-	open, err := s.ops.records.OpenOperations()
-	if err != nil {
+	if err := s.otherOperation(r, ""); err != nil {
 		return err
-	}
-	for _, o := range open {
-		if isCapturedKind(o.Kind) && o.Target == r.ID {
-			return &sl.Error{Code: string(gen.ErrorCodeCapturedPatternBusy), Detail: fmt.Sprintf("operation %s of captured pattern %s has not ended", o.ID, r.ID)}
-		}
 	}
 	if !proofRuns {
 		return nil
 	}
 	return s.proofRunBusy(r.ProofSlice)
+}
+
+// otherOperation refuses CapturedPatternBusy while an operation of the captured pattern other
+// than except has not ended.
+func (s *sliceServer) otherOperation(r *capturedRecord, except string) error {
+	open, err := s.ops.records.OpenOperations()
+	if err != nil {
+		return err
+	}
+	for _, o := range open {
+		if isCapturedKind(o.Kind) && o.Target == r.ID && o.ID != except {
+			return &sl.Error{Code: string(gen.ErrorCodeCapturedPatternBusy), Detail: fmt.Sprintf("operation %s of captured pattern %s has not ended", o.ID, r.ID)}
+		}
+	}
+	return nil
 }
 
 // proofRunBusy is CapturedPatternBusy while a run of the proof slice is starting (accepted, its
@@ -985,6 +1011,10 @@ func (s *sliceServer) capturedWork(ctx context.Context, rec store.OperationRecor
 		return s.approve(rec.Target)
 	case "makeProofSlice":
 		return s.makeProofSlice(ctx, rec.Target)
+	case "withdrawCapturedPattern":
+		return s.withdraw(rec.Target)
+	case "eraseCapturedPattern":
+		return s.erase(ctx, rec)
 	}
 	return WorkResult{}, fmt.Errorf("operation %s: no work for the kind %s yet", rec.ID, rec.Kind)
 }
@@ -1019,7 +1049,7 @@ func (s *sliceServer) workerSteps(ref string) ([]string, error) {
 	return steps, nil
 }
 
-// ---- not yet ----
+// ---- an engine that keeps no slices ----
 
 func (s *server) CaptureRun(context.Context, gen.CaptureRunRequestObject) (gen.CaptureRunResponseObject, error) {
 	return nil, errNotImplemented

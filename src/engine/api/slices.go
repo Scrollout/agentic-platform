@@ -256,6 +256,12 @@ func (s *sliceServer) deleteSlice(ctx context.Context, id, own string) error {
 		s.runs.mu.Lock()
 		defer s.runs.mu.Unlock()
 	}
+	return s.eraseSlice(ctx, id, own)
+}
+
+// eraseSlice is deleteSlice's erasure of an existing slice, refused RunActive while a run of it
+// has not ended. The caller holds the runs' lock (or no runs are kept).
+func (s *sliceServer) eraseSlice(ctx context.Context, id, own string) error {
 	if err := s.activeRun(id); err != nil {
 		return err
 	}

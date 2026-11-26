@@ -677,6 +677,20 @@ func (s *sliceServer) noOtherActiveRun(except string) error {
 	}
 }
 
+// fillErased is NotFound, naming it, when the captured pattern start follows was erased after the
+// pattern was chosen and before the runs' lock was taken (an erasure holds that lock while it
+// works), so no run starts on an erased captured pattern. The caller holds the runs' lock.
+func (s *sliceServer) fillErased(start RunStart) error {
+	if start.Fill == nil || s.captured == nil {
+		return nil
+	}
+	_, err := s.captured.CapturedPattern(start.Fill.Captured)
+	if errors.Is(err, store.ErrNotFound) {
+		return capturedNotFound(start.Fill.Captured)
+	}
+	return err
+}
+
 // workflowFailed begins the detail of the RunCancelled that ends a run whose workflow failed.
 const workflowFailed = "the run's workflow failed: "
 
@@ -809,6 +823,9 @@ func (s *sliceServer) StartRun(ctx context.Context, req gen.StartRunRequestObjec
 		if err := s.noOtherActiveRun(""); err != nil {
 			return s.refuse("startRun", err)
 		}
+		if err := s.fillErased(start); err != nil {
+			return s.refuse("startRun", err)
+		}
 	}
 	if err := s.projectTaken(req.Body.Project); err != nil {
 		return s.refuse("startRun", err)
@@ -938,6 +955,9 @@ func (s *sliceServer) ReplayRun(ctx context.Context, req gen.ReplayRunRequestObj
 		return s.refuse("replayRun", err)
 	}
 	if err := s.noOtherActiveRun(""); err != nil {
+		return s.refuse("replayRun", err)
+	}
+	if err := s.fillErased(start); err != nil {
 		return s.refuse("replayRun", err)
 	}
 	if err := s.projectTaken(req.Body.Project); err != nil {

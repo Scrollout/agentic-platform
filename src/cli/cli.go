@@ -114,7 +114,9 @@ const usageText = `usage:
   pattern <id> --drop <parameter>      remove a parameter
   pattern <id> --add [<name>=]<value>  add a parameter (the name is the value when none is given)
   proof-slice <id>                     make or give the captured pattern's proof slice and print its ID
-  approve-pattern <id>                 approve a proven captured pattern`
+  approve-pattern <id>                 approve a proven captured pattern
+  withdraw-pattern <id>                stop a captured pattern's use by new runs
+  erase-pattern <id>                   erase a captured pattern, its proof slice and their records after confirmation`
 
 // Run runs one command and returns its exit code.
 func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, stderr io.Writer) int {
@@ -227,6 +229,10 @@ func run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout io
 		do, err = parseProofSlice(rest)
 	case "approve-pattern":
 		do, err = parseApprovePattern(rest)
+	case "withdraw-pattern":
+		do, err = parseWithdrawPattern(rest)
+	case "erase-pattern":
+		do, err = parseErasePattern(rest)
 	default:
 		return usagef("unknown command %q", cmd)
 	}
