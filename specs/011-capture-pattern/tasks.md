@@ -542,8 +542,10 @@ proposed and adding the derived value works; the proof ends passed with no model
   `RunStarted`'s `reason`, `proof`, `source` and `parameters` as the terminal's event line gives
   them, the parameters in byte order of their names (two parameters declared in the other
   order). Seen failing
-- [ ] T032 [US1] Code author (done when T031 passes): the run page's event rendering in
+- [x] T032 [US1] Code author (done when T031 passes): the run page's event rendering in
   `src/page/`; no test is changed
+  Done 2026-11-26 (Sonnet, 1bb6569): T031 and `src/page`'s tests pass. Untested (for T011): the
+  page does not escape control characters or invalid UTF-8 in values as the terminal's `esc` does
 - [ ] T010 [US1] (after T007, T009, T029 and T032) Commit (tests and code in separate commits); fast lint; ask the owner before
   pushing (every check job runs); record the CI run here
 - [ ] T011 [US1] Fresh review of US1 judging T010's CI run; findings fixed as new tasks or
