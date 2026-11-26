@@ -104,6 +104,20 @@ reused only under the method that judged them), [feature 009](../009-no-hard-cod
   candidates in its order (the names in byte order, then the declared values in the contract's
   order) and leaves the others out; the developer may add a left-out one after removing another
   (owner; FR-003).
+- Q (T039, review S6): SC-006's limit fixture has the limit 200 and the derived 201, which are
+  also the HTTP statuses `200` and `201`, so a slice with another limit cannot fit; how is SC-006
+  proven? → A: on a new fixture whose limit and derived value equal no other literal of the
+  slice; the existing fixture and its tests stay; a value that also occurs as another literal (a
+  status) is replaced there too, so it varies only together with it (owner; SC-006, Edge Cases).
+- Q (T039, review S10): a proof slice changed by hand, then asked for again (`proof-slice`)? → A:
+  its changed parts are restored from the captured pattern's copy and approved again, recorded in
+  its history, so asking again always gives a slice that equals the copy (owner; FR-004, Edge
+  Cases).
+- Q (T039, round-2 suggestion): keep "a kept candidate then left with no place is left out" though
+  Propose reaches it today only through the places limit? → A: keep it, as a rule that holds for
+  every input (owner; FR-003).
+- Q (T039, round-2 suggestion): names before declared values in the cut? → A: keep names first;
+  the developer may add a left-out declared value after removing a name (owner; FR-003).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -246,7 +260,11 @@ use the captured pattern and says it needs a new proof; proving it again restore
 - The proof slice is erased by the developer: the proofs already recorded stay with the captured
   pattern, and the next proof makes a new proof slice.
 - A part of the proof slice is changed: it no longer equals the captured copy, so its build is
-  refused as not fitting.
+  refused as not fitting; asking for the proof slice again restores that part from the copy and
+  approves it again, recorded in the slice's history.
+- A parameter's source value is also another literal of the slice (a limit of 200 and the status
+  `200`): it is replaced there too, so a later slice fits only when that literal has the new value
+  as well; such a limit cannot vary alone.
 - The captured pattern is withdrawn: its proof slice's builds are refused, naming the withdrawal.
 - A run built from a captured pattern is resumed, taken over or replayed: resume and take-over keep
   its pattern; a replay uses the same captured pattern only while it is usable, and is refused
@@ -296,7 +314,8 @@ use the captured pattern and says it needs a new proof; proving it again restore
   the developer names, with the source values and no model call, running every check the
   captured pattern declares. A proof is an ordinary run of that slice, marked as a proof; the
   proof slice is made again when it was erased, so a proof works after the source slice is
-  erased. The proof MUST pass only when every check passes and every filled file (tests, code,
+  erased, and a part of it changed since it was made is restored from the copy and approved again
+  when the proof slice is asked for. The proof MUST pass only when every check passes and every filled file (tests, code,
   witnesses) equals the source run's accepted one; generated code is judged by its checks, as in
   every build. The proof shows that the captured pattern
   reproduces its source under the current method; whether other values work is judged by each
@@ -377,7 +396,8 @@ use the captured pattern and says it needs a new proof; proving it again restore
 - **SC-006**: For a captured slice that declares a text limit, with the limit and its derived value
   as parameters, a slice with another limit and derived value fits, and the filled files carry the
   new values in every place the old ones were (the examples state the derived value as a number,
-  "a text of 201 characters"; a literal text over 64 characters cannot be a parameter).
+  "a text of 201 characters"; a literal text over 64 characters cannot be a parameter); the
+  limit and the derived value equal no other literal of the source slice, such as a status.
 
 ## Assumptions
 

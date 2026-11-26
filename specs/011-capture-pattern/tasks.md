@@ -635,7 +635,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   left-out candidate added back keeps its kind (T037's API case needs it); `method.sha256`
   40caf4b3. Untested (T045): an added left-out declared value's source; an added left-out name
   overlapping a kept longer value; several kept ones losing their places in later rounds
-- [ ] T039 [US2] Before T012 (owner: a US2 task, decided through `/speckit-clarify`): SC-006's
+- [x] T039 [US2] Before T012 (owner: a US2 task, decided through `/speckit-clarify`): SC-006's
   limit fixture (`testdata/limit`) has the limit 200 and the derived 201 also as the HTTP statuses
   `"200"` and `"201"`, so a slice with another limit cannot equal the source filled with its
   values (a parameter cannot exclude places); decide (another fixture limit, or excluding places)
@@ -643,6 +643,25 @@ proposed and adding the derived value works; the proof ends passed with no model
   slice (re-approve as it is, restore from the copy, or refuse; review S10, T027, threat model)
   and two round-2 suggestions: the contract's "a kept one left with no place" (unreachable through
   Propose), and whether names should come before declared values in the cut
+  Done 2026-11-26 (`/speckit-clarify`, owner; spec Clarifications 2026-11-26): SC-006 is proven
+  on a new fixture whose limit and derived value equal no other literal (T012 makes it;
+  `testdata/limit` and its tests stay); a value that is also another literal varies with it (Edge
+  Cases); `proof-slice` restores a hand-changed part from the copy and approves it again (FR-004,
+  data model "Proof slice", contract draft) -> T047 to T049; the "no place" rule stays (FR-003);
+  names stay before declared values in the cut
+- [ ] T047 [US2] (T039, FR-004) Contract: `makeProofSlice`'s description in
+  `src/engine/api/preview/2026-11-12-preview/openapi.yaml` and the `changed` history kind's
+  description in `slice.schema.json` state that asking again restores from the copy a part changed
+  since the proof slice was made (one `changed` entry naming the restored parts, then one
+  `approved` entry each, after the part checks pass); `scripts/generate.sh`; committed alone
+- [ ] T048 [US2] Test author (after T047): new `src/engine/slices/proof_restore_test.go` and new
+  `src/engine/api/captured_proof_slice_restore_test.go`: a proof slice whose part was replaced by
+  hand is restored by `proof-slice` (its parts equal the copy, history `changed` naming exactly the
+  restored parts then `approved` each, the same slice ID), after which a proof starts instead of
+  `PatternDoesNotFit`; an unchanged proof slice gets no new history entry; a restore whose part
+  checks fail answers `PartFailsChecks` and leaves the slice as it was. Seen failing
+- [ ] T049 [US2] Code author (done when T048 passes, no other test changes): the restore in
+  `src/engine/slices/proof.go` (`ProofSlice` takes the copy's parts for an existing proof slice)
 - [ ] T040 [US2] (review S1; FR-009) A `fill` step's `writeStep` refusal that cannot succeed on
   resume (400 outside the writable entries, 422 `StepFilesTooLarge`, `InputHashMismatch`, an
   unreadable template, a refused fill) ends the run interrupted then expired; make it a
@@ -685,7 +704,7 @@ another (FR-008 to FR-010; research R4, R6).
 pass, three runs give the same files.
 
 - [ ] T012 [P] [US2] Test author: new `src/engine/captured/fit_test.go` (T003's fixtures): the
-  `task`/`tasks` slice fits with those values, and on `limit/` the `100`/`101` slice (SC-006);
+  `task`/`tasks` slice fits with those values, and on a new fixture `testdata/limit-280/` (the `limit/` slice and code with the limit 280 and the derived 281, which equal no other literal; T039) a slice with 100/101 fits and is filled (SC-006);
   SC-005's planted set does not fit and names the first place it differs: another rule, another
   example, another member, another operation, another status, two holes of one parameter with
   different values, `note_id` left unchanged where `note` became `task`; a value outside its
@@ -808,6 +827,7 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
 
 ## Dependencies & execution order
 
+- T047 → T048 → T049, before T016's push;
 - T011 round 1 → T037 → T038 → T011 round 2 → converge US1; T041 to T045 do not block US1 done
   (each fixed, or `closed:` by the owner, before the feature is done); T039 before T012; T040
   before T015.
