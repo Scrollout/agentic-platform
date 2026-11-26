@@ -2,6 +2,7 @@ package machine
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/agentic-platform/engine/canonical"
@@ -13,9 +14,15 @@ import (
 type Writer interface {
 	// Write makes the files of the project that match r.Step.Writable exactly r.Files and
 	// returns the project's files afterwards. A repeat gives the same answer. Nothing is
-	// committed: the step's commit, once it is accepted, is History.Commit's.
+	// committed: the step's commit, once it is accepted, is History.Commit's. An error that
+	// wraps ErrWriteRefused is a refusal a repeat cannot pass (the developer must act); any
+	// other error is one a repeat can pass.
 	Write(ctx context.Context, r WriteRequest) (WriteResult, error)
 }
+
+// ErrWriteRefused marks a write a repeat cannot pass: the run hands over to the developer rather
+// than being interrupted. Test it with errors.Is.
+var ErrWriteRefused = errors.New("the write was refused")
 
 // WriteRequest is writeStep for one attempt of a filled step.
 type WriteRequest struct {

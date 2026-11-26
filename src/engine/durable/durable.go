@@ -133,6 +133,10 @@ type WorkerResult struct {
 	// Failure is why the call failed, "" when it did not; Model, Usage and Took then hold what it
 	// used, and nothing else is set.
 	Failure string
+	// Refused is set with Failure when a `fill` step's write was refused in a way a repeat cannot
+	// pass (machine.ErrWriteRefused, an unreadable template or a refused fill): the run hands
+	// over instead of being interrupted.
+	Refused bool
 }
 
 // CheckCall is one check of one attempt (machine.CheckRequest), with the attempt's result by hash.
