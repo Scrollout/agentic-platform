@@ -524,10 +524,14 @@ func TestCapturedSliceIsBuiltWithNoModel(t *testing.T) {
 		return m
 	}
 
-	// capturedBuild runs `ap build` of the tasks slice into project with no step workers (a `fill`
-	// step needs none: startRun contract), and checks the contract's lines, the record and the files.
+	// capturedBuild runs `ap build` of the tasks slice into project, with the step workers up (a
+	// `fill` step needs none, but the base pattern's procedure steps contract-check and generate
+	// still run; they call no model; owner-approved 2026-11-26 after CI 45873468758), and checks
+	// the contract's lines, the record and the files.
 	capturedBuild := func(t *testing.T, project string) map[string]string {
 		t.Helper()
+		l.StepWorkers(t, tasksSlice, project)
+		defer l.StopStepWorkers(t, tasksSlice, project)
 		run, lines, code := capBuild(t, l, bin, tasksSlice, project, buildLimit)
 		// FR-010, contract.md `build`: the first line names the captured pattern and why.
 		m := capStarted.FindStringSubmatch(lines[0])
