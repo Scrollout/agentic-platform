@@ -833,7 +833,7 @@ pass, three runs give the same files.
   Earlier runs: 45873468758 (T014 case 6 refused WorkersNotReady: the test started no step
   workers; fixed f771855) and 45877543492 (case 6 passed; case 7: later builds reuse every result,
   no CheckPassed; fixed fbc09aa); both fixes owner-approved, Tests-approved-by
-- [ ] T017 [US2] Fresh review of US2 judging T016's CI run; `/speckit-converge` for US2
+- [x] T017 [US2] Fresh review of US2 judging T016's CI run; `/speckit-converge` for US2
   Round 1 2026-11-26 (fresh Sonnet, read-only worktree at ff9815b, judging CI 45882363812): B1
   blocking -> T051, T052; suggestions S1 -> T053, S2 and S6 -> T054, S3 -> T055, S4 -> T056,
   S5 -> T057, S7 and the untested cases -> T058. Open notes of T012, T013, T030 and T015's
@@ -848,6 +848,8 @@ pass, three runs give the same files.
   a reserved word as a value (T061-T063); T055 also covers the pattern's state (approved,
   withdrawn, method) read before `newRun`; everything else delivered or homed in T041-T045,
   T053-T056, T058. T017 is done when T061 is decided and, for option A, T062 and T063 pass
+  Done 2026-11-27: T061 option A, T062/T063 at 151384b; CI 45903926231 26/26 green; converge
+  US2 again (fresh Sonnet, at 151384b): no gap
 - [x] T051 [US2] (review B1; FR-010, contract `not_used` reason `refused-value`: "did not fit only
   because of a refused value") Test author: new `src/engine/captured/fit_refused_value_test.go`
   and a `startRun` case in a new `src/engine/api/captured_notused_test.go`: a value outside its
