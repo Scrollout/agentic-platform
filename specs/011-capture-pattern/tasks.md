@@ -854,6 +854,11 @@ pass, three runs give the same files.
   Done 2026-11-26 (Opus, next commit; method 9d1b9d29): the first refused value in reading order
   is kept; order of refusals place, value, paths (a value refusal wins over a path one, untested);
   captured and the whole api package pass (239 s)
+- [x] T059 [US2] (CI 45889661212, Go unit tests: `checksvc` `TestRateLimitPerToken` got 503 Busy on
+  a call made after the previous one answered; Fix the cause) `bounded` released a call's slot
+  after sending the answer, so the next sequential call could find it taken under load: release
+  it before the answer. Not reproduced on the host (20 race runs pass before and after); judged
+  by the next CI run
 - [ ] T053 [US2] (review S1; suggestion) `Fit`'s reading refuses a value that contains the
   literal after its hole (`class` before `s`) although a reading exists: try later positions, or
   state it in the contract as a limit; test author, then code author, or `closed:` by the owner

@@ -51,13 +51,13 @@ func bounded[T any](ctx context.Context, seconds int, work func(ctx context.Cont
 	}
 	done := make(chan result, 1)
 	go func() {
-		defer func() {
-			if sl != nil {
-				sl.release()
-			}
-		}()
-		defer cancel()
 		v, err := work(wctx)
+		cancel()
+		// the slot is free before the answer is sent, so a caller's next call, made after this
+		// one answered, never finds it taken (503 Busy)
+		if sl != nil {
+			sl.release()
+		}
 		done <- result{v, err}
 	}()
 	var zero T
