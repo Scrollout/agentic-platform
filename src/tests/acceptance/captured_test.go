@@ -582,8 +582,11 @@ func TestCapturedSliceIsBuiltWithNoModel(t *testing.T) {
 				t.Errorf("step %s has %d StepAccepted or ResultReused events, want 1", s, n)
 			}
 		}
-		if count(evs, "CheckPassed", "") == 0 || count(evs, "CheckFailed", "") != 0 {
-			t.Errorf("the run record has %d passed and %d failed checks, want checks that passed and none that failed", count(evs, "CheckPassed", ""), count(evs, "CheckFailed", ""))
+		// a later build of the same slice and values reuses the kept results instead of checking
+		// again (owner-approved 2026-11-26 after CI 45877543492): checks passed or results reused
+		passed, reused := count(evs, "CheckPassed", ""), count(evs, "ResultReused", "")
+		if passed+reused == 0 || count(evs, "CheckFailed", "") != 0 {
+			t.Errorf("the run record has %d passed and %d failed checks and %d reused results, want checks that passed or results reused, and no failed check", passed, count(evs, "CheckFailed", ""), reused)
 		}
 
 		// FR-009: the values in contents and paths, each in its case form; no file at a source path.
