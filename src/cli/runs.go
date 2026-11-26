@@ -481,7 +481,7 @@ func parseBuild(args []string) (func(context.Context, *session) error, error) {
 	return func(ctx context.Context, s *session) error {
 		op, err := mutate(ctx, s, "startRun", func(ctx context.Context, key *string) (*http.Response, error) {
 			return s.api.StartRun(ctx, slice, &gen.StartRunParams{ApiVersion: APIVersion, IdempotencyKey: key},
-				gen.RunRequest{Project: project})
+				gen.StartRunRequest{Project: project})
 		}, wrap(gen.ParseStartRunResponse, func(r *gen.StartRunResponse) startRun { return startRun{r} }))
 		if err != nil {
 			return err

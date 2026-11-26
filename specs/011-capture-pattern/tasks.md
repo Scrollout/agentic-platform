@@ -204,7 +204,7 @@ recordings do not change, so the recorded-model jobs stay green throughout.
 
 ## Phase 1: Setup (contract first)
 
-- [ ] T001 Contract (committed alone): `src/engine/api/preview/2026-11-12-preview/openapi.yaml`
+- [x] T001 Contract (committed alone): `src/engine/api/preview/2026-11-12-preview/openapi.yaml`
   gains `/captured-patterns` (`POST` capture `{run, name?}`, `GET` list paginated with opaque page
   tokens, `GET /{id}`, `PUT /{id}/parameters`, `POST /{id}/proof-slice`, `POST /{id}/approval`,
   `POST /{id}/withdrawal`, `DELETE /{id}`), each state change a 202 operation taking an
@@ -269,7 +269,11 @@ with its `x-operation-name`; `captureRun` 404,
   owner's exception, ADR 0100), run as `oasdiff breaking` from `main`'s copy of each contract
   to the new one (the preview has one version, so `scripts/contract-diff.sh` compares nothing),
   its output recorded in research; the draft then links to the authoritative copies.
-  `src/cli/contract.md` gains the command rows and output lines of the draft
+  `src/cli/contract.md` gains the command rows and output lines of the draft. Done 2026-11-26:
+  oasdiff as research E2 records (the ADR 0100 exception only), Spectral clean on both contracts;
+  `go test` of `src/engine` `./api/ ./slices/ ./store/`, `src/slice`, `src/cli` and `src/page`
+  pass with no test changed, `go vet` of every module passes; `./checksvc/` fails only its five
+  tests that install oapi-codegen offline (not in this host's module cache, unrelated to T001)
 - [ ] T002 Owner approvals: the plan's Complexity Tracking row (Principle XII not applicable, one
   developer; the Principle XV row was approved 2026-11-26, ADR 0100); and the code author of T001 lists every existing test that fails or no
   longer compiles after T001 (expected: tests that list the contract's paths, operation kinds,

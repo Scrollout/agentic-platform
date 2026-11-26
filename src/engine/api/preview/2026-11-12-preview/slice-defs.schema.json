@@ -24,6 +24,11 @@
       "pattern": "^(S|RUN)-[0-9]+$",
       "description": "The ID of a slice or of a run, `S-<n>` or `RUN-<n>`."
     },
+    "operation_target": {
+      "type": "string",
+      "pattern": "^((S|RUN)-[0-9]+|[a-z0-9-]+)$",
+      "description": "What an operation concerns: a slice (`S-<n>`), a run (`RUN-<n>`) or a captured pattern (its `pattern_id`, lowercase, so never equal to a slice or run ID)."
+    },
     "operation_id": {
       "type": "string",
       "pattern": "^OP-[0-9]+$",
@@ -58,6 +63,121 @@
       "type": "string",
       "pattern": "^[a-z0-9-]+@[0-9]+\\.[0-9]+\\.[0-9]+$",
       "description": "One version of a pattern, `<pattern_id>@<major>.<minor>.<patch>`."
+    },
+    "capture_name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "maxLength": 40,
+      "description": "The name a capture gives its captured pattern, whose ID is `<base pattern id>-<name>`: words of lowercase letters and digits joined by single hyphens, at most 40 characters."
+    },
+    "parameter_name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "maxLength": 64,
+      "description": "A captured pattern's parameter name: a lowercase letter, then lowercase letters, digits and hyphens, at most 64 characters; unique within its captured pattern."
+    },
+    "parameter_value": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9_. -]+$",
+      "description": "A parameter's value as text: 1 to `x-limits.parameter-value-max-chars` (64) ASCII letters, digits, `_`, `-`, `.` and spaces, the union of the forms of the three kinds; the form of its own kind (engine contract, `ParameterKind`) is judged by the engine, and a value outside it is refused with ParameterRefused."
+    },
+    "parameter_values": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/parameter_name"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/parameter_value"
+      },
+      "maxProperties": 32,
+      "description": "Each parameter's value, by parameter name, at most `x-limits.captured-pattern-parameters-max` (32); empty for a captured pattern with no parameter."
+    },
+    "pattern_reason": {
+      "type": "string",
+      "enum": [
+        "base",
+        "fits",
+        "chosen"
+      ],
+      "description": "Why a run uses its pattern, recorded since feature 011. `base`: the base pattern, because no usable captured pattern fits the slice; `fits`: the most recently approved usable captured pattern that fits the slice; `chosen`: the pattern the request named, the pattern of the run a replay replays, or the captured pattern a proof proves."
+    },
+    "part_hashes": {
+      "type": "object",
+      "required": [
+        "goals",
+        "rules",
+        "contract"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "goals": {
+          "$ref": "#/$defs/hash"
+        },
+        "rules": {
+          "$ref": "#/$defs/hash"
+        },
+        "contract": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "description": "The hash of each approved part, as a slice's `parts` gives them: `goals` of `{goals}`, `rules` of `{rules, examples, terms}`, `contract` of `{contract}`, each the SHA-256 of its RFC 8785 canonical JSON."
+    },
+    "not_used": {
+      "type": "array",
+      "description": "The captured patterns a run's start judged and did not use, in the order judged: each one that fits but needs a new proof, and each that did not fit only because of a refused value. Judged at the start and recorded, since a captured pattern's state changes later.",
+      "items": {
+        "type": "object",
+        "required": [
+          "pattern",
+          "reason",
+          "detail"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "pattern": {
+            "$ref": "#/$defs/pattern_id",
+            "description": "The captured pattern's ID."
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "needs-proof",
+              "refused-value"
+            ],
+            "description": "`needs-proof`: it fits, but it is approved and not usable (its latest proof did not pass under the current method); `refused-value`: it would fit but for a value outside its parameter's form, or equal to another parameter's in a case form."
+          },
+          "parameter": {
+            "$ref": "#/$defs/parameter_name",
+            "description": "With `refused-value` only: the parameter whose value was refused."
+          },
+          "detail": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Why, in words."
+          }
+        },
+        "if": {
+          "properties": {
+            "reason": {
+              "const": "refused-value"
+            }
+          }
+        },
+        "then": {
+          "required": [
+            "parameter"
+          ]
+        },
+        "else": {
+          "not": {
+            "required": [
+              "parameter"
+            ]
+          }
+        }
+      }
     },
     "step_name": {
       "type": "string",

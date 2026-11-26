@@ -6,16 +6,18 @@ info:
     Judges one attempt of a build step by running one named check, returns the files an attempt
     left in its step's writable paths, and produces one procedure step's files by running its fixed
     procedure, and keeps the project's version history: one commit per accepted step or open review round, and
-    the project restored to its last commit before each attempt. One program serves this contract in
+    the project restored to its last commit before each attempt; it also writes a filled step's
+    files (a captured pattern's `fill` steps) into the project before they are judged. One program serves this contract in
     three deployments. The check service reads the
     project folder and never writes it; it serves runCheck and readStepFiles, and answers every
     runProcedure with 404 UnknownProcedure. A procedure step's worker, which the launcher starts for
     that step with only the step's writable paths writable and registers with the engine, serves
     runProcedure for its step's procedure only, at the endpoint it registered; it answers every
     runCheck with 404 UnknownCheck and every readStepFiles with 404 UnknownStep. The project
-    worker, which holds the projects folder writable, serves commitStep and restoreStep and answers
-    runCheck, readStepFiles and runProcedure with those 404s; the check service and the procedure
-    step workers answer commitStep and restoreStep with 404 VersionHistoryNotServed. No deployment
+    worker, which holds the projects folder writable, serves commitStep, restoreStep and writeStep
+    and answers runCheck, readStepFiles and runProcedure with those 404s; the check service and the
+    procedure step workers answer commitStep, restoreStep and writeStep with 404
+    VersionHistoryNotServed. No deployment
     keeps anything between calls except the project worker, which keeps the version history in
     the project folder and its own record of each project's last commit (Version history), and the same request over the same project gives the same
     response and leaves the same files, whatever the `run`, `attempt` and `round` (outside
@@ -25,7 +27,8 @@ info:
     2026-11-13-preview returns 400 UnsupportedApiVersionValue. A request body must be sent with
     `Content-Type: application/json` (parameters such as `charset=utf-8` may follow); any other
     body, a body that does not match this contract, or one larger than
-    `x-limits.request-body-max-bytes` (for commitStep, `x-limits.commit-request-body-max-bytes`)
+    `x-limits.request-body-max-bytes` (for commitStep and writeStep,
+    `x-limits.commit-request-body-max-bytes`)
     returns 400 InvalidRequest. No response body is larger than
     `x-limits.response-body-max-bytes`: a response that would be is not sent, and the call returns
     500 ResponseTooLarge instead (the limits below are derived so that this does not happen). At most `x-limits.calls-at-once` calls run at once; a call
@@ -35,8 +38,8 @@ info:
     requests in any one-second window; more return 429 RateLimited with `Retry-After`. Requests with
     no accepted token are counted by their source address (the connection's peer address, never a
     header): up to `x-limits.requests-per-second-per-address-without-token` in any one-second window
-    get 401, more get 429. runCheck and readStepFiles change nothing; runProcedure and restoreStep,
-    repeated with the same request, leave the same files; commitStep, repeated, makes no second
+    get 401, more get 429. runCheck and readStepFiles change nothing; runProcedure, restoreStep and
+    writeStep, repeated with the same request, leave the same files; commitStep, repeated, makes no second
     commit (see commitStep). So no operation takes an Idempotency-Key and repeating a call is always
     safe. `x-error-codes` lists the problem codes each status code may carry.
     Names of checks, procedures, steps, runs, inputs and outputs are those of the catalogue pattern
@@ -45,13 +48,14 @@ info:
     following a symbolic link: an entry of the project folder that is not a regular file or a
     folder, a file larger than `x-limits.project-file-max-bytes`, or an entry whose path is not a
     ProjectPath, is never read, listed or written; runCheck fails on
-    it naming it, and readStepFiles, runProcedure, commitStep and restoreStep answer 422
+    it naming it, and readStepFiles, runProcedure, commitStep, restoreStep and writeStep answer 422
     UnreadableProject. Version history. The folder `.git` at the project folder's root is the
     project's version history, a git repository that commitStep creates and adds to. The folder
     may exist empty before the first commit (the launcher creates it so that every step
     container mounts it read-only). It is not part of the project: no path under it is ever
     listed in `before`, `project_files`, `files`, `removed` or `restored`, read, judged or written
-    by any operation other than commitStep and restoreStep. Any other path with a part equal to
+    by any operation other than commitStep, restoreStep and writeStep (which only inspect it, as
+    the history check below says). Any other path with a part equal to
     `.git` in any letter case (`.GIT`, `sub/.git`) is not a ProjectPath, and neither is a
     `writable` entry with such a part, so such an entry is refused with 400 InvalidRequest and
     such a file makes the project unreadable as above. The project worker's record. For each
@@ -81,7 +85,7 @@ info:
     init --template=` (no template) with the branch `main`, and writes the provisional record. A
     crash at any point of a first call leaves the claimed or the provisional record, so the
     next call recovers it by these rules. The history check: before running any other git command,
-    commitStep and restoreStep inspect `.git` as files, and with a provisional or full record it passes only when
+    commitStep, restoreStep and writeStep inspect `.git` as files, and with a provisional or full record it passes only when
     `.git` holds no symbolic link anywhere and no `commondir`, `gitdir`, `shallow`,
     `info/grafts` or `objects/info/alternates`; `.git/HEAD` is exactly `ref: refs/heads/main`
     followed by one line feed; `.git/config` has the recorded SHA-256; no `packed-refs` entry
@@ -91,7 +95,7 @@ info:
     recording and moving the branch); with a provisional record, the branch must be missing.
     Then, with git, the recorded commit must exist with the recorded parent and trailers. The
     history check applies only with a provisional or a full record. With no record or a claimed
-    one, restoreStep needs no repository: it only requires `before` to be empty (otherwise 409
+    one, restoreStep and writeStep need no repository: they only require `before` to be empty (otherwise 409
     ProjectStateDiffers, as for a last commit that does not hold `before`). Anything else answers 409
     HistoryChanged and changes nothing. Git always runs with `GIT_NO_REPLACE_OBJECTS=1`,
     `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`, `-c core.fsmonitor=false`, `-c
@@ -178,10 +182,12 @@ x-limits:
   # 10000 list entries (about 3.5 MB) + `project_files` (about 3.5 MB) + `removed` (about 2.7 MB)
   # + a reason of 65536 characters (at most 256 KiB), which fits 24 MiB.
   response-body-max-bytes: 25165824
-  # Largest commitStep request body, in bytes; a larger one gets 400 InvalidRequest. Derived:
-  # `before` and `project_files` (about 3.5 MB each) + a reused step's outputs in framed form, at
-  # most `step-files-max-bytes` of file bytes plus at most 265 bytes of framing per file for 10000
-  # files (11038608 bytes, 14718144 in base64), which fits 24 MiB.
+  # Largest commitStep or writeStep request body, in bytes; a larger one gets 400 InvalidRequest.
+  # Derived: `before` and `project_files` (about 3.5 MB each) + a reused step's outputs in framed
+  # form, at most `step-files-max-bytes` of file bytes plus at most 265 bytes of framing per file
+  # for 10000 files (11038608 bytes, 14718144 in base64), which fits 24 MiB. A writeStep body is
+  # `before` (about 3.5 MB) + its `files`, at most `step-files-max-bytes` of file bytes in base64
+  # (about 11.2 MB) and their 10000 entries (about 3.5 MB), which fits too.
   commit-request-body-max-bytes: 25165824
   # Calls that may run at once in one deployment; one more gets 503 Busy.
   calls-at-once: 2
@@ -669,6 +675,87 @@ paths:
           $ref: '#/components/responses/Busy'
         '504':
           $ref: '#/components/responses/TimeLimitExceeded'
+  /project-versions/write:
+    post:
+      tags:
+      - versions
+      operationId: writeStep
+      x-operation-name: Agentic.Check/project-versions/files/write
+      summary: Write a filled step's files into the project before they are judged
+      description: >-
+        Served by the project worker. Makes the files matching the step's `writable` entries in
+        the project folder `project` exactly `files`, without committing, so a step whose files the
+        engine filled from a captured pattern's template (its `fill` steps) can be judged like any
+        attempt: the engine calls it after the attempt's restoreStep, then reads the files with
+        readStepFiles for the step's checks, and calls commitStep when the step is accepted; the
+        next attempt's restoreStep removes what it wrote, as it removes any uncommitted change.
+        In order: (1) Every path of `files` must match one of the step's `writable` entries;
+        otherwise 400 InvalidRequest naming it, and nothing is read or changed (a path with `..`,
+        an absolute path or a `.git` part is not a ProjectPath, also 400, and so is a path sent
+        twice). (2) The history check
+        (info.description, The project worker's record), only with a provisional or full record;
+        a failed check is 409 HistoryChanged. With no record or a claimed one, `before` must be
+        empty. (3) The last commit must hold exactly the files `before` lists, and every file
+        outside the step's `writable` entries must equal `before`'s; otherwise 409
+        ProjectStateDiffers, naming the first path that differs, and nothing is changed. (4) Every
+        file's content is checked against its `sha256` (422 InputHashMismatch) and their bytes
+        together against `x-limits.step-files-max-bytes` (422 StepFilesTooLarge) before anything
+        is written. (5) Each file of `files` is written in place, every other file matching the
+        step's `writable` entries is removed, and no file outside them is touched; no symbolic
+        link is followed, and a folder on a path's way that is a symbolic link is 422
+        UnreadableProject. `files` may be empty: then the step's writable files are removed and
+        nothing is written. The answer lists `written`, the paths of `files`, and `removed`, the
+        files matching the `writable` entries that `before` lists and `files` does not, both in
+        byte order, so a repeat of the same request leaves the same files and gives the same
+        answer. 422 UnreadableProject as for commitStep; 500 WriteFailed when a file could not be
+        written or removed, and 504 TimeLimitExceeded when the call did not finish within
+        `time_limit_seconds`; after either the folder may hold partly written files, and a repeat
+        converges them. A caller treats every response other than 200 as files not written.
+      security:
+      - engineToken: []
+      x-error-codes:
+        '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
+        '401': [Unauthorized]
+        '404': [VersionHistoryNotServed]
+        '409': [ProjectStateDiffers, HistoryChanged]
+        '422': [UnreadableProject, InputHashMismatch, StepFilesTooLarge]
+        '429': [RateLimited]
+        '500': [WriteFailed, ResponseTooLarge]
+        '503': [Busy]
+        '504': [TimeLimitExceeded]
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WriteRequest'
+      responses:
+        '200':
+          description: The step's writable files are exactly `files`; nothing was committed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WrittenFiles'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/UnknownName'
+        '409':
+          $ref: '#/components/responses/StateDiffers'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/WriteFailed'
+        '503':
+          $ref: '#/components/responses/Busy'
+        '504':
+          $ref: '#/components/responses/TimeLimitExceeded'
   /project-versions/restore:
     post:
       tags:
@@ -794,7 +881,8 @@ components:
     UnknownName:
       description: This deployment serves no check (UnknownCheck) or procedure (UnknownProcedure) of
         that name, does not serve readStepFiles (UnknownStep), or does not keep version histories
-        (VersionHistoryNotServed); `detail` says which. Nothing ran.
+        (VersionHistoryNotServed, for commitStep, restoreStep and writeStep); `detail` says which. Nothing
+        ran.
       content:
         application/problem+json:
           schema:
@@ -834,7 +922,7 @@ components:
     WriteFailed:
       description: WriteFailed, writing or removing a file in the step's writable paths failed after
         the procedure produced its outputs, or a file or the version history could not be written
-        by commitStep or restoreStep; `detail` names the path, and the paths may hold partial
+        by commitStep, restoreStep or writeStep; `detail` names the path, and the paths may hold partial
         files. Or ResponseTooLarge, the result would be larger than
         `x-limits.response-body-max-bytes` (see ResponseTooLarge).
       content:
@@ -874,7 +962,7 @@ components:
         served. Unauthorized: see 401. RateLimited: see 429. UnknownCheck, UnknownProcedure: this
         deployment serves no check or procedure of that name. UnknownStep: this deployment does not
         serve readStepFiles. VersionHistoryNotServed: this deployment does not keep version
-        histories (commitStep, restoreStep). ProjectStateDiffers: the project's last commit or its
+        histories (commitStep, restoreStep, writeStep). ProjectStateDiffers: the project's last commit or its
         folder does not hold the files the request lists. HistoryChanged: the project's version history
         is not the one the project worker made (`.git/HEAD`, the branch `main` or `.git/config`
         differs from its record). ProjectExists: the project has no record and its folder
@@ -886,7 +974,8 @@ components:
         symbolic link), or its version history cannot be read. InputHashMismatch: an input's content does
         not have the SHA-256 it is sent with. StepFilesTooLarge: the step's files exceed
         `x-limits.step-files-max-bytes`. WriteFailed: a procedure's file could not be written or
-        removed, or a file or the version history could not be written. ResponseTooLarge: the response would be larger than
+        removed, a file or the version history could not be written, or a writeStep file could
+        not be written or removed. ResponseTooLarge: the response would be larger than
         `x-limits.response-body-max-bytes`, so it was not sent. Busy: `x-limits.calls-at-once` calls
         are running. TimeLimitExceeded: the call did not finish within its `time_limit_seconds`.
       enum:
@@ -1432,6 +1521,47 @@ components:
       allOf:
       - $ref: '#/components/schemas/CallCommon'
       unevaluatedProperties: false
+    WriteRequest:
+      description: >-
+        The attempt of a filled step, `before`, the files the project must hold before it, and
+        `files`, the step's writable files as the engine filled them, at most
+        `x-limits.project-files-max` entries and `x-limits.step-files-max-bytes` of file bytes
+        together.
+      allOf:
+      - $ref: '#/components/schemas/CallCommon'
+      - type: object
+        required:
+        - files
+        properties:
+          files:
+            type: array
+            maxItems: 10000
+            description: Each file the step's writable paths must hold, in any order; a path sent
+              twice is 400 InvalidRequest.
+            items:
+              $ref: '#/components/schemas/FileContent'
+      unevaluatedProperties: false
+    WrittenFiles:
+      type: object
+      description: What writeStep wrote and removed.
+      required:
+      - written
+      - removed
+      additionalProperties: false
+      properties:
+        written:
+          type: array
+          maxItems: 10000
+          description: The paths of `files`, in byte order.
+          items:
+            $ref: '#/components/schemas/ProjectPath'
+        removed:
+          type: array
+          maxItems: 10000
+          description: The files matching the step's `writable` entries that `before` lists and `files`
+            does not, in byte order.
+          items:
+            $ref: '#/components/schemas/ProjectPath'
     RestoredProject:
       type: object
       description: The project folder after restoreStep; `project_files` equals `before`.

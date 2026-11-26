@@ -63,8 +63,10 @@ Feature 002 met the same rule and gave its new code a separate problem schema (i
 here the new codes and kinds must come from existing operations (`getOperation`, `startRun`,
 `replayRun`). **Decision** (*owner*, 2026-11-26): extend `2026-11-12-preview` in place as an
 exception to Principle XV (plan, Complexity Tracking;
-[ADR 0100](../../docs/decisions/0100-preview-contract-gains-enum-values-in-place.md)). T001 records
-the final report.
+[ADR 0100](../../docs/decisions/0100-preview-contract-gains-enum-values-in-place.md)). The final
+T001 contracts give the same report (re-run 2026-11-26): engine contract exit 1 with 1258
+`response-property-enum-value-added` errors and 13 `response-property-pattern-changed` warnings,
+nothing else; check contract exit 0, no change reported as breaking.
 
 ## R1. What a captured pattern is (FR-002, FR-007, FR-009)
 

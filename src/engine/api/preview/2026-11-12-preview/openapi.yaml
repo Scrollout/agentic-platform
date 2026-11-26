@@ -60,6 +60,13 @@ x-limits:
   retry-longest-wait-ms: 30000
   # Each wait adds a uniform random part of up to this fraction of itself.
   retry-jitter-fraction: 0.5
+  # Most parameters of one captured pattern (ParametersRequest, CapturedPattern).
+  captured-pattern-parameters-max: 32
+  # Most places one parameter's value may occur in a captured pattern's slice and template;
+  # more is ParameterRefused.
+  parameter-places-max: 10000
+  # Most characters of one parameter value (slice-defs `parameter_value`).
+  parameter-value-max-chars: 64
 servers:
 - url: /
   description: The engine's address on the platform's internal network; not reachable from outside it.
@@ -68,6 +75,9 @@ tags:
   description: Describe, clarify, change and approve a slice.
 - name: runs
   description: Build an approved slice and inspect its runs.
+- name: captured-patterns
+  description: Capture a done run as a pattern that builds later slices of the same kind with no
+    model call, prove it, approve, withdraw and erase it.
 - name: operations
   description: Follow and cancel long-running work, and list this service's operations.
 - name: workers
@@ -470,15 +480,34 @@ paths:
       operationId: startRun
       x-operation-name: Agentic.Engine/runs/write
       summary: Build an approved slice
-      description: Starts a run that builds the slice into a new project folder. Refusals come in this
-        order, the first that applies; each comes at once, and no operation is created. A body that
-        does not match RunRequest is InvalidRequest, or InvalidProject when only its project name
-        breaks the folder-name rule; then an unknown slice is NotFound; then PatternDoesNotFit while the slice fails a pattern condition, even when
-        no part is approved; then NotApproved while a part is not approved at its current hash; then
-        WorkersNotReady while a step of the pattern has no ready worker; then RunActive while any
-        run, of any slice, has not ended (at most one active run on the platform, FR-021); then
-        ProjectExists when the folder exists. The operation's target is the new run; it lasts until
-        the run ends.
+      description: >-
+        Starts a run that builds the slice into a new project folder. The pattern: with `pattern`,
+        that one (the base pattern, or a captured pattern that is usable); without it, the most
+        recently approved usable captured pattern that fits the slice, else the base pattern. A
+        run of a proof slice (`proof_of`) is a proof: it always uses that captured pattern with
+        its source values, in any state but withdrawn, reuses no earlier result, and carries
+        `proof: true`. The run (getRun, readable as soon as this answers) and its RunStarted name
+        the pattern, `pattern_reason`, and for a captured pattern its parameters' values and
+        `source_run`; `not_used` names each captured pattern that fits but needs a new proof, and
+        each that did not fit only because of a refused value, with the reason. Refusals come in
+        this order, the first that applies; each comes at once, and no operation is created. A
+        body that does not match StartRunRequest is InvalidRequest, or InvalidProject when only
+        its project name breaks the folder-name rule; then an unknown slice, or a `pattern`
+        naming no pattern, is NotFound; then PatternDoesNotFit while the slice fails a pattern
+        condition of the base pattern, even when no part is approved; then NotApproved while a
+        part is not approved at its current hash; then, for a named captured pattern or a proof
+        slice's: CapturedPatternWithdrawn when it is withdrawn; CapturedPatternBusy, for a proof
+        only, while another of the captured pattern's operations runs (any other run judges the
+        captured pattern by its recorded state and is never refused Busy);
+        CapturedPatternNotApproved when a named one is `proposed` or `proven` (a proof slice's
+        own run is not refused); ProofRequired when a named approved one is not usable (its
+        latest proof did not pass under the current method); PatternDoesNotFit, with the first
+        place the slice differs or the value refused and why, when a named captured pattern does
+        not fit, and for a proof slice when `pattern` names another pattern or a part no longer
+        equals the copy it was made from; then WorkersNotReady while a step of the pattern has no
+        ready worker (a `fill` step needs none); then RunActive while any run, of any slice, has
+        not ended (at most one active run on the platform, FR-021); then ProjectExists when the
+        folder exists. The operation's target is the new run; it lasts until the run ends.
       security:
       - clientToken: []
       x-error-codes:
@@ -486,7 +515,7 @@ paths:
         '401': [Unauthorized]
         '403': [Forbidden]
         '404': [NotFound]
-        '409': [NotApproved, PatternDoesNotFit, WorkersNotReady, RunActive, ProjectExists, IdempotencyKeyReused]
+        '409': [NotApproved, PatternDoesNotFit, CapturedPatternWithdrawn, CapturedPatternBusy, CapturedPatternNotApproved, ProofRequired, WorkersNotReady, RunActive, ProjectExists, IdempotencyKeyReused]
         '429': [RateLimited]
         '503': [Unavailable]
       parameters:
@@ -498,7 +527,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RunRequest'
+              $ref: '#/components/schemas/StartRunRequest'
       responses:
         '202':
           $ref: '#/components/responses/Accepted'
@@ -701,7 +730,7 @@ paths:
       summary: Resume an interrupted run
       description: Continues an `interrupted` run without repeating its accepted steps; a run that waits
         for its step workers is refused with WorkersNotReady until they register, and then continues
-        by itself. Returns the run's operation; its target is the run. RunActive while any other run, of any slice, has not ended.
+        by itself. A resumed run keeps its recorded pattern, parameters and source run. Returns the run's operation; its target is the run. RunActive while any other run, of any slice, has not ended.
       security:
       - clientToken: []
       x-error-codes:
@@ -740,9 +769,17 @@ paths:
       operationId: replayRun
       x-operation-name: Agentic.Engine/runs/replay/action
       summary: Replay an ended run
-      description: Starts a new run of the same slice and pattern version into a new project folder. It
-        reuses every accepted result of the earlier run, so its artifacts are identical. The operation's
-        target is the new run. RunActive while any other run, of any slice, has not ended.
+      description: >-
+        Starts a new run of the same slice and pattern version into a new project folder. It
+        reuses every accepted result of the earlier run, so its artifacts are identical. The
+        operation's target is the new run. RunActive while any other run, of any slice, has not
+        ended. A replay of a run built from a captured pattern keeps the parameter values that
+        run recorded, with no new fit, and copies its part hashes; it is refused at once with
+        CapturedPatternWithdrawn when the captured pattern is withdrawn, ProofRequired when it is
+        not usable, and NotFound when it was erased. A replay of a proof run is a new proof in
+        any state but withdrawn: it reuses no earlier result, and is refused at once with
+        CapturedPatternWithdrawn, or CapturedPatternBusy while another of the captured pattern's
+        operations runs, never ProofRequired.
       security:
       - clientToken: []
       x-error-codes:
@@ -750,7 +787,7 @@ paths:
         '401': [Unauthorized]
         '403': [Forbidden]
         '404': [NotFound]
-        '409': [RunNotEnded, WorkersNotReady, RunActive, ProjectExists, IdempotencyKeyReused]
+        '409': [RunNotEnded, CapturedPatternWithdrawn, ProofRequired, CapturedPatternBusy, WorkersNotReady, RunActive, ProjectExists, IdempotencyKeyReused]
         '429': [RateLimited]
         '503': [Unavailable]
       parameters:
@@ -788,8 +825,9 @@ paths:
       x-operation-name: Agentic.Engine/runs/handOver/action
       summary: Accept a run's hand-over
       description: The developer takes over a run that is `waiting-for-developer`; the run ends with the
-        outcome `handed-over` and its project folder is the developer's to finish. Returns the run's
-        operation; its target is the run.
+        outcome `handed-over` and its project folder is the developer's to finish. The run keeps its
+        recorded pattern, parameters and source run. Returns the run's operation; its target is
+        the run.
       security:
       - clientToken: []
       x-error-codes:
@@ -803,6 +841,386 @@ paths:
       parameters:
       - $ref: '#/components/parameters/ApiVersion'
       - $ref: '#/components/parameters/RunId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          $ref: '#/components/responses/Accepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /captured-patterns:
+    post:
+      tags:
+      - captured-patterns
+      operationId: captureRun
+      x-operation-name: Agentic.Engine/capturedPatterns/write
+      summary: Capture a done run as a pattern
+      description: >-
+        Proposes a captured pattern from a run that ended `done`: a pattern that builds later
+        slices of the same kind with no model call, filling the run's accepted `tests`, `code`
+        and `witnesses` files with each slice's own values. Its ID is `<base pattern id>-<name>`,
+        `name` defaulting to the run's slice ID in lowercase (`s-3`); its version is always
+        `1.0.0`. It holds the source slice's approved parts, its parameters with every place they
+        occur (names in their lowercase, capitalised and uppercase forms, and declared values,
+        found longest first and never overlapping), and is `proposed` until a proof passes.
+        Refusals come at once, and no operation is created: a body outside CaptureRequest is
+        InvalidRequest; an unknown run NotFound; a run that has not ended `done` (still running,
+        interrupted, waiting for the developer, handed over, expired or cancelled) RunNotDone,
+        naming its state; RunNotCapturable for a run that cannot be a source, naming the cause: a
+        run recorded under another base pattern version than the engine's current one (naming
+        both), a run of a captured pattern, a proof run, a run whose slice changed after it
+        started (a part whose hash differs from the part hashes its RunStarted records, or a part
+        no longer approved, naming the part), and a run whose RunStarted records no part hashes
+        (started before captured patterns existed, or a replay of such a run); and
+        CapturedPatternExists when the ID is held by a captured pattern or was ever held by an
+        erased one (an ID is never given twice). The operation's target is the new captured
+        pattern's ID and its result names it; a capture whose operation fails leaves no captured
+        pattern (getCapturedPattern answers 404).
+      security:
+      - clientToken: []
+      x-error-codes:
+        '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
+        '401': [Unauthorized]
+        '403': [Forbidden]
+        '404': [NotFound]
+        '409': [RunNotDone, RunNotCapturable, CapturedPatternExists, IdempotencyKeyReused]
+        '429': [RateLimited]
+        '503': [Unavailable]
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaptureRequest'
+      responses:
+        '202':
+          $ref: '#/components/responses/Accepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      tags:
+      - captured-patterns
+      operationId: listCapturedPatterns
+      x-operation-name: Agentic.Engine/capturedPatterns/read
+      summary: List captured patterns
+      description: Lists captured patterns, newest first, at most 50 per page. A proof whose run was
+        handed over or has ended is completed from the run record before the answer, so no
+        finished proof is listed `running`.
+      security:
+      - clientToken: []
+      - pageToken: []
+      x-error-codes:
+        '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
+        '401': [Unauthorized]
+        '403': [Forbidden]
+        '429': [RateLimited]
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/PageToken'
+      responses:
+        '200':
+          $ref: '#/components/responses/CapturedPatternList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /captured-patterns/{capturedPatternId}:
+    get:
+      tags:
+      - captured-patterns
+      operationId: getCapturedPattern
+      x-operation-name: Agentic.Engine/capturedPatterns/read
+      summary: Get a captured pattern
+      description: Returns the captured pattern with its parameters and their places, its proofs,
+        approval, state and whether it is usable. A proof whose run was handed over or has ended
+        is completed from the run record before the answer, also after an engine restart, so a
+        finished proof is never shown `running`. NotFound for an unknown or erased ID.
+      security:
+      - clientToken: []
+      - pageToken: []
+      x-error-codes:
+        '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
+        '401': [Unauthorized]
+        '403': [Forbidden]
+        '404': [NotFound]
+        '429': [RateLimited]
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/CapturedPatternId'
+      responses:
+        '200':
+          $ref: '#/components/responses/CapturedPattern'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    delete:
+      tags:
+      - captured-patterns
+      operationId: eraseCapturedPattern
+      x-operation-name: Agentic.Engine/capturedPatterns/delete
+      summary: Erase a captured pattern
+      description: >-
+        Erases the captured pattern, the template artifacts only it holds, and its proof slice with
+        that slice's runs (its proofs); runs of other slices built from it keep their records and
+        keep naming it. Its ID is never given again (CapturedPatternExists). A client shows what
+        will be erased and asks for confirmation first. Refused at once with CapturedPatternBusy
+        while another of its operations runs, a run built from it has not ended, or its proof's
+        run has not ended; NotFound for an unknown or erased ID. The operation's target is the
+        captured pattern.
+      security:
+      - clientToken: []
+      x-error-codes:
+        '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
+        '401': [Unauthorized]
+        '403': [Forbidden]
+        '404': [NotFound]
+        '409': [CapturedPatternBusy, IdempotencyKeyReused]
+        '429': [RateLimited]
+        '503': [Unavailable]
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/CapturedPatternId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          $ref: '#/components/responses/Accepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /captured-patterns/{capturedPatternId}/parameters:
+    put:
+      tags:
+      - captured-patterns
+      operationId: replaceParameters
+      x-operation-name: Agentic.Engine/capturedPatterns/write
+      summary: Replace a captured pattern's parameters
+      description: >-
+        Replaces every parameter of a `proposed` or `proven` captured pattern, removing those not
+        sent and adding new ones; the engine sets each parameter's kind and source and finds its
+        places (CapturedPattern, Parameter). An added value must be one of the slice's names,
+        declared values or literal values. Every accepted change, even one that leaves the same
+        values, moves a `proven` captured pattern back to `proposed`, so a new proof is needed.
+        A body outside ParametersRequest (more than `x-limits.captured-pattern-parameters-max`
+        parameters, a value over `x-limits.parameter-value-max-chars` characters or outside
+        `parameter_value`) is InvalidRequest at once. Refused at once with
+        CapturedPatternApproved for an approved one, CapturedPatternWithdrawn for a withdrawn
+        one, and CapturedPatternBusy while another of its operations runs or a run of its proof
+        slice is starting or has not ended (also a failed proof's run that waits for the
+        developer). The operation fails with ParameterRefused, naming the parameter and why, for
+        a value outside its kind's form, two values equal in any case form, a value that does not
+        occur in the slice, or more than `x-limits.parameter-places-max` places. The operation's
+        target is the captured pattern.
+      security:
+      - clientToken: []
+      x-error-codes:
+        '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
+        '401': [Unauthorized]
+        '403': [Forbidden]
+        '404': [NotFound]
+        '409': [CapturedPatternApproved, CapturedPatternWithdrawn, CapturedPatternBusy, IdempotencyKeyReused]
+        '429': [RateLimited]
+        '503': [Unavailable]
+        operation: [ParameterRefused]
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/CapturedPatternId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParametersRequest'
+      responses:
+        '202':
+          $ref: '#/components/responses/Accepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /captured-patterns/{capturedPatternId}/proof-slice:
+    post:
+      tags:
+      - captured-patterns
+      operationId: makeProofSlice
+      x-operation-name: Agentic.Engine/capturedPatterns/proofSlice/write
+      summary: Give a captured pattern's proof slice
+      description: >-
+        Gives the captured pattern's proof slice, the slice a proof builds, making it when the
+        captured pattern has none: an approved slice made from the captured pattern's copy of its
+        source slice, described `Proof of <captured pattern>`, with `proof_of` naming it, its
+        history starting `made-for-proof`, then one `approved` entry per part, each part approved
+        by the engine after the part checks pass under the current method. It takes the next
+        slice ID and works after the source slice and its runs are erased. Asked again, it gives
+        the same slice while every part is approved under the current method; after a method
+        change withdrew a part's approval, it checks and approves the parts again. A part that
+        fails a check fails the operation with PartFailsChecks, listing the failures, and makes
+        or changes no slice. A proof is then `startRun` of that slice into a new project folder.
+        Refused at once with CapturedPatternWithdrawn for a withdrawn one and CapturedPatternBusy
+        while another of its operations runs; allowed in every other state. The operation's
+        target is the captured pattern; its result's `slice` is the proof slice.
+      security:
+      - clientToken: []
+      x-error-codes:
+        '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
+        '401': [Unauthorized]
+        '403': [Forbidden]
+        '404': [NotFound]
+        '409': [CapturedPatternWithdrawn, CapturedPatternBusy, IdempotencyKeyReused]
+        '429': [RateLimited]
+        '503': [Unavailable]
+        operation: [PartFailsChecks]
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/CapturedPatternId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          $ref: '#/components/responses/Accepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /captured-patterns/{capturedPatternId}/approval:
+    post:
+      tags:
+      - captured-patterns
+      operationId: approveCapturedPattern
+      x-operation-name: Agentic.Engine/capturedPatterns/approval/write
+      summary: Approve a proven captured pattern
+      description: >-
+        Approves a `proven` captured pattern whose latest proof passed under the engine's current
+        method, with parameters equal to its current ones; the approval records `by` (`client`),
+        `at` and the proof it approved, and the captured pattern is `approved` from then on.
+        Approving an approved one changes nothing, whatever its proofs. Refused at once with
+        ProofRequired for a `proposed` one or one whose latest proof did not pass under the
+        current method, CapturedPatternWithdrawn for a withdrawn one, and CapturedPatternBusy
+        while another of its operations runs. The operation's target is the captured pattern.
+      security:
+      - clientToken: []
+      x-error-codes:
+        '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
+        '401': [Unauthorized]
+        '403': [Forbidden]
+        '404': [NotFound]
+        '409': [ProofRequired, CapturedPatternWithdrawn, CapturedPatternBusy, IdempotencyKeyReused]
+        '429': [RateLimited]
+        '503': [Unavailable]
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/CapturedPatternId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          $ref: '#/components/responses/Accepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /captured-patterns/{capturedPatternId}/withdrawal:
+    post:
+      tags:
+      - captured-patterns
+      operationId: withdrawCapturedPattern
+      x-operation-name: Agentic.Engine/capturedPatterns/withdrawal/action
+      summary: Withdraw a captured pattern
+      description: >-
+        Stops the captured pattern's use by new runs, in any state; `withdrawn` is final, and
+        only erasure follows. A run already started on it finishes on it, and earlier runs'
+        records keep naming it. Withdrawing a withdrawn one changes nothing. Refused at once with
+        CapturedPatternBusy while another of its operations runs. The operation's target is the
+        captured pattern.
+      security:
+      - clientToken: []
+      x-error-codes:
+        '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
+        '401': [Unauthorized]
+        '403': [Forbidden]
+        '404': [NotFound]
+        '409': [CapturedPatternBusy, IdempotencyKeyReused]
+        '429': [RateLimited]
+        '503': [Unavailable]
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/CapturedPatternId'
       - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '202':
@@ -1040,6 +1458,13 @@ components:
       description: The run's ID.
       schema:
         $ref: slice-defs.schema.json#/$defs/run_id
+    CapturedPatternId:
+      name: capturedPatternId
+      in: path
+      required: true
+      description: The captured pattern's ID.
+      schema:
+        $ref: slice-defs.schema.json#/$defs/pattern_id
     OperationId:
       name: operationId
       in: path
@@ -1125,6 +1550,32 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/SliceList'
+    CapturedPattern:
+      description: The captured pattern.
+      headers:
+        Deprecation:
+          $ref: '#/components/headers/Deprecation'
+        Sunset:
+          $ref: '#/components/headers/Sunset'
+        Link:
+          $ref: '#/components/headers/Link'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CapturedPattern'
+    CapturedPatternList:
+      description: A page of captured patterns.
+      headers:
+        Deprecation:
+          $ref: '#/components/headers/Deprecation'
+        Sunset:
+          $ref: '#/components/headers/Sunset'
+        Link:
+          $ref: '#/components/headers/Link'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CapturedPatternList'
     Run:
       description: The run.
       headers:
@@ -1231,8 +1682,8 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     NotFound:
-      description: The slice, run, operation or artifact does not exist, or it exists but is not for
-        this slice or step.
+      description: The slice, run, operation, artifact or captured pattern does not exist (an erased
+        captured pattern included), or it exists but is not for this slice or step.
       content:
         application/problem+json:
           schema:
@@ -1284,7 +1735,20 @@ components:
         the project folder exists. InvalidProject: the project name is not a valid folder name.
         RunNotInterrupted: the run is not interrupted. RunNotWaiting: the run is not waiting for the
         developer. RunNotEnded: the run has not ended. OperationEnded: the operation has finished.
-        BudgetExhausted: the work used its token, cost or time budget. OperationFailed: the work
+        BudgetExhausted: the work used its token, cost or time budget. RunNotDone: the run has not
+        ended `done`; `detail` names its state. RunNotCapturable: the run cannot be captured (a
+        run under another base pattern version, a run of a captured pattern, a proof run, or a run
+        whose slice changed after it started or that recorded no part hashes); `detail` names the
+        cause. CapturedPatternExists: a captured pattern holds the ID, or an erased one held it.
+        ParameterRefused: a parameter's value is outside its kind's form, equals another's in a
+        case form, does not occur in the slice, or occurs in more than
+        `x-limits.parameter-places-max` places; `detail` names the parameter and why.
+        ProofRequired: the captured pattern's latest proof did not pass under the current method.
+        CapturedPatternWithdrawn: the captured pattern is withdrawn. CapturedPatternBusy: another
+        of the captured pattern's operations runs, or a run of its proof slice (for erasure, also a
+        run built from it) has not ended. CapturedPatternApproved: the captured pattern is
+        approved, so it never changes. CapturedPatternNotApproved: the named captured pattern is
+        `proposed` or `proven`. OperationFailed: the work
         failed for a reason no other code names, after any retries; `detail` says why. A 503
         answer has its own problem, UnavailableProblem, whose code is always Unavailable.
       enum:
@@ -1314,6 +1778,15 @@ components:
       - OperationEnded
       - BudgetExhausted
       - OperationFailed
+      - RunNotDone
+      - RunNotCapturable
+      - CapturedPatternExists
+      - ParameterRefused
+      - ProofRequired
+      - CapturedPatternWithdrawn
+      - CapturedPatternBusy
+      - CapturedPatternApproved
+      - CapturedPatternNotApproved
     Problem:
       type: object
       description: An RFC 9457 problem with a stable `code`.
@@ -1431,6 +1904,357 @@ components:
           $ref: slice-defs.schema.json#/$defs/project_name
           description: The name of the new project folder, created under the projects folder chosen when
             the platform started. It must not exist yet.
+    StartRunRequest:
+      type: object
+      required:
+      - project
+      additionalProperties: false
+      properties:
+        project:
+          $ref: slice-defs.schema.json#/$defs/project_name
+          description: The name of the new project folder, created under the projects folder chosen when
+            the platform started. It must not exist yet.
+        pattern:
+          $ref: slice-defs.schema.json#/$defs/pattern_id
+          description: The pattern to build with, the base pattern's ID or a captured pattern's. Without
+            it the most recently approved usable captured pattern that fits the slice is used, else
+            the base pattern (startRun).
+    CaptureRequest:
+      type: object
+      required:
+      - run
+      additionalProperties: false
+      properties:
+        run:
+          $ref: slice-defs.schema.json#/$defs/run_id
+          description: The run to capture; it must have ended `done`.
+        name:
+          $ref: slice-defs.schema.json#/$defs/capture_name
+          description: The captured pattern's name; its ID is `<base pattern id>-<name>`. Without it, the
+            run's slice ID in lowercase (`s-3`).
+    ParameterValueRequest:
+      type: object
+      required:
+      - name
+      - value
+      additionalProperties: false
+      properties:
+        name:
+          $ref: slice-defs.schema.json#/$defs/parameter_name
+        value:
+          $ref: slice-defs.schema.json#/$defs/parameter_value
+          description: The source value, as it occurs in the source slice.
+    ParametersRequest:
+      type: object
+      required:
+      - parameters
+      additionalProperties: false
+      properties:
+        parameters:
+          type: array
+          maxItems: 32
+          description: Every parameter the captured pattern keeps, at most
+            `x-limits.captured-pattern-parameters-max`; empty leaves none, so only a slice identical
+            to the source fits.
+          items:
+            $ref: '#/components/schemas/ParameterValueRequest'
+    CapturedPatternState:
+      type: string
+      description: >-
+        `proposed` until a proof with the current parameters passes; `proven` after one passed
+        (every accepted replaceParameters, and a failing proof, move it back to `proposed`);
+        `approved` once the developer approved it after a passing proof (it never changes again;
+        a new proof may run at any time); `withdrawn` once withdrawn, final.
+      enum:
+      - proposed
+      - proven
+      - approved
+      - withdrawn
+    ParameterKind:
+      type: string
+      description: >-
+        The form every value of the parameter takes, the source's and a later slice's. `name`:
+        `[a-z][a-z0-9]*` with at least two letters, its lowercase form; it covers that form, the
+        capitalised form and the uppercase form, each replaced wherever it occurs, inside longer
+        words too (a plural is its own parameter, and any other spelling, such as `nOTE`, is not
+        replaced). `number`: an integer or a decimal without a sign, matched only as a whole number
+        (the characters around it are not digits, letters or `_`, and not a `.` followed by a
+        digit). `string`: letters, digits, `_`, `-` and spaces.
+      enum:
+      - name
+      - number
+      - string
+    ParameterSource:
+      type: string
+      description: Where the value came from in the source slice. `name`, one of its names (a schema
+        property name, or a word of an operation ID or schema name split at case changes);
+        `declared-value`, a value its contract declares; `literal`, any other number or string
+        that occurs in it.
+      enum:
+      - name
+      - declared-value
+      - literal
+    ParameterPlace:
+      type: object
+      description: One place a parameter's value occurs, found longest value first, left to right,
+        never overlapping another place.
+      required:
+      - part
+      - in
+      - line
+      - column
+      - form
+      additionalProperties: false
+      properties:
+        part:
+          type: string
+          minLength: 1
+          description: '`slice/goals`, `slice/rules` or `slice/contract` for an approved part of the
+            source slice, as its canonical JSON; otherwise the path of a template file, relative to
+            the project folder.'
+        in:
+          type: string
+          enum:
+          - content
+          - path
+          description: Whether the place is in the part's or file's content, or in the file's path.
+        line:
+          type: integer
+          minimum: 1
+          description: The line, from 1; 1 for a place in a path.
+        column:
+          type: integer
+          minimum: 1
+          description: The column in characters, from 1, in the line or in the path.
+        form:
+          type: string
+          enum:
+          - lower
+          - capitalised
+          - upper
+          - exact
+          description: The case form that occurs there; `exact` for a number or a string.
+    Parameter:
+      type: object
+      required:
+      - name
+      - kind
+      - value
+      - source
+      - origin
+      - places
+      additionalProperties: false
+      properties:
+        name:
+          $ref: slice-defs.schema.json#/$defs/parameter_name
+        kind:
+          $ref: '#/components/schemas/ParameterKind'
+        value:
+          $ref: slice-defs.schema.json#/$defs/parameter_value
+          description: The source value.
+        source:
+          $ref: '#/components/schemas/ParameterSource'
+        origin:
+          type: string
+          enum:
+          - proposed
+          - added
+          description: '`proposed` by the capture; `added` by the developer with replaceParameters.'
+        places:
+          type: array
+          minItems: 1
+          maxItems: 10000
+          description: Every place the value occurs, at most `x-limits.parameter-places-max`, in the
+            order found.
+          items:
+            $ref: '#/components/schemas/ParameterPlace'
+    ProofFailure:
+      type: object
+      description: >-
+        Why a proof failed: a failing check (`step`, `check`), a filled file that differs from the
+        template (`step`, `path`), or the run's end other than `done` (`reason` only).
+      required:
+      - reason
+      additionalProperties: false
+      properties:
+        step:
+          $ref: slice-defs.schema.json#/$defs/step_name
+        check:
+          $ref: slice-defs.schema.json#/$defs/check_name
+        path:
+          type: string
+          minLength: 1
+          description: Path relative to the project folder.
+        reason:
+          type: string
+          minLength: 1
+    Proof:
+      type: object
+      description: >-
+        One proof: a run of the captured pattern's proof slice under the captured pattern with the
+        source values, reusing no earlier result. It is `running` from its RunStarted until its
+        run is handed over or ends; then `passed` when the run ended `done` and its `tests`,
+        `code` and `witnesses` outputs' hashes equal the template's (generated code is judged by
+        its checks, not compared), otherwise `failed`, naming each failing check, each differing
+        file, or the run's end (`expired`, `cancelled`); a hand-over fails it at once, while the
+        run waits for the developer. Only an interrupted run leaves it `running`. It makes the
+        captured pattern `proven`, and counts for approval, only while its `parameters` equal the
+        current ones.
+      required:
+      - run
+      - method
+      - outcome
+      - failures
+      - parameters
+      additionalProperties: false
+      properties:
+        run:
+          $ref: slice-defs.schema.json#/$defs/run_id
+          description: The proof's run; after the proof slice is erased, getRun answers NotFound for it.
+        method:
+          $ref: slice-defs.schema.json#/$defs/hash
+          description: The method identity the proof ran under.
+        outcome:
+          type: string
+          enum:
+          - running
+          - passed
+          - failed
+        failures:
+          type: array
+          description: Empty unless `failed`.
+          items:
+            $ref: '#/components/schemas/ProofFailure'
+        parameters:
+          $ref: slice-defs.schema.json#/$defs/parameter_values
+          description: The parameters' names and source values it proved.
+    CapturedPatternApproval:
+      type: object
+      required:
+      - by
+      - at
+      - proof
+      additionalProperties: false
+      properties:
+        by:
+          type: string
+          const: client
+          description: The developer's client token, the only caller that may approve.
+        at:
+          type: string
+          format: date-time
+        proof:
+          $ref: slice-defs.schema.json#/$defs/run_id
+          description: The run of the passing proof it approved.
+    CapturedPattern:
+      type: object
+      description: >-
+        A pattern captured from a run that ended `done`: its base pattern with each agent step's
+        worker replaced by the fixed procedure `fill`, which writes the source run's accepted
+        files with each parameter's value in its place, so it builds a slice that fits it with no
+        model call. A slice fits when filling the source slice's approved parts with one value
+        per parameter gives exactly that slice's approved parts. It is used only while `usable`.
+      required:
+      - id
+      - version
+      - base
+      - method
+      - source
+      - parts
+      - template
+      - parameters
+      - proofs
+      - state
+      - usable
+      - created_at
+      additionalProperties: false
+      properties:
+        id:
+          $ref: slice-defs.schema.json#/$defs/pattern_id
+          description: '`<base pattern id>-<name>`.'
+        version:
+          type: string
+          const: 1.0.0
+          description: Always `1.0.0`; a captured pattern never changes, and a change is a new capture.
+        base:
+          $ref: slice-defs.schema.json#/$defs/pattern_ref
+          description: The base pattern it was captured from, the engine's at capture.
+        method:
+          $ref: slice-defs.schema.json#/$defs/hash
+          description: The method identity at capture.
+        source:
+          type: object
+          required:
+          - run
+          - slice
+          additionalProperties: false
+          description: The run it was captured from and that run's slice; both are kept named after
+            they are erased.
+          properties:
+            run:
+              $ref: slice-defs.schema.json#/$defs/run_id
+            slice:
+              $ref: slice-defs.schema.json#/$defs/slice_id
+        parts:
+          $ref: slice-defs.schema.json#/$defs/part_hashes
+          description: The hashes of the source slice's approved parts it holds a copy of, kept when
+            the source slice is erased.
+        template:
+          type: object
+          required:
+          - tests
+          - code
+          - witnesses
+          additionalProperties: false
+          description: Per filled output, the artifact hash of the files the source run's project
+            ended with (the step's last acceptance or reuse, after any review round's fix).
+          properties:
+            tests:
+              $ref: slice-defs.schema.json#/$defs/hash
+            code:
+              $ref: slice-defs.schema.json#/$defs/hash
+            witnesses:
+              $ref: slice-defs.schema.json#/$defs/hash
+        proof_slice:
+          $ref: slice-defs.schema.json#/$defs/slice_id
+          description: Its proof slice (makeProofSlice); absent until the first one is made and after
+            it is erased.
+        parameters:
+          type: array
+          maxItems: 32
+          description: Its parameters, at most `x-limits.captured-pattern-parameters-max`; empty when
+            it has none, so only a slice identical to the source fits.
+          items:
+            $ref: '#/components/schemas/Parameter'
+        proofs:
+          type: array
+          description: Every proof, newest last, kept after its run is erased.
+          items:
+            $ref: '#/components/schemas/Proof'
+        approval:
+          $ref: '#/components/schemas/CapturedPatternApproval'
+        state:
+          $ref: '#/components/schemas/CapturedPatternState'
+        usable:
+          type: boolean
+          description: True while it is `approved` and its latest proof passed under the engine's
+            current method; only a usable captured pattern is chosen by startRun. A method change,
+            a later failing proof, or a proof still running makes it unusable until a new proof
+            passes.
+        created_at:
+          type: string
+          format: date-time
+    CapturedPatternList:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CapturedPattern'
+        next_page_token:
+          type: string
     WorkerRegistration:
       type: object
       required:
@@ -1459,7 +2283,8 @@ components:
           description: The registered base address, as `WorkerRegistration.endpoint` defines it.
     OperationKind:
       type: string
-      description: What the operation does. Resuming, replaying and handing over a run all use the kind `run`.
+      description: What the operation does. Resuming, replaying and handing over a run all use the kind
+        `run`; a proof is a run.
       enum:
       - propose-slice
       - answer-questions
@@ -1469,6 +2294,12 @@ components:
       - approve-part
       - delete-slice
       - run
+      - capture-run
+      - replace-parameters
+      - make-proof-slice
+      - approve-captured-pattern
+      - withdraw-captured-pattern
+      - erase-captured-pattern
     OperationStatus:
       type: string
       enum:
@@ -1497,8 +2328,8 @@ components:
         status:
           $ref: '#/components/schemas/OperationStatus'
         target:
-          $ref: slice-defs.schema.json#/$defs/slice_or_run_id
-          description: The slice or run the operation concerns.
+          $ref: slice-defs.schema.json#/$defs/operation_target
+          description: The slice, run or captured pattern the operation concerns.
         progress:
           type: object
           description: For a `run` operation, how many of the pattern's steps are accepted.
@@ -1517,9 +2348,11 @@ components:
               description: The step in progress.
         result:
           type: object
-          description: Set when the operation succeeded. `slice` is the slice it created or changed, `run`
-            the run it started or continued, and `reused_slice` an existing slice with the same
-            description, returned instead of a new one.
+          description: Set when the operation succeeded. `slice` is the slice it created or changed (for
+            makeProofSlice, the proof slice), `run` the run it started or continued, `reused_slice`
+            an existing slice with the same description, returned instead of a new one, and
+            `captured_pattern` the captured pattern a captured-pattern operation created or
+            changed.
           minProperties: 1
           maxProperties: 1
           additionalProperties: false
@@ -1530,6 +2363,8 @@ components:
               $ref: slice-defs.schema.json#/$defs/run_id
             reused_slice:
               $ref: slice-defs.schema.json#/$defs/slice_id
+            captured_pattern:
+              $ref: slice-defs.schema.json#/$defs/pattern_id
         error:
           $ref: '#/components/schemas/Problem'
         created_at:
@@ -1553,6 +2388,8 @@ components:
           $ref: slice.schema.json#/properties/state
         latest_run:
           $ref: slice-defs.schema.json#/$defs/run_id
+        proof_of:
+          $ref: slice.schema.json#/properties/proof_of
     SliceList:
       type: object
       required:
@@ -1636,7 +2473,7 @@ components:
           $ref: slice-defs.schema.json#/$defs/slice_id
         pattern:
           $ref: slice-defs.schema.json#/$defs/pattern_ref
-          description: Pattern ID and version, as `<id>@<version>`.
+          description: Pattern ID and version, as `<id>@<version>`, a base pattern or a captured pattern.
         project:
           $ref: slice-defs.schema.json#/$defs/project_name
           description: The project folder's name under the projects folder.
@@ -1660,6 +2497,25 @@ components:
         replay_of:
           $ref: slice-defs.schema.json#/$defs/run_id
           description: For a replay, the run it replays.
+        proof:
+          type: boolean
+          const: true
+          description: True for a proof of a captured pattern (a run of its proof slice); absent on
+            every other run.
+        pattern_reason:
+          $ref: slice-defs.schema.json#/$defs/pattern_reason
+          description: Why the run uses `pattern`, from its RunStarted; absent on runs started before
+            captured patterns existed.
+        parameters:
+          $ref: slice-defs.schema.json#/$defs/parameter_values
+          description: For a run of a captured pattern, each parameter's value in this run.
+        source_run:
+          $ref: slice-defs.schema.json#/$defs/run_id
+          description: For a run of a captured pattern, the run it was captured from.
+        not_used:
+          $ref: slice-defs.schema.json#/$defs/not_used
+          description: The captured patterns the start judged and did not use, with the reason; absent
+            when there are none.
         created_at:
           type: string
           format: date-time

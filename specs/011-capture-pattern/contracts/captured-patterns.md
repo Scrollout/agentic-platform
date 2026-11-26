@@ -1,5 +1,15 @@
 # Contract draft: captured patterns
 
+**Authoritative copies** (T001): the engine contract
+[`openapi.yaml`](../../../src/engine/api/preview/2026-11-12-preview/openapi.yaml) (tag
+`captured-patterns`, `startRun`, `replayRun`) with
+[`slice-defs.schema.json`](../../../src/engine/api/preview/2026-11-12-preview/slice-defs.schema.json),
+[`run-event.schema.json`](../../../src/engine/api/preview/2026-11-12-preview/run-event.schema.json) and
+[`slice.schema.json`](../../../src/engine/api/preview/2026-11-12-preview/slice.schema.json); the check
+contract [`openapi.yaml`](../../../src/check/api/preview/2026-11-13-preview/openapi.yaml)
+(`writeStep`); the terminal contract [`contract.md`](../../../src/cli/contract.md). Where this draft
+and they differ, they hold.
+
 A draft for the first consumer (the terminal client). The authoritative copies are the engine
 contract (`src/engine/api/preview/2026-11-12-preview/openapi.yaml`) and the check contract
 (`src/check/api/preview/2026-11-13-preview/openapi.yaml`), extended additively before any code, except the new enum values ([ADR 0100](../../../docs/decisions/0100-preview-contract-gains-enum-values-in-place.md))

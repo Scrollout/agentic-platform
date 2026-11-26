@@ -49,6 +49,10 @@
     "latest_run": {
       "$ref": "slice-defs.schema.json#/$defs/run_id"
     },
+    "proof_of": {
+      "$ref": "slice-defs.schema.json#/$defs/pattern_id",
+      "description": "Set only on a proof slice, which the engine made from a captured pattern's copy of its source slice: that captured pattern's ID. A run of a proof slice is a proof of it; `createSlice` never returns a proof slice. Absent on every other slice."
+    },
     "artifact_count": {
       "type": "integer",
       "minimum": 0,
@@ -159,7 +163,7 @@
     "history": {
       "type": "array",
       "minItems": 1,
-      "description": "Every change to the slice in order, starting with the proposal. A proposed or revised entry names the model and agent definition that wrote it, and how many attempts it took.",
+      "description": "Every change to the slice in order, starting with the proposal (for a proof slice, with made-for-proof). A proposed or revised entry names the model and agent definition that wrote it, and how many attempts it took.",
       "items": {
         "type": "object",
         "required": [
@@ -171,14 +175,15 @@
         "properties": {
           "kind": {
             "type": "string",
-            "description": "proposed: the analyst's first proposal; revised: its revision after answers; answered: questions answered; changed: a part replaced, which withdraws that part's approval; approved: a part approved; withdrawn: approvals of the parts in refs withdrawn because a change elsewhere made those parts fail a check.",
+            "description": "proposed: the analyst's first proposal; revised: its revision after answers; answered: questions answered; changed: a part replaced, which withdraws that part's approval; approved: a part approved; withdrawn: approvals of the parts in refs withdrawn because a change elsewhere made those parts fail a check; made-for-proof: the slice was made by the engine from a captured pattern's copy, as its proof slice (no model; refs its parts), the first entry of a proof slice, followed by one approved entry per part.",
             "enum": [
               "proposed",
               "revised",
               "answered",
               "changed",
               "approved",
-              "withdrawn"
+              "withdrawn",
+              "made-for-proof"
             ]
           },
           "at": {

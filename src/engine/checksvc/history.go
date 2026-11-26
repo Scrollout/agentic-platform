@@ -1068,6 +1068,15 @@ func sortedKeys(m map[string]string) []string {
 	return out
 }
 
+// ---- writeStep ----
+
+// WriteStep is declared in the check contract (a captured pattern's fill steps); its work comes
+// with feature 011's T007. Until then the front answers it 404 like any route it does not map, and
+// a direct call answers 500.
+func (s *service) WriteStep(context.Context, gen.WriteStepRequestObject) (gen.WriteStepResponseObject, error) {
+	return nil, errors.New("writeStep is not implemented yet")
+}
+
 // ---- restoreStep ----
 
 func (s *service) RestoreStep(ctx context.Context, req gen.RestoreStepRequestObject) (gen.RestoreStepResponseObject, error) {

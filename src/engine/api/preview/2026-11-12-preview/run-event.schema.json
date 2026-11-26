@@ -81,7 +81,11 @@
     },
     "pattern": {
       "$ref": "slice-defs.schema.json#/$defs/pattern_ref",
-      "description": "Pattern ID and version, as `<id>@<version>`."
+      "description": "Pattern ID and version, as `<id>@<version>`; on RunStarted, the pattern the run follows, a base pattern or a captured pattern."
+    },
+    "pattern_reason": {
+      "$ref": "slice-defs.schema.json#/$defs/pattern_reason",
+      "description": "On RunStarted only, recorded since feature 011: why the run uses its pattern."
     },
     "inputs": {
       "type": "array",
@@ -244,6 +248,27 @@
           "line"
         ]
       }
+    },
+    "parameters": {
+      "$ref": "slice-defs.schema.json#/$defs/parameter_values",
+      "description": "On RunStarted only, for a run of a captured pattern: each parameter's value in this run, by parameter name (an empty object when it has none)."
+    },
+    "source_run": {
+      "$ref": "slice-defs.schema.json#/$defs/run_id",
+      "description": "On RunStarted only, for a run of a captured pattern: the run it was captured from. It keeps naming that run after the run is erased."
+    },
+    "proof": {
+      "type": "boolean",
+      "const": true,
+      "description": "On RunStarted only: true for a proof of a captured pattern, a run of its proof slice (engine contract, `Slice.proof_of`); absent on every other run."
+    },
+    "part_hashes": {
+      "$ref": "slice-defs.schema.json#/$defs/part_hashes",
+      "description": "On RunStarted only, recorded since feature 011: the hashes of the slice's approved parts the run started on (a replay copies its earlier run's, and has none when that run had none). Capturing the run compares them with the slice's parts."
+    },
+    "not_used": {
+      "$ref": "slice-defs.schema.json#/$defs/not_used",
+      "description": "On RunStarted only, recorded since feature 011: the captured patterns the start judged and did not use, with the reason; absent when there are none."
     },
     "detail": {
       "type": "string",
@@ -540,6 +565,86 @@
             ]
           }
         }
+      }
+    },
+    {
+      "if": {
+        "anyOf": [
+          {
+            "required": [
+              "pattern_reason"
+            ]
+          },
+          {
+            "required": [
+              "parameters"
+            ]
+          },
+          {
+            "required": [
+              "source_run"
+            ]
+          },
+          {
+            "required": [
+              "proof"
+            ]
+          },
+          {
+            "required": [
+              "part_hashes"
+            ]
+          },
+          {
+            "required": [
+              "not_used"
+            ]
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "kind": {
+            "const": "RunStarted"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "proof"
+        ]
+      },
+      "then": {
+        "required": [
+          "source_run",
+          "parameters"
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "parameters"
+        ]
+      },
+      "then": {
+        "required": [
+          "source_run"
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "source_run"
+        ]
+      },
+      "then": {
+        "required": [
+          "parameters"
+        ]
       }
     }
   ]
