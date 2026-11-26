@@ -605,6 +605,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   T045 adds the cases T038 lists
   `/speckit-converge` for US1 2026-11-26 (fresh Sonnet, at 38d2418): one gap, G1 -> T046; every
   other US1 behaviour built or homed in T039 to T045
+  CI 45843298744 at 6dac265 (B1's tests and code, T046's wording): all 26 jobs green
 - [x] T046 [US1] (converge US1, G1; FR-002, N-053) the captured pattern names the method that
   accepted its source run, not only the method at capture (`api/captured.go` capture stores
   `currentMethod()`; the source run's step events carry the accepting method): decide through
