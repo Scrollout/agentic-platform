@@ -188,5 +188,5 @@ None.
 
 | Violation | Why needed | Simpler alternative rejected because |
 |-----------|------------|--------------------------------------|
-| Principle XII: captured patterns have no tenant scope | One developer by scope (feature 001 FR-021) | Not applicable until the hosted version, as for slices (feature 001's row); the owner approves this row with T002 |
+| Principle XII: captured patterns have no tenant scope | One developer by scope (feature 001 FR-021) | Not applicable until the hosted version, as for slices (feature 001's row); approved by the owner 2026-11-26 (T002) |
 | Principle XV: the engine contract's `2026-11-12-preview` gains 9 `ErrorCode` values, 6 `OperationKind` values and the slice history kind `made-for-proof` in place, which the pinned oasdiff reports as breaking (`response-property-enum-value-added`, research E2) | `getOperation` and `startRun` must return the new kinds and codes, so a separate problem schema (feature 002) does not fit; every client is generated from this contract in the same commit and prints any code | A new preview version needs a deprecation period, the engine serving two versions and a change to `scripts/contract-diff.sh`; extensible enums drop the generated Go constants across the modules. Approved by the owner 2026-11-26 ([ADR 0100](../../docs/decisions/0100-preview-contract-gains-enum-values-in-place.md)) |

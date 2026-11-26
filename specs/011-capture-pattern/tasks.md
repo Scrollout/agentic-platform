@@ -274,13 +274,15 @@ with its `x-operation-name`; `captureRun` 404,
   `go test` of `src/engine` `./api/ ./slices/ ./store/`, `src/slice`, `src/cli` and `src/page`
   pass with no test changed, `go vet` of every module passes; `./checksvc/` fails only its five
   tests that install oapi-codegen offline (not in this host's module cache, unrelated to T001)
-- [ ] T002 Owner approvals: the plan's Complexity Tracking row (Principle XII not applicable, one
+- [x] T002 Owner approvals: the plan's Complexity Tracking row (Principle XII not applicable, one
   developer; the Principle XV row was approved 2026-11-26, ADR 0100); and the code author of T001 lists every existing test that fails or no
   longer compiles after T001 (expected: tests that list the contract's paths, operation kinds,
   error codes, `RunStarted`'s, `Run`'s or a slice record's fields exactly, and launcher tests
   that list the commands it intercepts); ask the owner to approve each by name and record
   each approval here with its date; a change not approved is not made, and the task that needs it
   stops
+  Done 2026-11-26: the owner approved the Principle XII row (2026-11-26) and the Principle XV row
+  (2026-11-26, ADR 0100); T001 broke no existing test, so no test change needed approval
 
 ---
 
