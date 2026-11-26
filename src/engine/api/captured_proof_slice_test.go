@@ -48,10 +48,13 @@ import (
 	"net/http"
 	"regexp"
 	goslices "slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/agentic-platform/engine/canonical"
+	"github.com/agentic-platform/engine/machine"
 	"github.com/agentic-platform/engine/slices"
 	"github.com/agentic-platform/engine/store"
 )
@@ -121,9 +124,35 @@ func newPSRig(t *testing.T) *psRig {
 	sp.approveAfterSeed(t)
 	p := &psRig{lint: lint, runsRig: &runsRig{t: t, sp: sp, st: st, projects: t.TempDir(),
 		w: &fakeStepWorker{st: st, data: map[string][]byte{}}, c: &fakeStepChecker{}}}
+	p.w.set(p.psWork) // a capture reads a template: each output a framed file set (owner-approved 2026-11-26)
 	p.psBoot()
 	p.psRegister("S-1")
 	return p
+}
+
+// psWork is the step worker: each declared output, except the review's findings, is written as
+// the framed form of one file inside the step's first writable entry, as a real step output is.
+func (p *psRig) psWork(_ context.Context, r machine.Request) (machine.Result, error) {
+	out := map[string]string{}
+	for _, name := range r.Step.Outputs {
+		b := []byte("[]")
+		if name != "findings" {
+			dir := "out/"
+			if len(r.Step.Writable) > 0 {
+				dir = strings.TrimSuffix(r.Step.Writable[0], "**")
+			}
+			b = canonical.Framed([]canonical.File{{Path: dir + name + ".txt", Content: []byte("content of " + r.Step.Name + "/" + name + "\n")}})
+		}
+		h, err := p.st.PutArtifact("S-1", b)
+		if err != nil {
+			return machine.Result{}, err
+		}
+		p.w.mu.Lock()
+		p.w.data[h] = b
+		p.w.mu.Unlock()
+		out[name] = h
+	}
+	return machine.Result{Model: "test-model", Outputs: out, Usage: machine.Usage{Tokens: 10}, Done: true}, nil
 }
 
 func psGrants() map[string]WorkerGrant {

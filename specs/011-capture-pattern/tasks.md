@@ -451,10 +451,13 @@ proposed and adding the derived value works; the proof ends passed with no model
   362b8b3 (T006 file committed), 1013ba1 (T005, `skeleton_test.go`'s target rule). T003, T004,
   T005 (21 tests) and T006's `fill` cases pass; T006's proof cases and T027 wait for T029;
   replaying a captured or proof run answers 500 until T015/T029 (T029's brief says so)
-- [ ] T034 [US1] Before T029 (owner approval needed): T027's rig (`newPSRig`) uses runsRig's
+- [x] T034 [US1] Before T029 (owner approval needed): T027's rig (`newPSRig`) uses runsRig's
   `fakeStepWorker.produce`, whose outputs are not framed file sets, so every capture in
   `captured_proof_slice_test.go` fails closed on an unreadable template; propose the change
   (a framed-file worker as T005's `capRig.work`) to the owner
+  Done 2026-11-26: the owner approved; `newPSRig` sets `psWork` (each output but the findings a
+  framed one-file set inside the step's first writable entry); every T027 capture now succeeds
+  and each case fails only at `proof-slice` (500, T029)
 - [ ] T035 [US1] Open points from T007, for the US1 fresh review (T011): a `fill` step records
   no `agent_digest` (data model "everything else equal"); `engine/captured` has no function that
   gives a sent value's kind and source (the API derives it from `Propose` and `Fill`'s form
