@@ -649,13 +649,14 @@ proposed and adding the derived value works; the proof ends passed with no model
   Cases); `proof-slice` restores a hand-changed part from the copy and approves it again (FR-004,
   data model "Proof slice", contract draft) -> T047 to T049; the "no place" rule stays (FR-003);
   names stay before declared values in the cut
-- [ ] T047 [US2] (T039, FR-004) Contract: `makeProofSlice`'s description in
+- [x] T047 [US2] (T039, FR-004) Contract: `makeProofSlice`'s description in
   `src/engine/api/preview/2026-11-12-preview/openapi.yaml` and the `changed` history kind's
   description in `slice.schema.json` state that asking again restores from the copy a part changed
   since the proof slice was made (one `changed` entry naming the restored parts, then one
   `approved` entry per unapproved part, after the part checks pass), and that a restore while a
   run of the proof slice has not ended answers `CapturedPatternBusy` (data model "Proof slice");
   `scripts/generate.sh`; committed alone
+  Done 2026-11-26 (2436a13): description-only; Spectral clean; `method.sha256` 2363d850
 - [ ] T048 [US2] Test author (after T047): new `src/engine/slices/proof_restore_test.go` and new
   `src/engine/api/captured_proof_slice_restore_test.go`: a proof slice whose part was replaced by
   hand is restored by `proof-slice` (its parts equal the copy, history `changed` naming exactly the
