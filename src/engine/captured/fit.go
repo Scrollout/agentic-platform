@@ -29,9 +29,12 @@ const readMaxBytes = 4 * (ValueMaxChars + 1)
 // paths filled to one path) and each inside its output's writable entries; an output with files
 // and no entry in writable has no path inside.
 //
-// A refusal is the first that applies, in reading order: the first place the approved slice
-// differs (Place, its column in characters in the approved part), a value refused (Parameter),
-// or paths (Paths, the template's paths). Every refusal carries a Detail in words.
+// A refusal is the first that applies, in this order: the first place, in reading order, the
+// approved slice differs (Place, its column in characters in the approved part); then the first
+// value refused, in reading order (Parameter); then paths (Paths, the template's paths). A value
+// refused is read on as that parameter's value, so a difference anywhere later in the slice
+// (also at a later place of the same parameter) is told as its Place, and the value refusal
+// only when the slice otherwise matches. Every refusal carries a Detail in words.
 //
 // Limits: a value is read as the shortest text after which the following literal starts, while
 // one of its kind's form is preferred; where two places of different parameters touch with no
@@ -53,6 +56,9 @@ func Fit(src Copy, template Template, writable map[string][]string, parameters [
 			return nil, false, ref
 		}
 	}
+	if f.refused != nil {
+		return nil, false, *f.refused
+	}
 	values = make(map[string]string, len(parameters))
 	for i, p := range parameters {
 		if !f.read[i] {
@@ -67,15 +73,26 @@ func Fit(src Copy, template Template, writable map[string][]string, parameters [
 	return values, true, Refusal{}
 }
 
-// fitter holds the values read so far while the parts are compared.
+// fitter holds the values read so far while the parts are compared, and the first value
+// refused, which is told only when no place differs.
 type fitter struct {
-	ps     []Parameter
-	m      *matcher
-	values []string
-	read   []bool
+	ps      []Parameter
+	m       *matcher
+	values  []string
+	read    []bool
+	refused *Refusal
 }
 
-// part compares one part of the source with the approved part's text a.
+// refuse keeps the value refusal of parameter p with why, unless one is kept already.
+func (f *fitter) refuse(p int, why string) {
+	if f.refused == nil {
+		r := &Refused{Parameter: f.ps[p].Name, Detail: why}
+		f.refused = &Refusal{Parameter: r, Detail: r.Error()}
+	}
+}
+
+// part compares one part of the source with the approved part's text a and gives the first
+// place that differs; a value refused is kept (refuse) and read on as the parameter's value.
 func (f *fitter) part(name, s, a string) (Refusal, bool) {
 	var holes []hit
 	f.m.scan(s, func(h hit) { holes = append(holes, h) })
@@ -112,13 +129,12 @@ func (f *fitter) part(name, s, a string) (Refusal, bool) {
 				fmt.Sprintf("the approved slice differs from the captured pattern's source: %q is not the %s form of a value of %s", t, h.form.form, f.ps[p].Name)), true
 		}
 		if why := valueRefusal(f.ps[p].Kind, v); why != "" {
-			r := &Refused{Parameter: f.ps[p].Name, Detail: why}
-			return Refusal{Parameter: r, Detail: r.Error()}, true
+			f.refuse(p, why)
 		}
 		for q := range f.ps {
 			if f.read[q] && strings.EqualFold(f.values[q], v) {
-				r := &Refused{Parameter: f.ps[p].Name, Detail: fmt.Sprintf("its value %q equals the value of %s in a case form", v, f.ps[q].Name)}
-				return Refusal{Parameter: r, Detail: r.Error()}, true
+				f.refuse(p, fmt.Sprintf("its value %q equals the value of %s in a case form", v, f.ps[q].Name))
+				break
 			}
 		}
 		f.values[p], f.read[p] = v, true

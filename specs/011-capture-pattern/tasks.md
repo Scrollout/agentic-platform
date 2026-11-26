@@ -848,9 +848,12 @@ pass, three runs give the same files.
   refusal, 4 pass (guards, and a difference inside the literal after the value); api: 2 fail
   (`not_used` names `refused-value`; a named start's detail names the parameter), 1 guard
   passes. Left open: a bad value plus a path refusal (which wins); Number and String kinds
-- [ ] T052 [US2] Code author (done when T051 and every existing test pass): `Fit` keeps reading
+- [x] T052 [US2] Code author (done when T051 and every existing test pass): `Fit` keeps reading
   after a refused value (taking the text read as the value) and returns the value refusal only
   when the rest of the slice matches
+  Done 2026-11-26 (Opus, next commit; method 9d1b9d29): the first refused value in reading order
+  is kept; order of refusals place, value, paths (a value refusal wins over a path one, untested);
+  captured and the whole api package pass (239 s)
 - [ ] T053 [US2] (review S1; suggestion) `Fit`'s reading refuses a value that contains the
   literal after its hole (`class` before `s`) although a reading exists: try later positions, or
   state it in the contract as a limit; test author, then code author, or `closed:` by the owner
