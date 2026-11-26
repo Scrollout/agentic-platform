@@ -618,7 +618,18 @@ func TestCaptureOfARunThatIsNotDoneFailsRunNotDone(t *testing.T) {
 // T005 / FR-001: the state is judged when the call is made: the same run captures once it is done.
 func TestCaptureOfARunThatHasNotEndedWorksOnceItIsDone(t *testing.T) {
 	c := newCapRig(t)
-	release := c.x.gatedWorker()
+	gate := make(chan struct{})
+	var once sync.Once
+	c.x.w.set(func(ctx context.Context, r machine.Request) (machine.Result, error) {
+		select {
+		case <-gate:
+		case <-ctx.Done():
+			return machine.Result{}, ctx.Err()
+		}
+		return c.work(ctx, r)
+	})
+	release := func() { once.Do(func() { close(gate) }) }
+	t.Cleanup(release)
 	op := c.x.startOK("notes-app")
 	c.refused(func() reply { return c.capture(op.Target, "") }, 409, gen.ErrorCodeRunNotDone)
 	release()
@@ -1302,18 +1313,16 @@ func TestASecondStateChangeWhileOneRunsIsCapturedPatternBusy(t *testing.T) {
 		first <- result{c.call("PUT", "/captured-patterns/"+id+"/parameters", "busy-key", capParams("note", "note", "keep", "keep"))}
 	}()
 	var r1 reply
+	select { // the 202 comes first: the work runs after acceptance (Principle IV)
+	case res := <-first:
+		r1 = res.r
+	case <-time.After(10 * time.Second):
+		t.Fatal("the first call did not answer in 10 s")
+	}
 	select {
 	case <-blocked: // the operation is reading the template
-		select {
-		case res := <-first:
-			r1 = res.r
-		case <-time.After(10 * time.Second):
-			t.Fatal("the first call did not answer while its operation was held")
-		}
-	case res := <-first:
-		t.Fatalf("the operation ended or answered (%d) without reading an artifact: it cannot be held open to observe CapturedPatternBusy; this test needs a seam (reported)", res.r.Code)
 	case <-time.After(10 * time.Second):
-		t.Fatal("no artifact read in 10 s")
+		t.Fatal("no artifact read in 10 s: the operation cannot be held open to observe CapturedPatternBusy")
 	}
 	op := c.acceptedOnly(r1, "replace-parameters", id)
 
