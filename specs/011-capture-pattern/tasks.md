@@ -578,8 +578,14 @@ proposed and adding the derived value works; the proof ends passed with no model
   `src/page/`; no test is changed
   Done 2026-11-26 (Sonnet, 1bb6569): T031 and `src/page`'s tests pass. Untested (for T011): the
   page does not escape control characters or invalid UTF-8 in values as the terminal's `esc` does
-- [ ] T010 [US1] (after T007, T009, T029, T032 and T036) Commit (tests and code in separate commits); fast lint; ask the owner before
+- [x] T010 [US1] (after T007, T009, T029, T032 and T036) Commit (tests and code in separate commits); fast lint; ask the owner before
   pushing (every check job runs); record the CI run here
+  Done 2026-11-26: pushed with the owner's go-ahead. CI 45819156622 at a05c77f (23 of 26: the
+  engine archfile lacked `captured`, fixed 2473169 with the owner's approval) and 45824972601 at
+  2473169 (`method.sha256` stale after the archfile, fixed 016ceec); CI 45830105349 at 016ceec:
+  all 26 jobs green; T036's `TestCapturedProve...` passed in "Service tests with Docker (recorded
+  model)" (8 min 30 s; the job 34 min). `evals-current` lists analyst and steps tests/code/review
+  pending (T024 before merge)
 - [ ] T011 [US1] Fresh review of US1 judging T010's CI run; findings fixed as new tasks or
   recorded; `/speckit-converge` for US1
 
