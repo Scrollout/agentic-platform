@@ -679,7 +679,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   slice's making (no earlier baseline); `method.sha256` 27a24649. Open -> T050; untested (for
   T017): approve-only while a proof run has not ended, a restore of rules that drops or brings
   back example IDs
-- [ ] T050 [US2] (T049; owner decision) a busy found inside `makeProofSlice`'s work (a hand change
+- [x] T050 [US2] (T049; owner decision) a busy found inside `makeProofSlice`'s work (a hand change
   after the 202 while a proof run is active) fails the operation `OperationFailed`, since the
   contract lists only `PartFailsChecks` as its operation error: add `CapturedPatternBusy` to its
   `operation` codes (additive; contract, test author, code author) or accept `OperationFailed`
@@ -689,6 +689,9 @@ proposed and adding the derived value works; the proof ends passed with no model
   `src/engine/api/captured_proof_slice_busy_work_test.go` (a part changed by hand after the 202
   while a proof run has not ended fails the operation with `CapturedPatternBusy`, slice
   unchanged); code author maps the work's busy refusal to that code
+  Done 2026-11-26: contract 3a542a7; test (Sonnet) passes at 3a542a7 with no code change, as the
+  API's `workError` maps a slices error to any code the contract's `operation` list names; seen
+  failing against 3a542a7~1's contract (`OperationFailed`); its history is logged, not asserted
 - [ ] T040 [US2] (review S1; FR-009) A `fill` step's `writeStep` refusal that cannot succeed on
   resume (400 outside the writable entries, 422 `StepFilesTooLarge`, `InputHashMismatch`, an
   unreadable template, a refused fill) ends the run interrupted then expired; make it a
