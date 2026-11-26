@@ -934,7 +934,7 @@ withdrawn and erased; runs record it (FR-011 to FR-013; research R3, R5).
 pattern and names the captured pattern as needing a new proof; a new passing proof restores it;
 a withdrawn one is never chosen; erasing the source slice keeps the captured pattern usable.
 
-- [ ] T018 [P] [US3] Test author: new `src/engine/api/captured_method_test.go`: with the engine's
+- [x] T018 [P] [US3] Test author: new `src/engine/api/captured_method_test.go`: with the engine's
   method changed after approval (the `startRun` skip and `ProofRequired` cases are T013's; here a
   regression guard), a new passing proof under the new method
   makes it usable and records the method; a failing one leaves it unusable naming what failed;
@@ -956,9 +956,22 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   slice answers `CapturedPatternWithdrawn` at `startRun` and `proof-slice`; erasing a captured
   pattern erases its proof slice and that slice's runs, and answers `CapturedPatternBusy` while a
   proof's run has not ended. Seen failing
-- [ ] T019 [P] [US3] Test author: new `src/cli/captured_lifecycle_test.go`: `ap withdraw-pattern`
+  Done 2026-11-27 (c0d4fa1; fresh Sonnet, at 8d054f4): `captured_method_test.go`, 12 tests fail
+  at the withdraw/erase stubs (500); regression guards: the method-rule tests, a planted withdrawn
+  record's refusals, the 403s, the source slice's erasure. Assertions after the first withdraw or
+  erase call are checked only by hand until T020. Read for "before NotApproved": the slice's
+  NotApproved stays first (contract order); withdrawn comes before `CapturedPatternNotApproved`,
+  `ProofRequired`, `PatternDoesNotFit`, `WorkersNotReady`, `RunActive`, `ProjectExists`.
+  Withdrawing again: a 202 operation that succeeds and changes nothing (contract silent on the
+  answer). Template artifacts are read through the store (no API reader), as T027's tests do
+- [x] T019 [P] [US3] Test author: new `src/cli/captured_lifecycle_test.go`: `ap withdraw-pattern`
   and `ap erase-pattern` (shows what will be erased, asks for confirmation, does nothing without
   it). Seen failing
+  Done 2026-11-27 (a89c18d; fresh Sonnet, at 8d054f4): 15 tests fail on the missing commands.
+  Open for T020/T022: "the artifacts only it holds" has no field the client reads (only the
+  pattern, its proof slice and proof runs are tested); an unconfirmed answer exits non-zero and
+  says "nothing" on stderr (exit code not fixed by the contract); no `--yes` for erase-pattern;
+  no Idempotency-Key named for either command
 - [ ] T020 [US3] Code author (done when T018 and T019 pass): withdrawal and erasure in
   `src/engine/api/` and `src/engine/store/` (`withdrawCapturedPattern`, `eraseCapturedPattern`,
   the `CapturedPatternWithdrawn` refusals at `startRun` (a named use and the proof-slice branch),
