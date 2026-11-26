@@ -11,12 +11,17 @@ package api_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/agentic-platform/engine/api"
+	"github.com/agentic-platform/engine/canonical"
 	"github.com/agentic-platform/engine/durable"
 	"github.com/agentic-platform/engine/machine"
 	"go.temporal.io/sdk/activity"
@@ -107,8 +112,26 @@ func activitiesOn(s *testDurable, p api.DurablePorts) *durable.Activities {
 	if p.History != nil {
 		h = p.History
 	}
-	return &durable.Activities{Worker: p.Worker, Checker: p.Checker, History: h, Results: p.Record.Results(),
-		Artifacts: p.Artifacts, Events: testEvents{s: s, rec: p.Record}}
+	a := &durable.Activities{Worker: p.Worker, Checker: p.Checker, History: h, Results: p.Record.Results(),
+		Artifacts: alterableArtifacts{p.Artifacts}, Events: testEvents{s: s, rec: p.Record}}
+	if cs, ok := p.Artifacts.(api.CapturedStore); ok { // the store that keeps the captured patterns gives a fill step its parameters
+		a.Captured = api.CapturedParameters{Store: cs}
+	}
+	return a
+}
+
+// alterableArtifacts is the artifact store the activities use, where a test (api.DurableAlterFilled,
+// feature 011 T033, owner-approved 2026-11-26) may alter the bytes of the files a `fill` step
+// stores; nothing else it stores is touched.
+type alterableArtifacts struct{ api.DurableArtifacts }
+
+func (a alterableArtifacts) PutArtifact(slice string, data []byte) (string, error) {
+	if f := api.DurableAlterFilled.Load(); f != nil {
+		if files, err := canonical.Unframe(data); err == nil && len(files) > 0 {
+			data = canonical.Framed((*f)(files))
+		}
+	}
+	return a.DurableArtifacts.PutArtifact(slice, data)
 }
 
 // testEvents writes to the run record until the service is closed.
@@ -133,6 +156,19 @@ type noHistory struct{}
 func (noHistory) Restore(context.Context, machine.RestoreRequest) error       { return nil }
 func (noHistory) Commit(context.Context, machine.CommitRequest) (bool, error) { return true, nil }
 
+// Write (machine.Writer) writes nothing and answers the files it was given as the project's files.
+func (noHistory) Write(_ context.Context, r machine.WriteRequest) (machine.WriteResult, error) {
+	var res machine.WriteResult
+	for _, f := range r.Files {
+		sum := sha256.Sum256(f.Content)
+		res.Written = append(res.Written, f.Path)
+		res.ProjectFiles = append(res.ProjectFiles, machine.File{Path: f.Path, SHA256: hex.EncodeToString(sum[:])})
+	}
+	slices.Sort(res.Written)
+	slices.SortFunc(res.ProjectFiles, func(a, b machine.File) int { return strings.Compare(a.Path, b.Path) })
+	return res, nil
+}
+
 func (s *testDurable) Start(_ context.Context, r api.RunStart) error {
 	if r.Pattern != r.Definition.ID+"@"+r.Definition.Version {
 		return fmt.Errorf("durable test service: run %s names pattern %s, its definition is %s@%s", r.Run, r.Pattern,
@@ -155,6 +191,7 @@ func (s *testDurable) Start(_ context.Context, r api.RunStart) error {
 	env.SetWorkerOptions(worker.Options{Interceptors: []interceptor.WorkerInterceptor{&rigClock{s: s, run: r.Run}}})
 	env.RegisterWorkflowWithOptions(durable.Run, workflow.RegisterOptions{Name: "Run"})
 	act(env, s, durable.CallWorker, (*durable.Activities).CallWorker)
+	act(env, s, durable.WriteProject, (*durable.Activities).WriteProject)
 	act(env, s, durable.RunCheck, (*durable.Activities).RunCheck)
 	act(env, s, durable.RestoreProject, (*durable.Activities).RestoreProject)
 	act(env, s, durable.CommitStep, (*durable.Activities).CommitStep)
@@ -162,12 +199,19 @@ func (s *testDurable) Start(_ context.Context, r api.RunStart) error {
 	act(env, s, durable.PutResult, noResult((*durable.Activities).PutResult))
 	act(env, s, durable.RecordEvent, noResult((*durable.Activities).RecordEvent))
 	in := durable.RunInput{Run: r.Run, Slice: r.Slice, Project: r.Project, Pattern: r.Definition, Model: r.Model, Inputs: r.Inputs,
-		Refs: r.Refs, ReplayOf: r.ReplayOf, Operation: r.Operation}
+		Refs: r.Refs, ReplayOf: r.ReplayOf, Operation: r.Operation, PatternReason: r.PatternReason, Parameters: r.Parameters,
+		SourceRun: r.SourceRun, Proof: r.Proof, NotUsed: r.NotUsed, NoReuse: r.NoReuse}
+	if r.Fill != nil {
+		in.Fill = &durable.FillInput{Captured: r.Fill.Captured, Template: r.Fill.Template, Values: r.Fill.Values}
+	}
 	run := &testRun{env: env, done: make(chan struct{}), waits: map[int]time.Time{}}
 	s.runs[r.Run] = run
 	go func() {
 		defer close(run.done)
 		defer func() { _ = recover() }() // a workflow the test left behind
+		if hold := api.DurableHoldRun.Load(); hold != nil {
+			(*hold)(r.Run) // a test holds the run before its first recorded event (feature 011 T033)
+		}
 		env.ExecuteWorkflow("Run", in)
 	}()
 	return nil
