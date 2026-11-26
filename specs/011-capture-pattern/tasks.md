@@ -859,11 +859,12 @@ pass, three runs give the same files.
   Done 2026-11-26 (Opus, next commit; method 9d1b9d29): the first refused value in reading order
   is kept; order of refusals place, value, paths (a value refusal wins over a path one, untested);
   captured and the whole api package pass (239 s)
-- [ ] T060 [US2] (T017 round 2, R1, blocking; FR-008, FR-010) T052 reads an empty refused value
+- [x] T060 [US2] (T017 round 2, R1, blocking; FR-008, FR-010) T052 reads an empty refused value
   on, and a later place of that parameter in its capitalised form panics in `in` (value[:1]):
   the slice must get the value refusal (or a later place refusal), never a panic. Test (new file
   `captured/fit_empty_value_test.go`, coordinator, seen failing at 7f3888f: both cases panic),
   then code author
+  Done 2026-11-26: code (Opus) `in` gives the empty text for an empty value; method 1a2c3f0e
 - [x] T059 [US2] (CI 45889661212, Go unit tests: `checksvc` `TestRateLimitPerToken` got 503 Busy on
   a call made after the previous one answered; Fix the cause) `bounded` released a call's slot
   after sending the answer, so the next sequential call could find it taken under load: release

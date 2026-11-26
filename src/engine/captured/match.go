@@ -87,9 +87,13 @@ func forms(param int, kind Kind, value string) []form {
 }
 
 // in gives value's text in case form f: the same rule turns a source form into a later value's.
+// An empty value (refused, but read on by Fit) is the empty text in every form.
 func in(f Form, value string) string {
 	switch f {
 	case FormCapitalised:
+		if value == "" {
+			return ""
+		}
 		return strings.ToUpper(value[:1]) + value[1:]
 	case FormUpper:
 		return strings.ToUpper(value)
