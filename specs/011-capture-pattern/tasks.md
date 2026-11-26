@@ -589,7 +589,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   all 26 jobs green; T036's `TestCapturedProve...` passed in "Service tests with Docker (recorded
   model)" (8 min 30 s; the job 34 min). `evals-current` lists analyst and steps tests/code/review
   pending (T024 before merge)
-- [ ] T011 [US1] Fresh review of US1 judging T010's CI run; findings fixed as new tasks or
+- [x] T011 [US1] Fresh review of US1 judging T010's CI run; findings fixed as new tasks or
   recorded; `/speckit-converge` for US1
   Round 1 2026-11-26 (fresh Sonnet, at ddb0393, judging CI 45830105349): B1 blocking (a capture
   with more than 32 candidates fails, FR-001, Principle XVIII Sound) -> owner: cut at 32 by a rule
@@ -603,6 +603,14 @@ proposed and adding the derived value works; the proof ends passed with no model
   through Propose (T039's clarify may drop it); names before declared values can displace
   meaningful declared values in a small slice of generic words (T039's clarify may revisit);
   T045 adds the cases T038 lists
+  `/speckit-converge` for US1 2026-11-26 (fresh Sonnet, at 38d2418): one gap, G1 -> T046; every
+  other US1 behaviour built or homed in T039 to T045
+- [ ] T046 [US1] (converge US1, G1; FR-002, N-053) the captured pattern names the method that
+  accepted its source run, not only the method at capture (`api/captured.go` capture stores
+  `currentMethod()`; the source run's step events carry the accepting method): decide through
+  `/speckit-clarify` (add the accepting method beside the capture-time one, or state in FR-002 and
+  the contract that the field is the capture-time method); then contract, test author (new file),
+  code author; not blocking US1 (the proof is judged under the current method, FR-004, FR-006)
 - [x] T037 [US1] Test author (B1): new `src/engine/captured/propose_cap_test.go`: a slice copy
   with more than 32 candidates proposes exactly 32, the first in Propose's order (names in byte
   order, then declared values in the contract's order), each with the places found among the
