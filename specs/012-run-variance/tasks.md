@@ -173,12 +173,12 @@ their own projects; the set ends in one state and shows done out of ended and th
 for the developer shows `done 2/3`, `unstable`, each trial's run and outcome; the third trial starts
 only after the second ended; every trial's `RunStarted` has `trial_set` and no `ResultReused`.
 
-- [ ] T006 [P] [US1] Test author: new `src/engine/trials/outcome_test.go` on planted run records:
+- [X] T006 [P] [US1] Test author: new `src/engine/trials/outcome_test.go` on planted run records:
   outcomes done, done, handed-over give `done 2`, `ended 3`, `unstable`; 3/3 and 0/3 are not
   unstable (SC-002); a set with 2 of 3 trials ended counts only the ended; a cancelled trial counts
   as ended and not done; an expired trial is not done; each trial's run ID, outcome and method;
   trials under two methods give `methods_mixed`, one method does not; seen failing before T009
-- [ ] T007 [P] [US1] Test author: new `src/engine/api/trial_sets_test.go` (engine rig, durable
+- [X] T007 [P] [US1] Test author: new `src/engine/api/trial_sets_test.go` (engine rig, durable
   service, recorded or stub workers): `startTrialSet` answers 400 `InvalidRequest` for `trials` 0
   or 6 and for a prefix that makes an invalid project name, and records nothing; refusals in the
   data model's order, at once, with nothing started; trials start one after another, trial *i*
@@ -202,10 +202,10 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   slice runs is 409 `RunActive`; a second set of the slice while one runs is 409 `RunActive`;
   `getTrialSet` reads without a model call or a changed record (SC-005); erasing the slice erases
   its sets (404); limits equal the contract's `x-limits`; seen failing before T009
-- [ ] T008 [P] [US1] Test author: new `src/engine/durable/trial_fields_test.go`: a run started at
+- [X] T008 [P] [US1] Test author: new `src/engine/durable/trial_fields_test.go`: a run started at
   workflow version 3 records `trial_set` and `trial` on `RunStarted`; a run started under version 2
   replays unchanged; seen failing before T009
-- [ ] T009 [US1] Code author (done when T006-T008 pass): `src/engine/trials/` (outcome part of the
+- [X] T009 [US1] Code author (done when T006-T008 pass): `src/engine/trials/` (outcome part of the
   result), `src/engine/store/` trial-set records in the slice's folder with an ID sequence that
   never repeats, `src/engine/api/trial_sets.go` (`startTrialSet` with `StartRun`'s checks for every
   project, the `run-trials` job: reserve and write trial *i*'s run ID, start it through `newRun`
@@ -215,16 +215,16 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   (`deleteSlice` refused while a set runs), `src/engine/api/operations.go` (`run-trials`), `src/engine/api/durable.go`
   `RunStart.TrialSet`/`Trial`, `src/engine/durable/` and `src/engine/machine/` (the `RunStarted`
   fields, workflow version 3); method identity converged
-- [ ] T010 [P] [US1] Test author: new `src/cli/trials_test.go` and
+- [X] T010 [P] [US1] Test author: new `src/cli/trials_test.go` and
   `scripts/tests/test_ap_trials.py`: `ap trials <slice> <prefix> [--trials <k>]` runs
   `build-workers` for `<prefix>-1` to `<prefix>-<k>` before the client's `trials`, and stops at
   the first that fails, starting no set; the client starts the set, prints one line per trial as it
   ends and the `done <d>/<e>` line with `unstable` when marked; exit 0 when every trial ended done,
   the exit codes of the contract draft's table (0, 7, 6, 130, 4); `trial-set <id>` prints the same
   for an ended set and follows a running one; seen failing before T011
-- [ ] T011 [US1] Code author (done when T010 passes): `src/cli/` `trials` and `trial-set` (generated
+- [X] T011 [US1] Code author (done when T010 passes): `src/cli/` `trials` and `trial-set` (generated
   client only), `src/deploy/ap` intercepts `trials`
-- [ ] T012 [P] [US1] Test author: new `src/tests/acceptance/trials_test.go` (Compose stack,
+- [X] T012 [P] [US1] Test author: new `src/tests/acceptance/trials_test.go` (Compose stack,
   recorded model): `ap trials <slice> <prefix> --trials 2` on the notes slice: both projects get
   their workers, two runs end done one after the other, each makes model requests for every agent
   step (SC-004), `ap trial-set` prints `done 2/2` without `unstable`, and reading it adds no model
@@ -233,12 +233,12 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   T013's. Seen failing: CI 46041159126 at 73e0a4e, `docker` job: subtest 1 passed (step containers of
   2 projects 343.5 MiB in all, 181.5 and 162.0 MiB), subtests 2-6 failed (`trials` exit 3: the client
   had no `trials`); every other suite passed
-- [ ] T029 [P] [US1] Test author: new `src/engine/store/trial_sets_test.go`: a set's record is
+- [X] T029 [P] [US1] Test author: new `src/engine/store/trial_sets_test.go`: a set's record is
   kept in its slice's folder and read back after a restart; `runs` written one by one keeps its
   order; IDs `TS-<n>` come from a sequence that never gives an ID again, also after the slice is
   erased; erasing the slice removes its sets; seen failing before T009
-- [ ] T013 [US1] (after T005, T009, T011, T012 and T029) Commit (tests and code in separate commits);
-  fast lint; ask the owner before pushing (every check job runs); record the CI run here
+- [X] T013 [US1] (after T005, T009, T011, T012 and T029) Commit (tests and code in separate commits);
+  fast lint; ask the owner before pushing (every check job runs); record the CI run here. Done: code d70ee51, 6997707 (T009), 36732bf (T011); tests f5d2cbb, 16737fe, 73e0a4e, 254c9b1 (owner-approved T012 fix: step workers on the parent test's t, found on the owner's VM); helper changes approved (T002). CI 46070202691 at 254c9b1: 24/24 green, TestTrials included
 - [ ] T014 [US1] Fresh review of US1 judging T013's CI run; findings fixed as new tasks or
   recorded; `/speckit-converge` for US1
 
