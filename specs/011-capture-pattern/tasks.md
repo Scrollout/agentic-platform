@@ -1048,7 +1048,7 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
 
 ## Phase 5: Polish & cross-cutting
 
-- [ ] T023 Docs: `docs/architecture/overview.md` (captured patterns, the fill worker, `writeStep`,
+- [x] T023 Docs: `docs/architecture/overview.md` (captured patterns, the fill worker, `writeStep`,
   the pattern choice, the proof slice, ADR 0090 to 0100 in its Decisions), `src/catalogue/README.md`
   (captured patterns beside the base patterns), `src/engine/README.md`, `src/deploy/README.md`
   (`prove`), `docs/apis/engine-api.md` and

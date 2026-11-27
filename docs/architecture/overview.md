@@ -56,7 +56,22 @@ sources:
   - id: adr-0069
     resource: /decisions/0069-one-retry-rule-declared-in-the-engine-contract.md
     title: "ADR 0069: One retry rule, declared in the engine contract"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-20T23:30:00Z }
+  - id: plan-011
+    resource: ../../specs/011-capture-pattern/plan.md
+    title: Feature 011 plan, research R1 to R7
+  - id: data-model-011
+    resource: ../../specs/011-capture-pattern/data-model.md
+    title: Feature 011 data model
+  - id: adr-0090
+    resource: /decisions/0090-captured-pattern-fills-agent-steps-from-accepted-files.md
+    title: "ADR 0090: A captured pattern fills its agent steps from the accepted files"
+  - id: adr-0093
+    resource: /decisions/0093-captured-pattern-used-only-under-its-proven-method.md
+    title: "ADR 0093: A captured pattern is used only under its proven method"
+  - id: adr-0097
+    resource: /decisions/0097-proof-builds-a-slice-made-from-the-captured-copy.md
+    title: "ADR 0097: A proof builds a slice made from the captured pattern's copy"
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-27T12:00:00Z }
 ---
 
 # Context
@@ -272,6 +287,73 @@ Sources: [Feature 002 research](../../specs/002-durable-execution/research.md),
 [ADR 0068](/decisions/0068-operations-recorded-then-run-as-workflows.md),
 [ADR 0069](/decisions/0069-one-retry-rule-declared-in-the-engine-contract.md).
 
+Shipped by feature 011 ([spec](../../specs/011-capture-pattern/spec.md)):
+
+- **Captured patterns** (`src/engine/captured`, `/captured-patterns` in the engine API): a run of
+  the base pattern that ended done is captured as a pattern that builds later slices of the same
+  kind with no model call. Its declaration is the base pattern with each agent step's worker
+  replaced by the fixed procedure `fill`, one attempt and one review round; the review step keeps
+  only the checks that need no findings. Its template is the run's accepted `tests`, `code` and
+  `witnesses` outputs; `gen/**` is derived again from each slice's contract by the generate
+  procedure. Its parameters are the source slice's names (lowercase, capitalised and uppercase
+  forms), declared values and any other literal value the developer adds, each with every place it
+  occurs in the slice and in the template's contents and paths; at most 32 parameters, 10000
+  places each, values of at most 64 characters. A captured pattern never changes (always
+  `1.0.0`; a change is a new capture), and an erased ID is never given again
+  ([ADR 0090](/decisions/0090-captured-pattern-fills-agent-steps-from-accepted-files.md),
+  [ADR 0094](/decisions/0094-any-literal-value-may-be-a-parameter.md),
+  [ADR 0095](/decisions/0095-captured-patterns-never-change-values-keep-their-kind.md)).
+- **Kept in the engine store** as the developer's data: one record per captured pattern, with a
+  copy of the source slice's approved parts, and the template's artifacts held by the captured
+  pattern as a second holder, so they stay when the source slice is erased. Capture, parameters,
+  the proof slice, approval, withdrawal and erasure are operations, one at a time per captured
+  pattern ([ADR 0091](/decisions/0091-captured-patterns-kept-in-the-engine-store.md)).
+- **Fit by exact substitution**: one package, `engine/captured`, owns the rules. A slice fits a
+  captured pattern when filling the captured copy with one value per parameter, each of its
+  parameter's kind, gives exactly the approved slice, no two values are equal and every filled
+  path is distinct and inside its step's writable entries; a later name value that is a Go keyword
+  is refused. A fit picks values, never code
+  ([ADR 0092](/decisions/0092-captured-pattern-fit-is-exact-substitution.md)).
+- **The fill worker**: a `fill` step runs in the run workflow as the activity `WriteProject`, with
+  no step container: the engine fills the template outputs with the run's values and the project
+  worker writes them with the check contract's new `writeStep`; the check service reads them back
+  with `readStepFiles`, the base pattern's checks judge them, and `commitStep` records them, as on
+  the agent path. A refusal a repeat cannot pass hands the run over; nothing repairs it with a
+  model. The reuse key of a `fill` step also covers the hash of the run's values.
+- **The pattern choice** at `startRun`: a request may name a captured pattern or the base pattern;
+  otherwise the most recently approved usable captured pattern that fits is used, else the base
+  pattern. A captured pattern is usable only while it is approved and its latest proof passed
+  under the current method. The run and its `RunStarted` record the pattern, the reason (`base`,
+  `fits`, `chosen`), the values, the source run and each fitting captured pattern not used, with
+  why (`needs-proof`, `refused-value`); the run page and the terminal client show them. Resume and
+  take-over keep the run's pattern; a replay uses it again only while it is usable
+  ([ADR 0093](/decisions/0093-captured-pattern-used-only-under-its-proven-method.md),
+  [ADR 0098](/decisions/0098-proof-slice-marked-and-runs-keep-their-pattern.md)).
+- **The proof slice and the proof**: a captured pattern's proof slice is an approved slice the
+  engine makes from its copy (`Proof of <captured pattern>`, `proof_of`; history kind
+  `made-for-proof`), never reused by `createSlice`; asking again restores any part changed since.
+  A proof is an ordinary build of that slice under the captured pattern with the source values,
+  reusing no earlier result, into a new project folder (`ap prove <captured pattern> <project>`).
+  It passes when the run ends done and its `tests`, `code` and `witnesses` outputs equal the
+  template; generated code is judged by its checks, and a hand-over fails it at once. The
+  developer approves only after a passing proof under the current method
+  ([ADR 0097](/decisions/0097-proof-builds-a-slice-made-from-the-captured-copy.md), superseding
+  [ADR 0096](/decisions/0096-proof-step-workers-keyed-by-captured-pattern.md);
+  [ADR 0099](/decisions/0099-proof-compares-filled-outputs-and-paths-are-filled.md)).
+- **Withdrawal and erasure**: a withdrawn captured pattern is used by no new run; runs already
+  started finish on it. Erasure is refused while a run built from it or its proof has not ended;
+  it removes its proof slice, that slice's runs and the artifacts only it holds, and keeps the
+  records of other runs built from it.
+- **Contract changes**: additive, except the engine contract's new error codes, operation kinds
+  and slice history kind, added in place to `2026-11-12-preview`
+  ([ADR 0100](/decisions/0100-preview-contract-gains-enum-values-in-place.md)).
+
+Sources: [Feature 011 plan](../../specs/011-capture-pattern/plan.md),
+[Feature 011 data model](../../specs/011-capture-pattern/data-model.md),
+[ADR 0090](/decisions/0090-captured-pattern-fills-agent-steps-from-accepted-files.md),
+[ADR 0093](/decisions/0093-captured-pattern-used-only-under-its-proven-method.md),
+[ADR 0097](/decisions/0097-proof-builds-a-slice-made-from-the-captured-copy.md).
+
 Every container runs read-only with all capabilities dropped; the analyst, contract-lint, the check
 service and the workers run under [gVisor](/components/gvisor.md). Networks are internal and isolated: `clients`,
 `agents` (engine, gateway, step workers), `checks`, `lint` and `analyst` (engine, gateway), `durable` (engine, Temporal's server) and
@@ -325,4 +407,15 @@ Each further building block gets its own concept:
 - [ADR 0072: An operation's request body is kept in the engine store, and its work is rebuilt from its record](/decisions/0072-operation-request-bodies-kept-in-the-engine-store.md)
 - [ADR 0073: An Idempotency-Key is held 24 h from acceptance; an ended operation stays followable 24 h after its end](/decisions/0073-idempotency-key-held-24-h-from-acceptance.md)
 - [ADR 0074: Long acceptance suites run once, split across parallel CI jobs](/decisions/0074-long-ci-suites-split-across-parallel-jobs.md)
+- [ADR 0090: A captured pattern fills its agent steps from the accepted files](/decisions/0090-captured-pattern-fills-agent-steps-from-accepted-files.md)
+- [ADR 0091: Captured patterns are kept in the engine store](/decisions/0091-captured-patterns-kept-in-the-engine-store.md) (superseded in part by ADR 0095)
+- [ADR 0092: A slice fits a captured pattern by exact substitution](/decisions/0092-captured-pattern-fit-is-exact-substitution.md) (superseded in part by ADR 0094 and ADR 0095)
+- [ADR 0093: A captured pattern is used only under its proven method](/decisions/0093-captured-pattern-used-only-under-its-proven-method.md)
+- [ADR 0094: Any literal value of a slice may be a captured pattern's parameter](/decisions/0094-any-literal-value-may-be-a-parameter.md)
+- [ADR 0095: Captured patterns never change, and parameter values keep their kind](/decisions/0095-captured-patterns-never-change-values-keep-their-kind.md)
+- [ADR 0096: A proof's step workers are keyed by its captured pattern](/decisions/0096-proof-step-workers-keyed-by-captured-pattern.md) (superseded by ADR 0097)
+- [ADR 0097: A proof builds a slice made from the captured pattern's copy](/decisions/0097-proof-builds-a-slice-made-from-the-captured-copy.md)
+- [ADR 0098: A proof slice is marked, and continued runs keep their pattern](/decisions/0098-proof-slice-marked-and-runs-keep-their-pattern.md)
+- [ADR 0099: A proof compares the filled outputs, and template paths are filled](/decisions/0099-proof-compares-filled-outputs-and-paths-are-filled.md)
+- [ADR 0100: The engine's preview contract gains enum values in place](/decisions/0100-preview-contract-gains-enum-values-in-place.md)
 - ADRs 0005 to 0025: why each constitution principle exists, starting with [ADR 0005](/decisions/0005-principle-i-needs-before-solutions.md)

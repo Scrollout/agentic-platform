@@ -12,14 +12,15 @@ sources:
   - id: engine-contract
     resource: ../../src/engine/api/preview/2026-11-12-preview/openapi.yaml
     title: Engine OpenAPI contract
-generated: { by: claude-code/claude-sonnet-5-5, at: 2026-11-17T22:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-27T12:00:00Z }
 ---
 
 # Purpose
 
 It judges one attempt of a build step by running one named check, returns the files an attempt
 left in its step's writable paths, produces one procedure step's files by running its fixed
-procedure, and keeps the project's version history. Only the engine calls it. The authoritative
+procedure, writes a captured pattern's filled step into the project, and keeps the project's
+version history. Only the engine calls it. The authoritative
 contract is
 [openapi.yaml](../../src/check/api/preview/2026-11-13-preview/openapi.yaml), OpenAPI 3.1, version
 `2026-11-13-preview`. The engine's own API is the [engine API](/apis/engine-api.md).
@@ -28,8 +29,8 @@ One program serves the contract in three deployments:
 
 - the check service reads the project folder and never writes it (`runCheck`, `readStepFiles`);
 - a procedure step's worker serves `runProcedure` for its step's procedure only;
-- the project worker holds the projects folder writable and serves `commitStep` and
-  `restoreStep`.
+- the project worker holds the projects folder writable and serves `commitStep`, `restoreStep`
+  and `writeStep`.
 
 An operation a deployment does not serve returns 404 (`UnknownCheck`, `UnknownProcedure`,
 `UnknownStep` or `VersionHistoryNotServed`).
@@ -47,6 +48,7 @@ Every operation needs the `api-version` query parameter.
 | POST | `/procedures/{procedureName}/run` | Run a fixed procedure for one attempt of a step (`runProcedure`) |
 | POST | `/project-versions/commit` | Record an accepted step, or an open review round, as the project's next commit (`commitStep`) |
 | POST | `/project-versions/restore` | Restore the project to its last commit before an attempt (`restoreStep`) |
+| POST | `/project-versions/write` | Make a `fill` step's writable files exactly the given ones, without committing (`writeStep`, feature 011) |
 
 Sources: [Check OpenAPI contract](../../src/check/api/preview/2026-11-13-preview/openapi.yaml).
 
@@ -66,10 +68,10 @@ Sources: [Check OpenAPI contract](../../src/check/api/preview/2026-11-13-preview
 - Errors are RFC 9457 problems with a stable `code`, as in the engine API. Codes include
   `InvalidRequest`, `MissingApiVersionParameter`, `UnsupportedApiVersionValue`,
   `ProjectStateDiffers`, `HistoryChanged`, `UnreadableProject`, `InputHashMismatch`,
-  `ResponseTooLarge` and `WriteFailed`.
+  `ResponseTooLarge`, `StepFilesTooLarge` and `WriteFailed`.
 - No operation is a list, so none paginates.
 - No operation takes an `Idempotency-Key`. `runCheck` and `readStepFiles` change nothing,
-  `runProcedure` and `restoreStep` leave the same files when repeated, and a repeated
+  `runProcedure`, `restoreStep` and `writeStep` leave the same files when repeated, and a repeated
   `commitStep` makes no second commit.
 
 Sources: [Check OpenAPI contract](../../src/check/api/preview/2026-11-13-preview/openapi.yaml).

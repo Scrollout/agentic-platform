@@ -316,6 +316,16 @@ into the new project, then passes the command on. For both, an unknown run is ex
 and an answer that is missing, not 200 or cannot be read, or lacks the slice ID (for resume also the
 project name or status), is exit 1.
 
+`ap prove <captured pattern> <project>` (feature 011) proves a captured pattern: it runs the
+client's `proof-slice <captured pattern>`, which prints only the proof slice's ID (made from the
+captured pattern's copy, or restored to it), then does what `ap build <proof slice> <project>`
+does: `build-workers` for the proof slice into the new project, then the client's `build`, which
+prints the proof's outcome after the run's end line (`Proof of <id>: passed`, `failed: ...` or
+`running`) and exits 0 for a passed proof and 1 for a failed one. A project that is not a project
+name is exit 3, and a refusal of `proof-slice` (an unknown captured pattern is exit 4, `NotFound`)
+ends it with that code before anything is granted, made or started. A `fill` step's worker
+container is started as for any step but never called: the engine fills that step itself.
+
 `ap build-workers --resume <run>` (T053j, FR-020) rebuilds an interrupted run's step workers after
 `ap down` or a host reboot. It reads the run with `getRun`; the slice and project come only from the
 run, never the command line. A run that is not `interrupted` is exit 4 (`RunNotInterrupted`), an

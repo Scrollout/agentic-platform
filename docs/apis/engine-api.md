@@ -12,10 +12,13 @@ sources:
   - id: terminal
     resource: ../../src/cli/contract.md
     title: Terminal contract
+  - id: adr-0100
+    resource: /decisions/0100-preview-contract-gains-enum-values-in-place.md
+    title: "ADR 0100: The engine's preview contract gains enum values in place"
   - id: adr-0019
     resource: /decisions/0019-principle-xv-compatible-public-apis.md
     title: "ADR 0019: Principle XV, compatible public APIs"
-generated: { by: claude-code/claude-sonnet-5-5, at: 2026-11-17T22:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-27T12:00:00Z }
 ---
 
 # Purpose
@@ -40,11 +43,23 @@ Each operation names its permission in `x-operation-name`.
 | slices | `POST /slices` (createSlice), `GET /slices`, `GET /slices/{sliceId}`, `DELETE /slices/{sliceId}`, `PUT /slices/{sliceId}/goals`, `/rules` and `/contract`, `POST /slices/{sliceId}/answers`, `POST /slices/{sliceId}/approvals`, `POST /slices/{sliceId}/runs` (startRun) |
 | runs | `GET /runs`, `GET /runs/{runId}`, `GET /runs/{runId}/events`, `GET /runs/{runId}/artifacts/{hash}`, `GET /runs/{runId}/comparison`, `POST /runs/{runId}/resume`, `/replay` and `/hand-over` |
 | operations | `GET /operations/{operationId}`, `POST /operations/{operationId}/cancel` |
+| captured patterns | `POST /captured-patterns` (captureRun), `GET /captured-patterns`, `GET /captured-patterns/{capturedPatternId}`, `DELETE /captured-patterns/{capturedPatternId}`, `PUT /captured-patterns/{capturedPatternId}/parameters`, `POST /captured-patterns/{capturedPatternId}/proof-slice`, `/approval` and `/withdrawal` |
 | workers | `POST /workers` (a step worker announces that it is ready) |
 | provider | `GET /providers/Agentic.Engine/operations` (lists this service's operations) |
 
 Every state change but `registerWorker` returns an operation (HTTP 202) that the client follows with
 `getOperation`; `registerWorker` answers 200 at once and replaces the step's endpoint when repeated.
+
+A captured pattern (feature 011) turns a run that ended done into a pattern that builds later
+slices of the same kind with no model call. `startRun` takes an optional `pattern`, a captured
+pattern's or the base pattern's ID; without it the most recently approved usable captured pattern
+that fits is used, otherwise the base pattern, and the run records the choice and why. A captured
+pattern is used only after the developer approves it following a passing proof (a run of its
+proof slice) under the current method. The limits are `x-limits`
+`captured-pattern-parameters-max` (32), `parameter-places-max` (10000) and
+`parameter-value-max-chars` (64). The new error codes, operation kinds and the slice history kind
+`made-for-proof` were added in place to this preview version
+([ADR 0100](/decisions/0100-preview-contract-gains-enum-values-in-place.md)).
 
 Sources: [Engine OpenAPI contract](../../src/engine/api/preview/2026-11-12-preview/openapi.yaml).
 
@@ -73,8 +88,8 @@ Sources: [Engine OpenAPI contract](../../src/engine/api/preview/2026-11-12-previ
 
 # Pagination and idempotency
 
-- Lists (`listSlices`, `listRuns`, run events, run comparison) take an opaque `page_token` and
-  return `next_page_token`. Slices and runs are newest first, at most 50 per page. Run events
+- Lists (`listSlices`, `listRuns`, `listCapturedPatterns`, run events, run comparison) take an opaque `page_token` and
+  return `next_page_token`. Slices, runs and captured patterns are newest first, at most 50 per page. Run events
   are in `seq` order, at most 100 per page. Until a run ends, the last page still carries a
   token, and using it later returns the events recorded since.
 - State-changing operations but `registerWorker` accept an `Idempotency-Key`. The engine keeps a key and its first
