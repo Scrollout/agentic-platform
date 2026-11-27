@@ -243,13 +243,17 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   recorded; `/speckit-converge` for US1. Round 1 (fresh Sonnet, read-only, worktree at 254c9b1, CI 46070202691
   green): B1 blocking (a set whose `run-trials` operation fails stays `running` and its trial goes
   unfollowed; Principle X, plan row X, data model States) -> owner 2026-11-28: the set ends `failed`
-  (spec Clarifications, ADR 0106) -> T030-T032; S1-S5 suggestions -> T033
+  (spec Clarifications, ADR 0106) -> T030-T032; S1-S5 suggestions -> T033. Analyze round 4 (fresh Sonnet, 254c9b1..f687cd1): gate passed, 0 CRITICAL/HIGH; A1 (no XV exception: the set schemas are new) to A9 fixed at their source (ADR 0106, plan, research R9, data model States, T025, T020, T030-T032)
 - [ ] T030 [US1] Contract (committed alone): `TrialSetState` gains `failed` ("its operation failed:
   the running trial was cancelled and none started after"), `TrialSet` gains the optional
   `failed_because` (string, the operation's problem detail; required exactly with `failed`, absent
-  otherwise, like `stopped_because`; `ended_at` with it); `src/cli/contract.md` "Trial sets": the
-  first line shows `state failed  failed <reason>`; regenerate; pinned oasdiff recorded in research
-  R9 (expected: `response-property-enum-value-added` for `failed`, ADR 0106); method identity
+  otherwise: a new `allOf` if/else on `state: failed` as for `stopped`; a `maxLength` as other
+  free-text fields; `ended_at` with it), the descriptions of `TrialSetState`, `TrialSet` and
+  `ended_at` name `failed`; `src/cli/contract.md` "Trial sets": the first line shows
+  `state failed  failed <reason>`, and the exit table gains a row `failed` -> 4 with the reason, read
+  from the set (not the operation); `contracts/trial-sets.md` exit table and "Changed" list the
+  same; regenerate; pinned oasdiff recorded in research R9 (expected: unchanged, the schemas are
+  new in this feature, ADR 0106); method identity
 - [ ] T031 [US1] Test author: new `src/engine/api/trial_sets_failed_test.go` (engine rig, as T007):
   a trial whose start is refused for good (its project made non-empty after acceptance) ends the
   set `failed` with `failed_because` naming the refusal, cancels nothing else and starts no further
@@ -258,11 +262,18 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   and the result counts it as ended and not done; `getTrialSet` and `listTrialSets` then show
   `failed`, `ended_at`, no `stopped_because`; the slice is free for a new set and `deleteSlice`
   afterwards; a set already `ended`, `stopped` or `cancelled` is never changed by its operation's
-  late failure; new `src/cli/trial_set_failed_test.go`: `trial-set` of a `failed` set prints
+  late failure; a crash between the operation's failed end and the set's (the set left `running`)
+  is repaired by the next `getTrialSet`, `listTrialSets`, `startTrialSet` or `deleteSlice`, once,
+  and a repeated failed end changes nothing; a running trial whose cancel cannot land (durable
+  service down) leaves the set `failed` and the trial not ended, and the next read after the
+  service is back cancels it; `cancelOperation` on a `failed` set's operation answers as for an
+  ended operation and the set stays `failed`; a 24-hour `time` stop racing the failure ends in
+  exactly one state, the first recorded; new `src/cli/trial_set_failed_test.go`: `trial-set` of a `failed` set prints
   `state failed  failed <reason>` and exits 4; seen failing before T032
-- [ ] T032 [US1] Code author (done when T031 passes): the operation's failed end of a `run-trials`
-  operation ends its set `failed` (under the trial-set lock, once) and cancels its running trial;
-  the client prints the state; method identity converged; then commit, fast lint, push (owner
+- [ ] T032 [US1] Code author (done when T031 passes): in `src/engine/api/` the operation's failed
+  end of a `run-trials` operation ends its set `failed` (under the trial-set lock, once) and cancels
+  its running trial, and the repair on read, start and delete (data model, States); in `src/cli/`
+  the client prints the state and exits 4 with the reason; method identity converged; then commit, fast lint, push (owner
   go-ahead), T014 round 2 on B1 and the changed lines
 - [ ] T033 [US1] Suggestions of the US1 review round 1 (not blocking; decide each, or close with a
   reason): S1 the pattern is chosen again before each trial (a captured pattern approved mid-set
@@ -319,7 +330,7 @@ planted other method, names both methods and is `less reliable`.
   `src/engine/api/trial_sets_list_test.go`: `listTrialSets` newest first, at most 50 per page,
   opaque page tokens, a token from another list refused 400, each item with state, k, method,
   `done`/`ended` and `unstable`; `previous` is the latest earlier `ended` or `stopped` set of the
-  same slice with at least one ended trial (a `cancelled` or `running` one, or one with none ended,
+  same slice with at least one ended trial (a `cancelled`, `failed` or `running` one, or one with none ended,
   is skipped), with the change in share, `less_reliable`
   only when the share fell, `methods_differ` when the methods differ; the first set has no
   `previous`; seen failing before T022
@@ -337,7 +348,7 @@ planted other method, names both methods and is `less reliable`.
 ## Phase 6: Polish & cross-cutting
 
 - [ ] T025 Docs: `docs/architecture/overview.md` (trial sets, registrations by project, ADR 0102 to
-  0105), `docs/apis/engine-api.md`, `src/engine/README.md`, `src/cli/README.md` (`trials`,
+  0106), `docs/apis/engine-api.md`, `src/engine/README.md`, `src/cli/README.md` (`trials`,
   `trial-sets`, `trial-set`), `src/deploy/README.md` (`ap trials`), N-054 in
   `docs/overview/problem-space.md` (state), `docs/log.md`; `python3 scripts/okf.py check` OK
 - [ ] T026 Paid evals for the analyst and steps suites (owner go-ahead; add the branch to

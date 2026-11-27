@@ -91,7 +91,7 @@ Each decision that outlives the feature has a record in `docs/decisions/`.
 | Step-worker registrations name their project; a run uses only its own project's workers | R3 | [ADR 0103](../../docs/decisions/0103-worker-registrations-name-their-project.md) |
 | A trial that waits for the developer is handed over by its set | R4 | [ADR 0104](../../docs/decisions/0104-trial-waiting-for-developer-is-handed-over.md) |
 | The engine's preview contract gains `run-trials` in place, an exception to Principle XV | R9 | [ADR 0105](../../docs/decisions/0105-preview-contract-gains-run-trials-in-place.md) |
-| A set whose operation fails ends `failed`; `TrialSetState` gains `failed` in place, an exception to Principle XV | R9 | [ADR 0106](../../docs/decisions/0106-a-failed-trial-set-ends-failed.md) |
+| A set whose operation fails ends `failed` (its running trial cancelled, the reason kept); `TrialSetState`, new in this feature, gains `failed` before release | R9 | [ADR 0106](../../docs/decisions/0106-a-failed-trial-set-ends-failed.md) |
 
 ## Threat model
 
@@ -167,4 +167,3 @@ any other is stopped and asked for):
 |-----------|------------|--------------------------------------|
 | Principle XII: trial sets have no tenant scope | One developer by scope (feature 001 FR-021) | Not applicable until the hosted version, as for slices (feature 001's row). Approved by the owner 2026-11-27 (T002) |
 | Principle XV: the engine contract's `2026-11-12-preview` gains the `OperationKind` value `run-trials` in place, which the pinned oasdiff reports as breaking (`response-property-enum-value-added`, research R9) | `getOperation` must return the set's operation kind; every client is generated from this contract in the same commit | Reusing the kind `run` would make a `run` operation target something that is not a run; a new preview version needs a deprecation period and two served versions. Approved by the owner 2026-11-27 ([ADR 0105](../../docs/decisions/0105-preview-contract-gains-run-trials-in-place.md)) |
-| Principle XV: `TrialSetState` gains `failed` in place (oasdiff `response-property-enum-value-added`) | A set whose operation fails must end in one recorded state (Principle X; US1 review B1) | `cancelled` would say the developer cancelled it; a new preview version as above. Approved by the owner 2026-11-28 ([ADR 0106](../../docs/decisions/0106-a-failed-trial-set-ends-failed.md)) |

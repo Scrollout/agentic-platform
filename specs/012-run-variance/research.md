@@ -176,6 +176,10 @@ questions on 2026-11-27 (spec, Clarifications).
   which needs the owner's approval for this feature (plan, Complexity Tracking). The alternative,
   reusing the kind `run` for a set, would make an operation of kind `run` target something that is
   not a run.
+- `TrialSetState` gains `failed` and `TrialSet` the optional `failed_because` (US1 review B1,
+  ADR 0106). Both schemas are new in this feature (absent from `main`, the oasdiff baseline), so
+  this is additive and no exception: T030 records that the oasdiff report is unchanged (analyze
+  round 4, A1).
 - **Report** (T001, reproduced 2026-11-27 with the pinned oasdiff v1.37.0, `breaking --fail-on
   ERR`, from `main`'s copy of the engine contract to the T001 draft): exit 1, 39 changes: 19
   errors, all `response-property-enum-value-added` (`run-trials` in `OperationKind` on every

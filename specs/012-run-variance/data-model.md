@@ -34,8 +34,21 @@ Kept in the engine store in its slice's folder; erased with the slice (FR-011).
 | `stopped` | No further trial could start: the next would pass the cost budget (`budget`), 24 hours passed and the running trial was cancelled (`time`), a part of the slice is no longer approved or differs from `part_hashes` (`slice-changed`), or the next project's workers are gone (`workers`) | — |
 
 The set's operation succeeds on `ended` and `stopped`, ends `cancelled` on `cancelled` and
-`failed` on `failed`. When the operation ends failed, the set is ended `failed` in the same step
-that records the operation's end, and its running trial is cancelled (US1 review B1).
+`failed` on `failed`. When the operation ends failed (US1 review B1, ADR 0106):
+
+1. The operation's end is recorded first (the generic Operation workflow); the engine then ends the
+   set `failed` with `failed_because` = the operation's problem `detail`, under the trial-set lock,
+   once: a set already `ended`, `stopped`, `cancelled` or `failed` is left as it is.
+2. Repair: any read of the set, `startTrialSet` and `deleteSlice` that find a `running` set whose
+   operation ended failed end it the same way, so a crash between the two writes never leaves a
+   set `running` (and never blocks the slice).
+3. The set's last trial run, if it has not ended, is cancelled at that end and again at each
+   repair until its record shows an end; the set is `failed` whether or not the cancel has landed,
+   and the result counts that trial as not ended until its record ends.
+4. Which start refusals end the set how: before each trial the job stops the set `slice-changed`
+   (NotApproved, PatternDoesNotFit, the captured-pattern refusals) or `workers` (WorkersNotReady);
+   any other refusal of the trial's start (ProjectExists, a project made non-empty after the set was
+   accepted) fails the operation, so the set ends `failed`.
 
 ### Write order and repeats
 
