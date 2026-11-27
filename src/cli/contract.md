@@ -451,7 +451,7 @@ trial <i>  RUN-<n>  <outcome>
 
 When the set ends, `trial-set <id>` (and `trials`) prints, in this order:
 
-1. `TS-<n>  slice <slice>  state <state>[  stopped <stopped_because>]  done <done>/<ended>[  unstable][  methods mixed]`;
+1. `TS-<n>  slice <slice>  state <state>[  stopped <stopped_because>][  failed <failed_because>]  done <done>/<ended>[  unstable][  methods mixed]`;
 2. a table of the trials, one row per started trial in trial order, with the columns `RUN`,
    `OUTCOME`, `ATTEMPTS`, `ROUNDS`, `SECONDS`, `TOKENS` and `COST` (the trial's totals);
 3. a table of the steps, one row per step of the pattern in step order, with the columns `STEP`,
@@ -477,7 +477,8 @@ Start one with trials <slice> <prefix>.` Either way it exits 0; an unknown slice
 | `ended` or `stopped`, at least one trial ended and every ended trial is `done` | 0 |
 | `ended` or `stopped`, some ended trial is not `done`, or none ended | 7, as `compare`'s "differ": the builds do not agree with done |
 | `cancelled` | 6 |
-| refused (a problem answer), or the set's operation `failed` | 4, with the problem |
+| `failed` (read from the set: its `failed_because`) | 4, with the reason |
+| refused (a problem answer), or the set's operation `failed` while the set still reads `running` | 4, with the problem |
 | the engine lost or unreadable | 1 |
 | Ctrl-C (detached; the set continues), naming the operation | 130 |
 | SIGTERM (detached; the set continues) | 143 |

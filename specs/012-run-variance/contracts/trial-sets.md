@@ -24,6 +24,7 @@ body answers 409 `IdempotencyKeyReused`. Reading a set calls no model and change
 
 Changed: `WorkerRegistration` and `Worker` gain the optional `project`; `RunStarted` and `Run`
 gain `trial_set` and `trial`; `OperationKind` gains `run-trials` (plan, Complexity Tracking).
+A set whose operation fails ends `failed` with `failed_because` (ADR 0106).
 
 ## Terminal client
 
@@ -43,6 +44,7 @@ the previous set. Exit codes by the set's end:
 | `ended` or `stopped`, every ended trial done (at least one) | 0 |
 | `ended` or `stopped`, some ended trial not done, or none ended | 7 (as `compare`'s "differ": the builds do not agree with done) |
 | `cancelled` | 6, as a cancelled run |
+| `failed` (its `failed_because`, read from the set) | 4 |
 | detached while running | 130, naming the operation |
 | unknown set | 4 `NotFound` |
 

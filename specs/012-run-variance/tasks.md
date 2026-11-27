@@ -244,7 +244,7 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   green): B1 blocking (a set whose `run-trials` operation fails stays `running` and its trial goes
   unfollowed; Principle X, plan row X, data model States) -> owner 2026-11-28: the set ends `failed`
   (spec Clarifications, ADR 0106) -> T030-T032; S1-S5 suggestions -> T033. Analyze round 4 (fresh Sonnet, 254c9b1..f687cd1): gate passed, 0 CRITICAL/HIGH; A1 (no XV exception: the set schemas are new) to A9 fixed at their source (ADR 0106, plan, research R9, data model States, T025, T020, T030-T032)
-- [ ] T030 [US1] Contract (committed alone): `TrialSetState` gains `failed` ("its operation failed:
+- [X] T030 [US1] Contract (committed alone): `TrialSetState` gains `failed` ("its operation failed:
   the running trial was cancelled and none started after"), `TrialSet` gains the optional
   `failed_because` (string, the operation's problem detail; required exactly with `failed`, absent
   otherwise: a new `allOf` if/else on `state: failed` as for `stopped`; a `maxLength` as other
@@ -253,7 +253,7 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   `state failed  failed <reason>`, and the exit table gains a row `failed` -> 4 with the reason, read
   from the set (not the operation); `contracts/trial-sets.md` exit table and "Changed" list the
   same; regenerate; pinned oasdiff recorded in research R9 (expected: unchanged, the schemas are
-  new in this feature, ADR 0106); method identity
+  new in this feature, ADR 0106); method identity. Done: oasdiff unchanged (research R9); method 689b3ca9; engine, client and page tests still pass
 - [ ] T031 [US1] Test author: new `src/engine/api/trial_sets_failed_test.go` (engine rig, as T007):
   a trial whose start is refused for good (its project made non-empty after acceptance) ends the
   set `failed` with `failed_because` naming the refusal, cancels nothing else and starts no further

@@ -2838,12 +2838,15 @@ components:
         `running` while a trial runs, or the set waits for another run to end or for an
         interrupted trial; `ended` when all its trials ended; `cancelled` when its operation was
         cancelled (the running trial was cancelled and none started after); `stopped` when no
-        further trial could start, for the reason in `stopped_because`.
+        further trial could start, for the reason in `stopped_because`; `failed` when its operation
+        failed (a trial's start was refused for good, or the work could not go on after its
+        retries): its running trial is cancelled, none starts after, and `failed_because` says why.
       enum:
       - running
       - ended
       - cancelled
       - stopped
+      - failed
     TrialSetStopReason:
       type: string
       description: >-
@@ -2875,6 +2878,17 @@ components:
           not:
             required:
             - stopped_because
+      - if:
+          properties:
+            state:
+              const: failed
+        then:
+          required:
+          - failed_because
+        else:
+          not:
+            required:
+            - failed_because
       - if:
           properties:
             state:
@@ -2942,6 +2956,10 @@ components:
           $ref: '#/components/schemas/TrialSetState'
         stopped_because:
           $ref: '#/components/schemas/TrialSetStopReason'
+        failed_because:
+          type: string
+          description: With `failed` only, the `detail` of the set's operation's problem, as
+            getOperation gives it.
         runs:
           type: array
           description: The trials' run IDs in trial order, each recorded before its run starts; a
@@ -2956,7 +2974,8 @@ components:
         ended_at:
           type: string
           format: date-time
-          description: When the set ended; set exactly when `state` is not `running`.
+          description: When the set ended (`ended`, `cancelled`, `stopped` or `failed`); set exactly
+            when `state` is not `running`.
     TrialSetList:
       type: object
       required:
