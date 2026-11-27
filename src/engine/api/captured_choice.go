@@ -112,12 +112,18 @@ func onlyValue(ref captured.Refusal) bool {
 	return ref.Parameter != nil && ref.Place == nil && len(ref.Paths) == 0
 }
 
-// namedStart is the start of a run of slice naming the captured pattern r (not its proof slice),
-// refused as namedRefusal does, then PatternDoesNotFit naming the first place the slice differs,
-// the refused value or the paths.
-func (s *sliceServer) namedStart(slice string, r *capturedRecord) (RunStart, error) {
+// namedStart is the start of a run of slice naming the captured pattern named (not its proof
+// slice), refused as namedRefusal does, then PatternDoesNotFit naming the first place the slice
+// differs, the refused value or the paths. It judges the record as it is under cmu, never the copy
+// named was read from, so a withdrawal or an erasure that completed since is seen (NotFound when
+// erased) and never overwritten.
+func (s *sliceServer) namedStart(slice string, named *capturedRecord) (RunStart, error) {
 	s.cmu.Lock()
 	defer s.cmu.Unlock()
+	r, err := s.readCaptured(named.ID)
+	if err != nil {
+		return RunStart{}, err
+	}
 	m, err := currentMethod()
 	if err != nil {
 		return RunStart{}, err
