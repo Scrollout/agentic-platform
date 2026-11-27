@@ -575,7 +575,9 @@ func (s *sliceServer) removeRecord(id string) {
 }
 
 // newRun starts a new run of start's slice as a workflow of the durable service: the run ID is
-// given out by the record, the operation of the contract operation opID recorded, the run's
+// start.Run when given (a trial's ID, reserved and recorded in its set first) or else given out by
+// the record, the operation of the contract operation opID recorded (for a given ID, unless a run
+// operation on it is open already, which then follows the run), the run's
 // workflow started with both (it records RunStarted, with the project, the operation, replay_of
 // and the pattern choice start names, as its first event), then the operation's workflow. The
 // run follows start.Definition, the engine's base pattern when it has none. The caller holds
@@ -583,14 +585,27 @@ func (s *sliceServer) removeRecord(id string) {
 // accepted (startedAnyway). An error wrapping ErrUnavailable or errNotRecorded accepted nothing,
 // unless whether the workflow exists could not be told: then the operation's record stays.
 func (s *sliceServer) newRun(ctx context.Context, opID string, start RunStart) (gen.Operation, error) {
-	id, err := s.runs.st.NextRunID()
-	if err != nil {
-		log.Printf("engine: a run ID: %v", err)
-		return gen.Operation{}, errNotRecorded
+	id := start.Run
+	var rec store.OperationRecord
+	open := false
+	if id == "" {
+		var err error
+		if id, err = s.runs.st.NextRunID(); err != nil {
+			log.Printf("engine: a run ID: %v", err)
+			return gen.Operation{}, errNotRecorded
+		}
+	} else {
+		var err error
+		if rec, open, err = s.ops.openRun(id); err != nil {
+			log.Printf("engine: the open operation of run %s: %v", id, err)
+			return gen.Operation{}, errNotRecorded
+		}
 	}
-	rec, err := s.ops.record(ctx, opID, id)
-	if err != nil {
-		return gen.Operation{}, err
+	if !open {
+		var err error
+		if rec, err = s.ops.record(ctx, opID, id); err != nil {
+			return gen.Operation{}, err
+		}
 	}
 	if start.Definition.ID == "" {
 		start.Definition = s.runs.pattern
@@ -598,8 +613,7 @@ func (s *sliceServer) newRun(ctx context.Context, opID string, start RunStart) (
 	p := start.Definition
 	start.Run, start.Operation, start.Pattern, start.Model = id, rec.ID, p.ID+"@"+p.Version, s.runs.model
 	start.TaskQueue, start.RejectDuplicate = RunsQueue, true
-	err = s.runs.durable.Start(ctx, start)
-	if err != nil && !s.startedAnyway(ctx, id, rec.ID, err) {
+	if err := s.runs.durable.Start(ctx, start); err != nil && !s.startedAnyway(ctx, id, rec.ID, err) {
 		return gen.Operation{}, err
 	}
 	s.runs.vmu.Lock()
@@ -775,46 +789,9 @@ func (s *sliceServer) signal(ctx context.Context, run, name string) error {
 // used (chosenStart). The readiness check skips a captured pattern's `fill` steps.
 func (s *sliceServer) StartRun(ctx context.Context, req gen.StartRunRequestObject) (gen.StartRunResponseObject, error) {
 	id := req.SliceIdParameter
-	proofOf, err := s.svc.ProofOf(id)
+	start, steps, err := s.runChoice(id, req.Body.Pattern)
 	if err != nil {
 		return s.refuse("startRun", err)
-	}
-	named, err := s.namedPattern(req.Body.Pattern)
-	if err != nil {
-		return s.refuse("startRun", err)
-	}
-	if err := s.svc.Buildable(id); err != nil {
-		return s.refuse("startRun", err)
-	}
-	start := RunStart{PatternReason: string(gen.PatternReasonBase)}
-	steps := s.svc.Steps()
-	switch {
-	case proofOf != "":
-		slc, err := s.svc.Get(id)
-		if err != nil {
-			return s.refuse("startRun", err)
-		}
-		if start, err = s.proofStart(slc, proofOf, req.Body.Pattern); err != nil {
-			return s.refuse("startRun", err)
-		}
-		if steps, err = s.workerSteps(start.Definition.ID + "@" + start.Definition.Version); err != nil {
-			return nil, err
-		}
-	case named != nil:
-		if start, err = s.namedStart(id, named); err != nil {
-			return s.refuse("startRun", err)
-		}
-	case req.Body.Pattern != nil: // the base pattern, named
-		start.PatternReason = string(gen.PatternReasonChosen)
-	default:
-		if start, err = s.chosenStart(id); err != nil {
-			return s.refuse("startRun", err)
-		}
-	}
-	if start.Fill != nil && !start.Proof {
-		if steps, err = s.workerSteps(start.Definition.ID + "@" + start.Definition.Version); err != nil {
-			return nil, err
-		}
 	}
 	if err := s.ready(id, req.Body.Project, steps); err != nil {
 		return s.refuse("startRun", err)
@@ -835,9 +812,76 @@ func (s *sliceServer) StartRun(ctx context.Context, req gen.StartRunRequestObjec
 	if err := s.canRun(); err != nil {
 		return s.refuse("startRun", err)
 	}
+	if err := s.sliceStart(&start, id); err != nil {
+		return s.refuse("startRun", err)
+	}
+	start.Project = req.Body.Project
+	op, err := s.newRun(ctx, "startRun", start)
+	switch {
+	case notAccepted(err):
+		return unavailableFor(err), nil
+	case err != nil:
+		return s.refuse("startRun", err)
+	}
+	return gen.StartRun202JSONResponse{AcceptedJSONResponse: gen.AcceptedJSONResponse{Body: op}}, nil
+}
+
+// runChoice is startRun's pattern choice for a run of the slice, with `pattern` when the request
+// names one, and the steps of the chosen pattern that need a worker. It refuses in startRun's
+// order up to the captured-pattern refusals: NotFound, the pattern conditions and approvals
+// (Buildable), then a proof slice's or a named captured pattern's refusals. An error that is no
+// refusal (*slices.Error) is the engine's fault.
+func (s *sliceServer) runChoice(id string, pattern *gen.PatternId) (RunStart, []string, error) {
+	proofOf, err := s.svc.ProofOf(id)
+	if err != nil {
+		return RunStart{}, nil, err
+	}
+	named, err := s.namedPattern(pattern)
+	if err != nil {
+		return RunStart{}, nil, err
+	}
+	if err := s.svc.Buildable(id); err != nil {
+		return RunStart{}, nil, err
+	}
+	start := RunStart{PatternReason: string(gen.PatternReasonBase)}
+	steps := s.svc.Steps()
+	switch {
+	case proofOf != "":
+		slc, err := s.svc.Get(id)
+		if err != nil {
+			return RunStart{}, nil, err
+		}
+		if start, err = s.proofStart(slc, proofOf, pattern); err != nil {
+			return RunStart{}, nil, err
+		}
+		if steps, err = s.workerSteps(start.Definition.ID + "@" + start.Definition.Version); err != nil {
+			return RunStart{}, nil, err
+		}
+	case named != nil:
+		if start, err = s.namedStart(id, named); err != nil {
+			return RunStart{}, nil, err
+		}
+	case pattern != nil: // the base pattern, named
+		start.PatternReason = string(gen.PatternReasonChosen)
+	default:
+		if start, err = s.chosenStart(id); err != nil {
+			return RunStart{}, nil, err
+		}
+	}
+	if start.Fill != nil && !start.Proof {
+		if steps, err = s.workerSteps(start.Definition.ID + "@" + start.Definition.Version); err != nil {
+			return RunStart{}, nil, err
+		}
+	}
+	return start, steps, nil
+}
+
+// sliceStart sets what a new run of the slice starts from: the slice, its approved parts by hash
+// and its refs (the IDs of its goals and rules).
+func (s *sliceServer) sliceStart(start *RunStart, id string) error {
 	slc, err := s.svc.Get(id)
 	if err != nil {
-		return s.refuse("startRun", err)
+		return err
 	}
 	inputs := map[string]string{machine.InputGoals: slc.Parts.Goals, machine.InputRules: slc.Parts.Rules, machine.InputContract: slc.Parts.Contract}
 	var refs []string
@@ -847,15 +891,8 @@ func (s *sliceServer) StartRun(ctx context.Context, req gen.StartRunRequestObjec
 	for _, r := range slc.Rules {
 		refs = append(refs, r.ID)
 	}
-	start.Slice, start.Project, start.Inputs, start.Refs = id, req.Body.Project, inputs, refs
-	op, err := s.newRun(ctx, "startRun", start)
-	switch {
-	case notAccepted(err):
-		return unavailableFor(err), nil
-	case err != nil:
-		return s.refuse("startRun", err)
-	}
-	return gen.StartRun202JSONResponse{AcceptedJSONResponse: gen.AcceptedJSONResponse{Body: op}}, nil
+	start.Slice, start.Inputs, start.Refs = id, inputs, refs
+	return nil
 }
 
 // ResumeRun refuses an unknown run (NotFound), then one that is not interrupted
@@ -1105,6 +1142,7 @@ func (s *sliceServer) runView(id string) (gen.Run, bool, error) {
 		v.ReplayOf = &r
 	}
 	choiceView(&v, first)
+	trialView(&v, first.TrialSet, first.Trial)
 	if run.Status == machine.StatusEnded {
 		o, at := gen.RunOutcome(run.Outcome), last.At
 		v.Outcome, v.EndedAt = &o, &at
@@ -1147,7 +1185,16 @@ func (s *sliceServer) startingView(id string) (gen.Run, bool) {
 	}
 	choiceView(&v, machine.Event{PatternReason: st.PatternReason, Parameters: st.Parameters, SourceRun: st.SourceRun, Proof: st.Proof,
 		NotUsed: st.NotUsed})
+	trialView(&v, st.TrialSet, st.Trial)
 	return v, true
+}
+
+// trialView sets a slice trial's set and position (feature 012); a run that is no trial has
+// neither.
+func trialView(v *gen.Run, set string, trial int) {
+	if set != "" {
+		v.TrialSet, v.Trial = &set, &trial
+	}
 }
 
 // choiceView sets the run's pattern choice from its RunStarted (feature 011).

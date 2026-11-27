@@ -200,7 +200,7 @@ func (s *testDurable) Start(_ context.Context, r api.RunStart) error {
 	act(env, s, durable.RecordEvent, noResult((*durable.Activities).RecordEvent))
 	in := durable.RunInput{Run: r.Run, Slice: r.Slice, Project: r.Project, Pattern: r.Definition, Model: r.Model, Inputs: r.Inputs,
 		Refs: r.Refs, ReplayOf: r.ReplayOf, Operation: r.Operation, PatternReason: r.PatternReason, Parameters: r.Parameters,
-		SourceRun: r.SourceRun, Proof: r.Proof, NotUsed: r.NotUsed, NoReuse: r.NoReuse}
+		SourceRun: r.SourceRun, Proof: r.Proof, NotUsed: r.NotUsed, NoReuse: r.NoReuse, TrialSet: r.TrialSet, Trial: r.Trial}
 	if r.Fill != nil {
 		in.Fill = &durable.FillInput{Captured: r.Fill.Captured, Template: r.Fill.Template, Values: r.Fill.Values}
 	}

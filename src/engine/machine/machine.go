@@ -285,6 +285,10 @@ type Event struct {
 	Proof         bool              `json:"proof,omitempty"`
 	PartHashes    *PartHashes       `json:"part_hashes,omitempty"`
 	NotUsed       []NotUsed         `json:"not_used,omitempty"`
+	// TrialSet and Trial, on RunStarted only (feature 012): the trial set a slice trial belongs
+	// to (`TS-<n>`) and its position in it, 1 to k; empty and 0 for a run that is no trial.
+	TrialSet string `json:"trial_set,omitempty"`
+	Trial    int    `json:"trial,omitempty"`
 	// Project, on RunStarted, is the run's project folder, and Files, on StepAccepted and
 	// ResultReused, the project's files after the step. Neither is part of the run-event
 	// contract: an Events sink keeps them beside the event, so a run read back still has them.

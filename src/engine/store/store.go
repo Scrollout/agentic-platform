@@ -104,7 +104,8 @@ func Open(dir string, ids *slice.Schemas) (*Store, error) {
 	// rename were never acknowledged.
 	var tmps []string
 	for _, pattern := range []string{filepath.Join(s.artifacts, tmpPrefix+"*"), filepath.Join(dir, tmpPrefix+"*"),
-		filepath.Join(s.slices, "*", tmpPrefix+"*"), filepath.Join(dir, capturedDir, "*", tmpPrefix+"*")} {
+		filepath.Join(s.slices, "*", tmpPrefix+"*"), filepath.Join(s.slices, "*", trialSetsFolder, tmpPrefix+"*"),
+		filepath.Join(dir, capturedDir, "*", tmpPrefix+"*")} {
 		m, _ := filepath.Glob(pattern)
 		tmps = append(tmps, m...)
 	}
@@ -317,8 +318,8 @@ func (s *Store) ArtifactCount(sliceID string) (int, error) {
 	return len(s.owned[sl]), nil
 }
 
-// EraseSlice removes every event of the slice's runs, every artifact stored for the slice and its
-// step workers' registrations, from disk. An artifact another slice also stored stays readable for it. Erasing an unknown
+// EraseSlice removes every event of the slice's runs, every artifact stored for the slice, its
+// trial sets and its step workers' registrations, from disk. An artifact another slice also stored stays readable for it. Erasing an unknown
 // slice does nothing; an interrupted erasure is completed by calling it again.
 func (s *Store) EraseSlice(sliceID string) error {
 	sl, err := s.ids.ParseID(sliceID)

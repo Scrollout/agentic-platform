@@ -231,7 +231,7 @@ func (p reply) operation(t *testing.T, status int) gen.Operation {
 	if !regexp.MustCompile(`^OP-[0-9]+$`).MatchString(op.Id) {
 		t.Fatalf("operation id %q does not match ^OP-[0-9]+$", op.Id)
 	}
-	if !regexp.MustCompile(`^((S|RUN)-[0-9]+|[a-z0-9-]+)$`).MatchString(op.Target) { // operation_target
+	if !regexp.MustCompile(`^((S|RUN|TS)-[0-9]+|[a-z0-9-]+)$`).MatchString(op.Target) { // operation_target
 		t.Fatalf("operation target %q does not match the contract", op.Target)
 	}
 	return op

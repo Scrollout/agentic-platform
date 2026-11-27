@@ -73,6 +73,10 @@ type RunInput struct {
 	SourceRun     string
 	Proof         bool
 	NotUsed       []machine.NotUsed
+	// TrialSet and Trial: for a slice trial (feature 012), its trial set's ID and its position in
+	// it, recorded on RunStarted from workflow version 3 (trialVersion); "" and 0 for any other run.
+	TrialSet string
+	Trial    int
 }
 
 // FillInput is what a run of a captured pattern's `fill` steps needs; RunInput.Fill is nil for

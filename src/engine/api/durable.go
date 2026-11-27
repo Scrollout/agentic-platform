@@ -44,7 +44,8 @@ type Runs interface {
 // The pattern choice is recorded on RunStarted too: PatternReason (`base`, `fits`, `chosen`);
 // for a run of a captured pattern, Parameters (its values by parameter name), SourceRun and Fill,
 // what its `fill` steps are filled from; Proof for a proof, which reuses no earlier result
-// (NoReuse); NotUsed, the captured patterns the start judged and did not use.
+// (NoReuse); NotUsed, the captured patterns the start judged and did not use. A slice trial
+// (feature 012) records its TrialSet and its position in it, Trial, on RunStarted too.
 type RunStart struct {
 	Run, Slice, Project, ReplayOf string
 	Operation                     string
@@ -63,6 +64,9 @@ type RunStart struct {
 	NotUsed       []machine.NotUsed
 	Fill          *RunFill
 	NoReuse       bool
+
+	TrialSet string // "TS-<n>" for a slice trial, "" otherwise
+	Trial    int    // the trial's position in its set, 1 to k; 0 for a run that is no trial
 }
 
 // RunFill is what a run of a captured pattern's `fill` steps is filled from: the captured

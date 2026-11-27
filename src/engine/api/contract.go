@@ -78,6 +78,7 @@ type contract struct {
 	maxBody        int64                 // largest request body, in bytes
 	retry          retry.Rule            // the retry rule of x-limits
 	keyMin, keyMax int                   // Idempotency-Key length
+	trials         trialLimits           // the trial sets' limits of x-limits (feature 012)
 	// runID and hash are the contract's rules for a run ID and an artifact hash, which the run
 	// operations take as path and query parameters; patternID for a captured pattern's ID, which
 	// the captured-pattern operations take as a path parameter.
@@ -105,6 +106,10 @@ type (
 			PerAddress yaml.Node `yaml:"requests-per-second-per-address-without-token"`
 			KeepHours  yaml.Node `yaml:"idempotency-key-retention-hours"`
 			MaxBody    yaml.Node `yaml:"request-body-max-bytes"`
+			TrialsMax  yaml.Node `yaml:"trials-max"`
+			TrialsDef  yaml.Node `yaml:"trials-default"`
+			SetCost    yaml.Node `yaml:"trial-set-cost-usd"`
+			SetHours   yaml.Node `yaml:"trial-set-hours"`
 		} `yaml:"x-limits"`
 		Security   *[]map[string][]string `yaml:"security"`
 		Paths      yaml.Node              `yaml:"paths"`
@@ -316,6 +321,44 @@ func positiveInt(n *yaml.Node) (int64, error) {
 	return v, nil
 }
 
+// trialLimits are the limits of a trial set the contract's x-limits declare: the most trials of
+// one set, the trials of a set whose request gives none, and a set's cost budget (US dollars) and
+// time budget (hours).
+type trialLimits struct {
+	max, def, hours int
+	costUSD         float64
+}
+
+// trialLimitsOf reads the trial sets' limits; a missing one, or one that is not positive (an
+// integer but for the cost), is an error, as is a default above the most.
+func trialLimitsOf(maxN, defN, costN, hoursN *yaml.Node) (trialLimits, error) {
+	var l trialLimits
+	for _, f := range []struct {
+		key  string
+		node *yaml.Node
+		dst  *int
+	}{{"trials-max", maxN, &l.max}, {"trials-default", defN, &l.def}, {"trial-set-hours", hoursN, &l.hours}} {
+		n, err := positiveInt(f.node)
+		if err != nil {
+			return trialLimits{}, fmt.Errorf("%s: %w", f.key, err)
+		}
+		if n > math.MaxInt32 {
+			return trialLimits{}, fmt.Errorf("%s: %d is too large", f.key, n)
+		}
+		*f.dst = int(n)
+	}
+	if l.def > l.max {
+		return trialLimits{}, fmt.Errorf("trials-default %d is above trials-max %d", l.def, l.max)
+	}
+	if costN.Kind != yaml.ScalarNode || (costN.ShortTag() != "!!int" && costN.ShortTag() != "!!float") {
+		return trialLimits{}, fmt.Errorf("trial-set-cost-usd: %q is not a number", costN.Value)
+	}
+	if err := costN.Decode(&l.costUSD); err != nil || !(l.costUSD > 0) || math.IsInf(l.costUSD, 0) {
+		return trialLimits{}, fmt.Errorf("trial-set-cost-usd: %q is not a positive number", costN.Value)
+	}
+	return l, nil
+}
+
 // versionOf returns the version folder of a contract path, "preview/2026-11-12-preview/openapi.yaml".
 func versionOf(path string) string { return strings.Split(path, "/")[1] }
 
@@ -355,8 +398,12 @@ func parseContract(raw []byte, version string) (contract, error) {
 	if err != nil {
 		return contract{}, fmt.Errorf("x-limits: %w", err)
 	}
+	trials, err := trialLimitsOf(&d.Limits.TrialsMax, &d.Limits.TrialsDef, &d.Limits.SetCost, &d.Limits.SetHours)
+	if err != nil {
+		return contract{}, fmt.Errorf("x-limits: %w", err)
+	}
 	c := contract{version: version, retry: rule, ops: map[string]contractOp{}, byID: map[string]string{}, perSecond: int(limits[0]), perAddress: int(limits[1]),
-		keepKeys: time.Duration(limits[2]) * time.Hour, maxBody: limits[3]}
+		keepKeys: time.Duration(limits[2]) * time.Hour, maxBody: limits[3], trials: trials}
 
 	paths, err := pairs(&d.Paths, "paths")
 	if err != nil {

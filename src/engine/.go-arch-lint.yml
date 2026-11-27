@@ -59,6 +59,7 @@ components:
   slices: { in: slices }
   steps: { in: steps }
   store: { in: store }
+  trials: { in: trials }
 deps:
   analyst:
     mayDependOn: [agentcall, analyst, slices]
@@ -68,7 +69,7 @@ deps:
     # files from code, so api's code must not use them: api defines the ports durable implements
     # (data model). Owner-approved 2026-11-19.
     # canonical and captured: the captured-pattern resource (feature 011, owner-approved 2026-11-26).
-    mayDependOn: [api, api-gen, canonical, captured, durable, machine, method, slices, store]
+    mayDependOn: [api, api-gen, canonical, captured, durable, machine, method, slices, store, trials]
     canUse: [jsonschema, retry-module, slice-module, temporal, temporal-testsuite, yaml]
   api-gen:
     canUse: [oapi-runtime]
@@ -121,3 +122,6 @@ deps:
     canUse: [check-api-gen]
   store:
     canUse: [slice-module]
+  trials:
+    # feature 012: the result of a trial set's trials, from their run records (tasks.md T009).
+    mayDependOn: [machine, trials]

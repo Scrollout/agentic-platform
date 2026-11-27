@@ -25,12 +25,12 @@ import (
 // Job is one unit of work behind a state-changing call.
 type Job struct {
 	Kind   gen.OperationKind // the operation's kind, e.g. propose-slice
-	Target string            // slice, run or captured pattern ID the operation concerns (S-<n>, RUN-<n> or a pattern ID)
+	Target string            // slice, run, captured pattern or trial set ID the operation concerns (S-<n>, RUN-<n>, a pattern ID or TS-<n>)
 	Body   []byte            // the request body as received
 }
 
 // WorkResult is the result of a succeeded job; exactly one field is set.
-type WorkResult struct{ Slice, Run, ReusedSlice, CapturedPattern string }
+type WorkResult struct{ Slice, Run, ReusedSlice, CapturedPattern, TrialSet string }
 
 // WorkError ends the operation `failed` at once, without retries; its Code and Detail become
 // the operation's `error` problem.
@@ -143,7 +143,12 @@ var operationKinds = map[string]gen.OperationKind{
 	"captureRun": gen.OperationKindCaptureRun, "replaceParameters": gen.OperationKindReplaceParameters,
 	"makeProofSlice": gen.OperationKindMakeProofSlice, "approveCapturedPattern": gen.OperationKindApproveCapturedPattern,
 	"withdrawCapturedPattern": gen.OperationKindWithdrawCapturedPattern, "eraseCapturedPattern": gen.OperationKindEraseCapturedPattern,
+	"startTrialSet": gen.OperationKindRunTrials,
 }
+
+// isTrialsKind reports whether the contract operation kind accepts a trial set's operation, whose
+// target is the set's ID.
+func isTrialsKind(kind string) bool { return operationKinds[kind] == gen.OperationKindRunTrials }
 
 func isRunKind(kind string) bool { return operationKinds[kind] == gen.OperationKindRun }
 
@@ -185,6 +190,9 @@ type operations struct {
 	cancelRun func(ctx context.Context, run string) error
 	// progress is a run operation's progress, read from its run's record; nil for none.
 	progress func(run string) *operationProgress
+	// cancelTrials ends a trial set cancelled and cancels its running trial, when its run-trials
+	// operation is cancelled; nil when the engine keeps no trial sets.
+	cancelTrials func(ctx context.Context, rec store.OperationRecord) error
 }
 
 type operationProgress = struct {
@@ -205,6 +213,13 @@ type requestHashesKey struct{}
 // opID on target; an error wrapping errNotRecorded wrote nothing.
 func (o *operations) record(ctx context.Context, opID, target string) (store.OperationRecord, error) {
 	body, _ := ctx.Value(rawBodyKey{}).([]byte)
+	return o.recordBody(ctx, opID, target, body)
+}
+
+// recordBody is record with the body its work reads in place of the request's: the request's
+// hashes (its key and body) stay the request's, so a repeat under its Idempotency-Key is judged
+// as any other.
+func (o *operations) recordBody(ctx context.Context, opID, target string, body []byte) (store.OperationRecord, error) {
 	h, _ := ctx.Value(requestHashesKey{}).(requestHashes)
 	if h.body == "" {
 		sum := sha256.Sum256(body)
@@ -317,7 +332,9 @@ func (o *operations) get(ctx context.Context, id string) (gen.Operation, bool, e
 }
 
 // cancel cancels a kept operation that has not ended: a run operation's run first (a run that
-// has ended is no error), then its end `cancelled`, then its workflow; any other operation's
+// has ended is no error), then its end `cancelled`, then its workflow; a run-trials operation's set
+// first (it ends `cancelled` and its running trial is cancelled), then its end and its workflow
+// likewise; any other operation's
 // workflow, which ends it `cancelled` (or its record, while it has no workflow). It reports
 // whether the operation is kept and whether it had ended; an error wrapping ErrUnavailable
 // cancelled nothing.
@@ -329,8 +346,13 @@ func (o *operations) cancel(ctx context.Context, id string) (view gen.Operation,
 	case rec.EndedAt != nil:
 		return o.view(ctx, rec), true, true, nil
 	}
-	if isRunKind(rec.Kind) {
-		if o.cancelRun != nil {
+	if isRunKind(rec.Kind) || isTrialsKind(rec.Kind) {
+		switch {
+		case isTrialsKind(rec.Kind) && o.cancelTrials != nil:
+			if err := o.cancelTrials(ctx, rec); err != nil && !errors.Is(err, ErrNotFound) {
+				return gen.Operation{}, true, false, err
+			}
+		case isRunKind(rec.Kind) && o.cancelRun != nil:
 			if err := o.cancelRun(ctx, rec.Target); err != nil && !errors.Is(err, ErrNotFound) {
 				return gen.Operation{}, true, false, err
 			}
@@ -538,7 +560,8 @@ func runOnce(ctx context.Context, work func(ctx context.Context) (WorkResult, er
 	for _, f := range []struct {
 		v   string
 		dst **string
-	}{{wr.Slice, &res.Slice}, {wr.Run, &res.Run}, {wr.ReusedSlice, &res.ReusedSlice}, {wr.CapturedPattern, &res.CapturedPattern}} {
+	}{{wr.Slice, &res.Slice}, {wr.Run, &res.Run}, {wr.ReusedSlice, &res.ReusedSlice}, {wr.CapturedPattern, &res.CapturedPattern},
+		{wr.TrialSet, &res.TrialSet}} {
 		if f.v != "" {
 			v := f.v
 			*f.dst = &v

@@ -170,6 +170,7 @@ func NewEngine(cfg Config) (http.Handler, Operator) {
 		}
 		ss := &sliceServer{server: srv, svc: cfg.Slices, store: cfg.Store, workers: workersOf(cfg), projects: cfg.Projects, runs: newRuns(cfg, cfg.Slices)}
 		ss.captured, _ = cfg.Store.(CapturedStore)
+		ss.trialSets, _ = cfg.Store.(TrialSetStore)
 		ss.useOperations()
 		impl = ss
 	}

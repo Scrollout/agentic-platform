@@ -44,6 +44,10 @@ type sliceServer struct {
 	// serialises their acceptance checks and record changes.
 	captured CapturedStore
 	cmu      sync.Mutex
+	// trialSets keeps the trial sets (trial_sets.go), nil when Store keeps none; tmu serialises
+	// their acceptance checks and record changes, and is taken before the runs' lock.
+	trialSets TrialSetStore
+	tmu       sync.Mutex
 }
 
 var _ gen.StrictServerInterface = (*sliceServer)(nil)
@@ -84,15 +88,22 @@ func (s *sliceServer) useOperations() {
 		if s.runs.durable != nil {
 			s.ops.cancelRun = s.runs.durable.Cancel
 		}
+		if s.trialSets != nil {
+			s.ops.cancelTrials = s.cancelTrialSet
+		}
 	}
 }
 
 // work does what an accepted operation's request asked, from its record and body: a run
-// operation follows its run; a slice operation calls the Service, and a repeat finds the work it
-// did before (data model, the repeat table).
+// operation follows its run; a run-trials operation runs its set's trials (runTrials); a slice
+// operation calls the Service, and a repeat finds the work it did before (data model, the repeat
+// table).
 func (s *sliceServer) work(ctx context.Context, rec store.OperationRecord, body []byte) (WorkResult, error) {
 	if isRunKind(rec.Kind) {
 		return s.follow(ctx, rec.Target)
+	}
+	if isTrialsKind(rec.Kind) {
+		return s.runTrials(ctx, rec, body)
 	}
 	if isCapturedKind(rec.Kind) {
 		return s.capturedWork(ctx, rec, body)
@@ -231,6 +242,9 @@ func (s *sliceServer) DeleteSlice(ctx context.Context, req gen.DeleteSliceReques
 	if err := s.noActiveRun(id); err != nil {
 		return s.refuse("deleteSlice", err)
 	}
+	if err := s.noRunningSet(id); err != nil {
+		return s.refuse("deleteSlice", err)
+	}
 	op, err := s.ops.accept(ctx, "deleteSlice", id)
 	if err != nil {
 		return unavailableFor(err), nil
@@ -260,9 +274,12 @@ func (s *sliceServer) deleteSlice(ctx context.Context, id, own string) error {
 }
 
 // eraseSlice is deleteSlice's erasure of an existing slice, refused RunActive while a run of it
-// has not ended. The caller holds the runs' lock (or no runs are kept).
+// has not ended or a trial set of it runs. The caller holds the runs' lock (or no runs are kept).
 func (s *sliceServer) eraseSlice(ctx context.Context, id, own string) error {
 	if err := s.activeRun(id); err != nil {
+		return err
+	}
+	if err := s.noRunningSet(id); err != nil {
 		return err
 	}
 	of, err := s.svc.ProofOf(id)
@@ -291,11 +308,19 @@ func (s *sliceServer) eraseSlice(ctx context.Context, id, own string) error {
 }
 
 // eraseDurable deletes the workflows of the slice's runs, then the workflow and the record of
-// each operation other than own whose target is the slice or one of its runs; a record goes only
+// each operation other than own whose target is the slice, one of its runs or one of its trial
+// sets; a record goes only
 // once its workflow is gone, so a repeat finds it again. NotFound is no error; an unavailable
 // durable service is Retryable. The caller holds the runs' lock (or no runs are kept).
 func (s *sliceServer) eraseDurable(ctx context.Context, id, own string) error {
 	targets := map[string]bool{id: true}
+	sets, err := s.setIDs(id)
+	if err != nil {
+		return Retryable(err)
+	}
+	for _, set := range sets {
+		targets[set] = true
+	}
 	if s.runs != nil {
 		for _, e := range s.runs.st.Runs() {
 			if e.Slice != id {

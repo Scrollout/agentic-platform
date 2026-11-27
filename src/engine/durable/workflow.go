@@ -60,10 +60,12 @@ const (
 // bumps it behind workflow.GetVersion, so runs in flight replay on the code that started them.
 // Version 2 (feature 011) adds a captured pattern's `fill` steps and RunInput.NoReuse; under
 // version 1 a `fill` step is a worker step and every kept result is reused. Version 2 also
-// records the pattern choice and the part hashes on RunStarted.
+// records the pattern choice and the part hashes on RunStarted. Version 3 (feature 012) records
+// a slice trial's trial_set and trial on RunStarted and names its set in a HandOverAccepted.
 const (
-	workflowVersion = 2
+	workflowVersion = 3
 	fillVersion     = 2
+	trialVersion    = 3
 )
 
 // fillWorker is the worker of a captured pattern's `fill` steps (feature 011): the engine fills
@@ -115,6 +117,7 @@ type run struct {
 	committed bool
 
 	fills  bool   // the run's code version has `fill` steps and NoReuse (fillVersion)
+	trial  bool   // the run is a slice trial under a code version that records it (trialVersion)
 	values string // the hash of the Fill values, a `fill` step's extra reuse-key input
 }
 
@@ -124,7 +127,7 @@ type run struct {
 func Run(ctx workflow.Context, in RunInput) (RunResult, error) {
 	version := workflow.GetVersion(ctx, "run", workflow.DefaultVersion, workflowVersion)
 	r := &run{in: in, ref: in.Pattern.ID + "@" + in.Pattern.Version, rule: api.RetryRule(), artifacts: map[string]string{},
-		fills: version >= fillVersion}
+		fills: version >= fillVersion, trial: version >= trialVersion && in.TrialSet != ""}
 	r.root, _ = workflow.NewDisconnectedContext(ctx)
 	var cancel workflow.CancelFunc
 	r.ctx, cancel = workflow.WithCancel(ctx)
@@ -153,6 +156,9 @@ func Run(ctx workflow.Context, in RunInput) (RunResult, error) {
 		started.PatternReason, started.SourceRun, started.Proof = in.PatternReason, in.SourceRun, in.Proof
 		started.Parameters, started.NotUsed = maps.Clone(in.Parameters), slices.Clone(in.NotUsed)
 		started.PartHashes = machine.PartHashesOf(in.Inputs)
+	}
+	if r.trial {
+		started.TrialSet, started.Trial = in.TrialSet, in.Trial
 	}
 	err := r.record(&EventRecord{Event: started, Project: in.Project, Operation: in.Operation, ReplayOf: in.ReplayOf})
 	for err == nil || errors.Is(err, errAgain) {
@@ -1047,6 +1053,9 @@ func (r *run) pause(kind, reason string, open []Finding, signals ...string) erro
 		}
 		return errEnded
 	case got == SignalAcceptHandOver:
+		if r.trial { // a trial set accepts the hand-over of its waiting trials (feature 012, research R4)
+			reason = fmt.Sprintf("%s (trial %d of trial set %s)", reason, r.in.Trial, r.in.TrialSet)
+		}
 		if err := r.end(r.ctx, "HandOverAccepted", machine.OutcomeHandedOver, reason, open); err != nil {
 			return err
 		}
