@@ -48,6 +48,13 @@ ended done can be captured as a pattern).
   none no comparison is shown (FR-009); a trial starts only while the set's cost so far plus that
   run's own cost budget is within the set's (FR-010).
 
+### Session 2026-11-28
+
+- Found in the US1 fresh review (T014, B1): when the set's own work fails (a trial cannot be
+  started, for example its project appeared after the set was accepted, or the engine cannot go on
+  after its retries), nothing ended the set. Q: What does the set do then? → A: its running trial
+  is cancelled and the set ends `failed`, saying why; no further trial starts (owner; FR-003).
+
 ## Why the developer's runs do not vary today
 
 Under one method, a second run of the same slice reuses every accepted result of the first
@@ -171,6 +178,9 @@ reliable than the first.
 - The slice is erased: refused while one of its sets is running; afterwards its sets are erased
   with it.
 - A set's 24 hours pass: its running trial is cancelled and the set stops (`time`).
+- The set's own work fails (a trial cannot be started, or the engine cannot go on after its
+  retries): its running trial is cancelled, the set ends `failed` naming why, and no further trial
+  starts.
 
 ## Requirements *(mandatory)*
 
@@ -185,7 +195,8 @@ reliable than the first.
 - **FR-003**: Trials of one set MUST run one after another; a trial MUST start only after the one
   before it ended, and none MUST start once the set is cancelled, its budget is used, or the slice
   is no longer approved. A trial that waits for the developer MUST be ended handed over by the set,
-  and counts as not done.
+  and counts as not done. When the set's own work fails, its running trial MUST be cancelled and the
+  set MUST end `failed` with the reason; no trial MUST start after.
 - **FR-004**: The set's result MUST show how many trials ended done out of those that ended, each
   trial's run and outcome, and an unstable mark when at least one trial ended done and at least one
   did not; when the trials ran under more than one method, the result MUST say so.
@@ -217,7 +228,7 @@ reliable than the first.
 ### Key Entities
 
 - **Trial set** (glossary): the developer's request for k trials of one slice: its slice, k, the method at
-  start, its state (running, ended, cancelled, stopped by budget or by a slice change), and its
+  start, its state (running, ended, cancelled, failed, stopped by budget or by a slice change), and its
   trials in order.
 - **Slice trial** (glossary): one run of the slice in a trial set, reusing no earlier result; its outcome and
   measures come from its run record.

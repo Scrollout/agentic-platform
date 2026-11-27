@@ -20,18 +20,22 @@ Kept in the engine store in its slice's folder; erased with the slice (FR-011).
 | `state` | below |
 | `stopped_because` | With `stopped`: `budget`, `time`, `slice-changed` or `workers` |
 | `runs` | The trials' run IDs in order; trial *i*'s ID is written before its run is started (R1) |
+| `failed_because` | With `failed` only: the detail of the operation's problem |
 | `created_at`, `ended_at` | `ended_at` with every end state |
 
 ### States
 
 | State | Meaning | Next |
 |-------|---------|------|
-| `running` | A trial runs, or the set waits for another run to end or an interrupted trial | `ended`, `cancelled`, `stopped` |
+| `running` | A trial runs, or the set waits for another run to end or an interrupted trial | `ended`, `cancelled`, `stopped`, `failed` |
 | `ended` | All k trials ended | — |
 | `cancelled` | Its operation was cancelled: the running trial was cancelled, none started after | — |
+| `failed` | Its operation failed (a trial could not be started, or the job's retries ran out): the running trial was cancelled, none started after; `failed_because` holds the operation's problem detail (T030, ADR 0106) | — |
 | `stopped` | No further trial could start: the next would pass the cost budget (`budget`), 24 hours passed and the running trial was cancelled (`time`), a part of the slice is no longer approved or differs from `part_hashes` (`slice-changed`), or the next project's workers are gone (`workers`) | — |
 
-The set's operation succeeds on `ended` and `stopped` and ends `cancelled` on `cancelled`.
+The set's operation succeeds on `ended` and `stopped`, ends `cancelled` on `cancelled` and
+`failed` on `failed`. When the operation ends failed, the set is ended `failed` in the same step
+that records the operation's end, and its running trial is cancelled (US1 review B1).
 
 ### Write order and repeats
 

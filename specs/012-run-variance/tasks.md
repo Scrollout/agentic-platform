@@ -240,7 +240,41 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
 - [X] T013 [US1] (after T005, T009, T011, T012 and T029) Commit (tests and code in separate commits);
   fast lint; ask the owner before pushing (every check job runs); record the CI run here. Done: code d70ee51, 6997707 (T009), 36732bf (T011); tests f5d2cbb, 16737fe, 73e0a4e, 254c9b1 (owner-approved T012 fix: step workers on the parent test's t, found on the owner's VM); helper changes approved (T002). CI 46070202691 at 254c9b1: 24/24 green, TestTrials included
 - [ ] T014 [US1] Fresh review of US1 judging T013's CI run; findings fixed as new tasks or
-  recorded; `/speckit-converge` for US1
+  recorded; `/speckit-converge` for US1. Round 1 (fresh Sonnet, read-only, worktree at 254c9b1, CI 46070202691
+  green): B1 blocking (a set whose `run-trials` operation fails stays `running` and its trial goes
+  unfollowed; Principle X, plan row X, data model States) -> owner 2026-11-28: the set ends `failed`
+  (spec Clarifications, ADR 0106) -> T030-T032; S1-S5 suggestions -> T033
+- [ ] T030 [US1] Contract (committed alone): `TrialSetState` gains `failed` ("its operation failed:
+  the running trial was cancelled and none started after"), `TrialSet` gains the optional
+  `failed_because` (string, the operation's problem detail; required exactly with `failed`, absent
+  otherwise, like `stopped_because`; `ended_at` with it); `src/cli/contract.md` "Trial sets": the
+  first line shows `state failed  failed <reason>`; regenerate; pinned oasdiff recorded in research
+  R9 (expected: `response-property-enum-value-added` for `failed`, ADR 0106); method identity
+- [ ] T031 [US1] Test author: new `src/engine/api/trial_sets_failed_test.go` (engine rig, as T007):
+  a trial whose start is refused for good (its project made non-empty after acceptance) ends the
+  set `failed` with `failed_because` naming the refusal, cancels nothing else and starts no further
+  trial, and the operation ends `failed`; a job whose retries run out (the durable service down
+  past the retry rule) ends the set `failed`, cancels its running trial (the run ends `cancelled`)
+  and the result counts it as ended and not done; `getTrialSet` and `listTrialSets` then show
+  `failed`, `ended_at`, no `stopped_because`; the slice is free for a new set and `deleteSlice`
+  afterwards; a set already `ended`, `stopped` or `cancelled` is never changed by its operation's
+  late failure; new `src/cli/trial_set_failed_test.go`: `trial-set` of a `failed` set prints
+  `state failed  failed <reason>` and exits 4; seen failing before T032
+- [ ] T032 [US1] Code author (done when T031 passes): the operation's failed end of a `run-trials`
+  operation ends its set `failed` (under the trial-set lock, once) and cancels its running trial;
+  the client prints the state; method identity converged; then commit, fast lint, push (owner
+  go-ahead), T014 round 2 on B1 and the changed lines
+- [ ] T033 [US1] Suggestions of the US1 review round 1 (not blocking; decide each, or close with a
+  reason): S1 the pattern is chosen again before each trial (a captured pattern approved mid-set
+  changes later trials' pattern; its refusal reads `slice-changed`) and a trial's project appearing
+  after acceptance is not re-checked (now ends the set `failed`, T031); the result does not name a
+  captured pattern (spec edge case); S2 a registration without a project satisfies every trial
+  project (R3's fallback; FR-013 reads "only on the step workers of its own project"), also when the
+  project's own grant file is gone; S3 untested: the 2 s wait for a trial's run operation, a stop
+  while a recorded run ID never started (its outcome row), a trial interrupted mid-run waiting out
+  the 24 h, cancel racing the final end, captured-pattern trials; S4 the 200 ms poll while waiting
+  for another run re-reads k records each time; S5 `trial-sets` is in the terminal contract and
+  README before US3 builds it; `acceptTrialHandOver` holds the runs lock up to 10 s
 
 ---
 
