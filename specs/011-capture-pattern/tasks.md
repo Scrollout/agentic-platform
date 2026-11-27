@@ -988,7 +988,8 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   exits 1 (as `delete`); Busy found inside the erase work is `OperationFailed`; `startRun` and
   `replayRun` answer NotFound for a pattern erased between the choice and the runs' lock; both
   commands send an Idempotency-Key
-- [ ] T021 [US3] Commit; fast lint; push (owner go-ahead); record the CI run
+- [x] T021 [US3] Commit; fast lint; push (owner go-ahead); record the CI run
+  Done 2026-11-27: CI 45913069887 at 8624bfb, 26/26 green
 - [ ] T022 [US3] Fresh review of US3 judging T021's CI run; `/speckit-converge` for US3
 
 ---
