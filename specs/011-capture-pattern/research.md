@@ -75,7 +75,8 @@ fixed procedure `fill`, which writes that step's accepted files from the templat
 parameters' values filled in. Step names, order, writable paths, dependencies, limits and checks
 stay the base pattern's, except that the review step drops FindingsCarryEvidence and
 NoBlockingFindingOpen, which judge findings no agent writes, and so is no longer a review step
-(S3); its outputs are `witnesses` only, since `findings` is not a file set; and every `fill` step
+(S3), and adds AllTestsPass, since it writes the witness tests after the code step's AllTestsPass
+and no fix round runs them (T025 round 1, B1; ADR 0101); its outputs are `witnesses` only, since `findings` is not a file set; and every `fill` step
 has one attempt, since filling is deterministic and nothing may repair it (analyze R1). The
 pattern schema sets attempts for a whole pattern (`limits.attempts`; steps take no attempts of
 their own), so the captured declaration has `limits.attempts` 1 and `limits.review_rounds` 1 for

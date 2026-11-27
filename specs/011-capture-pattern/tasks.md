@@ -1058,6 +1058,29 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   (done 2026-11-27: evals 45979176058 at ca19e5e, 42 cases 3 of 3, $0.30; research R8)
 - [ ] T025 Final fresh review of the feature judging the head's CI run and T024; `/speckit-analyze`
   and `/speckit-converge` for the whole feature until clean
+  Round 1 2026-11-27 at 98107db (fresh Sonnet, read-only worktree, judging CI 45964551765 and
+  evals 45979176058): B1 blocking (research R1, ADR 0039, FR-009): `captured.Declaration` leaves
+  the filled review step with no check that runs a test (TestsBuild only compiles), and it writes
+  the witnesses `review/r<n>/` after the code step's AllTestsPass, so a filled witness that fails
+  against the filled code leaves the run done -> T072, T073 (owner chose the fix, 2026-11-27;
+  ADR 0101); S1 `src/cli/README.md` omits `withdraw-pattern` and `erase-pattern`, S2
+  problem-space N-052 "until the feature's evals pass" stale (fixed in the docs); S3 SC-004 case 7
+  may reuse, S4 `Number` repeats after an erasure, S5 the list completes proofs per record
+  (backlog). Analyze (fresh Sonnet, at 98107db): 0 CRITICAL, 0 HIGH; F1 `service.go` (T059)
+  missing from the plan's files, F2 the open-task rule silent on T066-T071 and T026 (fixed); F3
+  T042 stale, F4 stacked ADR 0093/0095 descriptions (accepted ADRs stay), F5 the keyword and
+  hand-over rules stay spec Clarifications, F6 SC-002 dropped on purpose and status set at T026,
+  F7 the overview links every ADR in its body
+- [ ] T072 (T025 round 1, B1; ADR 0101) Test author: the owner approved (2026-11-27) changing
+  `TestCapturedDeclarationIsTheBasePatternWithFillSteps` (`src/engine/api/captured_capture_test.go`)
+  so its expected review step adds AllTestsPass after its other kept checks; and, in a new test
+  file, a run built from a captured pattern whose template holds a witness test is judged by
+  AllTestsPass at the review step: with AllTestsPass failing there, the run does not end done.
+  Seen failing before T073
+- [ ] T073 (T025 round 1, B1; ADR 0101) Code: `captured.Declaration` appends AllTestsPass to the
+  filled review step's checks (done when T072 passes; method identity converged), then a CI run
+  and the paid analyst and steps evals (owner agreed, 2026-11-27), then T025 round 2 (B1 and the
+  changed lines)
 - [ ] T026 Merge: `evals-current` on the branch lists no pending suite; the owner fast-forwards
   `main`; remove the branch from environment dev's policies; delete the branch with the owner's OK;
   the spec's status `Implemented`
@@ -1076,7 +1099,7 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   Clarifications 2026-11-26 and FR-009.
 - T001 → T002 → US1 (T003-T006, T027, T028 in parallel → T007 → T033 → T029 → T036; T008 → T009; T031 → T032;
   T007, T009, T029, T032 and T036 → T010 → T011) → US2 (T012-T014, T030 in parallel → T015 → T016 → T017) → US3 (T018-T019 in parallel → T020 → T021 → T022) → T023 →
-  T024 → T025 → T026.
+  T024 → T025 (round 1 → T072 → T073 → round 2) → T026.
 - US2 needs US1's captured patterns and fill worker; US3 needs US2's choice at `startRun`.
 
 ## Parallel examples

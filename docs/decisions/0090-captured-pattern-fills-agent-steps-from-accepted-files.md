@@ -1,7 +1,7 @@
 ---
 type: Decision
 title: "ADR 0090: A captured pattern fills its agent steps from the accepted files"
-description: A captured pattern is its base pattern with each agent step's worker replaced by the fixed procedure fill, which writes the source run's accepted files with the parameters filled in; generated code is derived again and the review step keeps only the checks that need no findings.
+description: Refined in part by ADR 0101 (the filled review step also runs AllTestsPass). A captured pattern is its base pattern with each agent step's worker replaced by the fixed procedure fill, which writes the source run's accepted files with the parameters filled in; generated code is derived again and the review step keeps only the checks that need no findings.
 tags: [decisions, catalogue, captured-patterns]
 status: draft
 decision: accepted
@@ -27,6 +27,8 @@ Clarifications).
 Sources: [Feature 011 plan](../../specs/011-capture-pattern/plan.md).
 
 # Context
+
+> Refined in part by [ADR 0101](/decisions/0101-filled-review-step-runs-every-test.md): the filled review step also declares AllTestsPass, so its witness tests run against the filled code.
 
 - The owner wants a later slice of the same kind built with no model call (feature 011).
 - The run machine needs no agent step, and the base pattern's step boundaries and checks already

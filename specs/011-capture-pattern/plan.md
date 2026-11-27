@@ -69,7 +69,7 @@ field on `startRun`, eight terminal commands, one acceptance suite
 | VI. Adopt mature OSS | Pass | gonew, Copier, Cookiecutter and `text/template` evaluated; none derives a template from an accepted project (research R4); the custom engine is justified there |
 | VII. Providers | Pass | The rule that chooses between fitting patterns is specified (R6) |
 | VIII. Containers | Pass | No new image |
-| IX. Knowledge stays true | Pass | ADR 0090 to 0100, the reference "Project template tools", the architecture overview and the log at implementation |
+| IX. Knowledge stays true | Pass | ADR 0090 to 0101, the reference "Project template tools", the architecture overview and the log at implementation |
 | X. No silent loss | Pass | A captured run and a proof are ordinary runs: recorded before 202, one terminal state, checkpointed steps |
 | XI. Privacy | Pass | A captured pattern holds the developer's slice and code like a slice does; erasing it is an operation; telemetry names IDs and hashes only |
 | XII. Tenants | Not applicable | One developer by scope (feature 001 FR-021), as for slices; Complexity Tracking |
@@ -103,6 +103,7 @@ Each decision that outlives the feature has a record in `docs/decisions/`.
 | A proof's step workers are keyed by its captured pattern; a proof's run has no slice (superseded by ADR 0097) | R2, R5, S17 | [ADR 0096](../../docs/decisions/0096-proof-step-workers-keyed-by-captured-pattern.md) |
 | A proof is an ordinary build of the captured pattern's proof slice, an approved slice made from its copy; the captured pattern keeps the expected output hashes | R2, R5, S17, S18 | [ADR 0097](../../docs/decisions/0097-proof-builds-a-slice-made-from-the-captured-copy.md) (supersedes ADR 0096) |
 | A proof slice is marked (`Proof of <captured pattern>`, `proof_of`) and never reused; a proof reuses no result; resume and take-over keep the pattern; a replay follows the usable rule and a replayed proof is a new proof | R5 | [ADR 0098](../../docs/decisions/0098-proof-slice-marked-and-runs-keep-their-pattern.md) |
+| The filled review step also declares AllTestsPass, so the witness tests it writes run against the filled code (T025 round 1, B1) | R1 | [ADR 0101](../../docs/decisions/0101-filled-review-step-runs-every-test.md) |
 | A proof compares only the filled outputs (`tests`, `code`, `witnesses`) with the template; a hand-over fails it at once; template paths are filled like contents | R4, R5 | [ADR 0099](../../docs/decisions/0099-proof-compares-filled-outputs-and-paths-are-filled.md) |
 | The engine's preview contract gains the new enum values in place, an exception to Principle XV | E2, R7 | [ADR 0100](../../docs/decisions/0100-preview-contract-gains-enum-values-in-place.md) |
 

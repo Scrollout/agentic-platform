@@ -12,7 +12,7 @@ artifacts in its content-addressed store.
 | `base` | the base pattern's `id@version` | the engine's pattern at capture |
 | `source` | source run ID, source slice ID | the run ended done (FR-001) |
 | `slice` | the source slice's approved parts (goals, rules, examples, terms, contract) | copied at capture; kept when the slice is erased |
-| `declaration` | the base pattern with each agent step's worker `procedure:fill`, `limits.attempts` 1 and `limits.review_rounds` 1 for the whole declaration (the schema has no per-step attempts), and the review step without FindingsCarryEvidence and NoBlockingFindingOpen and with outputs `[witnesses]` | valid against `pattern.schema.json` (research R1) |
+| `declaration` | the base pattern with each agent step's worker `procedure:fill`, `limits.attempts` 1 and `limits.review_rounds` 1 for the whole declaration (the schema has no per-step attempts), and the review step without FindingsCarryEvidence and NoBlockingFindingOpen, with AllTestsPass added after its other checks (ADR 0101) and with outputs `[witnesses]` | valid against `pattern.schema.json` (research R1) |
 | `template` | per filled output (`tests`, `code`, `witnesses`): the artifact hash of the step's last acceptance in the source run, `StepAccepted` or `ResultReused` alike, after any review-round fix (so it equals the files the project ended with) | held by the captured pattern (research R3) |
 | `proof_slice` | the slice ID of its proof slice, absent until the first proof request and cleared when that slice is erased | an approved slice made from `slice`; its runs are the proofs (research R5) |
 | `parameters` | list of Parameter | FR-003 |

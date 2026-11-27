@@ -293,7 +293,8 @@ Shipped by feature 011 ([spec](../../specs/011-capture-pattern/spec.md)):
   the base pattern that ended done is captured as a pattern that builds later slices of the same
   kind with no model call. Its declaration is the base pattern with each agent step's worker
   replaced by the fixed procedure `fill`, one attempt and one review round; the review step keeps
-  only the checks that need no findings. Its template is the run's accepted `tests`, `code` and
+  only the checks that need no findings and adds AllTestsPass, so the witness tests it writes run
+  against the filled code ([ADR 0101](/decisions/0101-filled-review-step-runs-every-test.md)). Its template is the run's accepted `tests`, `code` and
   `witnesses` outputs; `gen/**` is derived again from each slice's contract by the generate
   procedure. Its parameters are the source slice's names (lowercase, capitalised and uppercase
   forms), declared values and any other literal value the developer adds, each with every place it
@@ -418,4 +419,5 @@ Each further building block gets its own concept:
 - [ADR 0098: A proof slice is marked, and continued runs keep their pattern](/decisions/0098-proof-slice-marked-and-runs-keep-their-pattern.md)
 - [ADR 0099: A proof compares the filled outputs, and template paths are filled](/decisions/0099-proof-compares-filled-outputs-and-paths-are-filled.md)
 - [ADR 0100: The engine's preview contract gains enum values in place](/decisions/0100-preview-contract-gains-enum-values-in-place.md)
+- [ADR 0101: A captured pattern's filled review step runs every test](/decisions/0101-filled-review-step-runs-every-test.md)
 - ADRs 0005 to 0025: why each constitution principle exists, starting with [ADR 0005](/decisions/0005-principle-i-needs-before-solutions.md)
