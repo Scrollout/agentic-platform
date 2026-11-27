@@ -14,7 +14,7 @@ under two methods say so.
 
 ## 2. The engine API (seconds to minutes, no model)
 
-`cd src/engine && go test ./api/... -run TrialSet`: k outside 1 to 5 is refused; a missing
+`cd src/engine && go test ./api/... -run 'TestTS'`: k outside 1 to 5 is refused; a missing
 project's workers or an existing project refuse the set before any trial; each trial starts only
 after the one before ended, with `NoReuse` and `trial_set` on its `RunStarted`; a trial waiting
 for the developer is handed over by the set and the next starts; cancelling the set cancels its

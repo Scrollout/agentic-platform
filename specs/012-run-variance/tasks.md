@@ -248,8 +248,8 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
 - [X] T030 [US1] Contract (committed alone): `TrialSetState` gains `failed` ("its operation failed:
   the running trial was cancelled and none started after"), `TrialSet` gains the optional
   `failed_because` (string, the operation's problem detail; required exactly with `failed`, absent
-  otherwise: a new `allOf` if/else on `state: failed` as for `stopped`; a `maxLength` as other
-  free-text fields; `ended_at` with it), the descriptions of `TrialSetState`, `TrialSet` and
+  otherwise: a new `allOf` if/else on `state: failed` as for `stopped`; no `maxLength`, as the
+  `Problem.detail` it copies (research R9); `ended_at` with it), the descriptions of `TrialSetState`, `TrialSet` and
   `ended_at` name `failed`; `src/cli/contract.md` "Trial sets": the first line shows
   `state failed  failed <reason>`, and the exit table gains a row `failed` -> 4 with the reason, read
   from the set (not the operation); `contracts/trial-sets.md` exit table and "Changed" list the
@@ -401,4 +401,4 @@ planted other method, names both methods and is `less reliable`.
 - [ ] T037 Derive the client's usage text "(default 3)" (`src/cli/cli.go:120`) from the embedded contract's `trials-default`, or drop the number, per tasks Rule "Limits have one home" (partial)
 - [ ] T038 Make US2's T016 and US3's T021 exercise the client's step table, `spreadCell`, `filesCell` and the "compared with" line already in `src/cli/trials.go`, which no test covers yet, per T016, T017, T021, T022 test-first order (unrequested)
 - [ ] T039 Add a test (new file) that a worker token is refused on `getTrialSet` and `listTrialSets` and a page token may read them, per Constitution V, the plan's threat model, T007 (partial)
-- [ ] T040 Correct T030's `maxLength` wording (none, as research R9 says), the contract's `failed_because` description (the detail, or the problem's code when the detail is empty, T034 R2-1; a contract change committed alone) and `quickstart.md` step 2's test pattern (`TestTS`), per Principle IX (partial)
+- [X] T040 Correct T030's `maxLength` wording (none, as research R9 says), the contract's `failed_because` description (the detail, or the problem's code when the detail is empty, T034 R2-1; a contract change committed alone) and `quickstart.md` step 2's test pattern (`TestTS`), per Principle IX (partial)
