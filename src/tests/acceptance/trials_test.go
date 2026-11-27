@@ -327,9 +327,10 @@ func TestTrials(t *testing.T) {
 		return ""
 	}
 
+	outer := t // the step containers live until the whole test ends: the lab removes them at its t's cleanup
 	t.Run("1 both projects have their step workers; the containers' memory is recorded", func(t *testing.T) {
 		for _, p := range projects {
-			l.StepWorkers(t, slice, p)
+			l.StepWorkers(outer, slice, p)
 		}
 		for _, p := range projects {
 			trlRegister(t, l, slice, p)
