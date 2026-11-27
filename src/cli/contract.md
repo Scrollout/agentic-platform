@@ -10,7 +10,7 @@ Two names, two jobs:
   suites use it), `down`, `build-workers
   <slice> <project>`, `page`, `test <suite>` (runs a test suite, see "The test harness") and `registry`
   (starts the local image registry if it isn't running; `src/deploy/build.sh` calls it). It intercepts
-  `build`, `resume`, `replay` and `prove` (research D32; feature 011):
+  `build`, `resume`, `replay`, `prove` (research D32; feature 011) and `trials` (feature 012):
   - `build <slice> <project>` runs `build-workers <slice> <project>` first, then passes the command on.
   - `replay <run> <project>` reads the run (`getRun`) for its slice, runs `build-workers <slice>
     <project>` unchanged, then passes the command on. A replay always builds into a new, empty
@@ -20,6 +20,13 @@ Two names, two jobs:
     which prints only the proof slice's ID and a line feed on standard output, then runs as
     `build <proof slice> <project>` does (`build-workers` first). An unknown captured pattern is
     exit 4 (`NotFound`) and starts nothing. Running it again into another project builds again.
+  - `trials <slice> <prefix> [--trials <k>]` runs `build-workers <slice> <prefix>-<i>` for each
+    `<i>` from 1 to `<k>` (3 without `--trials`, the engine contract's `x-limits.trials-default`),
+    in that order, then passes the command on. It stops at the first `build-workers` that fails,
+    with that command's exit code, and starts no set; the projects already made stay, and running
+    the command again with a new prefix is safe. `<k>` outside 1 to `x-limits.trials-max` is a
+    usage error (exit 3) before anything changes. Each project gets its own step containers, so
+    the trials run with the terminal closed.
   - `resume <run>` never runs `build-workers`. It reads the run (`getRun`), which gives its slice and
     project; an unknown run is exit 4 (`NotFound`), and a run that is not `interrupted` is passed on
     unchanged for the engine to refuse (`RunNotInterrupted`). For an interrupted run, every step of
@@ -154,6 +161,9 @@ states and exit codes".
 | `approve-pattern <id>` | Approves a proven captured pattern | `approveCapturedPattern`, `getOperation` |
 | `withdraw-pattern <id>` | Stops a captured pattern's use by new runs | `withdrawCapturedPattern`, `getOperation` |
 | `erase-pattern <id>` | Erases a captured pattern after confirmation | `getCapturedPattern`, `eraseCapturedPattern`, `getOperation` |
+| `trials <slice> <prefix> [--trials <k>]` | Builds the slice `<k>` times (1 to 5, default 3), reusing nothing, into the new projects `<prefix>-1` to `<prefix>-<k>`, one after another, and follows the set: one line per trial as it ends, then the result | `startTrialSet`, `getOperation`, `getTrialSet` |
+| `trial-sets <slice>` | Lists the slice's trial sets | `listTrialSets` |
+| `trial-set <id>` | Shows a trial set's result; follows it while it runs | `getTrialSet`, `getOperation` |
 
 When a slice fails a pattern condition (a check result with `pattern` true; a result without
 `pattern` counts as false), `describe` and `show` (without a part) also print one line: `The pattern does not fit this description: <condition>: <reason>; ...`, naming each failing
@@ -426,6 +436,52 @@ the terminal" says. For example:
 | `waiting-for-developer` | `RUN-<n> waits for the developer: <reason>; it expires <expires_at>. Take it over with take-over RUN-<n>, or cancel it with cancel RUN-<n>.` |
 | `interrupted`, waiting for its step workers (the run's `waits_for` is `step-workers`) | `RUN-<n> is interrupted: <reason>; it expires <expires_at>. It continues by itself once its step workers run: start them with ap build-workers --resume RUN-<n>, or cancel it with cancel RUN-<n>.` |
 | `interrupted`, any other (`waits_for` `resume` or absent) | `RUN-<n> is interrupted: <reason>; it expires <expires_at>. Resume it with resume RUN-<n>, or cancel it with cancel RUN-<n>.` |
+
+## Trial sets
+
+Feature 012. A trial set is `<k>` fresh builds of one approved slice, run one after another, each a
+run of its own (engine contract, `startTrialSet`); `cancel <operation>` with the set's operation
+cancels the running trial and starts no other. `trials` prints `TS-<n>  operation OP-<m>` once the
+set is accepted, then follows it as `trial-set` does. While following, it prints one line per
+trial as the trial ends, in trial order:
+
+```text
+trial <i>  RUN-<n>  <outcome>
+```
+
+When the set ends, `trial-set <id>` (and `trials`) prints, in this order:
+
+1. `TS-<n>  slice <slice>  state <state>[  stopped <stopped_because>]  done <done>/<ended>[  unstable][  methods mixed]`;
+2. a table of the trials, one row per started trial in trial order, with the columns `RUN`,
+   `OUTCOME`, `ATTEMPTS`, `ROUNDS`, `SECONDS`, `TOKENS` and `COST` (the trial's totals);
+3. a table of the steps, one row per step of the pattern in step order, with the columns `STEP`,
+   `REACHED`, `ATTEMPTS`, `ROUNDS`, `SECONDS`, `TOKENS`, `COST` (each `<lowest>/<median>/<highest>`)
+   and `FILES` (`same`, or the groups of trials with equal files as `1,2|3`);
+4. for an `ended` or `stopped` set whose slice has a previous one (`previous`), `compared with
+   TS-<m>: done <done>/<ended> -> <done>/<ended>[  less reliable][  methods differ]`.
+
+A value the engine does not give (not available, or a trial not ended) is `-`. Tables are aligned
+as `slices` aligns its table. Seconds are whole seconds, costs `$<usd>` with two decimals, and a
+median that falls between two whole values keeps one decimal.
+
+`trial-sets <slice>` reads every page of `listTrialSets` and prints one table, newest set first,
+with the columns `SET`, `STATE`, `TRIALS`, `DONE` (`<done>/<ended>`), `UNSTABLE` (`unstable` or
+`-`), `METHOD` (its first 12 hex digits) and `CREATED`. With no sets it prints `No trial sets yet.
+Start one with trials <slice> <prefix>.` Either way it exits 0; an unknown slice is exit 4
+`NotFound`.
+
+`trials` and `trial-set` end with the code of the set's state when they return:
+
+| How it ends | Exit |
+|-------------|------|
+| `ended` or `stopped`, at least one trial ended and every ended trial is `done` | 0 |
+| `ended` or `stopped`, some ended trial is not `done`, or none ended | 7, as `compare`'s "differ": the builds do not agree with done |
+| `cancelled` | 6 |
+| refused (a problem answer), or the set's operation `failed` | 4, with the problem |
+| the engine lost or unreadable | 1 |
+| Ctrl-C (detached; the set continues), naming the operation | 130 |
+| SIGTERM (detached; the set continues) | 143 |
+| a usage error (a malformed slice or set ID, `<k>` outside 1 to 5) | 3 |
 
 ## Run states and exit codes
 

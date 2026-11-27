@@ -515,10 +515,11 @@ func writeAccepted(w http.ResponseWriter, rec store.OperationRecord) {
 }
 
 type opResult = struct {
-	CapturedPattern *gen.PatternId `json:"captured_pattern,omitempty"`
-	ReusedSlice     *gen.SliceId   `json:"reused_slice,omitempty"`
-	Run             *gen.RunId     `json:"run,omitempty"`
-	Slice           *gen.SliceId   `json:"slice,omitempty"`
+	CapturedPattern *gen.PatternId  `json:"captured_pattern,omitempty"`
+	ReusedSlice     *gen.SliceId    `json:"reused_slice,omitempty"`
+	Run             *gen.RunId      `json:"run,omitempty"`
+	Slice           *gen.SliceId    `json:"slice,omitempty"`
+	TrialSet        *gen.TrialSetId `json:"trial_set,omitempty"`
 }
 
 // runOnce runs the work once; a panic or a result without exactly one field is a failure.

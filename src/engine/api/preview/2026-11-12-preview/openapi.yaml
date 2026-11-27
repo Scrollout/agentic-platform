@@ -67,6 +67,14 @@ x-limits:
   parameter-places-max: 10000
   # Most characters of one parameter value (slice-defs `parameter_value`).
   parameter-value-max-chars: 64
+  # Most trials of one trial set (TrialSetRequest.trials).
+  trials-max: 5
+  # Trials of a trial set when the request gives none.
+  trials-default: 3
+  # A trial set's cost budget in US dollars, over all its trials, on top of each run's own budgets.
+  trial-set-cost-usd: 2
+  # Hours a trial set may run, from its acceptance; then its running trial is cancelled.
+  trial-set-hours: 24
 servers:
 - url: /
   description: The engine's address on the platform's internal network; not reachable from outside it.
@@ -78,6 +86,9 @@ tags:
 - name: captured-patterns
   description: Capture a done run as a pattern that builds later slices of the same kind with no
     model call, prove it, approve, withdraw and erase it.
+- name: trial-sets
+  description: Build an approved slice several times, reusing nothing, and see how much the builds
+    vary.
 - name: operations
   description: Follow and cancel long-running work, and list this service's operations.
 - name: workers
@@ -200,9 +211,10 @@ paths:
       operationId: deleteSlice
       x-operation-name: Agentic.Engine/slices/delete
       summary: Delete a slice and its runs
-      description: Erases the slice, its run records and their stored artifacts. Project folders are
-        left to the developer. Refused while one of the slice's runs has not ended. The operation's
-        target is the slice.
+      description: Erases the slice, its run records, their stored artifacts and its trial sets.
+        Project folders are left to the developer. Refused with RunActive while one of the slice's
+        runs has not ended, and while one of its trial sets is `running` or a `run-trials`
+        operation of the slice has not ended. The operation's target is the slice.
       security:
       - clientToken: []
       x-error-codes:
@@ -545,6 +557,147 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /slices/{sliceId}/trial-sets:
+    post:
+      tags:
+      - trial-sets
+      operationId: startTrialSet
+      x-operation-name: Agentic.Engine/trialSets/write
+      summary: Build an approved slice several times
+      description: >-
+        Accepts a trial set: `trials` fresh builds of the slice (a slice trial each), into the new
+        projects `<project_prefix>-1` to `<project_prefix>-<trials>`, run one after another, so
+        the developer sees how much the builds vary (TrialSet). Each trial is a run started as
+        startRun without `pattern` starts one, into its own project, reusing no accepted result
+        of any earlier run (it records no ResultReused), with `trial_set` and `trial` on its
+        RunStarted and Run; a trial of a proof slice is a proof. Trial *i* starts only after trial
+        *i − 1* has ended; while another run of the platform has not ended, the set waits for it
+        rather than failing. A trial that waits for the developer is handed over by the set (its
+        reason names the set), and the next starts. Before each trial the set checks, in this
+        order, that it was not cancelled; that the set's cost so far plus the trial's own cost
+        budget (`budgets.run.cost_usd` of its pattern) is within `x-limits.trial-set-cost-usd`,
+        else it ends `stopped` with `budget`; that every part of the slice is still approved at
+        the hash it had when the set was accepted (`part_hashes`), else `slice-changed`; that the
+        trial's project has a ready worker for every step that needs one, else `workers`. A set
+        still running `x-limits.trial-set-hours` after it was accepted cancels its running trial
+        and ends `stopped` with `time`. Refusals come in this order, the first that applies; each
+        comes at once, nothing is recorded and no trial starts. A body that does not match
+        TrialSetRequest (`trials` outside 1 to `x-limits.trials-max`, or a `project_prefix`
+        outside its rule) is InvalidRequest; then an unknown slice is NotFound; then, as startRun
+        refuses: PatternDoesNotFit, NotApproved, and for a proof slice CapturedPatternWithdrawn
+        and CapturedPatternBusy; then WorkersNotReady naming the first project, in trial order,
+        and step without a ready worker; then ProjectExists naming the first project whose folder
+        exists; then RunActive while another trial set of the slice is `running` or its operation
+        has not ended. The operation (kind `run-trials`) targets the set and lasts until the set
+        ends: it succeeds when the set ends `ended` or `stopped` and ends `cancelled` when it is
+        cancelled. Cancelling it cancels the running trial and starts no other.
+      security:
+      - clientToken: []
+      x-error-codes:
+        '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
+        '401': [Unauthorized]
+        '403': [Forbidden]
+        '404': [NotFound]
+        '409': [PatternDoesNotFit, NotApproved, CapturedPatternWithdrawn, CapturedPatternBusy, WorkersNotReady, ProjectExists, RunActive, IdempotencyKeyReused]
+        '429': [RateLimited]
+        '503': [Unavailable]
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/SliceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrialSetRequest'
+      responses:
+        '202':
+          $ref: '#/components/responses/Accepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      tags:
+      - trial-sets
+      operationId: listTrialSets
+      x-operation-name: Agentic.Engine/trialSets/read
+      summary: List a slice's trial sets
+      description: Lists the slice's trial sets, newest first, at most 50 per page, each with its
+        result as getTrialSet gives it. Reading calls no model and changes no run. NotFound for an
+        unknown slice.
+      security:
+      - clientToken: []
+      - pageToken: []
+      x-error-codes:
+        '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
+        '401': [Unauthorized]
+        '403': [Forbidden]
+        '404': [NotFound]
+        '429': [RateLimited]
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/SliceId'
+      - $ref: '#/components/parameters/PageToken'
+      responses:
+        '200':
+          $ref: '#/components/responses/TrialSetList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /trial-sets/{trialSetId}:
+    get:
+      tags:
+      - trial-sets
+      operationId: getTrialSet
+      x-operation-name: Agentic.Engine/trialSets/read
+      summary: Get a trial set
+      description: Returns the trial set with its trials' runs and its result (TrialResult),
+        computed from the trials' run records on each read; reading calls no model and changes no
+        run. NotFound for an unknown set and for one erased with its slice.
+      security:
+      - clientToken: []
+      - pageToken: []
+      x-error-codes:
+        '400': [MissingApiVersionParameter, UnsupportedApiVersionValue, InvalidRequest]
+        '401': [Unauthorized]
+        '403': [Forbidden]
+        '404': [NotFound]
+        '429': [RateLimited]
+      parameters:
+      - $ref: '#/components/parameters/ApiVersion'
+      - $ref: '#/components/parameters/TrialSetId'
+      responses:
+        '200':
+          $ref: '#/components/responses/TrialSet'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
   /runs:
     get:
       tags:
@@ -1478,6 +1631,13 @@ components:
       description: The captured pattern's ID.
       schema:
         $ref: slice-defs.schema.json#/$defs/pattern_id
+    TrialSetId:
+      name: trialSetId
+      in: path
+      required: true
+      description: The trial set's ID.
+      schema:
+        $ref: slice-defs.schema.json#/$defs/trial_set_id
     OperationId:
       name: operationId
       in: path
@@ -1589,6 +1749,32 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/CapturedPatternList'
+    TrialSet:
+      description: The trial set.
+      headers:
+        Deprecation:
+          $ref: '#/components/headers/Deprecation'
+        Sunset:
+          $ref: '#/components/headers/Sunset'
+        Link:
+          $ref: '#/components/headers/Link'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TrialSet'
+    TrialSetList:
+      description: A page of trial sets.
+      headers:
+        Deprecation:
+          $ref: '#/components/headers/Deprecation'
+        Sunset:
+          $ref: '#/components/headers/Sunset'
+        Link:
+          $ref: '#/components/headers/Link'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TrialSetList'
     Run:
       description: The run.
       headers:
@@ -2282,6 +2468,14 @@ components:
             The worker's base address on the internal network: `http://`, a host name of lowercase
             letters, digits and hyphens (such as its Compose service name), a port, and nothing
             after an optional `/`.
+        project:
+          $ref: slice-defs.schema.json#/$defs/project_name
+          description: >-
+            The project the worker's container serves. The engine keeps one registration per
+            slice, step and project, and a run calls only its own project's workers; a registration
+            without a project serves any project of its slice, used only when the project has none
+            of its own. Registering again for the same slice, step and project replaces the
+            endpoint.
     Worker:
       type: object
       required:
@@ -2296,10 +2490,14 @@ components:
         endpoint:
           $ref: slice-defs.schema.json#/$defs/worker_endpoint
           description: The registered base address, as `WorkerRegistration.endpoint` defines it.
+        project:
+          $ref: slice-defs.schema.json#/$defs/project_name
+          description: The project it serves, as registered; absent for a registration without one.
     OperationKind:
       type: string
       description: What the operation does. Resuming, replaying and handing over a run all use the kind
-        `run`; a proof is a run.
+        `run`; a proof is a run. `run-trials` runs a trial set; each of its trials also has its own
+        `run` operation.
       enum:
       - propose-slice
       - answer-questions
@@ -2315,6 +2513,7 @@ components:
       - approve-captured-pattern
       - withdraw-captured-pattern
       - erase-captured-pattern
+      - run-trials
     OperationStatus:
       type: string
       enum:
@@ -2327,7 +2526,10 @@ components:
       type: object
       description: Long-running work. A `run` operation lasts from the start of its run until the run
         ends, and succeeds whatever the run's outcome, except `cancelled`; the outcome is on the run.
-        When the platform could not carry the run on, the operation fails with the run's reason.
+        When the platform could not carry the run on, the operation fails with the run's reason. A
+        `run-trials` operation lasts from the acceptance of its trial set until the set ends; it
+        succeeds when the set ends `ended` or `stopped`, whatever its trials' outcomes, and ends
+        `cancelled` when the set is cancelled; the outcomes are on the set.
       required:
       - id
       - kind
@@ -2344,7 +2546,7 @@ components:
           $ref: '#/components/schemas/OperationStatus'
         target:
           $ref: slice-defs.schema.json#/$defs/operation_target
-          description: The slice, run or captured pattern the operation concerns.
+          description: The slice, run, captured pattern or trial set the operation concerns.
         progress:
           type: object
           description: For a `run` operation, how many of the pattern's steps are accepted.
@@ -2365,9 +2567,9 @@ components:
           type: object
           description: Set when the operation succeeded. `slice` is the slice it created or changed (for
             makeProofSlice, the proof slice), `run` the run it started or continued, `reused_slice`
-            an existing slice with the same description, returned instead of a new one, and
+            an existing slice with the same description, returned instead of a new one,
             `captured_pattern` the captured pattern a captured-pattern operation created or
-            changed.
+            changed, and `trial_set` the trial set a `run-trials` operation ran.
           minProperties: 1
           maxProperties: 1
           additionalProperties: false
@@ -2380,6 +2582,8 @@ components:
               $ref: slice-defs.schema.json#/$defs/slice_id
             captured_pattern:
               $ref: slice-defs.schema.json#/$defs/pattern_id
+            trial_set:
+              $ref: slice-defs.schema.json#/$defs/trial_set_id
         error:
           $ref: '#/components/schemas/Problem'
         created_at:
@@ -2472,6 +2676,11 @@ components:
             - outcome
           - required:
             - ended_at
+      dependentRequired:
+        trial_set:
+        - trial
+        trial:
+        - trial_set
       required:
       - id
       - slice
@@ -2531,6 +2740,14 @@ components:
           $ref: slice-defs.schema.json#/$defs/not_used
           description: The captured patterns the start judged and did not use, with the reason; absent
             when there are none.
+        trial_set:
+          $ref: slice-defs.schema.json#/$defs/trial_set_id
+          description: For a slice trial, the trial set it belongs to, from its RunStarted; absent on
+            every other run.
+        trial:
+          $ref: slice-defs.schema.json#/$defs/trial_number
+          description: For a slice trial, its position in the set, from its RunStarted; present
+            exactly when `trial_set` is.
         created_at:
           type: string
           format: date-time
@@ -2598,6 +2815,372 @@ components:
             $ref: '#/components/schemas/Difference'
         next_page_token:
           type: string
+    TrialSetRequest:
+      type: object
+      required:
+      - project_prefix
+      additionalProperties: false
+      properties:
+        project_prefix:
+          $ref: slice-defs.schema.json#/$defs/project_prefix
+          description: Trial *i* builds into the new project folder `<project_prefix>-<i>` under the
+            projects folder chosen when the platform started; none of them may exist yet.
+        trials:
+          type: integer
+          minimum: 1
+          maximum: 5
+          default: 3
+          description: How many trials, 1 to `x-limits.trials-max`; `x-limits.trials-default` when
+            not given.
+    TrialSetState:
+      type: string
+      description: >-
+        `running` while a trial runs, or the set waits for another run to end or for an
+        interrupted trial; `ended` when all its trials ended; `cancelled` when its operation was
+        cancelled (the running trial was cancelled and none started after); `stopped` when no
+        further trial could start, for the reason in `stopped_because`.
+      enum:
+      - running
+      - ended
+      - cancelled
+      - stopped
+    TrialSetStopReason:
+      type: string
+      description: >-
+        Why a set `stopped`: `budget` when the next trial's own cost budget would take the set's
+        cost past `x-limits.trial-set-cost-usd`; `time` when `x-limits.trial-set-hours` passed
+        (its running trial was cancelled); `slice-changed` when a part of the slice is no longer
+        approved, or differs from the set's `part_hashes`; `workers` when the next trial's project
+        has no ready worker for a step that needs one.
+      enum:
+      - budget
+      - time
+      - slice-changed
+      - workers
+    TrialSet:
+      type: object
+      description: >-
+        A trial set: `trials` fresh builds of one approved slice, run one after another, and their
+        result. Kept in its slice's records and erased with the slice; it holds nothing beyond its
+        trials' run records and its own settings.
+      allOf:
+      - if:
+          properties:
+            state:
+              const: stopped
+        then:
+          required:
+          - stopped_because
+        else:
+          not:
+            required:
+            - stopped_because
+      - if:
+          properties:
+            state:
+              const: running
+        then:
+          not:
+            required:
+            - ended_at
+        else:
+          required:
+          - ended_at
+      required:
+      - id
+      - slice
+      - trials
+      - project_prefix
+      - method
+      - part_hashes
+      - budget
+      - operation
+      - state
+      - runs
+      - result
+      - created_at
+      properties:
+        id:
+          $ref: slice-defs.schema.json#/$defs/trial_set_id
+        slice:
+          $ref: slice-defs.schema.json#/$defs/slice_id
+        trials:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: How many trials the set has, k.
+        project_prefix:
+          $ref: slice-defs.schema.json#/$defs/project_prefix
+          description: Trial *i*'s project is `<project_prefix>-<i>`.
+        method:
+          $ref: slice-defs.schema.json#/$defs/hash
+          description: The engine's method identity when the set was accepted.
+        part_hashes:
+          $ref: slice-defs.schema.json#/$defs/part_hashes
+          description: The slice's approved part hashes when the set was accepted; each trial starts
+            only while the slice's parts are approved at these hashes.
+        budget:
+          type: object
+          required:
+          - cost_usd
+          - hours
+          additionalProperties: false
+          description: The set's own budget, on top of each run's budgets.
+          properties:
+            cost_usd:
+              type: number
+              exclusiveMinimum: 0
+              description: '`x-limits.trial-set-cost-usd` when the set was accepted.'
+            hours:
+              type: integer
+              minimum: 1
+              description: '`x-limits.trial-set-hours` when the set was accepted.'
+        operation:
+          $ref: slice-defs.schema.json#/$defs/operation_id
+          description: The set's `run-trials` operation.
+        state:
+          $ref: '#/components/schemas/TrialSetState'
+        stopped_because:
+          $ref: '#/components/schemas/TrialSetStopReason'
+        runs:
+          type: array
+          description: The trials' run IDs in trial order, each recorded before its run starts; a
+            trial not started yet has none.
+          items:
+            $ref: slice-defs.schema.json#/$defs/run_id
+        result:
+          $ref: '#/components/schemas/TrialResult'
+        created_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+          description: When the set ended; set exactly when `state` is not `running`.
+    TrialSetList:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrialSet'
+        next_page_token:
+          type: string
+    TrialMeasures:
+      type: object
+      additionalProperties: false
+      description: >-
+        What one trial, or one step of it, used. `attempts`: its AttemptMade events plus each
+        StepRejected with `usage` and no AttemptMade; `review_rounds`: the highest `round`;
+        `seconds`: for a step, the sum of its attempt spans (StepStarted to its StepAccepted or
+        StepRejected), for a trial, RunStarted to its end, either without the time the run was
+        interrupted (RunInterrupted to RunResumed); `tokens` and `cost_usd`: the sum of `usage`. A
+        measure its record does not carry is absent ("not available"), never 0.
+      properties:
+        attempts:
+          type: integer
+          minimum: 0
+        review_rounds:
+          type: integer
+          minimum: 0
+        seconds:
+          type: number
+          minimum: 0
+        tokens:
+          type: integer
+          minimum: 0
+        cost_usd:
+          type: number
+          minimum: 0
+    Spread:
+      type: object
+      required:
+      - lowest
+      - median
+      - highest
+      additionalProperties: false
+      description: The lowest, median and highest of one measure over the trials that carry it; the
+        median of an even count is the mean of the two middle values.
+      properties:
+        lowest:
+          type: number
+        median:
+          type: number
+        highest:
+          type: number
+    MeasureSpreads:
+      type: object
+      additionalProperties: false
+      description: Each measure of TrialMeasures as a Spread over the trials that carry it; absent
+        ("not available") when none does.
+      properties:
+        attempts:
+          $ref: '#/components/schemas/Spread'
+        review_rounds:
+          $ref: '#/components/schemas/Spread'
+        seconds:
+          $ref: '#/components/schemas/Spread'
+        tokens:
+          $ref: '#/components/schemas/Spread'
+        cost_usd:
+          $ref: '#/components/schemas/Spread'
+    TrialOutcome:
+      type: object
+      required:
+      - trial
+      - run
+      - totals
+      additionalProperties: false
+      description: One started trial.
+      properties:
+        trial:
+          $ref: slice-defs.schema.json#/$defs/trial_number
+        run:
+          $ref: slice-defs.schema.json#/$defs/run_id
+        outcome:
+          $ref: '#/components/schemas/RunOutcome'
+          description: The run's outcome; absent while it has not ended.
+        method:
+          $ref: slice-defs.schema.json#/$defs/hash
+          description: The method identity on its step events; absent when they carry none.
+        totals:
+          $ref: '#/components/schemas/TrialMeasures'
+    StepFiles:
+      type: object
+      required:
+      - same
+      - groups
+      additionalProperties: false
+      description: >-
+        Whether the step's accepted files (the `artifacts` of its last StepAccepted or
+        ResultReused) are the same in every trial that accepted it. `groups` holds the trials by
+        equal files, in order of their first trial, one group when `same`.
+      properties:
+        same:
+          type: boolean
+        groups:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required:
+            - trials
+            additionalProperties: false
+            properties:
+              trials:
+                type: array
+                minItems: 1
+                items:
+                  $ref: slice-defs.schema.json#/$defs/trial_number
+    StepSpread:
+      type: object
+      required:
+      - step
+      - reached
+      - measures
+      additionalProperties: false
+      description: One step of the pattern, over the trials whose record has it.
+      properties:
+        step:
+          $ref: slice-defs.schema.json#/$defs/step_name
+        reached:
+          type: integer
+          minimum: 0
+          description: How many trials' records have the step.
+        measures:
+          $ref: '#/components/schemas/MeasureSpreads'
+        files:
+          $ref: '#/components/schemas/StepFiles'
+          description: Absent when no trial accepted the step.
+    TrialComparison:
+      type: object
+      required:
+      - trial_set
+      - method
+      - done
+      - ended
+      - share_change
+      - less_reliable
+      - methods_differ
+      additionalProperties: false
+      description: >-
+        This set against the slice's previous one: the latest earlier set of the slice that
+        `ended` or `stopped` with at least one ended trial.
+      properties:
+        trial_set:
+          $ref: slice-defs.schema.json#/$defs/trial_set_id
+        method:
+          $ref: slice-defs.schema.json#/$defs/hash
+          description: The previous set's method.
+        done:
+          type: integer
+          minimum: 0
+        ended:
+          type: integer
+          minimum: 1
+        share_change:
+          type: number
+          minimum: -1
+          maximum: 1
+          description: This set's `done`/`ended` minus the previous set's.
+        less_reliable:
+          type: boolean
+          description: True exactly when `share_change` is below 0.
+        methods_differ:
+          type: boolean
+          description: True when the two sets' methods differ.
+    TrialResult:
+      type: object
+      required:
+      - ended
+      - done
+      - unstable
+      - methods_mixed
+      - outcomes
+      - steps
+      - totals
+      additionalProperties: false
+      description: >-
+        What the set's trials show together, computed from their run records on each read, never
+        stored.
+      properties:
+        ended:
+          type: integer
+          minimum: 0
+          description: Trials that ended.
+        done:
+          type: integer
+          minimum: 0
+          description: Of those, trials that ended `done`; a cancelled, expired or handed-over trial
+            is not done.
+        unstable:
+          type: boolean
+          description: True exactly when at least one trial ended `done` and at least one ended
+            otherwise.
+        methods_mixed:
+          type: boolean
+          description: True when the trials' runs ran under more than one method; the counts stay
+            over all trials.
+        outcomes:
+          type: array
+          description: One per started trial, in trial order.
+          items:
+            $ref: '#/components/schemas/TrialOutcome'
+        steps:
+          type: array
+          description: One per step of the pattern, in step order; a step no trial reached has
+            `reached` 0 and no measures.
+          items:
+            $ref: '#/components/schemas/StepSpread'
+        totals:
+          $ref: '#/components/schemas/MeasureSpreads'
+          description: Each measure of the trials' totals as a Spread.
+        previous:
+          $ref: '#/components/schemas/TrialComparison'
+          description: Only on a set that `ended` or `stopped`; absent when the slice has no
+            previous set.
     ProviderOperation:
       type: object
       required:

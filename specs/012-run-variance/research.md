@@ -176,5 +176,16 @@ questions on 2026-11-27 (spec, Clarifications).
   which needs the owner's approval for this feature (plan, Complexity Tracking). The alternative,
   reusing the kind `run` for a set, would make an operation of kind `run` target something that is
   not a run.
+- **Report** (T001, reproduced 2026-11-27 with the pinned oasdiff v1.37.0, `breaking --fail-on
+  ERR`, from `main`'s copy of the engine contract to the T001 draft): exit 1, 39 changes: 19
+  errors, all `response-property-enum-value-added` (`run-trials` in `OperationKind` on every
+  answer that carries an operation); 19 warnings `response-property-pattern-changed`
+  (`Operation.target`'s `operation_target` gains `TS`); and 1 warning
+  `response-property-all-of-removed` on `listRunEvents` (`items/items`): the run event's
+  "RunStarted only" branch gained `trial_set` and `trial`, so oasdiff, comparing `allOf` branches
+  one by one, sees that branch as replaced; it only constrains the two new optional fields, which
+  no earlier event could carry (`additionalProperties: false`). No other finding: the new paths,
+  schemas, fields and `x-limits` keys are additive. No error beyond the `run-trials` value, so
+  nothing went to the owner (analyze round 1, C1). The check contract did not change.
 - The Run workflow records the new `RunStarted` fields, so its version goes from 2 to 3 behind
   `workflow.GetVersion` ([ADR 0067](../../docs/decisions/0067-a-run-is-one-temporal-workflow.md)).

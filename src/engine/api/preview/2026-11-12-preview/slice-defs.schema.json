@@ -26,8 +26,19 @@
     },
     "operation_target": {
       "type": "string",
-      "pattern": "^((S|RUN)-[0-9]+|[a-z0-9-]+)$",
-      "description": "What an operation concerns: a slice (`S-<n>`), a run (`RUN-<n>`) or a captured pattern (its `pattern_id`, lowercase, so never equal to a slice or run ID)."
+      "pattern": "^((S|RUN|TS)-[0-9]+|[a-z0-9-]+)$",
+      "description": "What an operation concerns: a slice (`S-<n>`), a run (`RUN-<n>`), a trial set (`TS-<n>`) or a captured pattern (its `pattern_id`, lowercase, so never equal to a slice, run or trial-set ID)."
+    },
+    "trial_set_id": {
+      "type": "string",
+      "pattern": "^TS-[0-9]+$",
+      "description": "A trial set's ID, `TS-<n>`, from a sequence that never gives an ID again."
+    },
+    "trial_number": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5,
+      "description": "A slice trial's position in its trial set, from 1 to the engine contract's `x-limits.trials-max`."
     },
     "operation_id": {
       "type": "string",
@@ -202,6 +213,11 @@
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
       "description": "A project's name, which is also its folder name: lowercase letters, digits and hyphens, starting with a letter or digit, at most 63 characters."
+    },
+    "project_prefix": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,60}$",
+      "description": "The start of a trial set's project names: a `project_name` of at most 61 characters, so `<project_prefix>-<i>` is a `project_name` for every trial."
     },
     "worker_endpoint": {
       "type": "string",

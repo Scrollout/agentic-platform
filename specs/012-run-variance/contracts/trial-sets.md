@@ -47,3 +47,19 @@ the previous set. Exit codes by the set's end:
 | unknown set | 4 `NotFound` |
 
 `deleteSlice` is refused `RunActive` while a set of the slice is `running`.
+
+## Settled in the authoritative contracts (T001)
+
+- `TrialSetRequest` `{project_prefix, trials?}`; `project_prefix` is the slice-defs rule
+  `project_prefix` (a `project_name` of at most 61 characters), so a bad prefix is
+  `InvalidRequest` from the schema.
+- A trial is started as `startRun` without `pattern` starts a run, so a trial of a proof slice is a
+  proof, and the captured-pattern refusals that apply are `CapturedPatternWithdrawn` and
+  `CapturedPatternBusy`.
+- `TrialSet` carries its `result` (`TrialResult`) in `getTrialSet` and in each `listTrialSets`
+  item; `TrialResult.outcomes` holds each started trial's `trial`, `run`, `outcome` (absent until
+  it ends), `method` and `totals` (`TrialMeasures`); `steps` hold `StepSpread` (`reached`,
+  `measures` as `MeasureSpreads` of `Spread`, `files` as `StepFiles` `{same, groups}`);
+  `previous` is `TrialComparison` (`share_change`, `less_reliable`, `methods_differ`).
+- `Operation.result` gains `trial_set`; `Run` requires `trial` and `trial_set` together.
+- `trial-set` prints the trials' table without a `TRIAL` column and the files groups as `1,2|3`.

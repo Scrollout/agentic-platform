@@ -84,7 +84,7 @@ pattern, its template, agents and recordings do not change, so the recorded-mode
 
 ## Phase 1: Setup (contract first)
 
-- [ ] T001 Contract (committed alone): `src/engine/api/preview/2026-11-12-preview/openapi.yaml`
+- [X] T001 Contract (committed alone): `src/engine/api/preview/2026-11-12-preview/openapi.yaml`
   gains `POST /slices/{sliceId}/trial-sets` (`startTrialSet`, body `{project_prefix, trials?}`,
   `trials` integer `minimum: 1`, `maximum: 5`, default 3; 202 operation; `Idempotency-Key`; at
   once 404 `NotFound`, 409 `PatternDoesNotFit`, `NotApproved`, the captured-pattern refusals of
@@ -105,7 +105,12 @@ pattern, its template, agents and recordings do not change, so the recorded-mode
   run the pinned oasdiff on the draft before committing and record its report in research R9
   (expected: `response-property-enum-value-added` for `run-trials`, and the warning
   `response-property-pattern-changed` for `operation_target`, which gains `TS-<n>`); any other
-  error goes to the owner before the commit
+  error goes to the owner before the commit. Done: oasdiff report in research R9 (19
+  `run-trials` errors, 19 pattern warnings, 1 `allOf` warning; nothing else); generated server
+  methods answer as not implemented until T009 (`src/engine/api/trial_sets.go`); method identity
+  converged; every existing engine, CLI and page test still passes (`go test` in `src/engine/api`,
+  `durable`, `store`, `machine`, `src/cli`, `src/page`; `test_contract_diff`,
+  `test_inline_schema`), so T002 has no broken existing test to approve for T001
 - [ ] T002 Owner approvals: the plan's Complexity Tracking row for Principle XII (not applicable,
   one developer); the code author of T001 lists every existing test that fails or no longer
   compiles after T001 (expected: tests that list the contract's paths, operation kinds or fields

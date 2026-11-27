@@ -270,6 +270,14 @@
       "$ref": "slice-defs.schema.json#/$defs/not_used",
       "description": "On RunStarted only, recorded since feature 011: the captured patterns the start judged and did not use, with the reason; absent when there are none."
     },
+    "trial_set": {
+      "$ref": "slice-defs.schema.json#/$defs/trial_set_id",
+      "description": "On RunStarted only, recorded since feature 012: for a slice trial, the trial set it belongs to; absent on every other run."
+    },
+    "trial": {
+      "$ref": "slice-defs.schema.json#/$defs/trial_number",
+      "description": "On RunStarted only, recorded since feature 012: for a slice trial, its position in the set; present exactly when `trial_set` is."
+    },
     "detail": {
       "type": "string",
       "minLength": 1,
@@ -599,6 +607,16 @@
             "required": [
               "not_used"
             ]
+          },
+          {
+            "required": [
+              "trial_set"
+            ]
+          },
+          {
+            "required": [
+              "trial"
+            ]
           }
         ]
       },
@@ -644,6 +662,30 @@
       "then": {
         "required": [
           "parameters"
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "trial_set"
+        ]
+      },
+      "then": {
+        "required": [
+          "trial"
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "trial"
+        ]
+      },
+      "then": {
+        "required": [
+          "trial_set"
         ]
       }
     }
