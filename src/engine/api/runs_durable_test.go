@@ -340,7 +340,7 @@ func TestRegisterWorkerWhenTheDurableServiceIsUnreachableIs503AndChangesNothing(
 	x.runs.setDown(true)
 	last := declaredSteps[len(declaredSteps)-1]
 	unavailable(t, register(x.r, stepToken("S-1", last), endpointFor(last)))
-	if _, _, ok := x.wk.Endpoint("S-1", last); ok {
+	if _, _, ok := x.wk.Endpoint("S-1", "", last); ok {
 		t.Errorf("the worker %s is registered although the answer was 503", last)
 	}
 	// The same request again, once the service is back, registers it and signals.

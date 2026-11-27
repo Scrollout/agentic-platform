@@ -7,7 +7,7 @@ package store
 //	type WorkerRegistration struct{ Slice, Step, Endpoint, Grant string } // Grant: lowercase hex SHA-256 naming the grant file (ADR 0034)
 //	func (s *Store) WorkerRegistrations() ([]WorkerRegistration, error) // every kept registration, sorted by slice then step
 //	func (s *Store) PutWorkerRegistration(r WorkerRegistration) error  // adds or replaces the one for r.Slice and r.Step
-//	func (s *Store) DeleteWorkerRegistration(slice, step string) error // removes it; absent is no error
+//	func (s *Store) DeleteWorkerRegistration(slice, step, project string) error // removes it; absent is no error
 //	EraseSlice(slice) also removes that slice's registrations.
 //
 // On disk: one file, <store dir>/workers.json, written atomically (a temporary file renamed over
@@ -108,7 +108,7 @@ func TestDeleteRemovesOnlyThatRegistrationAndAnAbsentOneIsNoError(t *testing.T) 
 	dir := t.TempDir()
 	s := open(t, dir)
 	// Nothing kept yet, not even the file: deleting is no error.
-	if err := s.DeleteWorkerRegistration("S-1", "code"); err != nil {
+	if err := s.DeleteWorkerRegistration("S-1", "code", ""); err != nil {
 		t.Fatalf("DeleteWorkerRegistration on an empty store: %v", err)
 	}
 	a := wrReg("S-1", "code", "http://a:8080", "ta")
@@ -117,12 +117,12 @@ func TestDeleteRemovesOnlyThatRegistrationAndAnAbsentOneIsNoError(t *testing.T) 
 	for _, r := range []WorkerRegistration{a, b, c} {
 		wrPut(t, s, r)
 	}
-	if err := s.DeleteWorkerRegistration("S-1", "code"); err != nil {
+	if err := s.DeleteWorkerRegistration("S-1", "code", ""); err != nil {
 		t.Fatalf("DeleteWorkerRegistration(S-1, code): %v", err)
 	}
 	wrWant(t, "after the delete", wrList(t, s), []WorkerRegistration{b, c})
 	for _, k := range [][2]string{{"S-1", "code"}, {"S-1", "review"}, {"S-7", "code"}} {
-		if err := s.DeleteWorkerRegistration(k[0], k[1]); err != nil {
+		if err := s.DeleteWorkerRegistration(k[0], k[1], ""); err != nil {
 			t.Errorf("DeleteWorkerRegistration(%s, %s) of an absent registration: %v", k[0], k[1], err)
 		}
 	}
@@ -138,7 +138,7 @@ func TestRegistrationsSurviveAReopenOfTheStore(t *testing.T) {
 	wrPut(t, s, a)
 	wrPut(t, s, b)
 	wrPut(t, s, wrReg("S-2", "tests", "http://gone:8080", "tc"))
-	if err := s.DeleteWorkerRegistration("S-2", "tests"); err != nil {
+	if err := s.DeleteWorkerRegistration("S-2", "tests", ""); err != nil {
 		t.Fatal(err)
 	}
 	a2 := wrReg("S-1", "code", "http://a2:8080", "ta2")
@@ -272,7 +272,7 @@ func TestTheRegistrationsFileIsReplacedByARenameAndLeavesNoTemporaryFile(t *test
 	if b, _ := os.ReadFile(path); bytes.Equal(b, old) {
 		t.Errorf("%s did not change on a put", wrFile)
 	}
-	if err := s.DeleteWorkerRegistration("S-1", "tests"); err != nil {
+	if err := s.DeleteWorkerRegistration("S-1", "tests", ""); err != nil {
 		t.Fatal(err)
 	}
 	if deleted, err := os.Stat(path); err == nil && os.SameFile(after, deleted) {

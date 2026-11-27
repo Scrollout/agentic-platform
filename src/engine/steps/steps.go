@@ -42,10 +42,10 @@ import (
 	"github.com/agentic-platform/engine/procedures"
 )
 
-// Endpoints finds the step worker registered for a slice's step: its URL and the token the engine
-// calls it with.
+// Endpoints finds the step worker that serves a slice's step for a project: its URL and the token
+// the engine calls it with.
 type Endpoints interface {
-	Endpoint(slice, step string) (url, token string, ok bool)
+	Endpoint(slice, project, step string) (url, token string, ok bool)
 }
 
 // Config is what the worker and the checker need.
@@ -230,9 +230,9 @@ func sum(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:
 
 // Run runs one attempt.
 func (w *worker) Run(ctx context.Context, r machine.Request) (machine.Result, error) {
-	url, token, ok := w.c.Endpoints.Endpoint(r.Slice, r.Step.Name)
+	url, token, ok := w.c.Endpoints.Endpoint(r.Slice, r.Project, r.Step.Name)
 	if !ok {
-		return machine.Result{}, marked{fmt.Errorf("step %s of slice %s has no registered worker", r.Step.Name, r.Slice), machine.ErrWorkersNotReady}
+		return machine.Result{}, marked{fmt.Errorf("step %s of slice %s has no registered worker for project %s", r.Step.Name, r.Slice, r.Project), machine.ErrWorkersNotReady}
 	}
 	if r.Project == "" {
 		return machine.Result{}, errors.New("the run names no project")

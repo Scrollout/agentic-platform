@@ -79,14 +79,14 @@ func TestGrantsDirGrantWrittenAfterStartRegistersItsSliceAndStepOnly(t *testing.
 	if want := (workerBody{"S-1", "code", "http://code-worker:8080"}); got != want {
 		t.Fatalf("Worker = %+v, want %+v", got, want)
 	}
-	if url, _, ok := ws.Endpoint("S-1", "code"); !ok || url != "http://code-worker:8080" {
+	if url, _, ok := ws.Endpoint("S-1", "", "code"); !ok || url != "http://code-worker:8080" {
 		t.Errorf("Endpoint(S-1, code) = %q, %v; want the registered endpoint", url, ok)
 	}
 	for _, st := range declaredSteps {
 		if st == "code" {
 			continue
 		}
-		if _, _, ok := ws.Endpoint("S-1", st); ok {
+		if _, _, ok := ws.Endpoint("S-1", "", st); ok {
 			t.Errorf("a grant for code registered a worker for %s too", st)
 		}
 	}
@@ -102,7 +102,7 @@ func TestGrantsDirGrantForAnotherSliceOrAnUndeclaredStepIsNotFound(t *testing.T)
 	register(r, "tok-other-slice-000000000000000001", "http://svc:8080").problem(t, 404, "NotFound")
 	register(r, "tok-undeclared-step-0000000000001", "http://svc:8080").problem(t, 404, "NotFound")
 	for _, st := range declaredSteps {
-		if _, _, ok := ws.Endpoint("S-1", st); ok {
+		if _, _, ok := ws.Endpoint("S-1", "", st); ok {
 			t.Errorf("a refused registration registered %s", st)
 		}
 	}
@@ -139,7 +139,7 @@ func TestGrantsDirIsReadAtEachAuthentication(t *testing.T) {
 	if got.Step != "review" || got.Slice != "S-1" {
 		t.Fatalf("Worker = %+v, want the replaced grant's step review", got)
 	}
-	if _, tok, ok := ws.Endpoint("S-1", "review"); !ok || tok != "call-2" {
+	if _, tok, ok := ws.Endpoint("S-1", "", "review"); !ok || tok != "call-2" {
 		t.Errorf("Endpoint(S-1, review) token = %q, %v; want the replaced grant's call_token", tok, ok)
 	}
 }
@@ -174,7 +174,7 @@ func TestGrantsDirMalformedOrUnreadableFileGrantsNothing(t *testing.T) {
 			r, ws := grantsDirRig(t, dir, nil)
 			writeRawGrantFile(t, dir, grantFileName(grantsTok), []byte(c.content))
 			register(r, grantsTok, "http://svc:8080").problem(t, 401, "Unauthorized")
-			if _, _, ok := ws.Endpoint("S-1", "code"); ok {
+			if _, _, ok := ws.Endpoint("S-1", "", "code"); ok {
 				t.Error("a malformed grant registered a worker")
 			}
 			// The engine keeps serving: a good grant beside it still works.
@@ -222,7 +222,7 @@ func TestGrantsDirMalformedOrUnreadableFileGrantsNothing(t *testing.T) {
 					t.Fatal(err)
 				}
 				register(r, grantsTok, "http://svc:8080").problem(t, 401, "Unauthorized")
-				if _, _, ok := ws.Endpoint("S-1", "code"); ok {
+				if _, _, ok := ws.Endpoint("S-1", "", "code"); ok {
 					t.Error("a symlinked grant registered a worker")
 				}
 			})
@@ -240,7 +240,7 @@ func TestGrantsDirFileForAnotherTokensHashGrantsNothing(t *testing.T) {
 	// The hash in upper case is not the file's name either.
 	writeRawGrantFile(t, dir, upperHex(grantFileName(grantsTok)), []byte(`{"slice":"S-1","step":"code","call_token":"c"}`))
 	register(r, grantsTok, "http://svc:8080").problem(t, 401, "Unauthorized")
-	if _, _, ok := ws.Endpoint("S-1", "code"); ok {
+	if _, _, ok := ws.Endpoint("S-1", "", "code"); ok {
 		t.Error("a grant filed under another name registered a worker")
 	}
 }
@@ -260,7 +260,7 @@ func TestGrantsDirCallTokenIsWhatTheEngineCallsTheWorkerWith(t *testing.T) {
 	r, ws := grantsDirRig(t, dir, nil)
 	writeGrantFile(t, dir, grantsTok, "S-1", "generate", "the-call-token-for-generate")
 	decodeWorker(t, register(r, grantsTok, "http://generate-worker:8080"))
-	url, tok, ok := ws.Endpoint("S-1", "generate")
+	url, tok, ok := ws.Endpoint("S-1", "", "generate")
 	if !ok || url != "http://generate-worker:8080" {
 		t.Fatalf("Endpoint(S-1, generate) = %q, %v", url, ok)
 	}
@@ -295,10 +295,10 @@ func TestGrantsDirAndWorkerGrantsBothWork(t *testing.T) {
 	writeGrantFile(t, dir, grantsTok, "S-1", "code", "call-code")
 	decodeWorker(t, register(r, "tok-from-config-000000000000001", "http://tests:8080"))
 	decodeWorker(t, register(r, grantsTok, "http://code:8080"))
-	if _, tok, ok := ws.Endpoint("S-1", "tests"); !ok || tok != "call-tests" {
+	if _, tok, ok := ws.Endpoint("S-1", "", "tests"); !ok || tok != "call-tests" {
 		t.Errorf("Endpoint(S-1, tests) token = %q, %v", tok, ok)
 	}
-	if _, tok, ok := ws.Endpoint("S-1", "code"); !ok || tok != "call-code" {
+	if _, tok, ok := ws.Endpoint("S-1", "", "code"); !ok || tok != "call-code" {
 		t.Errorf("Endpoint(S-1, code) token = %q, %v", tok, ok)
 	}
 	// The session worker token is unchanged: accepted, but it has no grant.

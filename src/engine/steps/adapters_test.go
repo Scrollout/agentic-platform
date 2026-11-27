@@ -43,7 +43,7 @@ func b64(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) 
 
 type endpoints map[string][2]string // step -> url, token
 
-func (e endpoints) Endpoint(slice, step string) (string, string, bool) {
+func (e endpoints) Endpoint(slice, project, step string) (string, string, bool) {
 	v, ok := e[step]
 	return v[0], v[1], ok
 }

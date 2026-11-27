@@ -168,7 +168,7 @@ func kept(slice, step, endpoint string) store.WorkerRegistration {
 // its grant file, or not registered when endpoint is "".
 func (x *keptRig) wantEndpoint(what, slice, step, endpoint, callToken string) {
 	x.t.Helper()
-	url, tok, ok := x.ws.Endpoint(slice, step)
+	url, tok, ok := x.ws.Endpoint(slice, "", step)
 	switch {
 	case endpoint == "" && ok:
 		x.t.Errorf("%s: Endpoint(%s, %s) = %q, %q, registered; want not registered", what, slice, step, url, tok)
@@ -454,7 +454,7 @@ func TestARegistrationWithAStartTimeGrantIsNotKept(t *testing.T) {
 	x := newKeptRig(t, 1, nil, func(c *Config) { c.WorkerGrants = grants })
 	decodeWorker(t, register(x.r, tok, "http://tests-worker:8080"))
 	// It works on this engine, as before.
-	if url, call, ok := x.ws.Endpoint("S-1", "tests"); !ok || url != "http://tests-worker:8080" || call != "start-time-call-token" {
+	if url, call, ok := x.ws.Endpoint("S-1", "", "tests"); !ok || url != "http://tests-worker:8080" || call != "start-time-call-token" {
 		t.Errorf("Endpoint(S-1, tests) = %q, %q, %v; want the registration on the running engine", url, call, ok)
 	}
 	x.wantOnDisk("a start-time grant's registration")

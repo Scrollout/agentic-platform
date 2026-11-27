@@ -120,20 +120,25 @@ type grantFileKey struct{}
 type registrationStore interface {
 	WorkerRegistrations() ([]store.WorkerRegistration, error)
 	PutWorkerRegistration(store.WorkerRegistration) error
-	DeleteWorkerRegistration(slice, step string) error
+	DeleteWorkerRegistration(slice, step, project string) error
 }
 
-// Workers is where the engine finds the step worker of each step of each slice: the endpoint it
-// registered and the token to call it with. A worker granted by a grant file is found by that
-// file, read at each lookup, so removing the file unregisters it at once; the handler keeps such
-// registrations in its store across a restart (ADR 0071). One granted at the engine's start
-// (Config.WorkerGrants) holds its call token in memory only. It is safe for concurrent use.
+// Workers is where the engine finds the step worker of each step of each slice for each project:
+// the endpoint it registered and the token to call it with. It keeps one registration per slice,
+// step and project; one registered without a project serves every project of its slice that has
+// none of its own (ADR 0103). A worker granted by a grant file is found by that file, read at each
+// lookup, so removing the file unregisters it at once; the handler keeps such registrations in
+// its store across a restart (ADR 0071). One granted at the engine's start (Config.WorkerGrants)
+// holds its call token in memory only. It is safe for concurrent use.
 type Workers struct {
 	mu   sync.Mutex
-	m    map[string]map[string]endpoint // slice -> step -> its worker
+	m    map[string]map[stepOf]endpoint // slice -> step and project -> its worker
 	dir  string                         // the grants folder (Config.GrantsDir)
 	kept registrationStore              // nil: registrations are not kept
 }
+
+// stepOf names a registration within its slice: the step, and the project ("" for any).
+type stepOf struct{ step, project string }
 
 // endpoint is a registered worker: its URL, and its grant file's name (file) or, for a worker
 // granted at start, its call token.
@@ -168,14 +173,15 @@ func (w *Workers) load() error {
 	defer w.mu.Unlock()
 	for _, r := range all {
 		if w.m[r.Slice] == nil {
-			w.m[r.Slice] = map[string]endpoint{}
+			w.m[r.Slice] = map[stepOf]endpoint{}
 		}
-		w.m[r.Slice][r.Step] = endpoint{url: r.Endpoint, file: r.Grant}
+		w.m[r.Slice][stepOf{r.Step, r.Project}] = endpoint{url: r.Endpoint, file: r.Grant}
 	}
 	return nil
 }
 
-// forget drops the slice's registrations from memory, once its store entries are erased.
+// forget drops the slice's registrations, of every project, from memory, once its store entries
+// are erased.
 func (w *Workers) forget(slice string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -183,89 +189,92 @@ func (w *Workers) forget(slice string) {
 }
 
 // NewWorkers returns an empty registry.
-func NewWorkers() *Workers { return &Workers{m: map[string]map[string]endpoint{}} }
+func NewWorkers() *Workers { return &Workers{m: map[string]map[stepOf]endpoint{}} }
 
-// Endpoint returns the URL and call token of the worker registered for the slice's step, or
-// ok false when none is.
-func (w *Workers) Endpoint(slice, step string) (url, token string, ok bool) {
-	e, ok := w.endpoint(slice, step)
-	if !ok {
-		return "", "", false
+// Endpoint returns the URL and call token of the worker that serves the slice's step for the
+// project: the project's own registration, else the one registered without a project; ok false
+// when neither is registered. Project "" finds only the one registered without a project.
+func (w *Workers) Endpoint(slice, project, step string) (url, token string, ok bool) {
+	tried := []string{project}
+	if project != "" {
+		tried = append(tried, "")
 	}
-	token, ok = w.live(slice, step, e)
-	if !ok {
-		return "", "", false
+	for _, p := range tried {
+		if e, ok := w.endpoint(slice, stepOf{step, p}); ok {
+			if token, ok := w.live(slice, step, e); ok {
+				return e.url, token, true
+			}
+		}
 	}
-	return e.url, token, true
+	return "", "", false
 }
 
-func (w *Workers) register(slice, step string, e endpoint) {
+func (w *Workers) register(slice string, k stepOf, e endpoint) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.m[slice] == nil {
-		w.m[slice] = map[string]endpoint{}
+		w.m[slice] = map[stepOf]endpoint{}
 	}
-	w.m[slice][step] = e
+	w.m[slice][k] = e
 }
 
 // keep writes the registration of a file-granted worker to the store; others are not kept.
-func (w *Workers) keep(slice, step string, e endpoint) error {
+func (w *Workers) keep(slice string, k stepOf, e endpoint) error {
 	if w.kept == nil || e.file == "" {
 		return nil
 	}
-	return w.kept.PutWorkerRegistration(store.WorkerRegistration{Slice: slice, Step: step, Endpoint: e.url, Grant: e.file})
+	return w.kept.PutWorkerRegistration(store.WorkerRegistration{Slice: slice, Step: k.step, Project: k.project, Endpoint: e.url, Grant: e.file})
 }
 
 // unkeep puts the store back to the registration before a register (had false: none).
-func (w *Workers) unkeep(slice, step string, before endpoint, had bool) error {
+func (w *Workers) unkeep(slice string, k stepOf, before endpoint, had bool) error {
 	if w.kept == nil {
 		return nil
 	}
 	if had && before.file != "" {
-		return w.kept.PutWorkerRegistration(store.WorkerRegistration{Slice: slice, Step: step, Endpoint: before.url, Grant: before.file})
+		return w.kept.PutWorkerRegistration(store.WorkerRegistration{Slice: slice, Step: k.step, Project: k.project, Endpoint: before.url, Grant: before.file})
 	}
-	return w.kept.DeleteWorkerRegistration(slice, step)
+	return w.kept.DeleteWorkerRegistration(slice, k.step, k.project)
 }
 
-// restore puts back the worker the slice's step had before a register (had false: none).
-func (w *Workers) restore(slice, step string, before endpoint, had bool) {
+// restore puts back the worker the slice's step had for the project before a register (had
+// false: none).
+func (w *Workers) restore(slice string, k stepOf, before endpoint, had bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if had {
-		w.m[slice][step] = before
+		w.m[slice][k] = before
 		return
 	}
-	delete(w.m[slice], step)
+	delete(w.m[slice], k)
 }
 
-func (w *Workers) endpoint(slice, step string) (endpoint, bool) {
+func (w *Workers) endpoint(slice string, k stepOf) (endpoint, bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	e, ok := w.m[slice][step]
+	e, ok := w.m[slice][k]
 	return e, ok
 }
 
-// missing returns the first of steps with no registered worker for slice, or "" when every
-// step has one.
-func (w *Workers) missing(slice string, steps []string) string {
+// missing returns the first of steps with no worker that serves the slice's project (Endpoint),
+// or "" when every step has one.
+func (w *Workers) missing(slice, project string, steps []string) string {
 	for _, st := range steps {
-		e, ok := w.endpoint(slice, st)
-		if !ok {
-			return st
-		}
-		if _, ok := w.live(slice, st, e); !ok {
+		if _, _, ok := w.Endpoint(slice, project, st); !ok {
 			return st
 		}
 	}
 	return ""
 }
 
-// RegisterWorker records the endpoint for the slice and step the worker token was issued for,
-// replacing any earlier one. The endpoint's shape is the contract's, checked before this runs. A
-// token without a grant, a slice that does not exist and a step the pattern does not declare are
-// NotFound. Once every step of the pattern has a worker for the slice, the run of the slice that
-// waits for its step workers is sent `workers-ready` and continues; while the durable service
-// cannot be reached the answer is 503 and the worker is not registered.
+// RegisterWorker records the endpoint for the slice and step the worker token was issued for and
+// the project the body names (none: for any project of the slice), replacing any earlier one of
+// the same slice, step and project. The endpoint's and project's shapes are the contract's,
+// checked before this runs. A token without a grant, a slice that does not exist and a step the
+// pattern does not declare are NotFound. Once every step of the pattern has a worker for a
+// project, the run of the slice into that project that waits for its step workers is sent
+// `workers-ready` and continues; while the durable service cannot be reached the answer is 503
+// and the worker is not registered.
 func (s *sliceServer) RegisterWorker(ctx context.Context, req gen.RegisterWorkerRequestObject) (gen.RegisterWorkerResponseObject, error) {
 	g, ok := ctx.Value(grantKey{}).(WorkerGrant)
 	if !ok {
@@ -283,15 +292,19 @@ func (s *sliceServer) RegisterWorker(ctx context.Context, req gen.RegisterWorker
 	if file != "" {
 		e.token = "" // read from the grant file at each call
 	}
-	before, had := s.workers.endpoint(g.Slice, g.Step)
-	if err := s.workers.keep(g.Slice, g.Step, e); err != nil {
+	k := stepOf{step: g.Step}
+	if req.Body.Project != nil {
+		k.project = *req.Body.Project
+	}
+	before, had := s.workers.endpoint(g.Slice, k)
+	if err := s.workers.keep(g.Slice, k, e); err != nil {
 		return unavailableFor(fmt.Errorf("the registration could not be recorded: %w", err)), nil
 	}
-	s.workers.register(g.Slice, g.Step, e)
-	if err := s.workersReady(ctx, g.Slice); err != nil {
-		s.workers.restore(g.Slice, g.Step, before, had)
-		if uerr := s.workers.unkeep(g.Slice, g.Step, before, had); uerr != nil {
-			log.Printf("engine: registerWorker: putting back the registration of %s %s: %v", g.Slice, g.Step, uerr)
+	s.workers.register(g.Slice, k, e)
+	if err := s.workersReady(ctx, g.Slice, k.project); err != nil {
+		s.workers.restore(g.Slice, k, before, had)
+		if uerr := s.workers.unkeep(g.Slice, k, before, had); uerr != nil {
+			log.Printf("engine: registerWorker: putting back the registration of %s %s %q: %v", g.Slice, g.Step, k.project, uerr)
 		}
 		if errors.Is(err, ErrUnavailable) {
 			return unavailableFor(err), nil
@@ -299,16 +312,21 @@ func (s *sliceServer) RegisterWorker(ctx context.Context, req gen.RegisterWorker
 		return nil, err
 	}
 	return gen.RegisterWorker200JSONResponse{WorkerJSONResponse: gen.WorkerJSONResponse{
-		Body: gen.Worker{Slice: g.Slice, Step: g.Step, Endpoint: req.Body.Endpoint}}}, nil
+		Body: gen.Worker{Slice: g.Slice, Step: g.Step, Endpoint: req.Body.Endpoint, Project: req.Body.Project}}}, nil
 }
 
-// workersReady sends `workers-ready` to the run of the slice that waits for the slice's step
-// workers, once each step of the pattern has one; a run whose workflow has ended needs none.
-func (s *sliceServer) workersReady(ctx context.Context, slice string) error {
-	if s.runs == nil || s.runs.durable == nil || s.workers.missing(slice, s.svc.Steps()) != "" {
+// workersReady sends `workers-ready` to the run of the slice that waits for its step workers and
+// whose project a registration for project serves (project "": any of the slice's), once each
+// step of the pattern has a worker for that run's project; a run whose workflow has ended needs
+// none.
+func (s *sliceServer) workersReady(ctx context.Context, slice, project string) error {
+	if s.runs == nil || s.runs.durable == nil {
 		return nil
 	}
-	run, err := s.runs.waitingForWorkers(slice)
+	steps := s.svc.Steps()
+	run, err := s.runs.waitingForWorkers(slice, func(p string) bool {
+		return (project == "" || p == project) && s.workers.missing(slice, p, steps) == ""
+	})
 	if err != nil || run == "" {
 		return err
 	}

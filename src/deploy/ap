@@ -1133,10 +1133,12 @@ step_folders() {
 
 # One HTTP call to the engine on the network the step agents share with it, from a one-off
 # container (busybox nc, no capability) under runc, so Docker's DNS finds `engine`. The request,
-# token included, goes on standard input only. Prints the response's status code.
+# token included, goes on standard input only. Prints the response's status code. The body names
+# the project the worker's container serves (ADR 0103); a project name (is_project) and the
+# endpoint (http://<container>:8080) need no JSON escaping.
 register_worker() {
-  rtoken=$1 rendpoint=$2
-  body="{\"endpoint\":\"$rendpoint\"}"
+  rtoken=$1 rendpoint=$2 rproject=$3
+  body="{\"endpoint\":\"$rendpoint\",\"project\":\"$rproject\"}"
   resp=$(printf 'POST /workers?api-version=%s HTTP/1.1\r\nHost: engine\r\nAuthorization: Bearer %s\r\nContent-Type: application/json\r\nContent-Length: %s\r\nConnection: close\r\n\r\n%s' \
     "$api_version" "$rtoken" "${#body}" "$body" |
     docker run --rm -i --network "${compose_project}_agents" --read-only --cap-drop ALL \
@@ -1404,8 +1406,8 @@ build_workers() {
     fi
   fi
 
-  # The engine keeps one registration per slice and step, so none is moved away from a run of the
-  # slice that has not ended (research D32).
+  # The engine keeps one registration per slice, step and project (ADR 0103); none is moved away
+  # from a run of the slice that has not ended (research D32).
   refuse_active_run "$slice" "$resume_run"
 
   # Each project has its own containers (ADR 0036): a container of a wanted name whose project
@@ -1445,7 +1447,7 @@ build_workers() {
     die 1 "cannot write the step worker grants of $slice in $grants_dir"
   for st in $(printf '%s\n' "$steps" | awk '{ print $1 }'); do
     cname=$(step_cname "$slice" "$st" "$phash")
-    code=$(register_worker "$(token_of "$st" 2)" "http://$cname:8080")
+    code=$(register_worker "$(token_of "$st" 2)" "http://$cname:8080" "$project")
     case $code in
       200) ;;
       404) die 4 "build-workers: the engine has no slice $slice with a step $st (NotFound)" ;;
@@ -1539,7 +1541,7 @@ cmd_resume() {
     done
     for st in $(printf '%s\n' "$steps" | awk '{ print $1 }'); do
       cname=$(step_cname "$run_slice" "$st" "$phash")
-      code=$(register_worker "$(token_of "$st" 2)" "http://$cname:8080")
+      code=$(register_worker "$(token_of "$st" 2)" "http://$cname:8080" "$run_project")
       case $code in
         200) ;;
         404) die 4 "resume: the engine has no slice $run_slice with a step $st (NotFound)" ;;

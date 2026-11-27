@@ -21,7 +21,7 @@ func TestGrantsDirFileWithATrailingClosingDelimiterGrantsNothing(t *testing.T) {
 			r, ws := grantsDirRig(t, dir, nil)
 			writeRawGrantFile(t, dir, grantFileName(grantsTok), []byte(content))
 			register(r, grantsTok, "http://svc:8080").problem(t, 401, "Unauthorized")
-			if _, _, ok := ws.Endpoint("S-1", "code"); ok {
+			if _, _, ok := ws.Endpoint("S-1", "", "code"); ok {
 				t.Error("a grant file with trailing data registered a worker")
 			}
 			// The same grant without the trailing delimiter is accepted.

@@ -367,9 +367,10 @@ func (r *runs) activeWhere(in func(slice string) bool, except string) (run, slic
 	return "", "", nil
 }
 
-// waitingForWorkers returns the run of the slice that waits for the slice's step workers (its
-// record's last event is RunInterrupted `the step workers are not running`), or "".
-func (r *runs) waitingForWorkers(slice string) (string, error) {
+// waitingForWorkers returns the run of the slice that waits for its step workers (its record's
+// last event is RunInterrupted `the step workers are not running`) and whose project served
+// accepts, or "".
+func (r *runs) waitingForWorkers(slice string, served func(project string) bool) (string, error) {
 	for _, e := range r.st.Runs() {
 		if e.Slice != slice {
 			continue
@@ -378,7 +379,7 @@ func (r *runs) waitingForWorkers(slice string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		if ok && waitsForWorkers(v) {
+		if ok && waitsForWorkers(v) && served(v.Project) {
 			return e.Run, nil
 		}
 	}
@@ -452,14 +453,15 @@ func projectHolds(dir string) (string, error) {
 }
 
 // ready refuses WorkersNotReady while a step among steps (the run's pattern's steps that need a
-// worker) has no registered worker for the slice, or the engine cannot run a step at all.
-func (s *sliceServer) ready(slice string, steps []string) error {
+// worker) has no registered worker that serves the slice's project, or the engine cannot run a
+// step at all.
+func (s *sliceServer) ready(slice, project string, steps []string) error {
 	if len(steps) == 0 {
 		return &sl.Error{Code: string(gen.ErrorCodeWorkersNotReady), Detail: "the pattern declares no steps that a worker could run"}
 	}
-	if st := s.workers.missing(slice, steps); st != "" {
+	if st := s.workers.missing(slice, project, steps); st != "" {
 		return &sl.Error{Code: string(gen.ErrorCodeWorkersNotReady),
-			Detail: fmt.Sprintf("step %s of the pattern has no registered worker for slice %s", st, slice)}
+			Detail: fmt.Sprintf("step %s of the pattern has no registered worker for project %s of slice %s", st, project, slice)}
 	}
 	return nil
 }
@@ -761,7 +763,7 @@ func (s *sliceServer) signal(ctx context.Context, run, name string) error {
 // CapturedPatternWithdrawn, CapturedPatternNotApproved, ProofRequired, then PatternDoesNotFit for
 // a slice that does not fit it); then
 // WorkersNotReady while a step of the pattern that needs a worker has none registered for the
-// slice; then RunActive while any run, of any slice, has not ended (FR-021); then ProjectExists
+// run's project of the slice (its own, or one without a project); then RunActive while any run, of any slice, has not ended (FR-021); then ProjectExists
 // when the project's folder exists under the projects folder or a recorded run builds into it. A
 // start that passes them all is WorkersNotReady while the engine cannot start a run (canRun), and
 // 503 while the durable service cannot be reached. Otherwise the run's workflow is started
@@ -814,7 +816,7 @@ func (s *sliceServer) StartRun(ctx context.Context, req gen.StartRunRequestObjec
 			return nil, err
 		}
 	}
-	if err := s.ready(id, steps); err != nil {
+	if err := s.ready(id, req.Body.Project, steps); err != nil {
 		return s.refuse("startRun", err)
 	}
 	if s.runs != nil {
@@ -857,7 +859,7 @@ func (s *sliceServer) StartRun(ctx context.Context, req gen.StartRunRequestObjec
 }
 
 // ResumeRun refuses an unknown run (NotFound), then one that is not interrupted
-// (RunNotInterrupted), then WorkersNotReady, then RunActive while any other run, of any slice,
+// (RunNotInterrupted), then WorkersNotReady (for the run's project), then RunActive while any other run, of any slice,
 // has not ended (FR-021). It then signals `resume` to the run's workflow, which records RunResumed
 // and continues, and answers with the operation following the run; 503 while the durable service
 // cannot be reached.
@@ -884,7 +886,7 @@ func (s *sliceServer) ResumeRun(ctx context.Context, req gen.ResumeRunRequestObj
 	if err != nil {
 		return nil, err
 	}
-	if err := s.ready(run.Slice, steps); err != nil {
+	if err := s.ready(run.Slice, run.Project, steps); err != nil {
 		return s.refuse("resumeRun", err)
 	}
 	if err := s.canRun(); err != nil {
@@ -905,7 +907,7 @@ func (s *sliceServer) ResumeRun(ctx context.Context, req gen.ResumeRunRequestObj
 
 // ReplayRun refuses an unknown run (NotFound), then one that has not ended (RunNotEnded), then
 // WorkersNotReady, RunActive (any run of any slice) and ProjectExists as startRun does, for the
-// earlier run's slice. The new run has the earlier run's inputs, part hashes (none when the
+// earlier run's slice and the new run's project. The new run has the earlier run's inputs, part hashes (none when the
 // earlier run recorded none) and refs, `replay_of` and pattern_reason `chosen`; it reuses every
 // result accepted under the same reuse key. A replay of a proof run is a new proof (proofReplay:
 // NotFound, CapturedPatternWithdrawn or CapturedPatternBusy before WorkersNotReady): under the
@@ -951,7 +953,7 @@ func (s *sliceServer) ReplayRun(ctx context.Context, req gen.ReplayRunRequestObj
 			return nil, err
 		}
 	}
-	if err := s.ready(run.Slice, steps); err != nil {
+	if err := s.ready(run.Slice, req.Body.Project, steps); err != nil {
 		return s.refuse("replayRun", err)
 	}
 	if err := s.noOtherActiveRun(""); err != nil {
