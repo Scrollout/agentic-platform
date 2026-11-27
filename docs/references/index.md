@@ -14,6 +14,7 @@
 * [Go mutation testing tools](go-mutation-testing-tools.md) - What gremlins and go-mutesting (avito-tech's fork and zimmski's original) do, how healthy they are, and why none plants user-defined mutants, as read on 2026-11-21 for the step agents' evals.
 * [go-arch-lint](go-arch-lint.md) - What go-arch-lint v1.19.1 checks, its archfile schema version 3, how it classifies imports, its exit codes and output, and how it builds and runs offline, as checked on 2026-11-15.
 * [gosec hard-coded credentials](gosec-hardcoded-credentials.md) - What gosec's G101 rule found in plain Go service code, its size and health, as measured on 2026-11-23 for feature 009.
+* [LLM gateways](llm-gateways.md) - LiteLLM, agentgateway, Bifrost and Envoy AI Gateway compared with the nginx model gateway against the constitution's adoption rules, as of 2026-11-27; research only, nothing adopted.
 * [nginx access control for the run page](nginx-access-control.md) - The nginx directives that serve TLS, ask for HTTP Basic authentication, limit requests per address and refuse unknown names, as proven on the pinned nginx image on 2026-11-18.
 * [Open Knowledge Format v0.2 specification](okf-spec.md) - The format the knowledge bundle in docs/ follows, pinned to the upstream commit it was written against.
 * [Project template tools](project-template-tools.md) - What gonew, Copier, Cookiecutter and Go's text/template do for making new projects from a template, and that none derives a template from an existing project, as read on 2026-11-25.
