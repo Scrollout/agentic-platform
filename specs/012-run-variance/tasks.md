@@ -254,7 +254,7 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   from the set (not the operation); `contracts/trial-sets.md` exit table and "Changed" list the
   same; regenerate; pinned oasdiff recorded in research R9 (expected: unchanged, the schemas are
   new in this feature, ADR 0106); method identity. Done: oasdiff unchanged (research R9); method 689b3ca9; engine, client and page tests still pass
-- [ ] T031 [US1] Test author: new `src/engine/api/trial_sets_failed_test.go` (engine rig, as T007):
+- [X] T031 [US1] Test author: new `src/engine/api/trial_sets_failed_test.go` (engine rig, as T007):
   a trial whose start is refused for good (its project made non-empty after acceptance) ends the
   set `failed` with `failed_because` naming the refusal, cancels nothing else and starts no further
   trial, and the operation ends `failed`; a job whose retries run out (the durable service down
@@ -270,7 +270,7 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   ended operation and the set stays `failed`; a 24-hour `time` stop racing the failure ends in
   exactly one state, the first recorded; new `src/cli/trial_set_failed_test.go`: `trial-set` of a `failed` set prints
   `state failed  failed <reason>` and exits 4; seen failing before T032
-- [ ] T032 [US1] Code author (done when T031 passes): in `src/engine/api/` the operation's failed
+- [X] T032 [US1] Code author (done when T031 passes): in `src/engine/api/` the operation's failed
   end of a `run-trials` operation ends its set `failed` (under the trial-set lock, once) and cancels
   its running trial, and the repair on read, start and delete (data model, States); in `src/cli/`
   the client prints the state and exits 4 with the reason; method identity converged; then commit, fast lint, push (owner
