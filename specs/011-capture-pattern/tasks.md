@@ -1087,12 +1087,14 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   T042 stale, F4 stacked ADR 0093/0095 descriptions (accepted ADRs stay), F5 the keyword and
   hand-over rules stay spec Clarifications, F6 SC-002 dropped on purpose and status set at T026,
   F7 the overview links every ADR in its body
-- [ ] T072 (T025 round 1, B1; ADR 0101) Test author: the owner approved (2026-11-27) changing
+- [x] T072 (T025 round 1, B1; ADR 0101) Test author: the owner approved (2026-11-27) changing
   `TestCapturedDeclarationIsTheBasePatternWithFillSteps` (`src/engine/api/captured_capture_test.go`)
   so its expected review step adds AllTestsPass after its other kept checks; and, in a new test
   file, a run built from a captured pattern whose template holds a witness test is judged by
   AllTestsPass at the review step: with AllTestsPass failing there, the run does not end done.
   Seen failing before T073
+  Done 2026-11-27: 60e5da9 (fresh Sonnet; the three tests seen failing at 3b8ac25 for the missing
+  AllTestsPass only)
 - [ ] T073 (T025 round 1, B1; ADR 0101) Code: `captured.Declaration` appends AllTestsPass to the
   filled review step's checks (done when T072 passes; method identity converged), then a CI run
   and the paid analyst and steps evals (owner agreed, 2026-11-27), then T025 round 2 (B1 and the

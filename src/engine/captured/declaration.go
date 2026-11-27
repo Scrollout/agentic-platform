@@ -20,6 +20,9 @@ const (
 	// judge findings, which no fill step writes.
 	reviewCheck     = "NoBlockingFindingOpen"
 	witnessesOutput = "witnesses"
+	// testsCheck runs every test of the project: the filled review step writes the witnesses after
+	// the code step's run and no fix round follows, so it runs them there (ADR 0101).
+	testsCheck = "AllTestsPass"
 )
 
 var reviewChecks = map[string]bool{"FindingsCarryEvidence": true, reviewCheck: true}
@@ -27,7 +30,8 @@ var reviewChecks = map[string]bool{"FindingsCarryEvidence": true, reviewCheck: t
 // Declaration gives a captured pattern's declaration from its base pattern's (pattern.yaml, valid
 // against pattern.schema.json): each agent step's worker `procedure:fill`, `limits.attempts` and
 // `limits.review_rounds` 1, the review step without FindingsCarryEvidence and
-// NoBlockingFindingOpen and with outputs `[witnesses]`, everything else equal.
+// NoBlockingFindingOpen, with AllTestsPass after its other checks (once) and with outputs
+// `[witnesses]`, everything else equal.
 //
 // A `fill` step keeps no `agent_digest`: it runs no agent definition. Comments, key order and
 // anchors of the base are kept. A base that is not one YAML mapping with `limits` and a list of
@@ -73,6 +77,9 @@ func Declaration(base []byte) ([]byte, error) {
 			if !reviewChecks[c.Value] {
 				kept = append(kept, c)
 			}
+		}
+		if !holds(checks, testsCheck) {
+			kept = append(kept, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: testsCheck})
 		}
 		checks.Content = kept
 		set(st, "outputs", &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq", Style: yaml.FlowStyle,

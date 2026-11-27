@@ -94,7 +94,7 @@ Each decision that outlives the feature has a record in `docs/decisions/`.
 
 | Decision | Research | Record |
 |----------|----------|--------|
-| A captured pattern is its base pattern with each agent step filled from the accepted files by the fixed procedure `fill`; generated code is derived again; the review step keeps only the checks that need no findings | R1, R2 | [ADR 0090](../../docs/decisions/0090-captured-pattern-fills-agent-steps-from-accepted-files.md) |
+| A captured pattern is its base pattern with each agent step filled from the accepted files by the fixed procedure `fill`; generated code is derived again; the review step keeps only the checks that need no findings (refined by ADR 0101: it also runs AllTestsPass) | R1, R2 | [ADR 0090](../../docs/decisions/0090-captured-pattern-fills-agent-steps-from-accepted-files.md) |
 | Captured patterns are the developer's data in the engine store, behind `/captured-patterns`; their template artifacts are held apart from the source slice | R3, R7 | [ADR 0091](../../docs/decisions/0091-captured-patterns-kept-in-the-engine-store.md) |
 | Parameters are names in three case forms and declared values; a slice fits when filling the source gives it exactly; one engine owns the rules | R4 | [ADR 0092](../../docs/decisions/0092-captured-pattern-fit-is-exact-substitution.md) |
 | Any other literal value of the slice may be added as a parameter; a number matches only as a whole number | E1, R4 | [ADR 0094](../../docs/decisions/0094-any-literal-value-may-be-a-parameter.md) (supersedes ADR 0092 in part) |
