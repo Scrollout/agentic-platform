@@ -243,7 +243,8 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   recorded; `/speckit-converge` for US1. Round 1 (fresh Sonnet, read-only, worktree at 254c9b1, CI 46070202691
   green): B1 blocking (a set whose `run-trials` operation fails stays `running` and its trial goes
   unfollowed; Principle X, plan row X, data model States) -> owner 2026-11-28: the set ends `failed`
-  (spec Clarifications, ADR 0106) -> T030-T032; S1-S5 suggestions -> T033. Analyze round 4 (fresh Sonnet, 254c9b1..f687cd1): gate passed, 0 CRITICAL/HIGH; A1 (no XV exception: the set schemas are new) to A9 fixed at their source (ADR 0106, plan, research R9, data model States, T025, T020, T030-T032)
+  (spec Clarifications, ADR 0106) -> T030-T032; S1-S5 suggestions -> T033. Round 2 (same reviewer, B1 and 254c9b1..8d1a5ae): B1 fixed; no blocking
+  regression; suggestions R2-1 to R2-3 -> T034 Analyze round 4 (fresh Sonnet, 254c9b1..f687cd1): gate passed, 0 CRITICAL/HIGH; A1 (no XV exception: the set schemas are new) to A9 fixed at their source (ADR 0106, plan, research R9, data model States, T025, T020, T030-T032)
 - [X] T030 [US1] Contract (committed alone): `TrialSetState` gains `failed` ("its operation failed:
   the running trial was cancelled and none started after"), `TrialSet` gains the optional
   `failed_because` (string, the operation's problem detail; required exactly with `failed`, absent
@@ -275,6 +276,13 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   its running trial, and the repair on read, start and delete (data model, States); in `src/cli/`
   the client prints the state and exits 4 with the reason; method identity converged; then commit, fast lint, push (owner
   go-ahead), T014 round 2 on B1 and the changed lines
+- [ ] T034 [US1] Round 2 findings: R2-1 a `failed` set whose operation's problem has an empty
+  `detail` is answered without `failed_because`, which the contract's `allOf` requires: write a
+  non-empty reason (the problem's code when the detail is empty), with a test by a separate author
+  (fix before the feature is done; the contract holds); R2-2 (suggestion) an operation that fails
+  before the job wrote its set leaves no set record (`getTrialSet` 404), unlike `cancelTrialSet`,
+  which writes it from the operation; R2-3 (suggestion) a failed set's never-started trial is
+  cancelled again (NotFound, harmless) on every read
 - [ ] T033 [US1] Suggestions of the US1 review round 1 (not blocking; decide each, or close with a
   reason): S1 the pattern is chosen again before each trial (a captured pattern approved mid-set
   changes later trials' pattern; its refusal reads `slice-changed`) and a trial's project appearing
