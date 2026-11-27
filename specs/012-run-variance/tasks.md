@@ -75,6 +75,10 @@ pattern, its template, agents and recordings do not change, so the recorded-mode
   N1 MEDIUM (the set and its operation are two stores) -> data model Write order 1, T007, T029;
   N3 LOW (R5's bound) reworded; P3 closed: the run page shows no trial field and T001's
   regeneration runs `go test ./...` in `src/page`, whose drift check proves the generated client.
+  Round 3 (same reviewer, 41a3604..48a3f62): N1 to N3 fixed, P3 closed; N4 MEDIUM (a set written
+  late from the operation's body took `method` and `part_hashes` at job time) and N5 LOW
+  (`deleteSlice` while a `run-trials` operation is open) fixed in the data model and T007. Gate
+  passed: 0 CRITICAL, 0 HIGH. Review converged in 3 rounds.
 
 ---
 
@@ -175,8 +179,9 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   once, with one `run` operation (data model, Write order and repeats); a trial that leaves
   `waiting` before the hand-over signal arrives (`RunNotWaiting`) does not fail the set; a failed
   operation write at `startTrialSet` answers 503 and keeps nothing; a failed set write after the
-  operation's leaves the job to write the set from the operation's body before its first trial,
-  and a second `startTrialSet` meanwhile is 409 `RunActive`; `deleteSlice` while a set of the
+  operation's leaves the job to write the set from the operation's body, `method` and
+  `part_hashes` recorded at acceptance (a slice edited meanwhile stops it `slice-changed`) before
+  its first trial, and a second `startTrialSet` or a `deleteSlice` meanwhile is 409 `RunActive`; `deleteSlice` while a set of the
   slice runs is 409 `RunActive`; a second set of the slice while one runs is 409 `RunActive`;
   `getTrialSet` reads without a model call or a changed record (SC-005); erasing the slice erases
   its sets (404); limits equal the contract's `x-limits`; seen failing before T009
