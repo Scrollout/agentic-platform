@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-25
 
-**Status**: Draft
+**Status**: Implemented (merged 2026-11-27)
 
 **Input**: The remainder of need N-052 (owner chose it as the next work, 2026-11-25). Feature 001
 left "proposing a new pattern" for a later feature (its FR-010 and Clarifications). Capture an

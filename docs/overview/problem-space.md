@@ -51,10 +51,9 @@ c24f755) and every counted eval case passes 3 of 3 trials (evals run 45667754374
 
 Feature 011 (specified 2026-11-25) covers N-052's remainder: a run that ended done is captured
 as a pattern whose later slices, equal to its source except for named parameters, are built with
-no model call, after the developer approves its proof (owner). Its three stories are implemented
-and pass in CI (check run 45964551765 at ca19e5e, 2026-11-27): capture and proof, the pattern
-choice at `startRun`, and withdrawal and erasure. N-052 stays `in progress` until the feature
-is merged (T026). Feature 011 also serves N-050, N-051 and N-053 without
+no model call, after the developer approves its proof (owner). Its three stories, capture and proof,
+the pattern choice at `startRun`, and withdrawal and erasure, pass in CI (check run 45994369063
+at 4dad8c4) and were merged on 2026-11-27, so N-052 is `done`. Feature 011 also serves N-050, N-051 and N-053 without
 changing their scope or state: a captured run is built by the same method from the same input
 (N-050), accepted only by the base pattern's checks (N-051), and records its captured pattern,
 values and source run (N-053).
@@ -141,7 +140,7 @@ Constitution Principle XX makes them binding for the product.
 |----|------|----------|-----------|------|-------|
 | N-050 | Applying the same method to the same input gives the same accepted result | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [006](../../specs/006-method-record/spec.md), [011](../../specs/011-capture-pattern/spec.md) | done |
 | N-051 | A result is accepted only when it passes checks that do not depend on a model's judgement | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [007](../../specs/007-analyst-answer-checks/spec.md), [010](../../specs/010-strict-requests/spec.md), [011](../../specs/011-capture-pattern/spec.md) | done |
-| N-052 | A proven solution is captured once and reused, without the model generating it again | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [010](../../specs/010-strict-requests/spec.md), [011](../../specs/011-capture-pattern/spec.md) | in progress |
+| N-052 | A proven solution is captured once and reused, without the model generating it again | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [010](../../specs/010-strict-requests/spec.md), [011](../../specs/011-capture-pattern/spec.md) | done |
 | N-053 | Every result can be traced to the method, inputs, model and rules that produced it, and reproduced from them | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [006](../../specs/006-method-record/spec.md), [011](../../specs/011-capture-pattern/spec.md) | done |
 | N-054 | How much results vary from run to run is measured and shown | yes | | [008](../../specs/008-eval-variance/spec.md) | in progress |
 | N-055 | The project's principles, docs, specs, decisions, validations, tests and reviews hold at every stage of the lifecycle | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [010](../../specs/010-strict-requests/spec.md), [011](../../specs/011-capture-pattern/spec.md) | in progress |

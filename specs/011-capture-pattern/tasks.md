@@ -1110,9 +1110,11 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
 - [x] T074 (converge whole feature; ADR 0101, Principle IX; LOW) Docs: `src/catalogue/README.md`
   says the filled review step drops the findings checks and adds AllTestsPass, as the overview and
   ADR 0101 do. Done 2026-11-27
-- [ ] T026 Merge: every task above is checked (done or `closed:`); `evals-current` on the branch lists no pending suite; the owner fast-forwards
+- [x] T026 Merge: every task above is checked (done or `closed:`); `evals-current` on the branch lists no pending suite; the owner fast-forwards
   `main`; remove the branch from environment dev's policies; delete the branch with the owner's OK;
   the spec's status `Implemented`
+  Done 2026-11-27 (owner go-ahead): check run 45994369063 at 4dad8c4 green; `evals-current`
+  names no pending suite; main fast-forwarded; branch removed from `dev`'s policies and deleted
 
 ---
 
