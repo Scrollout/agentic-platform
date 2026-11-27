@@ -2958,8 +2958,9 @@ components:
           $ref: '#/components/schemas/TrialSetStopReason'
         failed_because:
           type: string
-          description: With `failed` only, the `detail` of the set's operation's problem, as
-            getOperation gives it.
+          description: With `failed` only, why the set failed - the `detail` of the set's
+            operation's problem, as getOperation gives it, or that problem's `code` when its
+            `detail` is empty.
         runs:
           type: array
           description: The trials' run IDs in trial order, each recorded before its run starts; a
