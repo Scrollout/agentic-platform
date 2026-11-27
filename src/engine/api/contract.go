@@ -106,10 +106,6 @@ type (
 			PerAddress yaml.Node `yaml:"requests-per-second-per-address-without-token"`
 			KeepHours  yaml.Node `yaml:"idempotency-key-retention-hours"`
 			MaxBody    yaml.Node `yaml:"request-body-max-bytes"`
-			TrialsMax  yaml.Node `yaml:"trials-max"`
-			TrialsDef  yaml.Node `yaml:"trials-default"`
-			SetCost    yaml.Node `yaml:"trial-set-cost-usd"`
-			SetHours   yaml.Node `yaml:"trial-set-hours"`
 		} `yaml:"x-limits"`
 		Security   *[]map[string][]string `yaml:"security"`
 		Paths      yaml.Node              `yaml:"paths"`
@@ -321,6 +317,17 @@ func positiveInt(n *yaml.Node) (int64, error) {
 	return v, nil
 }
 
+// trialLimitsDoc is the engine's own keys of x-limits, read apart from the document's Limits,
+// which hold exactly the keys every service contract declares (ruleset.yaml ap-limits-declared).
+type trialLimitsDoc struct {
+	X struct {
+		TrialsMax yaml.Node `yaml:"trials-max"`
+		TrialsDef yaml.Node `yaml:"trials-default"`
+		SetCost   yaml.Node `yaml:"trial-set-cost-usd"`
+		SetHours  yaml.Node `yaml:"trial-set-hours"`
+	} `yaml:"x-limits"`
+}
+
 // trialLimits are the limits of a trial set the contract's x-limits declare: the most trials of
 // one set, the trials of a set whose request gives none, and a set's cost budget (US dollars) and
 // time budget (hours).
@@ -398,7 +405,11 @@ func parseContract(raw []byte, version string) (contract, error) {
 	if err != nil {
 		return contract{}, fmt.Errorf("x-limits: %w", err)
 	}
-	trials, err := trialLimitsOf(&d.Limits.TrialsMax, &d.Limits.TrialsDef, &d.Limits.SetCost, &d.Limits.SetHours)
+	var td trialLimitsDoc
+	if err := yaml.Unmarshal(raw, &td); err != nil {
+		return contract{}, err
+	}
+	trials, err := trialLimitsOf(&td.X.TrialsMax, &td.X.TrialsDef, &td.X.SetCost, &td.X.SetHours)
 	if err != nil {
 		return contract{}, fmt.Errorf("x-limits: %w", err)
 	}
