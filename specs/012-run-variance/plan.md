@@ -163,5 +163,5 @@ any other is stopped and asked for):
 
 | Violation | Why needed | Simpler alternative rejected because |
 |-----------|------------|--------------------------------------|
-| Principle XII: trial sets have no tenant scope | One developer by scope (feature 001 FR-021) | Not applicable until the hosted version, as for slices (feature 001's row) |
+| Principle XII: trial sets have no tenant scope | One developer by scope (feature 001 FR-021) | Not applicable until the hosted version, as for slices (feature 001's row). Approved by the owner 2026-11-27 (T002) |
 | Principle XV: the engine contract's `2026-11-12-preview` gains the `OperationKind` value `run-trials` in place, which the pinned oasdiff reports as breaking (`response-property-enum-value-added`, research R9) | `getOperation` must return the set's operation kind; every client is generated from this contract in the same commit | Reusing the kind `run` would make a `run` operation target something that is not a run; a new preview version needs a deprecation period and two served versions. Approved by the owner 2026-11-27 ([ADR 0105](../../docs/decisions/0105-preview-contract-gains-run-trials-in-place.md)) |

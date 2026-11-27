@@ -119,6 +119,8 @@ pattern, its template, agents and recordings do not change, so the recorded-mode
   T005's commit, for the existing tests and fakes that pin the registry's key or
   `registrationStore` (`api/workers_test.go`, `api/worker_registrations_restart_test.go`,
   `store/worker_registrations_test.go`)
+  Recorded: the owner approved the Principle XII row on 2026-11-27; T001 broke no existing test,
+  so it needs no approval. Open: T005's list
 
 ---
 
