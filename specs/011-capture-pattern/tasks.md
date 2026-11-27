@@ -990,11 +990,18 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   commands send an Idempotency-Key
 - [x] T021 [US3] Commit; fast lint; push (owner go-ahead); record the CI run
   Done 2026-11-27: CI 45913069887 at 8624bfb, 26/26 green
-- [ ] T022 [US3] Fresh review of US3 judging T021's CI run; `/speckit-converge` for US3
+- [x] T022 [US3] Fresh review of US3 judging T021's CI run; `/speckit-converge` for US3
   Round 1 2026-11-27 (fresh Sonnet, read-only worktree at e693cea, judging CI 45913069887): F1
   blocking -> T064, T065; suggestions F2 and F3 -> T066, F4 -> T067, F5 -> T068, F6 -> T069,
   the untested cases -> T070. Every T018-T020 reading judged not an issue except F5 and F6
   F1 fixed by T064/T065; CI 45964551765 at ca19e5e 26/26 green (judged by round 2)
+  Round 2 2026-11-27 (fresh Sonnet, at b102dc0, F1 and the changed lines): F1 fixed, no new
+  blocking; suggestions: two NotFound texts for one erased pattern (before and after the lock) ->
+  T066; the tests prove the re-read's effect, not the lock -> closed: calling in order is the
+  state the race reaches, as the test header says
+  Converge US3 2026-11-27 (fresh Sonnet, at b102dc0): every US3 requirement and scenario
+  delivered and tested; one test-strength gap -> T071 (LOW, as T070 does not block US3 done);
+  T066 widened to every start and replay path. Done: review converged in 2 rounds
 - [x] T064 [US3] (review F1; FR-012, data model "withdrawn: final", Single owner for rules) Test
   author: new `src/engine/api/captured_named_stale_test.go` (package `api`): `namedStart` given a
   record read while the captured pattern was approved, after a withdrawal has completed, answers
@@ -1010,6 +1017,9 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   NotFound (the contract names NotFound only for an unknown slice or pattern); a withdrawal
   completing between the choice and the lock still starts a run on it. Redo the choice, or fall
   back to the base pattern, for an unnamed start; re-check the state under the runs' lock
+  (round 2: also one NotFound text for an erased named pattern, before and after the lock)
+  (converge: the same window holds for a named start, a proof start and `replayRun`
+  (`capturedReplay`, `proofReplay`): re-check the state under the runs' lock on all four paths)
 - [ ] T067 [US3] (review F4; suggestion) an erasure whose operation ends failed or cancelled after
   the `erased` marker leaves its artifacts and `artifacts` list on disk with no owner, and a new
   DELETE answers 404: complete marked erasures at startup, or close with a reason
@@ -1027,6 +1037,12 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   an accepted erasure; another slice's run that holds an artifact equal to a template hash keeps
   it; a real method change on the withdraw and erase paths; the CLI answer with spaces or another
   case
+- [ ] T071 [US3] (converge US3; FR-011 "naming why", edge case "interrupted or restarted"; LOW)
+  Test author, a new test file: a `replayRun` refused `ProofRequired` or `CapturedPatternWithdrawn`
+  names the captured pattern and why (the method pair after a method change, a failed proof, a
+  proof that has not ended, withdrawn), with the same reason text as the `needs-proof` entry of a
+  `chosen` start; a proof started under method A that ends after the engine's method became B
+  records A and leaves the pattern unusable
 
 ---
 
