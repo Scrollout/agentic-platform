@@ -809,8 +809,8 @@ func TestCaptureNameAndBodyRules(t *testing.T) {
 // T005 / FR-002, research R1 (captured.Declaration): the captured pattern's declaration is the
 // base pattern's with each agent step's worker `procedure:fill`, `limits.attempts` and
 // `limits.review_rounds` 1 and the review step without FindingsCarryEvidence and
-// NoBlockingFindingOpen and with outputs [witnesses], valid against pattern.schema.json,
-// everything else equal. The declaration is not in getCapturedPattern, so it is judged on the
+// NoBlockingFindingOpen, with AllTestsPass added after its other checks (last; ADR 0101), and
+// with outputs [witnesses], valid against pattern.schema.json, everything else equal. The declaration is not in getCapturedPattern, so it is judged on the
 // function that makes it. (agent_digest is left out of the comparison: the contract does not say
 // whether a `fill` step keeps it.)
 func TestCapturedDeclarationIsTheBasePatternWithFillSteps(t *testing.T) {
@@ -862,6 +862,7 @@ func TestCapturedDeclarationIsTheBasePatternWithFillSteps(t *testing.T) {
 					checks = append(checks, ck)
 				}
 			}
+			checks = append(checks, "AllTestsPass")
 			st["checks"] = checks
 		}
 	}
