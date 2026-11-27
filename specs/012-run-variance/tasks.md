@@ -391,3 +391,14 @@ planted other method, names both methods and is `less reliable`.
   variation N-054 is about.
 - US2 tells which step varies and how much; US3 shows whether a change helped.
 - No recordings change: the base pattern, its template and agents are unchanged.
+
+---
+
+## Phase 7: Convergence
+
+- [ ] T035 CRITICAL: add a contract test (new file, separate test author) that pins the engine's trial limits to the contract's `x-limits` (`trials-max`, `trials-default`, `trial-set-cost-usd`, `trial-set-hours`) and the `minimum`, `maximum` and `default` of `TrialSetRequest.trials`, `TrialSet.trials` and `trial_number` to them, failing on a planted contract copy, and covering `trialLimitsOf`'s refusals (a key missing, zero, a default above the most, a non-numeric cost) so the engine refuses to start; code only if the test fails, per Constitution III (contract test proves they match), tasks Rule "Limits have one home", FR-001 (partial)
+- [ ] T036 Decide with the owner whether a read of a set may repair it (end a crash-left `running` set `failed`, cancel a failed set's unended trial, appending `RunCancelled`), then amend FR-007 and SC-005 (a read changes no run record) or keep reads read-only and repair only on `startTrialSet`, `deleteSlice` and engine start, and change the data model (States rules 2, 3), T031's tests (owner approval) and the code to match, per FR-007, SC-005, data model States (contradicts)
+- [ ] T037 Derive the client's usage text "(default 3)" (`src/cli/cli.go:120`) from the embedded contract's `trials-default`, or drop the number, per tasks Rule "Limits have one home" (partial)
+- [ ] T038 Make US2's T016 and US3's T021 exercise the client's step table, `spreadCell`, `filesCell` and the "compared with" line already in `src/cli/trials.go`, which no test covers yet, per T016, T017, T021, T022 test-first order (unrequested)
+- [ ] T039 Add a test (new file) that a worker token is refused on `getTrialSet` and `listTrialSets` and a page token may read them, per Constitution V, the plan's threat model, T007 (partial)
+- [ ] T040 Correct T030's `maxLength` wording (none, as research R9 says), the contract's `failed_because` description (the detail, or the problem's code when the detail is empty, T034 R2-1; a contract change committed alone) and `quickstart.md` step 2's test pattern (`TestTS`), per Principle IX (partial)
