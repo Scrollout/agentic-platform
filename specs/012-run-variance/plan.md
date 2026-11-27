@@ -50,7 +50,7 @@ registration field, three terminal commands, one acceptance suite
 
 ## Constitution Check
 
-*Evaluated before research and again after design: PASS, with one exception awaiting the owner.*
+*Evaluated before research and again after design: PASS, with one owner-approved exception.*
 
 | Principle | Status | How this plan complies |
 |-----------|--------|------------------------|
@@ -62,13 +62,13 @@ registration field, three terminal commands, one acceptance suite
 | VI. Adopt mature OSS | Pass | Docker Agent's `eval --repeat` evaluated and does not apply (R8); no dependency |
 | VII. Providers | Not applicable | No provider |
 | VIII. Containers | Pass | No new image; the k projects' step containers are the existing ones |
-| IX. Knowledge stays true | Pass | ADR 0102 to 0104, the architecture overview, the engine and terminal READMEs and the log at implementation |
+| IX. Knowledge stays true | Pass | ADR 0102 to 0105, the architecture overview, the engine and terminal READMEs and the log at implementation |
 | X. No silent loss | Pass | Each trial is an ordinary run; a set ends in exactly one state; its waits are bounded by 24 hours (R5) |
 | XI. Privacy | Pass | A set holds IDs, counts and hashes only; it is erased with its slice |
 | XII. Tenants | Not applicable | One developer by scope (feature 001 FR-021), as for slices; Complexity Tracking |
 | XIII. Supply chain | Pass | No dependency |
 | XIV. Safe defaults | Pass | Set cost and time budgets on top of each run's; a trial that could pass the budget never starts |
-| XV. Compatible APIs | Exception | Additive paths and fields; paginated list; Idempotency-Key; the `run-trials` enum value needs the owner's approval (Complexity Tracking) |
+| XV. Compatible APIs | Exception | Additive paths and fields; paginated list; Idempotency-Key; the `run-trials` enum value is an owner-approved exception (Complexity Tracking, ADR 0105) |
 | XVI. Human control | Pass | The developer asks for trials; the owner merges |
 | XVII. Declare, derive, converge | Pass | Limits declared once in the contract; the result derived from the run records, never stored |
 | XVIII. Abstractions say what | Pass | `trial-sets`, `trials`: named for what they do; no option exists for how |
@@ -90,6 +90,7 @@ Each decision that outlives the feature has a record in `docs/decisions/`.
 | A trial set is one engine operation that runs k fresh runs of a slice one after another and derives its result from their run records | R1, R2, R5, R6 | [ADR 0102](../../docs/decisions/0102-trial-set-runs-fresh-builds-and-derives-its-result.md) |
 | Step-worker registrations name their project; a run uses only its own project's workers | R3 | [ADR 0103](../../docs/decisions/0103-worker-registrations-name-their-project.md) |
 | A trial that waits for the developer is handed over by its set | R4 | [ADR 0104](../../docs/decisions/0104-trial-waiting-for-developer-is-handed-over.md) |
+| The engine's preview contract gains `run-trials` in place, an exception to Principle XV | R9 | [ADR 0105](../../docs/decisions/0105-preview-contract-gains-run-trials-in-place.md) |
 
 ## Threat model
 
@@ -161,4 +162,4 @@ None.
 | Violation | Why needed | Simpler alternative rejected because |
 |-----------|------------|--------------------------------------|
 | Principle XII: trial sets have no tenant scope | One developer by scope (feature 001 FR-021) | Not applicable until the hosted version, as for slices (feature 001's row) |
-| Principle XV: the engine contract's `2026-11-12-preview` gains the `OperationKind` value `run-trials` in place, which the pinned oasdiff reports as breaking (`response-property-enum-value-added`, research R9) | `getOperation` must return the set's operation kind; every client is generated from this contract in the same commit | Reusing the kind `run` would make a `run` operation target something that is not a run; a new preview version needs a deprecation period and two served versions. **Awaiting the owner's approval** (as [ADR 0100](../../docs/decisions/0100-preview-contract-gains-enum-values-in-place.md) for feature 011) |
+| Principle XV: the engine contract's `2026-11-12-preview` gains the `OperationKind` value `run-trials` in place, which the pinned oasdiff reports as breaking (`response-property-enum-value-added`, research R9) | `getOperation` must return the set's operation kind; every client is generated from this contract in the same commit | Reusing the kind `run` would make a `run` operation target something that is not a run; a new preview version needs a deprecation period and two served versions. Approved by the owner 2026-11-27 ([ADR 0105](../../docs/decisions/0105-preview-contract-gains-run-trials-in-place.md)) |
