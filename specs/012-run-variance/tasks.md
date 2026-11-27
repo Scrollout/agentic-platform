@@ -276,7 +276,7 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   its running trial, and the repair on read, start and delete (data model, States); in `src/cli/`
   the client prints the state and exits 4 with the reason; method identity converged; then commit, fast lint, push (owner
   go-ahead), T014 round 2 on B1 and the changed lines
-- [ ] T034 [US1] Round 2 findings: R2-1 a `failed` set whose operation's problem has an empty
+- [ ] T034 [US1] Round 2 findings: R2-1 (done: fix and test, local) a `failed` set whose operation's problem has an empty
   `detail` is answered without `failed_because`, which the contract's `allOf` requires: write a
   non-empty reason (the problem's code when the detail is empty), with a test by a separate author
   (fix before the feature is done; the contract holds); R2-2 (suggestion) an operation that fails
