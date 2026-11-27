@@ -90,7 +90,10 @@ func problemText(p *gen.Problem) string {
 	return b.String()
 }
 
-const usageText = `usage:
+// usageText is the command list; its trials default is the contract's x-limits.trials-default.
+var usageText = strings.Replace(usageLines, "(default <trials-default>)", fmt.Sprintf("(default %d)", trialsDefault()), 1)
+
+const usageLines = `usage:
   describe [description...]            propose a slice (the description is read from standard input without arguments)
   questions <slice>                    show open questions and answer them, one line each from standard input
   show <slice> [goals|rules|contract]  show a part, its hash and its check results
@@ -117,7 +120,7 @@ const usageText = `usage:
   approve-pattern <id>                 approve a proven captured pattern
   withdraw-pattern <id>                stop a captured pattern's use by new runs
   erase-pattern <id>                   erase a captured pattern, its proof slice and their records after confirmation
-  trials <slice> <prefix> [--trials <k>] build the slice k times (default 3) into <prefix>-1 to <prefix>-<k> and follow the set
+  trials <slice> <prefix> [--trials <k>] build the slice k times (default <trials-default>) into <prefix>-1 to <prefix>-<k> and follow the set
   trial-set <id>                       show a trial set's result and follow it while it runs`
 
 // Run runs one command and returns its exit code.

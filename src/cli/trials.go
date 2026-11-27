@@ -38,6 +38,20 @@ func trialsMax() int {
 	return d.Limits.TrialsMax
 }
 
+// trialsDefault is how many trials a set has when none is asked for: x-limits.trials-default of
+// the embedded engine contract.
+func trialsDefault() int {
+	var d struct {
+		Limits struct {
+			TrialsDefault int `yaml:"trials-default"`
+		} `yaml:"x-limits"`
+	}
+	if err := yaml.Unmarshal(engineContract, &d); err != nil || d.Limits.TrialsDefault < 1 {
+		panic(fmt.Sprintf("engine contract: x-limits.trials-default: %v (%d)", err, d.Limits.TrialsDefault))
+	}
+	return d.Limits.TrialsDefault
+}
+
 type startTrialSet struct{ *gen.StartTrialSetResponse }
 
 func (r startTrialSet) accepted() *gen.Operation { return r.JSON202 }
