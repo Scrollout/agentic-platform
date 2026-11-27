@@ -7,6 +7,7 @@
 * **Implementation**: Feature 011 (T018-T022, T064, T065): a captured pattern can be withdrawn (no new run uses it; runs already started finish on it) and erased (refused while a run built from it or its proof has not ended; its proof slice, that slice's runs and the artifacts only it holds go; its ID is never given again); `ap withdraw-pattern`, `ap erase-pattern` (erases only after the ID is typed). A named start judges the captured pattern as it is under the lock. User Story 3 is reviewed and converged (CI 45964551765 green).
 * **Documentation**: Feature 011 (T023): the architecture overview describes captured patterns (the fill worker, `writeStep`, the pattern choice, the proof slice and the proof) and lists ADR 0090 to 0100; the engine and check API concepts, the catalogue, engine and deploy READMEs (`ap prove`) and N-052's state in the problem space follow.
 * **Reference**: [LLM gateways](/references/llm-gateways.md): LiteLLM, agentgateway, Bifrost and Envoy AI Gateway compared with the nginx model gateway against Principles III, V, VI, VIII, XI and XIII (owner's request); research only, nothing adopted.
+* **Implementation**: Feature 011 (T024): the analyst and steps eval suites pass under the new method identity, every one of the 42 counted cases 3 of 3 trials (evals run 45979176058 at ca19e5e, $0.30).
 
 ## 2026-11-26
 

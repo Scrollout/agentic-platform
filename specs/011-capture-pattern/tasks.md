@@ -1053,8 +1053,9 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   (captured patterns beside the base patterns), `src/engine/README.md`, `src/deploy/README.md`
   (`prove`), `docs/apis/engine-api.md` and
   `docs/apis/check-api.md`, N-052 in `docs/overview/problem-space.md` (state), `docs/log.md`
-- [ ] T024 Paid evals for the analyst and steps suites (owner go-ahead; add the branch to
+- [x] T024 Paid evals for the analyst and steps suites (owner go-ahead; add the branch to
   environment dev's branch policies): the method identity changed; every counted case pass^3
+  (done 2026-11-27: evals 45979176058 at ca19e5e, 42 cases 3 of 3, $0.30; research R8)
 - [ ] T025 Final fresh review of the feature judging the head's CI run and T024; `/speckit-analyze`
   and `/speckit-converge` for the whole feature until clean
 - [ ] T026 Merge: `evals-current` on the branch lists no pending suite; the owner fast-forwards

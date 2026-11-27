@@ -322,6 +322,11 @@ merge (with the owner's go-ahead), as after any engine change. The recorded step
 change: no generated file or step request changes for the base pattern. A captured run makes no
 model call, which the acceptance tests assert (SC-001).
 
+T024 (2026-11-27, owner's go-ahead): evals dispatch 45979176058 at ca19e5e ran the four pending
+suites. Every one of the 42 counted cases passed 3 of 3 trials, none quarantined: analyst 21 cases
+(17 min), steps code 7 (35 min), steps review 9 (47 min), steps tests 5 (50 min); $0.30 in all
+(measurement artifacts `eval-measurements-*-1`).
+
 ## Threat-model input
 
 - Parameter values come from the approved slice, which the analyst model may have written:
