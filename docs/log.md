@@ -2,6 +2,7 @@
 
 ## 2026-11-27
 
+* **Plan**: Feature 012 planned: a trial set is one `run-trials` operation of k fresh runs (`NoReuse`) into `<prefix>-1..k`, its result derived from their run records; worker registrations name their project; a trial waiting for the developer is handed over by its set; $2 and 24 hours per set. Decisions [ADR 0102](/decisions/0102-trial-set-runs-fresh-builds-and-derives-its-result.md), [ADR 0103](/decisions/0103-worker-registrations-name-their-project.md), [ADR 0104](/decisions/0104-trial-waiting-for-developer-is-handed-over.md); the `run-trials` enum value awaits the owner (Principle XV exception).
 * **Specification**: Feature 012 (N-054 remainder) specified: the developer asks for k fresh builds (trials) of an approved slice, reusing no earlier result, and sees how many ended done, the unstable mark, each step's spread of attempts, review rounds, duration, tokens and cost, and which steps' files differ; sets are listed and compared with the slice's previous set. Owner: fresh trials only, API and terminal client only, k from 1 to 5 (default 3), $2 per set. Glossary: Trial set, Slice trial, Unstable trial set.
 * **Implementation**: Feature 011 merged to `main` (T026, owner): N-052 is `done`; the spec is `Implemented`.
 * **Implementation**: Feature 011 (T072-T074): a captured pattern's filled review step runs AllTestsPass, so a filled witness that fails stops the run (ADR 0101); CI 45994369063 green; no eval suite pending. The final review converged in 2 rounds and `/speckit-converge` found nothing more.

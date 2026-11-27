@@ -35,6 +35,13 @@ ended done can be captured as a pattern).
   client only; the run page is unchanged (owner; FR-012).
 - Q: The largest k and the default set budget? → A: k from 1 to 5, 3 when not given; one set's
   default cost budget is $2, on top of each run's own budgets (owner; FR-001, FR-010).
+- Found while planning: the engine keeps one step-worker registration per slice and step, so it
+  cannot run k trials into k projects by itself. Q: How do the trials get their step workers? →
+  A: all k projects' step workers are started before the set starts, and each registration names
+  its project, so the set runs on its own with the terminal closed (owner; FR-013).
+- Found while planning: a run that runs out of attempts or budget waits for the developer up to
+  14 days. Q: What does a trial do then? → A: the set ends that trial handed over, counted as not
+  done, and starts the next; its project stays (owner; FR-003).
 
 ## Why the developer's runs do not vary today
 
@@ -139,8 +146,13 @@ reliable than the first.
   the limit is refused before anything starts.
 - Another run is active: trials wait for it like any run and start in order, since only one run is
   active at a time.
-- A trial is interrupted (a platform stop) or waits for the developer: the trials do not start the
-  next one until it ends; one that expires counts as not done.
+- A trial waits for the developer (out of attempts, review rounds or budget): the set ends it
+  handed over, counted as not done, and starts the next; its project stays for inspection.
+- A trial is interrupted (a platform stop, or the model unavailable on every attempt): the set waits
+  until it continues or is resumed, within the set's time budget; one that ends otherwise counts as
+  not done.
+- A trial's project already exists, or one of the k projects has no step workers: the set is
+  refused before any trial starts.
 - The developer cancels the trials: the running trial is cancelled, no further trial starts, and the
   result counts only the trials that ended, naming the set as cancelled.
 - The budget runs out: the trials stop, and the result says so; no trial starts beyond the budget.
@@ -162,7 +174,8 @@ reliable than the first.
   ends exactly as any other run.
 - **FR-003**: Trials of one set MUST run one after another; a trial MUST start only after the one
   before it ended, and none MUST start once the set is cancelled, its budget is used, or the slice
-  is no longer approved.
+  is no longer approved. A trial that waits for the developer MUST be ended handed over by the set,
+  and counts as not done.
 - **FR-004**: The set's result MUST show how many trials ended done out of those that ended, each
   trial's run and outcome, and an unstable mark when at least one trial ended done and at least one
   did not.
@@ -186,6 +199,9 @@ reliable than the first.
   hold.
 - **FR-012**: The developer MUST ask for, follow, cancel, list and read trials through the API and
   the terminal client; the run page MUST NOT change.
+- **FR-013**: The step workers of every trial's project MUST be ready before the set starts, and a
+  trial MUST run only on the step workers of its own project; a set whose projects lack them, or
+  one of whose projects exists, MUST be refused before any trial starts.
 
 ### Key Entities
 
