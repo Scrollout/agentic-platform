@@ -4,7 +4,7 @@ package api
 // rules 1-4; ADR 0106; engine contract `TrialSetState` `failed` and `TrialSet.failed_because`): a
 // trial set whose `run-trials` operation ends `failed` ends `failed` with the operation's problem
 // `detail` as `failed_because`, its unended last trial is cancelled, and a set that was left `running`
-// by a crash between the two writes is repaired by the next read, start or delete. Written before the
+// by a crash between the two writes is shown `failed` by a read and repaired by the next start, delete or engine start. Written before the
 // code (T032) by a test author, judged from the spec, the contract and the data model; the code author
 // must not change it (ADR 0029). The rigs and helpers of trial_sets_test.go and
 // operations_durable_test.go are used as they are; only new helpers are in this file.
@@ -15,7 +15,7 @@ package api
 //     store's own EndOperation (the operation ended `failed` while the set record says `running`, the
 //     job's trial held), read through each of the four entry points; a 24-hour stop racing it;
 //   - dopRig (fake durable Runs and Operations): a job whose retries run out because the durable
-//     service is down (its running trial cannot be cancelled then, and is cancelled by the next read
+//     service is down (its running trial cannot be cancelled then, and is cancelled by the next start or delete
 //     once the service is back), the generic workflow's `End` (Operator.End) on a held job, late
 //     failures of operations whose set has ended, stopped or been cancelled, a repeated failed end, a
 //     failed set with no trial or with its trial ended, cancelOperation, erasure.
@@ -26,7 +26,7 @@ package api
 // failed_because); a failed set with no trial started, with its trial already ended (nothing is
 // cancelled) and with its trial unended (cancelled, the run ends `cancelled`, counted ended and not
 // done); the cancel that cannot land (the service is down), the set stays `failed`, the trial not
-// ended, the next read once the service is back cancels it, and a read after the trial's end cancels
+// ended, the next start or delete once the service is back cancels it, and a read after the trial's end cancels
 // nothing again; a refused start ends the set `failed` after the trial before it ended and starts no
 // further trial; the set is ended right after the operation, without any read (the record is looked at
 // directly); the set's reason is the operation's `detail`, equal to what getOperation shows; a failed
@@ -266,23 +266,78 @@ func tfCrashWindow(t *testing.T, x *trRig, reason string) (op spOp, run string) 
 	return op, run
 }
 
-func TestTSFASetLeftRunningByACrashIsRepairedOnceByTheNextReadStartOrDelete(t *testing.T) { // T031: data model States rule 3
+// tfOpEndedAt is the end time the store holds for the operation.
+func tfOpEndedAt(t *testing.T, st *store.Store, id string) time.Time {
+	t.Helper()
+	rec, _, err := st.Operation(id)
+	if err != nil || rec.EndedAt == nil {
+		t.Fatalf("operation %s: %+v, %v, want an ended one", id, rec, err)
+	}
+	return *rec.EndedAt
+}
+
+// tfWantEndedAt checks a decoded set's ended_at is the given instant.
+func tfWantEndedAt(t *testing.T, m map[string]any, want time.Time) {
+	t.Helper()
+	s, _ := m["ended_at"].(string)
+	got, err := time.Parse(time.RFC3339Nano, s)
+	if err != nil || !got.Equal(want) {
+		t.Errorf("set %v: ended_at = %v (%v), want %v, the operation's end", m["id"], m["ended_at"], err, want)
+	}
+}
+
+func TestTSFASetLeftRunningByACrashIsShownFailedByAReadAndLeftAsItWas(t *testing.T) { // T031, T036: data model States rule 2
 	const reason = "failed after 4 attempts: planted crash window"
-	for _, via := range []string{"getTrialSet", "listTrialSets", "startTrialSet", "deleteSlice"} {
+	for _, via := range []string{"getTrialSet", "listTrialSets"} {
 		t.Run(via, func(t *testing.T) {
 			x := newTRRig(t)
 			op, run := tfCrashWindow(t, x, reason)
-			var newOp spOp
-			switch via {
-			case "getTrialSet":
-				tfWantFailed(t, x.tfSetOf(op.Target), reason)
-			case "listTrialSets":
+			endedAt := tfOpEndedAt(t, x.st, op.ID)
+			x.r.clock.Advance(time.Hour) // the read's time is not the operation's end
+			_, rawBefore, err := x.st.TrialSet(op.Target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			read := func() map[string]any {
+				if via == "getTrialSet" {
+					return x.tfSetOf(op.Target)
+				}
 				page := tfMap(t, x.do("GET", spURL("S-1", "/trial-sets"), ""), "listTrialSets")
 				items, _ := page["items"].([]any)
 				if len(items) != 1 {
 					t.Fatalf("listTrialSets = %v, want the one set", page)
 				}
-				tfWantFailed(t, items[0].(map[string]any), reason)
+				return items[0].(map[string]any)
+			}
+			v := read()
+			tfWantFailed(t, v, reason)
+			tfWantEndedAt(t, v, endedAt)
+			if s := tfRawState(t, x.st, op.Target); s != "running" {
+				t.Errorf("after a read the record is %q, want running: a read writes nothing", s)
+			}
+			if r := x.trialRun(run); r.Status == "ended" {
+				t.Errorf("trial 1 = %+v after a read, want it not ended: a read cancels nothing", r)
+			}
+			// A repeated read answers the same, and the record's bytes are as they were.
+			x.r.clock.Advance(time.Hour)
+			if again := read(); again["state"] != "failed" || again["ended_at"] != v["ended_at"] || again["failed_because"] != v["failed_because"] {
+				t.Errorf("set read again = %v, want what the first read showed: %v", again, v)
+			}
+			if _, rawAfter, err := x.st.TrialSet(op.Target); err != nil || string(rawAfter) != string(rawBefore) {
+				t.Errorf("the record changed by reads (%v):\n%s\nwas:\n%s", err, rawAfter, rawBefore)
+			}
+		})
+	}
+}
+
+func TestTSFASetLeftRunningByACrashIsRepairedOnceByTheNextStartOrDelete(t *testing.T) { // T031: data model States rule 3
+	const reason = "failed after 4 attempts: planted crash window"
+	for _, via := range []string{"startTrialSet", "deleteSlice"} {
+		t.Run(via, func(t *testing.T) {
+			x := newTRRig(t)
+			op, run := tfCrashWindow(t, x, reason)
+			var newOp spOp
+			switch via {
 			case "startTrialSet":
 				newOp = x.startSetOK("again", 1) // accepted: the failed set no longer holds the slice
 				if s := tfRawState(t, x.st, op.Target); s != "failed" {
@@ -322,23 +377,31 @@ func TestTSFASetLeftRunningByACrashIsRepairedOnceByTheNextReadStartOrDelete(t *t
 			if end := x.settleOp(op.ID); tfOpDetail(t, end) != reason {
 				t.Errorf("operation = %+v, want the failed end that was recorded", end)
 			}
-			if newOp.ID == "" {
-				newOp = x.startSetOK("again", 1)
-			}
 			x.settled(newOp, "ended")
 		})
 	}
 }
 
-func TestTSFATimeStopRacingTheFailureEndsTheSetInExactlyOneState(t *testing.T) { // T031: the first recorded wins
+func TestTSFATimeStopRacingTheFailureEndsTheSetInExactlyOneState(t *testing.T) { // T031: the first recorded wins; T036: a start settles it
 	const reason = "failed after 4 attempts: racing the time stop"
 	x := newTRRig(t)
 	op, run := tfCrashWindow(t, x, reason)
 	x.r.clock.Advance(time.Duration(contractLimit(t, "trial-set-hours"))*time.Hour + time.Minute)
-	v := x.waitSet(op.Target, "failed or stopped", func(v trSetView) bool { return v.State != "running" })
+	// Reads show failed throughout (never stopped) until a write path records the end.
+	for range 3 {
+		if tfRawState(t, x.st, op.Target) != "running" {
+			break // the job's own time stop wrote the record first: the checks below judge that end
+		}
+		tfWantFailed(t, x.tfSetOf(op.Target), reason)
+		time.Sleep(trialPoll)
+	}
+	// A start drives the outcome (or the job's own write does): the record is written once.
+	x.startSetOK("again", 1)
+	tfWaitUntilNotRunning(t, x.st, op.Target)
+	state := tfRawState(t, x.st, op.Target)
 	x.waitRunEnded(run)
 	first := x.tfSetOf(op.Target)
-	switch v.State {
+	switch state {
 	case "failed":
 		tfWantFailed(t, first, reason)
 	case "stopped":
@@ -347,7 +410,10 @@ func TestTSFATimeStopRacingTheFailureEndsTheSetInExactlyOneState(t *testing.T) {
 			t.Errorf("set stopped because %v, want time", first["stopped_because"])
 		}
 	default:
-		t.Fatalf("set is %q, want failed or stopped", v.State)
+		t.Fatalf("set is %q, want failed or stopped", state)
+	}
+	if first["state"] != state {
+		t.Errorf("the record ended %q and a read shows %v, want the same", state, first["state"])
 	}
 	for range 3 {
 		time.Sleep(trialPoll)
@@ -358,6 +424,18 @@ func TestTSFATimeStopRacingTheFailureEndsTheSetInExactlyOneState(t *testing.T) {
 	}
 	if out := x.outcomeOf(run); out != "cancelled" {
 		t.Errorf("trial 1 ended %q, want cancelled", out)
+	}
+}
+
+// tfWaitUntilNotRunning waits, without reading through the engine, until the set's record has ended.
+func tfWaitUntilNotRunning(t *testing.T, st *store.Store, id string) {
+	t.Helper()
+	end := time.Now().Add(10 * time.Second)
+	for tfRawState(t, st, id) == "running" {
+		if time.Now().After(end) {
+			t.Fatalf("the record of %s is still running 10 s after a write path ran, want failed or stopped", id)
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }
 
@@ -395,50 +473,78 @@ func (x *dopRig) tfCancels(run string) int {
 	return n
 }
 
-func TestTSFAJobWhoseRetriesRunOutEndsTheSetFailedAndCancelsItsTrialOnceTheServiceIsBack(t *testing.T) { // T031
-	x, op := tfStartedSet(t)
-	x.ops.release(op.ID)
-	x.waitStarts(1)
-	x.recordRun() // RUN-1 is running: its workflow wrote its start
-	// The engine restarts and the durable service is down: the job, repeated, cannot reach it.
-	x.restart(false, true)
-	x.registerAll()
-	x.runs.set(func(f *dopRuns) { f.down = true })
-	x.ops.release(op.ID)
-	end := x.settle(op.ID)
-	if end.Status != "failed" || end.Error == nil || !strings.Contains(end.Error.Detail, "failed after") {
-		t.Fatalf("operation = %+v, want failed once the retry rule's attempts are used up", end)
+func TestTSFAJobWhoseRetriesRunOutEndsTheSetFailedAndTheNextStartOrDeleteCancelsItsTrialOnceTheServiceIsBack(t *testing.T) { // T031, T036
+	for _, via := range []string{"startTrialSet", "deleteSlice"} {
+		t.Run(via, func(t *testing.T) {
+			x, op := tfStartedSet(t)
+			x.ops.release(op.ID)
+			x.waitStarts(1)
+			x.recordRun() // RUN-1 is running: its workflow wrote its start
+			// The engine restarts and the durable service is down: the job, repeated, cannot reach it.
+			x.restart(false, true)
+			x.registerAll()
+			x.runs.set(func(f *dopRuns) { f.down = true })
+			x.ops.release(op.ID)
+			end := x.settle(op.ID)
+			if end.Status != "failed" || end.Error == nil || !strings.Contains(end.Error.Detail, "failed after") {
+				t.Fatalf("operation = %+v, want failed once the retry rule's attempts are used up", end)
+			}
+			tfWaitRawState(t, x.st, op.Target, "failed") // ended right after the operation, with no read
+			// The cancel cannot land while the service is down: the set is failed and the trial is not ended.
+			v := x.tfSetOf(op.Target)
+			tfWantFailed(t, v, end.Error.Detail)
+			if n := x.tfCancels("RUN-1"); n != 0 {
+				t.Fatalf("%d cancels reached the down service", n)
+			}
+			if r := tfMap(t, x.get("/runs/RUN-1?api-version="+apiVersion), "getRun RUN-1"); r["status"] == "ended" {
+				t.Fatalf("RUN-1 = %v, want not ended while its cancel cannot land", r)
+			}
+			// The service is back: reads cancel nothing, and show the same failed set, record untouched.
+			x.runs.set(func(f *dopRuns) { f.down = false })
+			_, rawBefore, err := x.st.TrialSet(op.Target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			x.tfSetOf(op.Target)
+			tfMap(t, x.get(spURL("S-1", "/trial-sets")), "listTrialSets")
+			again := x.tfSetOf(op.Target)
+			if again["ended_at"] != v["ended_at"] || again["failed_because"] != v["failed_because"] || again["state"] != "failed" {
+				t.Errorf("set after the service is back = %v, want %v", again, v)
+			}
+			if n := x.tfCancels("RUN-1"); n != 0 {
+				t.Fatalf("%d cancels of RUN-1 by reads, want none: only a start, a delete or the engine's start cancels", n)
+			}
+			if _, rawAfter, err := x.st.TrialSet(op.Target); err != nil || string(rawAfter) != string(rawBefore) {
+				t.Errorf("the record changed by reads (%v):\n%s\nwas:\n%s", err, rawAfter, rawBefore)
+			}
+			// The next start or delete cancels the trial.
+			tfStartOrDelete(x, via, "other")
+			if x.tfCancels("RUN-1") == 0 {
+				t.Fatalf("calls %v: want the running trial cancelled by the %s after the service is back", x.log.all(), via)
+			}
+			// Its record ends: nothing is cancelled again by a later start or delete.
+			x.recordRunMore("RunCancelled")
+			n := x.tfCancels("RUN-1")
+			tfStartOrDelete(x, "startTrialSet", "other2")
+			tfStartOrDelete(x, "deleteSlice", "")
+			if got := x.tfCancels("RUN-1"); got != n {
+				t.Errorf("%d cancels of RUN-1 after its record ended, want the %d before: a repair cancels until the record ends only", got, n)
+			}
+			if s := tfRawState(t, x.st, op.Target); s != "failed" {
+				t.Errorf("the record is %q, want failed", s)
+			}
+		})
 	}
-	tfWaitRawState(t, x.st, op.Target, "failed") // ended right after the operation, with no read
-	// The cancel cannot land while the service is down: the set is failed and the trial is not ended.
-	v := x.tfSetOf(op.Target)
-	tfWantFailed(t, v, end.Error.Detail)
-	if n := x.tfCancels("RUN-1"); n != 0 {
-		t.Fatalf("%d cancels reached the down service", n)
+}
+
+// tfStartOrDelete makes the write path the repair runs on, ignoring its answer: the repair comes first.
+func tfStartOrDelete(x *dopRig, via, prefix string) {
+	x.t.Helper()
+	if via == "startTrialSet" {
+		x.startSet(prefix, 1)
+		return
 	}
-	if r := tfMap(t, x.get("/runs/RUN-1?api-version="+apiVersion), "getRun RUN-1"); r["status"] == "ended" {
-		t.Fatalf("RUN-1 = %v, want not ended while its cancel cannot land", r)
-	}
-	// The service is back: the next read cancels the trial, and the set is the same failed set.
-	x.runs.set(func(f *dopRuns) { f.down = false })
-	again := x.tfSetOf(op.Target)
-	if again["ended_at"] != v["ended_at"] || again["failed_because"] != v["failed_because"] || again["state"] != "failed" {
-		t.Errorf("set after the service is back = %v, want %v", again, v)
-	}
-	if x.tfCancels("RUN-1") == 0 {
-		t.Fatalf("calls %v: want the running trial cancelled by the first read after the service is back", x.log.all())
-	}
-	// Its record ends: nothing is cancelled again by later reads.
-	x.recordRunMore("RunCancelled")
-	n := x.tfCancels("RUN-1")
-	x.tfSetOf(op.Target)
-	x.tfSetOf(op.Target)
-	if got := x.tfCancels("RUN-1"); got != n {
-		t.Errorf("%d cancels of RUN-1 after its record ended, want the %d before: a repair cancels until the record ends only", got, n)
-	}
-	if set := x.getSetMap(op.Target); set["state"] != "failed" {
-		t.Errorf("set = %v, want failed", set)
-	}
+	x.do("DELETE", spURL("S-1", ""), "", "")
 }
 
 func (x *dopRig) getSetMap(id string) map[string]any { return x.tfSetOf(id) }

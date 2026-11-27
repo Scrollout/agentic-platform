@@ -10,7 +10,7 @@ package api
 //
 // Edge cases checked: the detail empty through Operator.End (the end the failTrialSet hook handles
 // at once); the problem with no `detail` field at all and with a whitespace-only detail, planted as the
-// crash window leaves them and repaired by the next read (getTrialSet and listTrialSets); a blank
+// crash window leaves them and shown failed by a read (getTrialSet and listTrialSets); a blank
 // reason is not accepted (non-blank after trimming); the schema check on getTrialSet and on every
 // listTrialSets item, and again after a later read (repair once, the answer is the same); a non-empty
 // detail copied exactly, with its surrounding and inner spaces; no `stopped_because` with it; the
@@ -87,7 +87,7 @@ func TestTSFRAnEmptyDetailOnTheFailedEndStillGivesTheSetAReason(t *testing.T) { 
 	trfReadBoth(t, x, op.Target, "OperationFailed")
 }
 
-func TestTSFRAnEmptyOrMissingOrBlankDetailLeftByACrashIsRepairedWithAReason(t *testing.T) { // T034 R2-1: repair path on read
+func TestTSFRAnEmptyOrMissingOrBlankDetailLeftByACrashIsShownFailedWithAReason(t *testing.T) { // T034 R2-1: shown failed by a read
 	problems := map[string]string{
 		"empty detail":      `{"type":"about:blank","title":"The operation failed","code":"OperationFailed","detail":""}`,
 		"no detail field":   `{"type":"about:blank","title":"The operation failed","code":"OperationFailed"}`,
