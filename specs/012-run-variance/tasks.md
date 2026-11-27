@@ -111,7 +111,7 @@ pattern, its template, agents and recordings do not change, so the recorded-mode
   converged; every existing engine, CLI and page test still passes (`go test` in `src/engine/api`,
   `durable`, `store`, `machine`, `src/cli`, `src/page`; `test_contract_diff`,
   `test_inline_schema`), so T002 has no broken existing test to approve for T001
-- [ ] T002 Owner approvals: the plan's Complexity Tracking row for Principle XII (not applicable,
+- [X] T002 Owner approvals: the plan's Complexity Tracking row for Principle XII (not applicable,
   one developer); the code author of T001 lists every existing test that fails or no longer
   compiles after T001 (expected: tests that list the contract's paths, operation kinds or fields
   exactly) and asks the owner to approve each by name, recorded here with its date; a change not
@@ -120,7 +120,7 @@ pattern, its template, agents and recordings do not change, so the recorded-mode
   `registrationStore` (`api/workers_test.go`, `api/worker_registrations_restart_test.go`,
   `store/worker_registrations_test.go`)
   Recorded: the owner approved the Principle XII row on 2026-11-27; T001 broke no existing test,
-  so it needs no approval. T005's list, approved by the owner on 2026-11-27 (each call site gains
+  so it needs no approval. T009 (owner 2026-11-27): `src/engine/api/skeleton_test.go:234` (`operation_target` gains `TS`, as the contract since T001) and `src/engine/api/durable_service_test.go:203` (`RunInput` gains `TrialSet`, `Trial`). T005's list, approved by the owner on 2026-11-27 (each call site gains
   only a project argument, `""` for the project-less registration, as `Workers.Endpoint(slice,
   project, step)`, `steps.Endpoints` and `store.DeleteWorkerRegistration(slice, step, project)`
   gain it): `src/engine/steps/adapters_test.go:46` (the `endpoints` fake),
@@ -136,7 +136,7 @@ pattern, its template, agents and recordings do not change, so the recorded-mode
 **Goal**: several projects of one slice have ready step workers at once, and a run calls only its
 own project's (FR-013; research R3; ADR 0103).
 
-- [ ] T003 [P] Test author: new `src/engine/api/workers_project_test.go` (engine rig): two projects
+- [X] T003 [P] Test author: new `src/engine/api/workers_project_test.go` (engine rig): two projects
   of one slice register their workers (`project` set) and both stay registered; a run of each
   calls only its own project's endpoint; a registration without `project` serves any project of
   its slice; `startRun` into a project whose step has no worker of its own or without a project
@@ -146,20 +146,20 @@ own project's (FR-013; research R3; ADR 0103).
   `resumeRun` and `replayRun` check the workers of their run's (or the new) project;
   registrations by project survive an engine restart; erasing the slice removes all of its
   projects' registrations; seen failing before T005
-- [ ] T004 [P] Test author: new `scripts/tests/test_build_workers_project_registration.py`:
+- [X] T004 [P] Test author: new `scripts/tests/test_build_workers_project_registration.py`:
   `build-workers <slice> <project>` sends `{"endpoint": …, "project": "<project>"}` for each step;
   building workers for a second project of the same slice leaves the first project's containers
   and registrations in place; seen failing before T005, on the CI run of a push of the T003 and
   T004 tests before T005's code (plan, Exceptions). Seen failing: CI 46029974303 at 3e4bd11,
   `py_tests` 4 of 5 failed (the body has no `project`), the containers test passed, nothing else
   failed
-- [ ] T005 Code author (done when T003 and T004 pass): `src/engine/api/workers.go` keeps
+- [X] T005 Code author (done when T003 and T004 pass): `src/engine/api/workers.go` keeps
   registrations by slice, step and project (`missing`, `Endpoint` and the lookup take the run's
   project, a registration without a project only as fallback; `workersReady` and
   `waitingForWorkers` by slice and project; `forget` and `DeleteWorkerRegistration` cover every
   project of the slice); `src/engine/store/workers.go` keeps the project; `src/engine/api/runs.go`
   `ready()` takes the project in `StartRun`, `ResumeRun` and `ReplayRun`; `src/deploy/ap` `register_worker` sends
-  `project`; the launcher's `refuse_active_run` stays; method identity converged
+  `project`; the launcher's `refuse_active_run` stays; method identity converged. Done: 8cd8693 (method eafebed3), T003 c033975; CI 46041159126 at 73e0a4e: every job but T012's expected red passed, T004's 5 tests included (46033845550 at d0813c3 had them too, but for one intermittent Python test, backlog T211)
 
 ---
 
@@ -230,7 +230,9 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   step (SC-004), `ap trial-set` prints `done 2/2` without `unstable`, and reading it adds no model
   request (SC-005); records the step containers' memory for two projects (research R3). Seen
   failing first on the CI run of a push of T001 and T012 alone (plan, Exceptions), then passing on
-  T013's
+  T013's. Seen failing: CI 46041159126 at 73e0a4e, `docker` job: subtest 1 passed (step containers of
+  2 projects 343.5 MiB in all, 181.5 and 162.0 MiB), subtests 2-6 failed (`trials` exit 3: the client
+  had no `trials`); every other suite passed
 - [ ] T029 [P] [US1] Test author: new `src/engine/store/trial_sets_test.go`: a set's record is
   kept in its slice's folder and read back after a restart; `runs` written one by one keeps its
   order; IDs `TS-<n>` come from a sequence that never gives an ID again, also after the slice is
