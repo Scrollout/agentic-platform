@@ -16,7 +16,8 @@ per event and an end line, and exits by the run's state; store text is printed w
 characters escaped, except `artifact`, which writes the raw bytes.
 
 `captured.go` holds the captured-pattern commands (`capture`, `patterns`, `pattern` with `--drop`
-and `--add`, `proof-slice`, `approve-pattern`), each mutating call with its own `Idempotency-Key`,
+and `--add`, `proof-slice`, `approve-pattern`, `withdraw-pattern`, and `erase-pattern`, which erases only after the
+captured pattern's ID is typed), each mutating call with its own `Idempotency-Key`,
 and the proof outcome line that `build`, `replay`, `resume` and `run` print after a proof run's end
 line (`Proof of <id>: passed`, `failed: ...` with exit 1, or `running`).
 

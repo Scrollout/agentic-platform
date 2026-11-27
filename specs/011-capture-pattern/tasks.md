@@ -712,22 +712,26 @@ proposed and adding the derived value works; the proof ends passed with no model
   run) and a read-back whose files do not decode stay interrupts; no workflow version gate (an
   old history has no `Refused`). steps and durable pass in full; api `Captured|Fill|Proof|Write`
   passes but for T013's 13 `TestSR` cases that wait for T015
-- [ ] T041 [US1] (review S2, S3; Single owner for rules; suggestion) one function in
+- [x] T041 [US1] (review S2, S3; Single owner for rules; suggestion) one function in
   `engine/captured` that gives a sent value's kind and source (the API's `kindOf` derives it from
   Propose's survivors and `Fill(nil, ...)`); the literal `procedure:fill` in one place
   (`captured.FillWorker`); do with US2's T015 or leave: not blocking
-- [ ] T042 [US1] (review S4) data model "Declaration": a `fill` step keeps no `agent_digest`; fix
+  closed: moved to backlog T207 (owner, 2026-11-27: not blocking; feature 010's way)
+- [x] T042 [US1] (review S4) data model "Declaration": a `fill` step keeps no `agent_digest`; fix
   "everything else equal" (docs, with T023)
-- [ ] T043 [US1] (review S5, T033's open point; suggestion) a proof start reads the parameter
+  Done 2026-11-27 (T025 analyze F3): the data model's declaration row says both
+- [x] T043 [US1] (review S5, T033's open point; suggestion) a proof start reads the parameter
   values, then releases the captured lock before `StartRun` takes the runs lock, so a `PUT
   /parameters` accepted in the gap gives a proof of old values (fails closed: it does not count);
   and `newRun` holds the runs lock through `recordWait`, so a `PUT /parameters` then waits up to
   10 s before answering Busy; test author, then code author, or `closed:` by the owner
-- [ ] T044 [US1] (review S7, S9, T035 F5/F11; suggestion) a launcher test in `scripts/tests` for
+  closed: moved to backlog T207 (owner, 2026-11-27: not blocking; feature 010's way)
+- [x] T044 [US1] (review S7, S9, T035 F5/F11; suggestion) a launcher test in `scripts/tests` for
   `ap prove`'s dispatch (`die 3` for a bad project name, `die 1` for a bad slice ID, the exit code
   passed through); `src/cli/contract.md` states `--add` of an existing name (replaces it) and
   `--drop` of a missing one (exit 3); the acceptance proof asserts no model request (SC-001)
-- [ ] T045 [US1] (review round 1, untested cases; Findings have a home) for a test author, each
+  closed: moved to backlog T207 (owner, 2026-11-27: not blocking; feature 010's way)
+- [x] T045 [US1] (review round 1, untested cases; Findings have a home) for a test author, each
   a new file: `steps` History's `Write` (project and check calls, the files read back, an error);
   `store.openCaptured` after a restart and `PutCapturedPattern` with a missing artifact; an engine
   restart between a capture's artifact hold and its record; two parameters whose source values
@@ -736,6 +740,7 @@ proposed and adding the derived value works; the proof ends passed with no model
   the new commands and its `pattern_id`/`parameter_name` forms against the contract; T038's untested cases (an added left-out declared value's
   source; an added left-out name overlapping a kept longer value; several kept ones losing their
   places in later rounds)
+  closed: moved to backlog T207 (owner, 2026-11-27: not blocking; feature 010's way)
 
 ---
 
@@ -901,27 +906,32 @@ pass, three runs give the same files.
   Done 2026-11-27 (Opus; method a7b1fa67): `goKeywords` and `reservedRefusal` in `match.go`,
   checked in `Fit`'s `part` after the form, before the equal values (a keyword equal to the other
   value is told as the keyword); captured and the whole api package pass (261 s); fast lint 0
-- [ ] T053 [US2] (review S1; suggestion) `Fit`'s reading refuses a value that contains the
+- [x] T053 [US2] (review S1; suggestion) `Fit`'s reading refuses a value that contains the
   literal after its hole (`class` before `s`) although a reading exists: try later positions, or
   state it in the contract as a limit; test author, then code author, or `closed:` by the owner
-- [ ] T054 [US2] (review S2, S6; suggestion) an unreadable template of one approved captured
+  closed: moved to backlog T208 (owner, 2026-11-27: not blocking; feature 010's way)
+- [x] T054 [US2] (review S2, S6; suggestion) an unreadable template of one approved captured
   pattern fails every unnamed `startRun` (500): read templates only for a part-level fit; a
   stored parameter set that fails `checkSet` is an engine fault, not `refused-value`
-- [ ] T055 [US2] (review S3; suggestion) the fit reads the approved parts under the captured lock
+  closed: moved to backlog T208 (owner, 2026-11-27: not blocking; feature 010's way)
+- [x] T055 [US2] (review S3; suggestion) the fit reads the approved parts under the captured lock
   and `StartRun` reads the part hashes again later: a part replaced and approved in between
   gives a run whose filled values were read from the old text; compare the hashes before the run
   starts (refuse as `PatternDoesNotFit` or fit again)
-- [ ] T056 [US2] (review S4; suggestion) "approved most recently" is by `approval.at` wall clock;
+  closed: moved to backlog T208 (owner, 2026-11-27: not blocking; feature 010's way)
+- [x] T056 [US2] (review S4; suggestion) "approved most recently" is by `approval.at` wall clock;
   a clock step back changes the order: keep an approval sequence, or `closed:` by the owner
+  closed: moved to backlog T208 (owner, 2026-11-27: not blocking; feature 010's way)
 - [x] T057 [US2] (review S5; docs) FR-009 "runs every check": a later build of the same slice and
   values reuses the kept results (the reuse rule), so no check runs; state it in the spec's
   Assumptions (a clarification, owner; recorded as a Clarification and in FR-009 instead)
   Done 2026-11-26: owner chose to state reuse; spec Clarifications 2026-11-26 and FR-009
-- [ ] T058 [US2] (review S7 and untested cases; Findings have a home) for a test author, each a new
+- [x] T058 [US2] (review S7 and untested cases; Findings have a home) for a test author, each a new
   file: `fit_test.go`'s `writable` as the declaration gives it; `not_used`'s order (newest
   approval first) with three patterns; two parameters whose first places touch; an unreadable
   template at an unnamed start; a restart between the choice and the workflow start; SC-006
   through `startRun` (the limit-280 slice built done); a failing filled check on the stack
+  closed: moved to backlog T208 (owner, 2026-11-27: not blocking; feature 010's way)
 
 ---
 
@@ -1012,7 +1022,7 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   `cmu`, never the copy `namedPattern` read before (done when T064 passes)
   Done 2026-11-27: T064 1e1f17d (fresh Sonnet, seen failing), T065 (coordinator; method
   2c54e8ef); whole `./api` 230 s green
-- [ ] T066 [US3] (review F2, F3; suggestion) at the runs' lock `startRun` re-checks only erasure
+- [x] T066 [US3] (review F2, F3; suggestion) at the runs' lock `startRun` re-checks only erasure
   (`fillErased`): an unnamed start whose chosen captured pattern was erased before the lock answers
   NotFound (the contract names NotFound only for an unknown slice or pattern); a withdrawal
   completing between the choice and the lock still starts a run on it. Redo the choice, or fall
@@ -1020,29 +1030,35 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   (round 2: also one NotFound text for an erased named pattern, before and after the lock)
   (converge: the same window holds for a named start, a proof start and `replayRun`
   (`capturedReplay`, `proofReplay`): re-check the state under the runs' lock on all four paths)
-- [ ] T067 [US3] (review F4; suggestion) an erasure whose operation ends failed or cancelled after
+  closed: moved to backlog T209 (owner, 2026-11-27: not blocking; feature 010's way)
+- [x] T067 [US3] (review F4; suggestion) an erasure whose operation ends failed or cancelled after
   the `erased` marker leaves its artifacts and `artifacts` list on disk with no owner, and a new
   DELETE answers 404: complete marked erasures at startup, or close with a reason
-- [ ] T068 [US3] (review F5, T019's open point; suggestion) `erase-pattern` prints every template
+  closed: moved to backlog T209 (owner, 2026-11-27: not blocking; feature 010's way)
+- [x] T068 [US3] (review F5, T019's open point; suggestion) `erase-pattern` prints every template
   hash "unless a slice or another captured pattern also holds them": give `CapturedPattern` a
   read-only field naming the artifacts only it holds (contract first), or word
   `src/cli/contract.md` as the client prints it
-- [ ] T069 [US3] (review F6; suggestion) the `eraseCapturedPattern` description does not say that a
+  closed: moved to backlog T209 (owner, 2026-11-27: not blocking; feature 010's way)
+- [x] T069 [US3] (review F6; suggestion) the `eraseCapturedPattern` description does not say that a
   run started between the 202 and the work fails the operation `OperationFailed`
   (`CapturedPatternBusy`), nothing erased; state it in the contract
-- [ ] T070 [US3] (review untested cases; Findings have a home) for a test author, each a new
+  closed: moved to backlog T209 (owner, 2026-11-27: not blocking; feature 010's way)
+- [x] T070 [US3] (review untested cases; Findings have a home) for a test author, each a new
   test: the store's `EraseCapturedPattern`, `CapturedPatternErased`, `openCaptured` skipping a
   marked ID and `PutCapturedPattern` on an erased ID; an erase retried after a crash past the
   marker; an erase operation cancelled; `fillErased` at `startRun` and `replayRun`; a start racing
   an accepted erasure; another slice's run that holds an artifact equal to a template hash keeps
   it; a real method change on the withdraw and erase paths; the CLI answer with spaces or another
   case
-- [ ] T071 [US3] (converge US3; FR-011 "naming why", edge case "interrupted or restarted"; LOW)
+  closed: moved to backlog T209 (owner, 2026-11-27: not blocking; feature 010's way)
+- [x] T071 [US3] (converge US3; FR-011 "naming why", edge case "interrupted or restarted"; LOW)
   Test author, a new test file: a `replayRun` refused `ProofRequired` or `CapturedPatternWithdrawn`
   names the captured pattern and why (the method pair after a method change, a failed proof, a
   proof that has not ended, withdrawn), with the same reason text as the `needs-proof` entry of a
   `chosen` start; a proof started under method A that ends after the engine's method became B
   records A and leaves the pattern unusable
+  closed: moved to backlog T209 (owner, 2026-11-27: not blocking; feature 010's way)
 
 ---
 
@@ -1081,7 +1097,7 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   filled review step's checks (done when T072 passes; method identity converged), then a CI run
   and the paid analyst and steps evals (owner agreed, 2026-11-27), then T025 round 2 (B1 and the
   changed lines)
-- [ ] T026 Merge: `evals-current` on the branch lists no pending suite; the owner fast-forwards
+- [ ] T026 Merge: every task above is checked (done or `closed:`); `evals-current` on the branch lists no pending suite; the owner fast-forwards
   `main`; remove the branch from environment dev's policies; delete the branch with the owner's OK;
   the spec's status `Implemented`
 

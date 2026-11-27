@@ -53,8 +53,8 @@ Feature 011 (specified 2026-11-25) covers N-052's remainder: a run that ended do
 as a pattern whose later slices, equal to its source except for named parameters, are built with
 no model call, after the developer approves its proof (owner). Its three stories are implemented
 and pass in CI (check run 45964551765 at ca19e5e, 2026-11-27): capture and proof, the pattern
-choice at `startRun`, and withdrawal and erasure. N-052 stays `in progress` until the feature's
-evals pass and it is merged (T024 to T026). Feature 011 also serves N-050, N-051 and N-053 without
+choice at `startRun`, and withdrawal and erasure. N-052 stays `in progress` until the feature
+is merged (T026). Feature 011 also serves N-050, N-051 and N-053 without
 changing their scope or state: a captured run is built by the same method from the same input
 (N-050), accepted only by the base pattern's checks (N-051), and records its captured pattern,
 values and source run (N-053).
