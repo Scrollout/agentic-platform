@@ -39,12 +39,15 @@ The set's operation succeeds on `ended` and `stopped`, ends `cancelled` on `canc
 1. The operation's end is recorded first (the generic Operation workflow); the engine then ends the
    set `failed` with `failed_because` = the operation's problem `detail`, under the trial-set lock,
    once: a set already `ended`, `stopped`, `cancelled` or `failed` is left as it is.
-2. Repair: any read of the set, `startTrialSet` and `deleteSlice` that find a `running` set whose
-   operation ended failed end it the same way, so a crash between the two writes never leaves a
-   set `running` (and never blocks the slice).
+2. Repair: `startTrialSet`, `deleteSlice` and the engine's start find a `running` set whose
+   operation ended failed and end it the same way, so a crash between the two writes never leaves
+   a set `running` (and never blocks the slice). A read (`getTrialSet`, `listTrialSets`) writes
+   nothing (FR-007, SC-005): it shows such a set as `failed`, with `failed_because` and `ended_at`
+   taken from its failed operation (owner 2026-11-28, T036).
 3. The set's last trial run, if it has not ended, is cancelled at that end and again at each
-   repair until its record shows an end; the set is `failed` whether or not the cancel has landed,
-   and the result counts that trial as not ended until its record ends.
+   repair (start, delete, engine start) until its record shows an end; the set is `failed` whether
+   or not the cancel has landed, and the result counts that trial as not ended until its record
+   ends.
 4. Which start refusals end the set how: before each trial the job stops the set `slice-changed`
    (NotApproved, PatternDoesNotFit, the captured-pattern refusals) or `workers` (WorkersNotReady);
    any other refusal of the trial's start (ProjectExists, a project made non-empty after the set was
