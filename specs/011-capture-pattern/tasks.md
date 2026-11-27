@@ -991,6 +991,39 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
 - [x] T021 [US3] Commit; fast lint; push (owner go-ahead); record the CI run
   Done 2026-11-27: CI 45913069887 at 8624bfb, 26/26 green
 - [ ] T022 [US3] Fresh review of US3 judging T021's CI run; `/speckit-converge` for US3
+  Round 1 2026-11-27 (fresh Sonnet, read-only worktree at e693cea, judging CI 45913069887): F1
+  blocking -> T064, T065; suggestions F2 and F3 -> T066, F4 -> T067, F5 -> T068, F6 -> T069,
+  the untested cases -> T070. Every T018-T020 reading judged not an issue except F5 and F6
+- [ ] T064 [US3] (review F1; FR-012, data model "withdrawn: final", Single owner for rules) Test
+  author: new `src/engine/api/captured_named_stale_test.go` (package `api`): `namedStart` given a
+  record read while the captured pattern was approved, after a withdrawal has completed, answers
+  `CapturedPatternWithdrawn` and leaves the stored state `withdrawn` (also when a proof completed
+  since, so `completeProofs` changes the copy); after an erasure it answers NotFound naming it,
+  not an internal error. Seen failing
+- [ ] T065 [US3] (review F1) Code: `namedStart` judges and saves the record it reads under
+  `cmu`, never the copy `namedPattern` read before (done when T064 passes)
+- [ ] T066 [US3] (review F2, F3; suggestion) at the runs' lock `startRun` re-checks only erasure
+  (`fillErased`): an unnamed start whose chosen captured pattern was erased before the lock answers
+  NotFound (the contract names NotFound only for an unknown slice or pattern); a withdrawal
+  completing between the choice and the lock still starts a run on it. Redo the choice, or fall
+  back to the base pattern, for an unnamed start; re-check the state under the runs' lock
+- [ ] T067 [US3] (review F4; suggestion) an erasure whose operation ends failed or cancelled after
+  the `erased` marker leaves its artifacts and `artifacts` list on disk with no owner, and a new
+  DELETE answers 404: complete marked erasures at startup, or close with a reason
+- [ ] T068 [US3] (review F5, T019's open point; suggestion) `erase-pattern` prints every template
+  hash "unless a slice or another captured pattern also holds them": give `CapturedPattern` a
+  read-only field naming the artifacts only it holds (contract first), or word
+  `src/cli/contract.md` as the client prints it
+- [ ] T069 [US3] (review F6; suggestion) the `eraseCapturedPattern` description does not say that a
+  run started between the 202 and the work fails the operation `OperationFailed`
+  (`CapturedPatternBusy`), nothing erased; state it in the contract
+- [ ] T070 [US3] (review untested cases; Findings have a home) for a test author, each a new
+  test: the store's `EraseCapturedPattern`, `CapturedPatternErased`, `openCaptured` skipping a
+  marked ID and `PutCapturedPattern` on an erased ID; an erase retried after a crash past the
+  marker; an erase operation cancelled; `fillErased` at `startRun` and `replayRun`; a start racing
+  an accepted erasure; another slice's run that holds an artifact equal to a template hash keeps
+  it; a real method change on the withdraw and erase paths; the CLI answer with spaces or another
+  case
 
 ---
 
