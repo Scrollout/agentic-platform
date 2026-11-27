@@ -665,10 +665,11 @@ func (s *sliceServer) cancelTrialSet(ctx context.Context, op store.OperationReco
 }
 
 // failTrialSet ends the set of a run-trials operation that has ended failed (data model, "States"
-// rules 1 and 3): under the trial-set lock, once, the set ends `failed` with the operation's problem
-// detail as failed_because; a set that has ended in any state is left as it is. Its last trial, when
-// its record shows no end, is then cancelled; a cancel that cannot land is tried again by the next
-// repair (repairSet).
+// rules 1 and 3): under the trial-set lock, once, the set ends `failed` with failedReason as
+// failed_because and the operation's recorded end as ended_at (what a read shows before, failedView);
+// a set that has ended in any state is left as it is. Its last trial, when its record shows no end,
+// is then cancelled; a cancel that cannot land is tried again by the next repair (repairSet: at
+// startTrialSet, deleteSlice and the engine's start).
 func (s *sliceServer) failTrialSet(ctx context.Context, op store.OperationRecord) {
 	if s.trialSets == nil || s.runs == nil {
 		return
@@ -676,10 +677,9 @@ func (s *sliceServer) failTrialSet(ctx context.Context, op store.OperationRecord
 	s.tmu.Lock()
 	set, err := s.readSet(op.Target)
 	if err == nil && set.State == gen.TrialSetStateRunning {
-		at := s.ops.now().UTC()
-		set.State, set.StoppedBecause, set.FailedBecause, set.EndedAt = gen.TrialSetStateFailed, "", failedReason(op), &at
+		set = failedView(set, op)
 		if err = s.putSet(set); err != nil {
-			log.Printf("engine: ending trial set %s failed: %v; the next read repairs it", set.ID, err)
+			log.Printf("engine: ending trial set %s failed: %v; the next start, delete or engine start repairs it", set.ID, err)
 		}
 	}
 	s.tmu.Unlock()
@@ -695,13 +695,15 @@ func (s *sliceServer) cancelFailedTrial(ctx context.Context, set trialSetRecord)
 		return
 	}
 	if err := s.cancelTrial(ctx, set.Runs[n-1]); err != nil {
-		log.Printf("engine: cancelling trial run %s of failed trial set %s: %v; the next read tries again", set.Runs[n-1], set.ID, err)
+		log.Printf("engine: cancelling trial run %s of failed trial set %s: %v; the next start, delete or engine start tries again",
+			set.Runs[n-1], set.ID, err)
 	}
 }
 
-// repairSet is the set as a read, a start or a delete must find it (data model, "States" rule 2):
-// a `running` set whose operation has ended failed is ended `failed` now (failTrialSet), and a
-// failed set's last trial whose record shows no end is cancelled again. Any other set is as kept.
+// repairSet is the repair a start, a delete and the engine's start make (data model, "States" rules
+// 2 and 3): a `running` set whose operation has ended failed is ended `failed` now (failTrialSet),
+// and a failed set's last trial whose record shows no end is cancelled again. Any other set is as
+// kept. A read never repairs (FR-007): it shows the set as shownSet does.
 func (s *sliceServer) repairSet(ctx context.Context, set trialSetRecord) trialSetRecord {
 	switch set.State {
 	case gen.TrialSetStateRunning:
@@ -717,6 +719,42 @@ func (s *sliceServer) repairSet(ctx context.Context, set trialSetRecord) trialSe
 		s.cancelFailedTrial(ctx, set)
 	}
 	return set
+}
+
+// shownSet is the set as a read shows it, writing and cancelling nothing (FR-007, SC-005): a
+// `running` set whose operation has ended failed is shown as the repair will write it (failedView).
+func (s *sliceServer) shownSet(set trialSetRecord) trialSetRecord {
+	if set.State != gen.TrialSetStateRunning {
+		return set
+	}
+	op, _, err := s.ops.records.Operation(set.Operation)
+	if err != nil || op.EndedAt == nil || op.Status != string(gen.OperationStatusFailed) {
+		return set
+	}
+	return failedView(set, op)
+}
+
+// failedView is a running set ended by its failed operation: `failed`, failed_because its
+// failedReason, ended_at the operation's recorded end.
+func failedView(set trialSetRecord, op store.OperationRecord) trialSetRecord {
+	at := op.AcceptedAt
+	if op.EndedAt != nil {
+		at = *op.EndedAt
+	}
+	at = at.UTC()
+	set.State, set.StoppedBecause, set.FailedBecause, set.EndedAt = gen.TrialSetStateFailed, "", failedReason(op), &at
+	return set
+}
+
+// repairAllSets is the engine's start's repair of every slice's sets (repairSet), so a set its
+// failed operation left running is ended and its trial cancelled with no request.
+func (s *sliceServer) repairAllSets(ctx context.Context) {
+	if s.trialSets == nil || s.runs == nil {
+		return
+	}
+	for _, slc := range s.svc.List() {
+		s.repairSets(ctx, slc.ID)
+	}
 }
 
 // repairSets repairs every set of the slice (repairSet).
@@ -781,9 +819,11 @@ func (s *sliceServer) setView(set trialSetRecord) (gen.TrialSet, error) {
 	return v, nil
 }
 
-// GetTrialSet shows one set with its result, read from the records: no model is called and no
-// record changes. An unknown or erased set is NotFound.
-func (s *sliceServer) GetTrialSet(ctx context.Context, req gen.GetTrialSetRequestObject) (gen.GetTrialSetResponseObject, error) {
+// GetTrialSet shows one set with its result, read from the records: no model is called, no record
+// changes and nothing is cancelled; a `running` set whose operation has ended failed is shown
+// `failed` (shownSet) until a start, a delete or the engine's start repairs it. An unknown or erased
+// set is NotFound.
+func (s *sliceServer) GetTrialSet(_ context.Context, req gen.GetTrialSetRequestObject) (gen.GetTrialSetResponseObject, error) {
 	if _, err := s.trialSetStore(); err != nil {
 		return nil, err
 	}
@@ -798,8 +838,7 @@ func (s *sliceServer) GetTrialSet(ctx context.Context, req gen.GetTrialSetReques
 	case err != nil:
 		return nil, err
 	}
-	set = s.repairSet(ctx, set)
-	v, err := s.setView(set)
+	v, err := s.setView(s.shownSet(set))
 	if err != nil {
 		return nil, err
 	}
@@ -808,7 +847,7 @@ func (s *sliceServer) GetTrialSet(ctx context.Context, req gen.GetTrialSetReques
 
 // ListTrialSets lists the slice's sets newest first, each as getTrialSet shows it; a page token
 // names the number of the last set of its page. An unknown slice is NotFound.
-func (s *sliceServer) ListTrialSets(ctx context.Context, req gen.ListTrialSetsRequestObject) (gen.ListTrialSetsResponseObject, error) {
+func (s *sliceServer) ListTrialSets(_ context.Context, req gen.ListTrialSetsRequestObject) (gen.ListTrialSetsResponseObject, error) {
 	ts, err := s.trialSetStore()
 	if err != nil {
 		return nil, err
@@ -844,7 +883,7 @@ func (s *sliceServer) ListTrialSets(ctx context.Context, req gen.ListTrialSetsRe
 		if r.Runs == nil {
 			r.Runs = []string{}
 		}
-		v, err := s.setView(s.repairSet(ctx, r))
+		v, err := s.setView(s.shownSet(r))
 		if err != nil {
 			return nil, err
 		}

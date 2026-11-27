@@ -172,6 +172,7 @@ func NewEngine(cfg Config) (http.Handler, Operator) {
 		ss.captured, _ = cfg.Store.(CapturedStore)
 		ss.trialSets, _ = cfg.Store.(TrialSetStore)
 		ss.useOperations()
+		ss.repairAllSets(base) // a set its failed operation left running (feature 012, data model "States" rule 2)
 		impl = ss
 	}
 	ops.sweep(base, time.Time{})
