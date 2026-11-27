@@ -69,7 +69,12 @@ pattern, its template, agents and recordings do not change, so the recorded-mode
   Write order and repeats, `part_hashes`, `methods_mixed`, `previous`; contract draft exit codes;
   plan Exceptions; T001, T003, T005 to T007, T009, T010, T012, T015, T020, new T029); C3 (the
   Principle XII row) stays with T002 as in feature 011; P2 (containers' memory) is measured in
-  T012 and judged by the owner then.
+  T012 and judged by the owner then. Round 2 (same reviewer, the fixes 42cbf73..41a3604): every
+  round-1 finding fixed except C3 (kept) and P2 (closed); N2 HIGH (FR-004, FR-009, FR-010 changed
+  without a recorded clarification) -> the owner confirmed them (spec Clarifications 2026-11-27);
+  N1 MEDIUM (the set and its operation are two stores) -> data model Write order 1, T007, T029;
+  N3 LOW (R5's bound) reworded; P3 closed: the run page shows no trial field and T001's
+  regeneration runs `go test ./...` in `src/page`, whose drift check proves the generated client.
 
 ---
 
@@ -169,7 +174,9 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   a second, and when the recorded ID has neither a workflow nor a record it starts that same ID
   once, with one `run` operation (data model, Write order and repeats); a trial that leaves
   `waiting` before the hand-over signal arrives (`RunNotWaiting`) does not fail the set; a failed
-  store write at `startTrialSet` answers 503 and keeps no set; `deleteSlice` while a set of the
+  operation write at `startTrialSet` answers 503 and keeps nothing; a failed set write after the
+  operation's leaves the job to write the set from the operation's body before its first trial,
+  and a second `startTrialSet` meanwhile is 409 `RunActive`; `deleteSlice` while a set of the
   slice runs is 409 `RunActive`; a second set of the slice while one runs is 409 `RunActive`;
   `getTrialSet` reads without a model call or a changed record (SC-005); erasing the slice erases
   its sets (404); limits equal the contract's `x-limits`; seen failing before T009

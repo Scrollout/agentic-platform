@@ -35,9 +35,13 @@ The set's operation succeeds on `ended` and `stopped` and ends `cancelled` on `c
 
 ### Write order and repeats
 
-1. `startTrialSet` checks every refusal, then records the set (`running`) and its operation in one
-   store write; when that write fails nothing is kept and the answer is 503, retryable. A set is
-   never recorded without its operation, so no orphan `running` set blocks the slice.
+1. `startTrialSet` checks every refusal, reserves `TS-<n>`, then records the set's operation
+   (target `TS-<n>`, with the request body, as every operation is), then the set (`running`). When
+   the operation's write fails nothing is kept and the answer is 503, retryable. When the set's
+   write fails after it, the operation stands: its job, finding no set record for its target,
+   writes it from the operation's body before its first trial, so a set never exists without its
+   operation and an operation never runs without its set; "one running set per slice" counts the
+   slice's open `run-trials` operations as well as `running` records, so no orphan blocks it.
 2. Before trial *i* the job reserves a run ID from the run sequence and writes it into `runs`, then
    starts the run with that ID (`RejectDuplicate`) and records the trial's `run` operation only
    once. A repeated job reads `runs`: a recorded ID with a workflow is followed; a recorded ID with

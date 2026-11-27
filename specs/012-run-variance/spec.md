@@ -42,6 +42,11 @@ ended done can be captured as a pattern).
 - Found while planning: a run that runs out of attempts or budget waits for the developer up to
   14 days. Q: What does a trial do then? → A: the set ends that trial handed over, counted as not
   done, and starts the next; its project stays (owner; FR-003).
+- Analyze round 1 (fresh Sonnet, 42cbf73) sharpened three requirements; the owner confirmed them
+  the same day: the result says when a set's trials ran under more than one method (FR-004); a set
+  is compared with the latest earlier ended or stopped set with at least one ended trial, and with
+  none no comparison is shown (FR-009); a trial starts only while the set's cost so far plus that
+  run's own cost budget is within the set's (FR-010).
 
 ## Why the developer's runs do not vary today
 

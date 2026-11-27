@@ -100,9 +100,9 @@ questions on 2026-11-27 (spec, Clarifications).
   (`budgets.run.cost_usd`, $0.50 for the base pattern, S8; read from the pattern, never a literal)
   is at most the set's, so the set never exceeds $2 (SC-006). A run's budget is checked after each attempt
   (`durable/workflow.go:718` `overBudget`), which then hands the run over, so a run's cost can pass
-  its budget by at most that one attempt, itself bounded by the step budget ($0.20); SC-006 is
-  therefore "within $2 plus at most one step budget" in the worst case, and the rule's margin (one
-  whole run reserved) covers it. With five costly trials the fifth may not start: the set stops
+  its budget by at most that one attempt; the step budget is judged after the attempt too, so that
+  attempt has no hard bound. The rule's margin (a whole run's budget reserved before each trial) is
+  what keeps a set within $2 in practice; SC-006 is proven on planted usage in T007. With five costly trials the fifth may not start: the set stops
   `budget`; a set still running 24 hours after it started
   cancels its trial and ends `stopped`. A trial's own run budget is unchanged.
 - **Rationale**: S8. Five happy trials cost about $0.20; the rule stops a set only after costly
