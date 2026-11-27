@@ -195,6 +195,13 @@ func (s *session) printResult(set *gen.TrialSet) error {
 	if set.StoppedBecause != nil && *set.StoppedBecause != "" {
 		first += "  stopped " + esc(string(*set.StoppedBecause))
 	}
+	reason := ""
+	if set.FailedBecause != nil {
+		reason = *set.FailedBecause
+	}
+	if set.State == gen.TrialSetStateFailed {
+		first += "  failed " + esc(reason)
+	}
 	first += fmt.Sprintf("  done %d/%d", r.Done, r.Ended)
 	if r.Unstable {
 		first += "  unstable"
@@ -246,6 +253,8 @@ func (s *session) printResult(set *gen.TrialSet) error {
 	switch {
 	case set.State == gen.TrialSetStateCancelled:
 		return &failure{code: exitCancelled}
+	case set.State == gen.TrialSetStateFailed: // the reason is the set's, not its operation's
+		return failf(exitRefused, "trial set %s failed: %s", esc(set.Id), esc(reason))
 	case settled && r.Ended >= 1 && r.Done == r.Ended:
 		return nil
 	case settled:

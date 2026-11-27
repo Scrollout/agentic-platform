@@ -193,6 +193,9 @@ type operations struct {
 	// cancelTrials ends a trial set cancelled and cancels its running trial, when its run-trials
 	// operation is cancelled; nil when the engine keeps no trial sets.
 	cancelTrials func(ctx context.Context, rec store.OperationRecord) error
+	// failTrials ends a trial set `failed` once its run-trials operation has ended failed (data
+	// model, "States" rule 1); nil when the engine keeps no trial sets.
+	failTrials func(ctx context.Context, rec store.OperationRecord)
 }
 
 type operationProgress = struct {
@@ -380,7 +383,8 @@ func (o *operations) cancel(ctx context.Context, id string) (view gen.Operation,
 }
 
 // end writes an operation's end once; a later end, or an operation no longer kept, changes
-// nothing.
+// nothing. Once a run-trials operation's recorded end is `failed`, its set ends `failed` too
+// (failTrials), whichever end wrote it.
 func (o *operations) end(id string, status gen.OperationStatus, res *opResult, problem *gen.Problem) error {
 	var result, prob json.RawMessage
 	if res != nil {
@@ -393,7 +397,21 @@ func (o *operations) end(id string, status gen.OperationStatus, res *opResult, p
 	if errors.Is(err, store.ErrNotFound) {
 		return nil
 	}
+	if err == nil && status == gen.OperationStatusFailed && o.failTrials != nil {
+		if rec, _, rerr := o.records.Operation(id); rerr == nil && isTrialsKind(rec.Kind) && rec.Status == string(gen.OperationStatusFailed) {
+			o.failTrials(context.Background(), rec)
+		}
+	}
 	return err
+}
+
+// problemDetail is the detail of an ended operation's problem, "" for none.
+func problemDetail(rec store.OperationRecord) string {
+	var p gen.Problem
+	if len(rec.Error) == 0 || json.Unmarshal(rec.Error, &p) != nil || p.Detail == nil {
+		return ""
+	}
+	return *p.Detail
 }
 
 // Do does the work the operation's request asked for, from its record and body, and writes its

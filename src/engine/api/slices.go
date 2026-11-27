@@ -90,6 +90,7 @@ func (s *sliceServer) useOperations() {
 		}
 		if s.trialSets != nil {
 			s.ops.cancelTrials = s.cancelTrialSet
+			s.ops.failTrials = s.failTrialSet
 		}
 	}
 }
@@ -239,6 +240,7 @@ func (s *sliceServer) DeleteSlice(ctx context.Context, req gen.DeleteSliceReques
 	if _, err := s.svc.Get(id); err != nil {
 		return s.refuse("deleteSlice", err)
 	}
+	s.repairSets(ctx, id)
 	if err := s.noActiveRun(id); err != nil {
 		return s.refuse("deleteSlice", err)
 	}

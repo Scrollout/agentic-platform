@@ -26,7 +26,9 @@ starts a set with one `Idempotency-Key` (k from 1 to the engine contract's `x-li
 read from the embedded contract; without `--trials` the engine's default applies) and follows it as
 `trial-set <id>` does: one line per trial as it ends, then the set's first line, its trials' and
 steps' tables (`-` for a measure the engine does not give) and the comparison line, and the exit
-code of the set's state. `trial-set` of an ended set prints the trial lines too.
+code of the set's state. `trial-set` of an ended set prints the trial lines too. A `failed` set's
+first line ends its state with `failed <failed_because>`, and the client exits 4 with that reason,
+read from the set (not its operation).
 
 Signals reach `Run` through `Env.Signals`, which `main` fills with `signal.Notify` for SIGINT and
 SIGTERM: the first one stops following, never the work, prints how to follow or cancel it, and
