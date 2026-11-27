@@ -18,8 +18,9 @@ pattern that ended done, captured with `ap capture <run>`, becomes a pattern tha
 slices of the same kind with no model call. A captured pattern is not a file here. It is the
 developer's data in the engine store, behind the engine API's `/captured-patterns`, and its
 declaration is derived from its base pattern's `pattern.yaml`: each agent step is filled from the
-source run's accepted files by the fixed procedure `fill`, and the review step keeps only the
-checks that need no findings. Every other check of the base pattern judges a filled step as it
+source run's accepted files by the fixed procedure `fill`, and the review step drops the
+checks that judge findings (FindingsCarryEvidence, NoBlockingFindingOpen) and adds AllTestsPass, so
+its witness tests run against the filled code ([ADR 0101](../../docs/decisions/0101-filled-review-step-runs-every-test.md)). Every other check of the base pattern judges a filled step as it
 judges an agent's. A later slice fits it only when it equals the source slice except for the
 captured pattern's parameter values; the developer proves it with `ap prove` and approves it before
 any run uses it. The rules are in the

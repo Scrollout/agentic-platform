@@ -2,6 +2,7 @@
 
 ## 2026-11-27
 
+* **Implementation**: Feature 011 (T072-T074): a captured pattern's filled review step runs AllTestsPass, so a filled witness that fails stops the run (ADR 0101); CI 45994369063 green; no eval suite pending. The final review converged in 2 rounds and `/speckit-converge` found nothing more.
 * **Documentation**: Feature 011 (T025): the terminal client README lists `withdraw-pattern` and `erase-pattern`; N-052's note waits only for the merge; the plan lists `checksvc/service.go` (T059). The open review suggestions of the three stories and the final review moved to the backlog (T207 to T210, owner 2026-11-27).
 * **Decision**: [ADR 0101](/decisions/0101-filled-review-step-runs-every-test.md) refines ADR 0090: a captured pattern's filled review step also declares AllTestsPass, so the witness tests it writes run against the filled code (feature 011 final review, T025 B1; owner 2026-11-27).
 * **Specification**: Feature 011, T061 clarify (owner): a later slice's name value that is a Go keyword (`func`, `type`, `go`) does not fit a captured pattern, refused at the fit naming the parameter and the word; the proposal, the check and changing the parameters refuse none. The engine contract's `refused-value` description says so; a later value equal to its parameter's own source value is not refused as a keyword (owner, T062).

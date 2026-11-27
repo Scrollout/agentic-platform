@@ -1072,7 +1072,7 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
 - [x] T024 Paid evals for the analyst and steps suites (owner go-ahead; add the branch to
   environment dev's branch policies): the method identity changed; every counted case pass^3
   (done 2026-11-27: evals 45979176058 at ca19e5e, 42 cases 3 of 3, $0.30; research R8)
-- [ ] T025 Final fresh review of the feature judging the head's CI run and T024; `/speckit-analyze`
+- [x] T025 Final fresh review of the feature judging the head's CI run and T024; `/speckit-analyze`
   and `/speckit-converge` for the whole feature until clean
   Round 1 2026-11-27 at 98107db (fresh Sonnet, read-only worktree, judging CI 45964551765 and
   evals 45979176058): B1 blocking (research R1, ADR 0039, FR-009): `captured.Declaration` leaves
@@ -1087,6 +1087,12 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   T042 stale, F4 stacked ADR 0093/0095 descriptions (accepted ADRs stay), F5 the keyword and
   hand-over rules stay spec Clarifications, F6 SC-002 dropped on purpose and status set at T026,
   F7 the overview links every ADR in its body
+  Round 2 2026-11-27 at 4dad8c4 (same reviewer, B1 and the changed lines, judging CI 45994369063
+  and evals 45994408466): B1 fixed, no regression; the evals' empty selection is right; R2-S1
+  (suggestion: a pattern captured before 4dad8c4 keeps its old declaration, also after a new
+  proof) to backlog T210. Review converged. Analyze round 2 (fresh Sonnet, at 3b8ac25): 0
+  CRITICAL, 0 HIGH (N1 plan row fixed in 4dad8c4). `/speckit-converge` for the whole feature
+  (fresh Sonnet, at 4dad8c4): one gap, T074 (done); every FR and SC delivered and tested
 - [x] T072 (T025 round 1, B1; ADR 0101) Test author: the owner approved (2026-11-27) changing
   `TestCapturedDeclarationIsTheBasePatternWithFillSteps` (`src/engine/api/captured_capture_test.go`)
   so its expected review step adds AllTestsPass after its other kept checks; and, in a new test
@@ -1095,10 +1101,15 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   Seen failing before T073
   Done 2026-11-27: 60e5da9 (fresh Sonnet; the three tests seen failing at 3b8ac25 for the missing
   AllTestsPass only)
-- [ ] T073 (T025 round 1, B1; ADR 0101) Code: `captured.Declaration` appends AllTestsPass to the
+- [x] T073 (T025 round 1, B1; ADR 0101) Code: `captured.Declaration` appends AllTestsPass to the
   filled review step's checks (done when T072 passes; method identity converged), then a CI run
   and the paid analyst and steps evals (owner agreed, 2026-11-27), then T025 round 2 (B1 and the
   changed lines)
+  Done 2026-11-27: 4dad8c4 (coordinator; method a062a6cf); CI 45994369063 at 4dad8c4 26/26
+  green; evals 45994408466 selected no suite (research R8); round 2 judged B1 fixed
+- [x] T074 (converge whole feature; ADR 0101, Principle IX; LOW) Docs: `src/catalogue/README.md`
+  says the filled review step drops the findings checks and adds AllTestsPass, as the overview and
+  ADR 0101 do. Done 2026-11-27
 - [ ] T026 Merge: every task above is checked (done or `closed:`); `evals-current` on the branch lists no pending suite; the owner fast-forwards
   `main`; remove the branch from environment dev's policies; delete the branch with the owner's OK;
   the spec's status `Implemented`

@@ -328,6 +328,11 @@ suites. Every one of the 42 counted cases passed 3 of 3 trials, none quarantined
 (17 min), steps code 7 (35 min), steps review 9 (47 min), steps tests 5 (50 min); $0.30 in all
 (measurement artifacts `eval-measurements-*-1`).
 
+T073 (2026-11-27): evals dispatch 45994408466 at 4dad8c4 selected no suite: no file an eval
+suite's globs (`src/tests/evals/suites.yaml`) read changed since ca19e5e (`src/engine/captured`
+is read by none; the suites run the base pattern's agents), so `evals-current` in CI 45994369063
+names no pending suite. The final review's round 2 judged that right.
+
 ## Threat-model input
 
 - Parameter values come from the approved slice, which the analyst model may have written:
