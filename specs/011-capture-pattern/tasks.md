@@ -994,14 +994,16 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   Round 1 2026-11-27 (fresh Sonnet, read-only worktree at e693cea, judging CI 45913069887): F1
   blocking -> T064, T065; suggestions F2 and F3 -> T066, F4 -> T067, F5 -> T068, F6 -> T069,
   the untested cases -> T070. Every T018-T020 reading judged not an issue except F5 and F6
-- [ ] T064 [US3] (review F1; FR-012, data model "withdrawn: final", Single owner for rules) Test
+- [x] T064 [US3] (review F1; FR-012, data model "withdrawn: final", Single owner for rules) Test
   author: new `src/engine/api/captured_named_stale_test.go` (package `api`): `namedStart` given a
   record read while the captured pattern was approved, after a withdrawal has completed, answers
   `CapturedPatternWithdrawn` and leaves the stored state `withdrawn` (also when a proof completed
   since, so `completeProofs` changes the copy); after an erasure it answers NotFound naming it,
   not an internal error. Seen failing
-- [ ] T065 [US3] (review F1) Code: `namedStart` judges and saves the record it reads under
+- [x] T065 [US3] (review F1) Code: `namedStart` judges and saves the record it reads under
   `cmu`, never the copy `namedPattern` read before (done when T064 passes)
+  Done 2026-11-27: T064 1e1f17d (fresh Sonnet, seen failing), T065 (coordinator; method
+  2c54e8ef); whole `./api` 230 s green
 - [ ] T066 [US3] (review F2, F3; suggestion) at the runs' lock `startRun` re-checks only erasure
   (`fillErased`): an unnamed start whose chosen captured pattern was erased before the lock answers
   NotFound (the contract names NotFound only for an unknown slice or pattern); a withdrawal
