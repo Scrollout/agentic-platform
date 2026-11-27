@@ -3,7 +3,7 @@
 #
 # Runs on the host and calls nothing but `docker` (Compose) and POSIX utilities, except `test`, which
 # also runs a test binary it built in the pinned Go container (ADR 0037). Its own commands
-# are start, up, down, build-workers, page, test and registry; build, resume, replay and prove first make the slice's
+# are start, up, down, build-workers, page, test and registry; build, resume, replay, prove and trials first make the slice's
 # workers ready; every other command goes unchanged to the terminal client container, and its exit
 # code is returned. Exit codes are the terminal contract's: 3 is a usage error or a command that is
 # not available yet; 1 is a failed start or stop.
@@ -1597,6 +1597,50 @@ cmd_prove() {
   compose_run cli build "$proof_slice" "$project"
 }
 
+# `trials <slice> <prefix> [--trials <k>]` (feature 012): make the step workers of each trial's
+# project, `<prefix>-1` to `<prefix>-<k>` in that order, then pass the command on unchanged. k and
+# every project name are checked before anything changes; the first build-workers that fails ends
+# it with its exit code and no set is started (the projects already made stay). The limits are the
+# engine contract's x-limits (trials-max, trials-default), read from this repository's copy.
+contract_limit() {
+  awk -v n="$1" '
+    /^x-limits:/ { in_limits = 1; next }
+    in_limits && /^[^ #]/ { exit }
+    in_limits && $1 == n ":" { print $2; exit }
+  ' "$here/../engine/api/preview/2026-11-12-preview/openapi.yaml"
+}
+
+cmd_trials() {
+  trials_slice=$1 trials_prefix=$2
+  trials_max=$(contract_limit trials-max) trials_k=$(contract_limit trials-default)
+  case $trials_max$trials_k in '' | *[!0-9]*) die 1 "trials: the engine contract's x-limits.trials-max or trials-default cannot be read" ;; esac
+  if [ $# -eq 4 ]; then
+    [ "$3" = --trials ] || die 3 "trials: want <slice> <prefix> [--trials <k>], not '$3'"
+    case $4 in
+      [1-9] | [1-9]*[0-9]) case $4 in *[!0-9]*) die 3 "trials: --trials takes a whole number from 1 to $trials_max, not '$4'" ;; esac ;;
+      *) die 3 "trials: --trials takes a whole number from 1 to $trials_max, not '$4'" ;;
+    esac
+    [ "$4" -le "$trials_max" ] || die 3 "trials: --trials takes a whole number from 1 to $trials_max, not '$4'"
+    trials_k=$4
+  elif [ $# -ne 2 ]; then
+    die 3 "trials: want <slice> <prefix> [--trials <k>]"
+  fi
+  is_slice_id "$trials_slice" || die 3 "trials: '$trials_slice' is not a slice ID (S-<n>)"
+  trials_i=1
+  while [ "$trials_i" -le "$trials_k" ]; do
+    is_project "$trials_prefix-$trials_i" ||
+      die 3 "trials: '$trials_prefix-$trials_i' is not a project name (lowercase letters, digits and hyphens, at most 63); nothing was changed"
+    trials_i=$((trials_i + 1))
+  done
+  load
+  trials_i=1
+  while [ "$trials_i" -le "$trials_k" ]; do
+    build_workers "$trials_slice" "$trials_prefix-$trials_i" || exit $?
+    trials_i=$((trials_i + 1))
+  done
+  compose_run cli trials "$@"
+}
+
 # The test harness (src/cli/contract.md "The test harness", research D33, ADR 0037). `test <suite>`
 # builds the acceptance suite's test binary in the pinned golang container, offline, with the module
 # cache in ${XDG_CACHE_HOME:-~/.cache}/agentic-platform/go (as scripts/check.sh builds its docker
@@ -1751,5 +1795,6 @@ case $cmd in
   resume) [ $# -eq 1 ] || usage; load; cmd_resume "$1" ;;
   replay) [ $# -ge 2 ] || usage; load; cmd_replay "$1" "$2" || exit $?; compose_run cli replay "$@" ;;
   prove) [ $# -eq 2 ] || usage; load; cmd_prove "$1" "$2" ;;
+  trials) [ $# -ge 2 ] || usage; cmd_trials "$@" ;;
   *) load; compose_run cli "$cmd" "$@" ;;
 esac

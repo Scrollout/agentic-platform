@@ -316,6 +316,14 @@ into the new project, then passes the command on. For both, an unknown run is ex
 and an answer that is missing, not 200 or cannot be read, or lacks the slice ID (for resume also the
 project name or status), is exit 1.
 
+`ap trials <slice> <prefix> [--trials <k>]` (feature 012) runs `build-workers <slice>
+<prefix>-<i>` for each `<i>` from 1 to `<k>`, in that order, then passes the command on to the
+client unchanged. `<k>` defaults to the engine contract's `x-limits.trials-default` and may be 1 to
+`x-limits.trials-max`, both read from this repository's copy of the contract; a `<k>` outside them,
+a malformed slice ID or a prefix that does not make a project name for every trial (so at most 61
+characters) is exit 3 before anything changes. The first `build-workers` that fails ends it with
+that exit code and starts no set; the projects already made stay.
+
 `ap prove <captured pattern> <project>` (feature 011) proves a captured pattern: it runs the
 client's `proof-slice <captured pattern>`, which prints only the proof slice's ID (made from the
 captured pattern's copy, or restored to it), then does what `ap build <proof slice> <project>`
