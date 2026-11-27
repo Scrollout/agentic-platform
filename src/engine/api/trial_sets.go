@@ -677,7 +677,7 @@ func (s *sliceServer) failTrialSet(ctx context.Context, op store.OperationRecord
 	set, err := s.readSet(op.Target)
 	if err == nil && set.State == gen.TrialSetStateRunning {
 		at := s.ops.now().UTC()
-		set.State, set.StoppedBecause, set.FailedBecause, set.EndedAt = gen.TrialSetStateFailed, "", problemDetail(op), &at
+		set.State, set.StoppedBecause, set.FailedBecause, set.EndedAt = gen.TrialSetStateFailed, "", failedReason(op), &at
 		if err = s.putSet(set); err != nil {
 			log.Printf("engine: ending trial set %s failed: %v; the next read repairs it", set.ID, err)
 		}
@@ -888,4 +888,18 @@ func (s *server) ListTrialSets(context.Context, gen.ListTrialSetsRequestObject) 
 
 func (s *server) GetTrialSet(context.Context, gen.GetTrialSetRequestObject) (gen.GetTrialSetResponseObject, error) {
 	return gen.GetTrialSet404ApplicationProblemPlusJSONResponse{NotFoundApplicationProblemPlusJSONResponse: notFound("the trial set")}, nil
+}
+
+// failedReason is a failed set's failed_because: the detail of its operation's problem, or, when
+// that is empty or blank, the problem's code (OperationFailed when none is recorded), so a failed
+// set always says why (the contract requires failed_because with failed).
+func failedReason(op store.OperationRecord) string {
+	if d := problemDetail(op); strings.TrimSpace(d) != "" {
+		return d
+	}
+	var p gen.Problem
+	if len(op.Error) != 0 && json.Unmarshal(op.Error, &p) == nil && p.Code != "" {
+		return string(p.Code)
+	}
+	return string(gen.ErrorCodeOperationFailed)
 }
