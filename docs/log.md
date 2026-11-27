@@ -4,6 +4,7 @@
 
 * **Specification**: Feature 011, T061 clarify (owner): a later slice's name value that is a Go keyword (`func`, `type`, `go`) does not fit a captured pattern, refused at the fit naming the parameter and the word; the proposal, the check and changing the parameters refuse none. The engine contract's `refused-value` description says so; a later value equal to its parameter's own source value is not refused as a keyword (owner, T062).
 * **Implementation**: Feature 011 (T063): the fit refuses a Go keyword as a later name value (`refused-value`, or `PatternDoesNotFit` for a named start). User Story 2 is reviewed and converged (CI 45903926231 green).
+* **Implementation**: Feature 011 (T018-T022, T064, T065): a captured pattern can be withdrawn (no new run uses it; runs already started finish on it) and erased (refused while a run built from it or its proof has not ended; its proof slice, that slice's runs and the artifacts only it holds go; its ID is never given again); `ap withdraw-pattern`, `ap erase-pattern` (erases only after the ID is typed). A named start judges the captured pattern as it is under the lock. User Story 3 is reviewed and converged (CI 45964551765 green).
 
 ## 2026-11-26
 
