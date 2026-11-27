@@ -189,3 +189,15 @@ These terms come from the Feature 011 specification.
 | Proof slice | An approved slice the platform makes from a captured pattern's copy of its source slice; each of its runs is a proof of that captured pattern, so a proof works after the source slice is erased. |
 
 Sources: [Feature 011 specification](../../specs/011-capture-pattern/spec.md).
+
+# Feature 012 terms
+
+These terms come from the Feature 012 specification.
+
+| Term | Meaning |
+|------|---------|
+| Trial set | The developer's request for k fresh builds of one approved slice, run one after another as one operation, to see how much they vary. |
+| Slice trial | One run in a trial set: it builds the slice into its own project and reuses no earlier accepted result. |
+| Unstable trial set | A trial set some of whose trials ended done and some did not. |
+
+Sources: [Feature 012 specification](../../specs/012-run-variance/spec.md).

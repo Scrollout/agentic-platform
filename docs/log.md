@@ -2,6 +2,7 @@
 
 ## 2026-11-27
 
+* **Specification**: Feature 012 (N-054 remainder) specified: the developer asks for k fresh builds (trials) of an approved slice, reusing no earlier result, and sees how many ended done, the unstable mark, each step's spread of attempts, review rounds, duration, tokens and cost, and which steps' files differ; sets are listed and compared with the slice's previous set. Owner: fresh trials only, API and terminal client only, k from 1 to 5 (default 3), $2 per set. Glossary: Trial set, Slice trial, Unstable trial set.
 * **Implementation**: Feature 011 merged to `main` (T026, owner): N-052 is `done`; the spec is `Implemented`.
 * **Implementation**: Feature 011 (T072-T074): a captured pattern's filled review step runs AllTestsPass, so a filled witness that fails stops the run (ADR 0101); CI 45994369063 green; no eval suite pending. The final review converged in 2 rounds and `/speckit-converge` found nothing more.
 * **Documentation**: Feature 011 (T025): the terminal client README lists `withdraw-pattern` and `erase-pattern`; N-052's note waits only for the merge; the plan lists `checksvc/service.go` (T059). The open review suggestions of the three stories and the final review moved to the backlog (T207 to T210, owner 2026-11-27).
