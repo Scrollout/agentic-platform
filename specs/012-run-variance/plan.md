@@ -158,6 +158,7 @@ any other is stopped and asked for):
 | Rule | Location | Reason |
 |------|----------|--------|
 | Outside-in, test-first: acceptance tests are seen failing before the code | `src/tests/acceptance/trials_test.go` (T012) | The Compose-stack suite runs only in CI (owner's rule: no heavy local tests). It is seen failing on the CI run of a push of T001 and T012 alone, before any code; the engine-rig tests T007 and T010 are seen failing locally. Recorded 2026-11-27 (analyze round 1, T1) |
+| Outside-in, test-first: tests are seen failing before the code | `scripts/tests/test_build_workers_project_registration.py` (T004) | The build-workers rig needs real Docker and gVisor (no heavy local tests). It is seen failing on the CI run of a push of the T003 and T004 tests before T005's code. Owner, 2026-11-27 |
 
 ## Complexity Tracking
 

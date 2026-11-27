@@ -120,7 +120,14 @@ pattern, its template, agents and recordings do not change, so the recorded-mode
   `registrationStore` (`api/workers_test.go`, `api/worker_registrations_restart_test.go`,
   `store/worker_registrations_test.go`)
   Recorded: the owner approved the Principle XII row on 2026-11-27; T001 broke no existing test,
-  so it needs no approval. Open: T005's list
+  so it needs no approval. T005's list, approved by the owner on 2026-11-27 (each call site gains
+  only a project argument, `""` for the project-less registration, as `Workers.Endpoint(slice,
+  project, step)`, `steps.Endpoints` and `store.DeleteWorkerRegistration(slice, step, project)`
+  gain it): `src/engine/steps/adapters_test.go:46` (the `endpoints` fake),
+  `src/engine/api/grants_dir_test.go` (its 10 `Endpoint` calls), `api/grants_trailing_test.go:24`,
+  `api/worker_registrations_restart_test.go:171` and `:457`, `api/runs_durable_test.go:343`,
+  `src/engine/store/worker_registrations_test.go` (its 6 `DeleteWorkerRegistration` calls and the
+  doc comment at `:10`). Any other existing test T005 breaks is stopped and asked for
 
 ---
 
@@ -142,7 +149,8 @@ own project's (FR-013; research R3; ADR 0103).
 - [ ] T004 [P] Test author: new `scripts/tests/test_build_workers_project_registration.py`:
   `build-workers <slice> <project>` sends `{"endpoint": …, "project": "<project>"}` for each step;
   building workers for a second project of the same slice leaves the first project's containers
-  and registrations in place; seen failing before T005
+  and registrations in place; seen failing before T005, on the CI run of a push of the T003 and
+  T004 tests before T005's code (plan, Exceptions)
 - [ ] T005 Code author (done when T003 and T004 pass): `src/engine/api/workers.go` keeps
   registrations by slice, step and project (`missing`, `Endpoint` and the lookup take the run's
   project, a registration without a project only as fallback; `workersReady` and
