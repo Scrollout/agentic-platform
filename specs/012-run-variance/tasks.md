@@ -150,7 +150,9 @@ own project's (FR-013; research R3; ADR 0103).
   `build-workers <slice> <project>` sends `{"endpoint": …, "project": "<project>"}` for each step;
   building workers for a second project of the same slice leaves the first project's containers
   and registrations in place; seen failing before T005, on the CI run of a push of the T003 and
-  T004 tests before T005's code (plan, Exceptions)
+  T004 tests before T005's code (plan, Exceptions). Seen failing: CI 46029974303 at 3e4bd11,
+  `py_tests` 4 of 5 failed (the body has no `project`), the containers test passed, nothing else
+  failed
 - [ ] T005 Code author (done when T003 and T004 pass): `src/engine/api/workers.go` keeps
   registrations by slice, step and project (`missing`, `Endpoint` and the lookup take the run's
   project, a registration without a project only as fallback; `workersReady` and
