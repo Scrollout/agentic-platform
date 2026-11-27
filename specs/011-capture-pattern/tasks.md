@@ -994,6 +994,7 @@ a withdrawn one is never chosen; erasing the source slice keeps the captured pat
   Round 1 2026-11-27 (fresh Sonnet, read-only worktree at e693cea, judging CI 45913069887): F1
   blocking -> T064, T065; suggestions F2 and F3 -> T066, F4 -> T067, F5 -> T068, F6 -> T069,
   the untested cases -> T070. Every T018-T020 reading judged not an issue except F5 and F6
+  F1 fixed by T064/T065; CI 45964551765 at ca19e5e 26/26 green (judged by round 2)
 - [x] T064 [US3] (review F1; FR-012, data model "withdrawn: final", Single owner for rules) Test
   author: new `src/engine/api/captured_named_stale_test.go` (package `api`): `namedStart` given a
   record read while the captured pattern was approved, after a withdrawal has completed, answers
