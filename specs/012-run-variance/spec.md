@@ -144,8 +144,9 @@ reliable than the first.
   files; the result names the pattern.
 - k is 1, or larger than the limit: 1 is a single fresh build and shows no unstable mark; more than
   the limit is refused before anything starts.
-- Another run is active: trials wait for it like any run and start in order, since only one run is
-  active at a time.
+- Another run is active: the set waits until it ends before starting its next trial (a run asked
+  for directly is refused instead), within the set's time budget, since only one run is active at
+  a time.
 - A trial waits for the developer (out of attempts, review rounds or budget): the set ends it
   handed over, counted as not done, and starts the next; its project stays for inspection.
 - A trial is interrupted (a platform stop, or the model unavailable on every attempt): the set waits
@@ -156,11 +157,15 @@ reliable than the first.
 - The developer cancels the trials: the running trial is cancelled, no further trial starts, and the
   result counts only the trials that ended, naming the set as cancelled.
 - The budget runs out: the trials stop, and the result says so; no trial starts beyond the budget.
-- The slice changes or loses an approval while trials run: no further trial starts, and the result
-  says why.
+- The slice changes or loses an approval while trials run (between two trials no run is active, so
+  it can be edited and approved again): no further trial starts once any part differs from the part
+  the set started with, and the set says why (`slice-changed`).
+- The step workers of a later trial's project are gone (`ap down`): the set stops (`workers`).
 - The method changes between two trials of one set (an upgrade while trials run): the result names
   each trial's method and does not compare outcomes across methods as if they were one set.
-- The slice is erased: its trials' results are erased with it.
+- The slice is erased: refused while one of its sets is running; afterwards its sets are erased
+  with it.
+- A set's 24 hours pass: its running trial is cancelled and the set stops (`time`).
 
 ## Requirements *(mandatory)*
 
@@ -178,7 +183,7 @@ reliable than the first.
   and counts as not done.
 - **FR-004**: The set's result MUST show how many trials ended done out of those that ended, each
   trial's run and outcome, and an unstable mark when at least one trial ended done and at least one
-  did not.
+  did not; when the trials ran under more than one method, the result MUST say so.
 - **FR-005**: The result MUST show per step, over the trials that reached it, the lowest, median and
   highest of attempts, review rounds, duration, tokens and cost, and the same for each trial's
   totals; a measure no such trial carries MUST be shown as not available.
@@ -188,12 +193,13 @@ reliable than the first.
   a model or change any run.
 - **FR-008**: The developer MUST be able to list a slice's sets of trials, newest first, paginated,
   each with when it ran, its method, k, how many ended done and the unstable mark.
-- **FR-009**: When a set of trials of a slice ends, its result MUST show the change in the share of
-  trials that ended done since the latest earlier ended set of the same slice, and mark a fall as
-  less reliable; sets under different methods MUST be named as such.
+- **FR-009**: When a set of trials of a slice ends or stops, its result MUST show the change in the
+  share of trials that ended done since the latest earlier ended or stopped set of the same slice
+  with at least one ended trial, and mark a fall as less reliable; sets under different methods
+  MUST be named as such. With no such set, no comparison is shown.
 - **FR-010**: Trials MUST be bounded by a budget of cost (default $2) and time for the whole set,
-  both declared in the contract, in addition to each run's own budgets; a trial MUST NOT start when
-  the set's remaining budget is used.
+  both declared in the contract, in addition to each run's own budgets; a trial MUST start only when
+  the set's cost so far plus that run's own cost budget is within the set's budget.
 - **FR-011**: A set's result and its trials MUST be kept as long as the slice and its runs are kept
   and erased with the slice; it MUST hold no content beyond what the trials' run records already
   hold.

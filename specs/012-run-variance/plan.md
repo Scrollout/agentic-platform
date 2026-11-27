@@ -155,7 +155,9 @@ any other is stopped and asked for):
 
 ## Exceptions
 
-None.
+| Rule | Location | Reason |
+|------|----------|--------|
+| Outside-in, test-first: acceptance tests are seen failing before the code | `src/tests/acceptance/trials_test.go` (T012) | The Compose-stack suite runs only in CI (owner's rule: no heavy local tests). It is seen failing on the CI run of a push of T001 and T012 alone, before any code; the engine-rig tests T007 and T010 are seen failing locally. Recorded 2026-11-27 (analyze round 1, T1) |
 
 ## Complexity Tracking
 

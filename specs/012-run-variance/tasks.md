@@ -31,8 +31,8 @@ pattern, its template, agents and recordings do not change, so the recorded-mode
 - **Existing tests**: only changes the owner approves by name (T002) are made, each commit carrying
   `Tests-approved-by: Marius Gologan (<date of the approval>)`. Any other existing test that needs a
   change is stopped and asked for, quoting what changes and why.
-- **Method identity**: every commit that changes a file `src/engine/method/method.json` lists runs
-  `scripts/method-digest.py` and commits the converged `src/engine/method/method.sha256`.
+- **Method identity**: every commit that changes a file listed in `src/engine/method/method.json`
+  runs `scripts/method-digest.py` and commits the converged `src/engine/method/method.sha256`.
 - **Trailers**: `Approved-by: Marius Gologan (2026-11-12)` is the owner's standing approval to
   commit finished, tested work to protected paths.
 - **No dependency** is added.
@@ -44,7 +44,8 @@ pattern, its template, agents and recordings do not change, so the recorded-mode
   existing run path (`StartRun`'s checks, `newRun`, `follow`, the hand-over signal).
 - **Limits have one home**: `trials-max: 5`, `trials-default: 3`, `trial-set-cost-usd: 2`,
   `trial-set-hours: 24` are read from the contract's `x-limits`, never repeated as literals; a
-  contract test pins the engine's values to them.
+  contract test pins the engine's values, and the `trials` schema's `minimum`, `maximum` and
+  `default`, to them.
 - **Test time**: locally only the packages a task touches (`go test ./trials/ ./api/ ./durable/
   ./store/ ./machine/` in `src/engine`, `go test ./...` in `src/cli`, `go vet ./...` in `src/tests`
   and `go test ./...` in `src/page` after regenerating, the touched `scripts/tests/test_*.py`
@@ -60,7 +61,15 @@ pattern, its template, agents and recordings do not change, so the recorded-mode
 - **Lint**: before each push of Go changes, the pinned golangci-lint with gosec on the changed
   lines.
 - **Gate**: `/speckit-analyze` (fresh reviewer) must report no CRITICAL or HIGH before T001, and
-  again after any change to spec, plan, tasks or a design artifact.
+  again after any change to spec, plan, tasks or a design artifact. Round 1 (fresh Sonnet, at
+  42cbf73): 0 CRITICAL, 3 HIGH (E1 the trial's run ID reserved before its start has no path
+  through `newRun`; F1 a slice edited and approved again between trials; W1 `workersReady`,
+  resume and replay read registrations without the project), 11 MEDIUM, 8 LOW; fixed at their
+  source (spec edge cases, FR-004, FR-009, FR-010; research S2, R1, R3, R5, R6, R9; data model
+  Write order and repeats, `part_hashes`, `methods_mixed`, `previous`; contract draft exit codes;
+  plan Exceptions; T001, T003, T005 to T007, T009, T010, T012, T015, T020, new T029); C3 (the
+  Principle XII row) stays with T002 as in feature 011; P2 (containers' memory) is measured in
+  T012 and judged by the owner then.
 
 ---
 
@@ -84,13 +93,18 @@ pattern, its template, agents and recordings do not change, so the recorded-mode
   `trial_set` and `trial` (1 to 5); `slice-defs.schema.json` gains `trial_set_id`
   (`^TS-[0-9]+$`). `src/cli/contract.md` gains the rows and output of `trials`, `trial-sets` and
   `trial-set` (contract draft, Terminal client) and `ap`'s interception of `trials`. Regenerate;
-  record the pinned oasdiff's report (expected: only `response-property-enum-value-added` for
-  `run-trials`) in research R9
+  run the pinned oasdiff on the draft before committing and record its report in research R9
+  (expected: `response-property-enum-value-added` for `run-trials`, and the warning
+  `response-property-pattern-changed` for `operation_target`, which gains `TS-<n>`); any other
+  error goes to the owner before the commit
 - [ ] T002 Owner approvals: the plan's Complexity Tracking row for Principle XII (not applicable,
   one developer); the code author of T001 lists every existing test that fails or no longer
   compiles after T001 (expected: tests that list the contract's paths, operation kinds or fields
   exactly) and asks the owner to approve each by name, recorded here with its date; a change not
-  approved is not made, and the task that needs it stops
+  approved is not made, and the task that needs it stops. T005's author does the same, before
+  T005's commit, for the existing tests and fakes that pin the registry's key or
+  `registrationStore` (`api/workers_test.go`, `api/worker_registrations_restart_test.go`,
+  `store/worker_registrations_test.go`)
 
 ---
 
@@ -103,16 +117,22 @@ own project's (FR-013; research R3; ADR 0103).
   of one slice register their workers (`project` set) and both stay registered; a run of each
   calls only its own project's endpoint; a registration without `project` serves any project of
   its slice; `startRun` into a project whose step has no worker of its own or without a project
-  answers `WorkersNotReady` naming the step and project; registrations by project survive an
-  engine restart; erasing the slice removes all of them; seen failing before T005
+  answers `WorkersNotReady` naming the step and project; a project-less registration is used only
+  when the project has none of its own; registering project 1's workers sends `workers-ready` only
+  to a run waiting for project 1's workers, never to a waiting run of project 2 of the same slice;
+  `resumeRun` and `replayRun` check the workers of their run's (or the new) project;
+  registrations by project survive an engine restart; erasing the slice removes all of its
+  projects' registrations; seen failing before T005
 - [ ] T004 [P] Test author: new `scripts/tests/test_build_workers_project_registration.py`:
   `build-workers <slice> <project>` sends `{"endpoint": …, "project": "<project>"}` for each step;
   building workers for a second project of the same slice leaves the first project's containers
   and registrations in place; seen failing before T005
 - [ ] T005 Code author (done when T003 and T004 pass): `src/engine/api/workers.go` keeps
-  registrations by slice, step and project (`missing` and the lookup take the run's project, a
-  registration without a project as fallback); `src/engine/store/workers.go` keeps the project;
-  `src/engine/api/runs.go` `ready()` takes the project; `src/deploy/ap` `register_worker` sends
+  registrations by slice, step and project (`missing`, `Endpoint` and the lookup take the run's
+  project, a registration without a project only as fallback; `workersReady` and
+  `waitingForWorkers` by slice and project; `forget` and `DeleteWorkerRegistration` cover every
+  project of the slice); `src/engine/store/workers.go` keeps the project; `src/engine/api/runs.go`
+  `ready()` takes the project in `StartRun`, `ResumeRun` and `ReplayRun`; `src/deploy/ap` `register_worker` sends
   `project`; the launcher's `refuse_active_run` stays; method identity converged
 
 ---
@@ -131,7 +151,7 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   outcomes done, done, handed-over give `done 2`, `ended 3`, `unstable`; 3/3 and 0/3 are not
   unstable (SC-002); a set with 2 of 3 trials ended counts only the ended; a cancelled trial counts
   as ended and not done; an expired trial is not done; each trial's run ID, outcome and method;
-  seen failing before T009
+  trials under two methods give `methods_mixed`, one method does not; seen failing before T009
 - [ ] T007 [P] [US1] Test author: new `src/engine/api/trial_sets_test.go` (engine rig, durable
   service, recorded or stub workers): `startTrialSet` answers 400 `InvalidRequest` for `trials` 0
   or 6 and for a prefix that makes an invalid project name, and records nothing; refusals in the
@@ -142,9 +162,15 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   is handed over by the set (`handed-over`, its reason names the set) and the next starts; a set
   whose cost so far plus $0.50 would pass $2 stops `budget` and starts no further trial (SC-006);
   24 hours (a fake clock) stops it `time` and cancels its trial; the slice losing an approval stops
-  it `slice-changed`; `cancelOperation` on the set's operation cancels the running trial, starts no
-  other and ends the set `cancelled`; the job repeated after a stop follows the trial run it
-  recorded and never starts a second; a second set of the slice while one runs is 409 `RunActive`;
+  it `slice-changed`, and so does a part edited and approved again between two trials (its hash
+  differs from the set's `part_hashes`); the next project's workers gone stops it `workers`;
+  `cancelOperation` on the set's operation cancels the running trial, starts no other and ends the
+  set `cancelled`; the job repeated after a stop follows the trial run it recorded and never starts
+  a second, and when the recorded ID has neither a workflow nor a record it starts that same ID
+  once, with one `run` operation (data model, Write order and repeats); a trial that leaves
+  `waiting` before the hand-over signal arrives (`RunNotWaiting`) does not fail the set; a failed
+  store write at `startTrialSet` answers 503 and keeps no set; `deleteSlice` while a set of the
+  slice runs is 409 `RunActive`; a second set of the slice while one runs is 409 `RunActive`;
   `getTrialSet` reads without a model call or a changed record (SC-005); erasing the slice erases
   its sets (404); limits equal the contract's `x-limits`; seen failing before T009
 - [ ] T008 [P] [US1] Test author: new `src/engine/durable/trial_fields_test.go`: a run started at
@@ -153,9 +179,11 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
 - [ ] T009 [US1] Code author (done when T006-T008 pass): `src/engine/trials/` (outcome part of the
   result), `src/engine/store/` trial-set records in the slice's folder with an ID sequence that
   never repeats, `src/engine/api/trial_sets.go` (`startTrialSet` with `StartRun`'s checks for every
-  project, the `run-trials` job: write trial *i*'s run ID, start it through `newRun` with
-  `NoReuse`, follow it, accept a hand-over, check budget, time and approval before each trial;
-  `getTrialSet`), `src/engine/api/operations.go` (`run-trials`), `src/engine/api/durable.go`
+  project, the `run-trials` job: reserve and write trial *i*'s run ID, start it through `newRun`
+  (which gains an optional given run ID) with `NoReuse`, follow its record in the job's own loop,
+  send the hand-over signal on `waiting`, check budget (the chosen pattern's `budgets.run.cost_usd`),
+  time, approval and `part_hashes` before each trial; `getTrialSet`), `src/engine/api/slices.go`
+  (`deleteSlice` refused while a set runs), `src/engine/api/operations.go` (`run-trials`), `src/engine/api/durable.go`
   `RunStart.TrialSet`/`Trial`, `src/engine/durable/` and `src/engine/machine/` (the `RunStarted`
   fields, workflow version 3); method identity converged
 - [ ] T010 [P] [US1] Test author: new `src/cli/trials_test.go` and
@@ -163,17 +191,22 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   `build-workers` for `<prefix>-1` to `<prefix>-<k>` before the client's `trials`, and stops at
   the first that fails, starting no set; the client starts the set, prints one line per trial as it
   ends and the `done <d>/<e>` line with `unstable` when marked; exit 0 when every trial ended done,
-  7 when any did not; `trial-set <id>` prints the same for an ended set and follows a running one;
-  detaching exits 130 naming the operation; seen failing before T011
+  the exit codes of the contract draft's table (0, 7, 6, 130, 4); `trial-set <id>` prints the same
+  for an ended set and follows a running one; seen failing before T011
 - [ ] T011 [US1] Code author (done when T010 passes): `src/cli/` `trials` and `trial-set` (generated
   client only), `src/deploy/ap` intercepts `trials`
 - [ ] T012 [P] [US1] Test author: new `src/tests/acceptance/trials_test.go` (Compose stack,
   recorded model): `ap trials <slice> <prefix> --trials 2` on the notes slice: both projects get
   their workers, two runs end done one after the other, each makes model requests for every agent
   step (SC-004), `ap trial-set` prints `done 2/2` without `unstable`, and reading it adds no model
-  request (SC-005); records the step containers' memory for two projects (research R3). Passes or
-  fails on T013's CI run
-- [ ] T013 [US1] (after T005, T009, T011 and T012) Commit (tests and code in separate commits);
+  request (SC-005); records the step containers' memory for two projects (research R3). Seen
+  failing first on the CI run of a push of T001 and T012 alone (plan, Exceptions), then passing on
+  T013's
+- [ ] T029 [P] [US1] Test author: new `src/engine/store/trial_sets_test.go`: a set's record is
+  kept in its slice's folder and read back after a restart; `runs` written one by one keeps its
+  order; IDs `TS-<n>` come from a sequence that never gives an ID again, also after the slice is
+  erased; erasing the slice removes its sets; seen failing before T009
+- [ ] T013 [US1] (after T005, T009, T011, T012 and T029) Commit (tests and code in separate commits);
   fast lint; ask the owner before pushing (every check job runs); record the CI run here
 - [ ] T014 [US1] Fresh review of US1 judging T013's CI run; findings fixed as new tasks or
   recorded; `/speckit-converge` for US1
@@ -191,7 +224,7 @@ shows `1/1/2`, its files differing in the third trial; a fixed procedure's token
 - [ ] T015 [P] [US2] Test author: new `src/engine/trials/measures_test.go` on planted run records:
   per step over the trials that reached it, attempts (`AttemptMade` plus a `StepRejected` with
   `usage` and no `AttemptMade`), review rounds (highest `round`), seconds (the sum of the step's
-  attempt spans, `StepStarted` to its `StepAccepted` or `StepRejected`), tokens and cost (sum of
+  attempt spans, `StepStarted` to its `StepAccepted` or `StepRejected`, without interrupted time), tokens and cost (sum of
   `usage`), as `{lowest, median, highest}`; the median of an even count is the mean of the two
   middle values; a measure no such trial carries is absent ("not available"), never 0; per trial
   totals, seconds from `RunStarted` to the end without interrupted time; files `same` when every
@@ -221,7 +254,8 @@ planted other method, names both methods and is `less reliable`.
   `src/engine/api/trial_sets_list_test.go`: `listTrialSets` newest first, at most 50 per page,
   opaque page tokens, a token from another list refused 400, each item with state, k, method,
   `done`/`ended` and `unstable`; `previous` is the latest earlier `ended` or `stopped` set of the
-  same slice (a `cancelled` or `running` one is skipped), with the change in share, `less_reliable`
+  same slice with at least one ended trial (a `cancelled` or `running` one, or one with none ended,
+  is skipped), with the change in share, `less_reliable`
   only when the share fell, `methods_differ` when the methods differ; the first set has no
   `previous`; seen failing before T022
 - [ ] T021 [P] [US3] Test author: new `src/cli/trial_sets_test.go`: `trial-sets <slice>` prints one
@@ -253,7 +287,7 @@ planted other method, names both methods and is `less reliable`.
 
 ## Dependencies & execution order
 
-- T001 → T002 → Phase 2 (T003, T004 in parallel → T005) → US1 (T006-T008 in parallel → T009;
+- T001 → T002 → Phase 2 (T003, T004 in parallel → T005) → US1 (T006-T008 and T029 in parallel → T009;
   T010 → T011; T012; T005, T009, T011 and T012 → T013 → T014) → US2 (T015, T016 in parallel →
   T017 → T018 → T019) → US3 (T020, T021 in parallel → T022 → T023 → T024) → T025 → T026 → T027 →
   T028.
@@ -264,7 +298,7 @@ planted other method, names both methods and is `less reliable`.
 ## Parallel examples
 
 - Phase 2: T003 and T004 by separate test-author sessions.
-- US1: T006, T007, T008, T010 and T012 by separate test-author sessions (different files).
+- US1: T006, T007, T008, T010, T012 and T029 by separate test-author sessions (different files).
 - US2: T015 and T016; US3: T020 and T021.
 
 ## Implementation strategy

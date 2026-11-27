@@ -33,8 +33,17 @@ gain `trial_set` and `trial`; `OperationKind` gains `run-trials` (plan, Complexi
 | `trial-sets <slice>` | Lists the slice's sets | `listTrialSets` |
 | `trial-set <id>` | Shows a set's result; follows it while it runs | `getTrialSet`, `getOperation` |
 
-`trial-set` prints `done <d>/<e>` and `unstable` when marked, one row per trial (`RUN`, `OUTCOME`,
+`trial-set` prints `done <d>/<e>`, `unstable` when marked and `methods mixed` when they are, one row per trial (`RUN`, `OUTCOME`,
 `ATTEMPTS`, `ROUNDS`, `SECONDS`, `TOKENS`, `COST`), one row per step (`STEP`, `REACHED`, each measure
 as `lowest/median/highest` or `-`, `FILES` `same` or the groups), and the comparison line naming
-the previous set. Exit 0 for a set that ended with every trial done, 7 for one that ended or
-stopped with any trial not done (as `compare`'s "differ"), the run exit codes otherwise.
+the previous set. Exit codes by the set's end:
+
+| Set | Exit |
+|-----|------|
+| `ended` or `stopped`, every ended trial done (at least one) | 0 |
+| `ended` or `stopped`, some ended trial not done, or none ended | 7 (as `compare`'s "differ": the builds do not agree with done) |
+| `cancelled` | 6, as a cancelled run |
+| detached while running | 130, naming the operation |
+| unknown set | 4 `NotFound` |
+
+`deleteSlice` is refused `RunActive` while a set of the slice is `running`.
