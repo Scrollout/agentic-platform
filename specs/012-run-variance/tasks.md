@@ -402,3 +402,10 @@ planted other method, names both methods and is `less reliable`.
 - [ ] T038 Make US2's T016 and US3's T021 exercise the client's step table, `spreadCell`, `filesCell` and the "compared with" line already in `src/cli/trials.go`, which no test covers yet, per T016, T017, T021, T022 test-first order (unrequested)
 - [X] T039 Add a test (new file) that a worker token is refused on `getTrialSet` and `listTrialSets` and a page token may read them, per Constitution V, the plan's threat model, T007 (partial)
 - [X] T040 Correct T030's `maxLength` wording (none, as research R9 says), the contract's `failed_because` description (the detail, or the problem's code when the detail is empty, T034 R2-1; a contract change committed alone) and `quickstart.md` step 2's test pattern (`TestTS`), per Principle IX (partial)
+
+---
+
+## Phase 8: Convergence
+
+- [X] T041 Reword ADR 0106's Decision bullet "any later reader or start ... ends the set the same way" to "a start, a delete or the engine's start ends it the same way; a read shows it failed and writes nothing", per T036, data model States rule 2, FR-007, SC-005, Principle IX (contradicts)
+- [X] T042 Add a test that the client's usage shows the contract's `trials-default`, or close it with a reason, per T037, tasks rule "Limits have one home" (partial); closed: the usage line reads `trials-default` from the embedded contract by code, T035 pins that value to the engine and the schema, and the output text is unchanged; a test of the help text would judge wording only

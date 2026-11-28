@@ -42,8 +42,9 @@ Sources: [Feature 012 plan](../../specs/012-run-variance/plan.md).
 - When a set's operation ends failed, the set ends `failed`, with `failed_because` holding the
   operation's problem `detail` as every operation exposes it; no further trial starts; its running
   trial is cancelled.
-- The operation's end comes first; the set is ended right after it, and any later reader or start
-  that finds a `running` set whose operation ended failed ends the set the same way, once.
+- The operation's end comes first; the set is ended right after it. A start, a delete or the
+  engine's start that finds a `running` set whose operation ended failed ends it the same way, once;
+  a read shows such a set `failed` and writes nothing (owner 2026-11-28).
 - `TrialSetState` (new in feature 012) gains `failed`, and `TrialSet` the optional
   `failed_because`; additive, no exception to Principle XV.
 
