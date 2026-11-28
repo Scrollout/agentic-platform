@@ -68,8 +68,8 @@ client only, k at most 5, $2 per set).
 passed trials, its unstable mark and the spread of its effort, keeps its measurement 90 days and
 compares with the latest earlier run in its history (evals runs 45163722619, 45170628365).
 Feature 012's three stories (trials of a slice, the spread of their effort and files, the
-comparison with the slice's previous set) pass in CI (check run 46148858951 at b21e0f0); N-054
-stays `in progress` until its final review and merge; its paid evals passed (run 46156571586, T026).
+comparison with the slice's previous set) pass in CI (check run 46165598206 at f893a99) and its
+paid evals (run 46156571586), and were merged on 2026-11-28, so N-054 is `done`.
 
 N-040 (2026-11-21): `done` by feature 002: its three stories pass in CI (check run 44886296672
 at aab7fcb) and in the regression evals (run 44809763108), the clean-machine measurement (T032)
@@ -149,7 +149,7 @@ Constitution Principle XX makes them binding for the product.
 | N-051 | A result is accepted only when it passes checks that do not depend on a model's judgement | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [007](../../specs/007-analyst-answer-checks/spec.md), [010](../../specs/010-strict-requests/spec.md), [011](../../specs/011-capture-pattern/spec.md) | done |
 | N-052 | A proven solution is captured once and reused, without the model generating it again | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [010](../../specs/010-strict-requests/spec.md), [011](../../specs/011-capture-pattern/spec.md) | done |
 | N-053 | Every result can be traced to the method, inputs, model and rules that produced it, and reproduced from them | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [006](../../specs/006-method-record/spec.md), [011](../../specs/011-capture-pattern/spec.md) | done |
-| N-054 | How much results vary from run to run is measured and shown | yes | | [008](../../specs/008-eval-variance/spec.md), [012](../../specs/012-run-variance/spec.md) | in progress |
+| N-054 | How much results vary from run to run is measured and shown | yes | | [008](../../specs/008-eval-variance/spec.md), [012](../../specs/012-run-variance/spec.md) | done |
 | N-055 | The project's principles, docs, specs, decisions, validations, tests and reviews hold at every stage of the lifecycle | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md), [010](../../specs/010-strict-requests/spec.md), [011](../../specs/011-capture-pattern/spec.md) | in progress |
 | N-056 | The author of a change cannot alter, skip or weaken the checks that judge it; only a recorded, independent decision can change a check | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | done |
 | N-057 | A change stays within the files and areas its task allows; anything outside is rejected | yes | | [001](../../specs/001-prose-to-accepted-slice/spec.md) | done |

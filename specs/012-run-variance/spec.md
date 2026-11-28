@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-27
 
-**Status**: Draft
+**Status**: Implemented (merged 2026-11-28)
 
 **Input**: The remainder of need N-054 (owner chose it as the next work, 2026-11-27). Feature 008
 covered the platform's own eval suites and left "how the developer's own runs of a slice vary" for

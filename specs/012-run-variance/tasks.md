@@ -420,9 +420,12 @@ planted other method, names both methods and is `less reliable`.
   and `/speckit-converge` for the whole feature until clean; done: review converged in 1 round
   (Phase 15, T060), analyze round 8 gate passed (T059), converge 3 passes (T061-T063), the last
   one wording only
-- [ ] T028 Merge: every task above is checked (done or `closed:`); `evals-current` on the branch
+- [X] T028 Merge: every task above is checked (done or `closed:`); `evals-current` on the branch
   lists no pending suite; the owner fast-forwards `main`; remove the branch from environment dev's
-  policies; delete the branch with the owner's OK; the spec's status `Implemented`
+  policies; delete the branch with the owner's OK; the spec's status `Implemented`; done: CI
+  46165598206 at f893a99 green (26 jobs), evals-current no suite pending, `main` fast-forwarded to
+  f893a99 (owner, 2026-11-28), branch removed from environment dev's policies; branch deletion
+  awaits the owner's OK
 
 ---
 
