@@ -23,7 +23,9 @@ terminal commands `trials`, `trial-sets` and `trial-set` (R7).
 
 **Language/Version**: Go 1.26 (engine, terminal client), POSIX shell (`ap`)
 
-**Primary Dependencies**: none added; the engine's Temporal Operation workflow and run path
+**Primary Dependencies**: no new module; the terminal client requires `go.yaml.in/yaml/v3` v3.0.6
+directly (already in its module graph) to read `x-limits` from its embedded contract (owner approved
+2026-11-28, T061); the engine's Temporal Operation workflow and run path
 
 **Storage**: the engine store gains trial-set records in the slice's folder; worker registrations
 gain a project
@@ -66,7 +68,7 @@ registration field, three terminal commands, one acceptance suite
 | X. No silent loss | Pass | Each trial is an ordinary run; a set ends in exactly one state; its waits are bounded by 24 hours (R5) |
 | XI. Privacy | Pass | A set holds IDs, counts and hashes only; it is erased with its slice |
 | XII. Tenants | Not applicable | One developer by scope (feature 001 FR-021), as for slices; Complexity Tracking |
-| XIII. Supply chain | Pass | No dependency |
+| XIII. Supply chain | Pass | No new module; `go.yaml.in/yaml/v3` made direct in `src/cli` (owner approved 2026-11-28, T061) |
 | XIV. Safe defaults | Pass | Set cost and time budgets on top of each run's; a trial that could pass the budget never starts |
 | XV. Compatible APIs | Exception | Additive paths and fields; paginated list; Idempotency-Key; the `run-trials` enum value is an owner-approved exception (Complexity Tracking, ADR 0105) |
 | XVI. Human control | Pass | The developer asks for trials; the owner merges |

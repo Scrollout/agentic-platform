@@ -548,7 +548,7 @@ planted other method, names both methods and is `less reliable`.
 
 ## Phase 16: Convergence (whole feature pass 1, at 1736c7d)
 
-- [ ] T061 MEDIUM: `src/cli/go.mod` makes `go.yaml.in/yaml/v3` v3.0.6 (already in the module graph,
+- [X] T061 (owner 2026-11-28: keep it; approval recorded in the plan, concept updated) MEDIUM: `src/cli/go.mod` makes `go.yaml.in/yaml/v3` v3.0.6 (already in the module graph,
   indirect) a direct requirement of the terminal client, which reads `x-limits` from the embedded
   contract with it (`src/cli/trials.go`), against the plan's "no dependency added" and Principle
   XVI (a dependency added needs a recorded human approval); `docs/components/go-yaml.md` names only

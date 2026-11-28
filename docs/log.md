@@ -3,6 +3,7 @@
 ## 2026-11-28
 
 * **Planning**: Feature 012 (T027): `/speckit-analyze` round 8 (fresh reviewer, whole feature) passed the gate with 3 LOW findings, fixed as T059 (N-054 note, T025 wording, the client README says a set with no ended trial shows no comparison line).
+* **Documentation**: Feature 012 (T061, T062): the terminal client requires go-yaml directly to read its contract's trial limits (owner approved); the go-yaml concept and the plan say so; the plan's Constitution Check names ADR 0102 to 0107.
 * **Planning**: Feature 012 (T027): the final fresh review of the whole feature found no blocking finding (CI 46156561668 and evals 46156571586 green); suggestions filed as T060.
 * **Implementation**: Feature 012 (T026): the analyst and steps eval suites pass under the new method identity, every one of the 42 counted cases 3 of 3 trials (evals run 46156571586 at 15a0ec7).
 * **Documentation**: Feature 012 (T025): the architecture overview describes trial sets (fresh builds of a slice as one `run-trials` operation, their bounds, the hand-over of a waiting trial, the `failed` end, the result derived from the run records, registrations by project) and lists ADR 0102 to 0107; the engine API concept lists the trial-set operations; the engine and terminal client READMEs describe the comparison with the previous set and `trial-sets`; N-054 notes the feature's state; the spec gains the edge case of a set with no ended trial and research R6 says the methods are named only when they differ (T054).

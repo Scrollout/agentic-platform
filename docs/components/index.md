@@ -12,7 +12,7 @@
 * [git](git.md) - The version control CLI the project worker runs to keep each new project's version history, one commit per accepted step.
 * [go-arch-lint](go-arch-lint.md) - Checks each platform Go module's imports against the components and allowed dependencies its .go-arch-lint.yml declares; an undeclared import or an unmapped package fails the arch step of scripts/check.sh, run in CI.
 * [go-licenses](go-licenses.md) - Google's Go dependency licence checker, pinned at v2.0.1, run over every platform Go module by the deps step of scripts/check.sh with forbidden and unknown licence types disallowed.
-* [go-yaml](go-yaml.md) - The YAML library (go.yaml.in/yaml/v3) the slice model and the engine use to read contracts, patterns and rules.
+* [go-yaml](go-yaml.md) - The YAML library (go.yaml.in/yaml/v3) the slice model, the engine and the terminal client use to read contracts, patterns and rules.
 * [godog](godog.md) - The Cucumber test runner for Go, v0.16.0, which runs a slice's Gherkin examples with --strict so that an undefined step fails and every example is proven bound to a test.
 * [golang.org/x/mod](x-mod.md) - The Go team's module library; the engine's DependenciesAllowed step check reads a project's go.mod with its modfile package.
 * [golangci-lint](golangci-lint.md) - Runs Go linters (with gosec) on the Go packages a commit changes; the pre-commit hook keeps only findings on the changed lines.
