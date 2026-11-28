@@ -406,7 +406,7 @@ planted other method, names both methods and is `less reliable`.
 
 - [X] T025 Docs: `docs/architecture/overview.md` (trial sets, registrations by project, ADR 0102 to
   0106), `docs/apis/engine-api.md`, `src/engine/README.md`, `src/cli/README.md` (`trials`,
-  `trial-sets`, `trial-set`), `src/deploy/README.md` (`ap trials`), N-054 in
+  `trial-sets`, `trial-set`), `src/deploy/README.md` (`ap trials`, already current), N-054 in
   `docs/overview/problem-space.md` (state), `docs/log.md`; `python3 scripts/okf.py check` OK
 - [X] T026 Paid evals for the analyst and steps suites (owner go-ahead; add the branch to
   environment dev's branch policies): the method identity changed; every counted case pass^3;
@@ -518,3 +518,11 @@ planted other method, names both methods and is `less reliable`.
   `src/cli/trials.go`; an existing test that breaks is stopped and asked for (owner approval).
   Owner approved 2026-11-28 (T057's author makes it): in `src/cli/trial_sets_test.go` only the
   expected strings at :370, :372, :378 and :488 end `methods differ <previous 12> -> <this 12>`
+
+---
+
+## Phase 14: Analyze round 8 (final, fresh Sonnet, whole feature at 0a641a5: gate passed, 0 CRITICAL/HIGH/MEDIUM)
+
+- [X] T059 LOW findings, docs only: M1 N-054's note in `docs/overview/problem-space.md` no longer
+  waits on T026 (evals run 46156571586 green); M2 T025 marks `src/deploy/README.md` already current;
+  M3 `src/cli/README.md` says a set with no ended trial shows no comparison line
