@@ -397,6 +397,8 @@ planted other method, names both methods and is `less reliable`.
   Round 1 (fresh Sonnet, read-only, 25cafae..d21d2c4, CI 46143180993): no blocking finding;
   suggestions S1-S4 and untested U1-U4, U6 -> T055 (U5 empty methods: covered by
   `previous_test.go` `TestMethodsDifferExactlyWhenTheMethodsDiffer`). Review converged in 1 round
+  Converge pass 1 (at d21d2c4): C1 -> Phase 13 T056-T058 (done); pass 2 (at 3793399): converged
+  (an R6 wording note -> T054 L3). T024 ticks when the C1 fix's CI run is green
 
 ---
 
@@ -486,7 +488,8 @@ planted other method, names both methods and is `less reliable`.
 - [ ] T054 LOW findings, fold into T025: L1 `src/cli/contract.md` "Trial sets" row 4 and
   `contracts/trial-sets.md` say the comparison line needs an ended trial of the set (a contract
   change committed alone); L2 a spec Edge Cases bullet for a set with no ended trial (no
-  comparison), per spec Clarifications 2026-11-28, Principle XVIII (Instructive)
+  comparison); L1 done by T056; L3 research R6 "both sets' methods named": the line names them
+  when they differ, per spec Clarifications 2026-11-28, Principle XVIII (Instructive)
 
 - [ ] T055 [US3] T024 suggestions, not blocking: S1 each `getTrialSet` and `listTrialSets` page reads
   every set's runs of the slice (O(sets x k) per request; no cap on sets per slice); S2 one
