@@ -35,7 +35,8 @@ pattern, its template, agents and recordings do not change, so the recorded-mode
   runs `scripts/method-digest.py` and commits the converged `src/engine/method/method.sha256`.
 - **Trailers**: `Approved-by: Marius Gologan (2026-11-12)` is the owner's standing approval to
   commit finished, tested work to protected paths.
-- **No dependency** is added.
+- **No new module** is added; `go.yaml.in/yaml/v3`, already in its module graph, becomes a direct
+  requirement of `src/cli` (T061, owner approved 2026-11-28).
 - **Fail closed**: `trials` outside 1 to 5, a `project_prefix` that does not make valid project
   names, a missing worker for any project, an existing project: refused before anything is recorded
   or started, naming it (Values that check themselves).
@@ -557,3 +558,10 @@ planted other method, names both methods and is `less reliable`.
   (partial)
 - [X] T062 LOW: plan Constitution Check row IX names ADR 0102 to 0107 (0106, 0107 were added in
   US1 and US2), per Principle IX (partial)
+
+---
+
+## Phase 17: Convergence (whole feature pass 2, at 4544a0b)
+
+- [X] T063 LOW: the tasks Rule "No dependency" and plan row VI say no new module and name T061's
+  direct go-yaml requirement in `src/cli`, per Principle IX (contradicts)

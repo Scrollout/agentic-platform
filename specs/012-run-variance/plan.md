@@ -61,7 +61,7 @@ registration field, three terminal commands, one acceptance suite
 | III. API-first | Pass | Sets are started, listed, read and cancelled only through the engine API; limits declared in the contract |
 | IV. Asynchronous operations | Pass | A set is one operation with a lifecycle and cancellation; its job is idempotent (trial run IDs recorded before each start, R1) |
 | V. Identity | Pass | No new caller; a registration's project is sent with the slice and step's worker token, as the endpoint is |
-| VI. Adopt mature OSS | Pass | Docker Agent's `eval --repeat` evaluated and does not apply (R8); no dependency |
+| VI. Adopt mature OSS | Pass | Docker Agent's `eval --repeat` evaluated and does not apply (R8); no new module (T061) |
 | VII. Providers | Not applicable | No provider |
 | VIII. Containers | Pass | No new image; the k projects' step containers are the existing ones |
 | IX. Knowledge stays true | Pass | ADR 0102 to 0107, the architecture overview, the engine and terminal READMEs and the log at implementation |
