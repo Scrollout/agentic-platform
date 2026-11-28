@@ -207,7 +207,7 @@ func TestAttemptsStepRejectedAfterAnAttemptMadeIsNotCountedTwice(t *testing.T) {
 	wantSpread(t, "attempts", step(t, r, "implement").Measures.Attempts, 2, 2, 2)
 }
 
-func TestAttemptsStepRejectedWithoutUsageAndWithoutAttemptMadeIsNotAnAttempt(t *testing.T) {
+func TestAttemptsStepRejectedWithoutUsageAndWithoutAttemptMadeIsAnAttempt(t *testing.T) {
 	a := newRec("R-1").
 		add(10, machine.Event{Kind: "StepStarted", Step: "implement"}).
 		add(15, machine.Event{Kind: "StepRejected", Step: "implement", Attempt: 1}).
@@ -215,7 +215,7 @@ func TestAttemptsStepRejectedWithoutUsageAndWithoutAttemptMadeIsNotAnAttempt(t *
 		add(25, machine.Event{Kind: "AttemptMade", Step: "implement", Attempt: 2, Usage: use(5, 0.05)}).
 		add(30, machine.Event{Kind: "StepAccepted", Step: "implement", Attempt: 2})
 	r := trials.Of(pattern, numbered(a))
-	wantSpread(t, "attempts", step(t, r, "implement").Measures.Attempts, 1, 1, 1)
+	wantSpread(t, "attempts", step(t, r, "implement").Measures.Attempts, 2, 2, 2)
 }
 
 func TestReviewRoundsIsTheHighestRound(t *testing.T) {

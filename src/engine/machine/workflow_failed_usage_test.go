@@ -33,7 +33,11 @@ type fuHarness struct {
 	in  durable.RunInput
 	// worker and check are the fakes (default: a good result, 1 s for the worker, 0 for a check).
 	worker func(c durable.WorkerCall) (durable.WorkerResult, error)
-	check  func(c durable.CheckCall) (durable.CheckResult, error)
+	// only, when set, limits worker to the step of that name: every other step gets a good result
+	// that used nothing and took no time. The failing step of these cases is an agent step, as
+	// a procedure step records no usage.
+	only  string
+	check func(c durable.CheckCall) (durable.CheckResult, error)
 
 	mu      sync.Mutex
 	records []durable.EventRecord
@@ -55,10 +59,14 @@ func newFU(t *testing.T, p machine.Pattern) *fuHarness {
 		h.mu.Lock()
 		h.workers = append(h.workers, c)
 		h.mu.Unlock()
-		if h.worker != nil {
+		if h.worker != nil && (h.only == "" || c.Step.Name == h.only) {
 			return h.worker(c)
 		}
-		return wfWorkerResult(t, c, wfOK(c), time.Second), nil
+		took := time.Second
+		if h.only != "" {
+			took = 0
+		}
+		return wfWorkerResult(t, c, wfOK(c), took), nil
 	}, durable.CallWorker)
 	reg(func(_ context.Context, c durable.CheckCall) (durable.CheckResult, error) {
 		if h.check != nil {
@@ -189,27 +197,29 @@ func TestFailedCallsUsageReachesTheRunBudget(t *testing.T) {
 	t.Run("tokens: the third failed attempt passes the run's budget", func(t *testing.T) {
 		u := machine.Usage{Tokens: 400, CostUSD: 0.01}
 		h := newFU(t, fuPattern(0, machine.Budget{Tokens: 1000, CostUSD: 0.50, Duration: 30 * time.Minute}, machine.Budget{}))
+		h.only = "tests"
 		h.worker = func(c durable.WorkerCall) (durable.WorkerResult, error) {
 			return fuFail(c, "model refused the request", u, time.Second), nil
 		}
 		h.run()
-		fuWantRejected(t, h, "contract-check", 3, "model refused the request", u)
+		fuWantRejected(t, h, "tests", 3, "model refused the request", u)
 		want := "the run used 1200 tokens, past the run's token budget of 1000"
 		if got := h.handedOver(); got != want {
 			t.Fatalf("hand-over %q, want %q", got, want)
 		}
-		if n := h.workerCalls("contract-check"); n != 3 {
+		if n := h.workerCalls("tests"); n != 3 {
 			t.Fatalf("%d worker calls, want 3", n)
 		}
 	})
 	t.Run("cost: the second failed attempt passes the run's budget", func(t *testing.T) {
 		u := machine.Usage{Tokens: 10, CostUSD: 0.30}
 		h := newFU(t, fuPattern(0, machine.Budget{Tokens: 3000000, CostUSD: 0.50, Duration: 30 * time.Minute}, machine.Budget{CostUSD: 0.40, Tokens: 1000000, Duration: 10 * time.Minute}))
+		h.only = "tests"
 		h.worker = func(c durable.WorkerCall) (durable.WorkerResult, error) {
 			return fuFail(c, "boom", u, time.Second), nil
 		}
 		h.run()
-		fuWantRejected(t, h, "contract-check", 2, "boom", u)
+		fuWantRejected(t, h, "tests", 2, "boom", u)
 		want := "the run cost $0.6000, past the run's cost budget of $0.5000"
 		if got := h.handedOver(); got != want {
 			t.Fatalf("hand-over %q, want %q", got, want)
@@ -218,27 +228,32 @@ func TestFailedCallsUsageReachesTheRunBudget(t *testing.T) {
 	t.Run("a failed attempt over the step's budget on its own, on the same attempt it fails", func(t *testing.T) {
 		u := machine.Usage{Tokens: 600}
 		h := newFU(t, fuPattern(0, machine.Budget{}, machine.Budget{Tokens: 500, CostUSD: 0.20, Duration: 10 * time.Minute}))
+		h.only = "tests"
 		h.worker = func(c durable.WorkerCall) (durable.WorkerResult, error) {
 			return fuFail(c, "boom", u, time.Second), nil
 		}
 		h.run()
 		// The failure is recorded as today ("the worker failed: ..."), with its usage; then the
 		// run is handed over for the budget, with no further attempt.
-		fuWantRejected(t, h, "contract-check", 1, "boom", u)
-		want := "step contract-check used 600 tokens, past the step's token budget of 500"
+		fuWantRejected(t, h, "tests", 1, "boom", u)
+		want := "step tests used 600 tokens, past the step's token budget of 500"
 		if got := h.handedOver(); got != want {
 			t.Fatalf("hand-over %q, want %q", got, want)
 		}
-		if n := h.workerCalls("contract-check"); n != 1 {
+		if n := h.workerCalls("tests"); n != 1 {
 			t.Fatalf("%d worker calls, want 1: an over-budget failure is not tried again", n)
 		}
 	})
 	t.Run("usage adds up across steps: an earlier accepted step's use counts with a failed one's", func(t *testing.T) {
-		// contract-check succeeds with 600 tokens; generate fails with 300 on each attempt:
-		// 600 + 300 + 300 = 1200 > 1000 on the second failed attempt.
+		// tests succeeds with 600 tokens; code fails with 300 on each attempt:
+		// 600 + 300 + 300 = 1200 > 1000 on the second failed attempt. The two procedure steps
+		// before them succeed and record no usage.
 		h := newFU(t, fuPattern(0, machine.Budget{Tokens: 1000, CostUSD: 0.50, Duration: 30 * time.Minute}, machine.Budget{}))
 		h.worker = func(c durable.WorkerCall) (durable.WorkerResult, error) {
-			if c.Step.Name == "contract-check" {
+			switch c.Step.Name {
+			case "contract-check", "generate":
+				return wfWorkerResult(t, c, wfOK(c), time.Second), nil
+			case "tests":
 				r := wfWorkerResult(t, c, wfOK(c), time.Second)
 				r.Usage = machine.Usage{Tokens: 600}
 				return r, nil
@@ -246,7 +261,7 @@ func TestFailedCallsUsageReachesTheRunBudget(t *testing.T) {
 			return fuFail(c, "boom", machine.Usage{Tokens: 300}, time.Second), nil
 		}
 		h.run()
-		fuWantRejected(t, h, "generate", 2, "boom", machine.Usage{Tokens: 300})
+		fuWantRejected(t, h, "code", 2, "boom", machine.Usage{Tokens: 300})
 		want := "the run used 1200 tokens, past the run's token budget of 1000"
 		if got := h.handedOver(); got != want {
 			t.Fatalf("hand-over %q, want %q", got, want)
@@ -269,11 +284,12 @@ func TestFailedCallsWithNoOrNegativeUsageCountAsZero(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newFU(t, wfPattern())
+			h.only = "tests"
 			h.worker = func(c durable.WorkerCall) (durable.WorkerResult, error) {
 				return fuFail(c, "boom", tc.u, tc.took), nil
 			}
 			h.run()
-			fuWantRejected(t, h, "contract-check", 3, "boom", tc.want)
+			fuWantRejected(t, h, "tests", 3, "boom", tc.want)
 			if n := len(h.eventsOf("RunInterrupted")); n != 1 {
 				t.Fatalf("%d interruptions, want 1 (failed on all attempts); events %v", n, h.kinds())
 			}
@@ -286,6 +302,7 @@ func TestFailedCallsWithNoOrNegativeUsageCountAsZero(t *testing.T) {
 		// attempt 1 uses 900 tokens (run budget 1000), attempt 2 reports -900, attempt 3 reports
 		// 200: 1100 > 1000. Taking the negative would leave 200.
 		h := newFU(t, fuPattern(0, machine.Budget{Tokens: 1000, CostUSD: 0.50, Duration: 30 * time.Minute}, machine.Budget{}))
+		h.only = "tests"
 		h.worker = func(c durable.WorkerCall) (durable.WorkerResult, error) {
 			tokens := map[int]int64{1: 900, 2: -900, 3: 200}[c.Attempt]
 			return fuFail(c, "boom", machine.Usage{Tokens: tokens}, time.Second), nil
@@ -304,30 +321,32 @@ func TestFailedCallsTookCountsTowardTheTimeBudget(t *testing.T) {
 	t.Run("summed over attempts, the last allowed attempt passes the run's budget", func(t *testing.T) {
 		// 4 attempts of 9 minutes: 27m after the third, 36m after the fourth, which is the last.
 		h := newFU(t, fuPattern(4, machine.Budget{}, machine.Budget{}))
+		h.only = "tests"
 		h.worker = func(c durable.WorkerCall) (durable.WorkerResult, error) {
 			return fuFail(c, "boom", machine.Usage{}, 9*time.Minute), nil
 		}
 		h.run()
-		fuWantRejected(t, h, "contract-check", 4, "boom", machine.Usage{})
+		fuWantRejected(t, h, "tests", 4, "boom", machine.Usage{})
 		want := "the run took 36m0s, past the run's time budget of 30m0s"
 		if got := h.handedOver(); got != want {
 			t.Fatalf("hand-over %q, want %q", got, want)
 		}
-		if n := h.workerCalls("contract-check"); n != 4 {
+		if n := h.workerCalls("tests"); n != 4 {
 			t.Fatalf("%d worker calls, want 4", n)
 		}
 	})
 	t.Run("one failed call past the step's time budget", func(t *testing.T) {
 		h := newFU(t, wfPattern())
+		h.only = "tests"
 		h.worker = func(c durable.WorkerCall) (durable.WorkerResult, error) {
 			return fuFail(c, "boom", machine.Usage{}, 11*time.Minute), nil
 		}
 		h.run()
-		want := "step contract-check took 11m0s, past the step's time budget of 10m0s"
+		want := "step tests took 11m0s, past the step's time budget of 10m0s"
 		if got := h.handedOver(); got != want {
 			t.Fatalf("hand-over %q, want %q", got, want)
 		}
-		if n := h.workerCalls("contract-check"); n != 1 {
+		if n := h.workerCalls("tests"); n != 1 {
 			t.Fatalf("%d worker calls, want 1", n)
 		}
 	})
@@ -338,9 +357,10 @@ func TestFailedCallsTookCountsTowardTheTimeBudget(t *testing.T) {
 // the failed results do not compile; with the code, the call count tells the two apart.
 func TestWorkersNotReadyIsStillRetriedAndAFailedResultIsAnAttempt(t *testing.T) {
 	h := newFU(t, wfPattern())
+	h.only = "tests"
 	first := true
 	h.worker = func(c durable.WorkerCall) (durable.WorkerResult, error) {
-		if c.Step.Name == "contract-check" && first {
+		if c.Step.Name == "tests" && first {
 			first = false
 			return durable.WorkerResult{}, temporal.NewNonRetryableApplicationError(wfNoWorkers, durable.WorkersNotReady, nil)
 		}
@@ -348,10 +368,10 @@ func TestWorkersNotReadyIsStillRetriedAndAFailedResultIsAnAttempt(t *testing.T) 
 	}
 	h.run()
 	// 1 call that was not ready (retried, nothing recorded) + 3 attempts that failed.
-	if n := h.workerCalls("contract-check"); n != 4 {
+	if n := h.workerCalls("tests"); n != 4 {
 		t.Fatalf("%d worker calls, want 4 (1 not ready, then 3 attempts); events %v", n, h.kinds())
 	}
-	fuWantRejected(t, h, "contract-check", 3, "boom", machine.Usage{Tokens: 7})
+	fuWantRejected(t, h, "tests", 3, "boom", machine.Usage{Tokens: 7})
 	for _, e := range h.eventsOf("StepRejected") {
 		if e.Attempt < 1 || e.Attempt > 3 {
 			t.Fatalf("StepRejected of attempt %d: the not-ready call was recorded as an attempt", e.Attempt)

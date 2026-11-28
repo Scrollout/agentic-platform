@@ -346,8 +346,12 @@ shows `1/1/2`, its files differing in the third trial; a fixed procedure's token
   and attempt, usage or not; no usage on the events of a step whose worker has the `procedure:`
   prefix, in `src/engine/durable/` (analyze r5 A3); a `fill` step keeps its single attempt.
   Owner 2026-11-28 (A2): the in-memory driver `src/engine/machine/drive.go`, which only tests
-  start, keeps its usage on procedure steps, so `machine/workflow_failed_usage_test.go` is
-  unchanged
+  start, keeps its usage on procedure steps. Owner approved 2026-11-28 (the changed rule breaks
+  them): `src/engine/trials/measures_test.go:210` (a `StepRejected` with no usage and no
+  `AttemptMade` is an attempt: 2, renamed), `src/engine/machine/workflow_failed_usage_test.go`
+  (it runs the durable engine; its failed-attempt cases fail an agent step instead of
+  `contract-check`/`generate`), `src/engine/api/trial_sets_test.go:985` (the fake charges cost
+  on agent steps only)
 - [ ] T047 [US2] T019 suggestions, not blocking: S1 a `ResultReused` with `open_round` taken as
   accepted files; S2 a span interrupted before its end, or open at the end, gives no step seconds;
   S3 a trial with only `RunStarted` has seconds 0, not absent; S4 spreads pass through float32

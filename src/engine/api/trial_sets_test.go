@@ -151,7 +151,7 @@ type trCtl struct {
 	gates   map[string]chan struct{}
 	seen    map[string]bool
 	started []string          // projects, in the order of their first worker call
-	perStep float64           // what each of generate, tests and code reports as its cost
+	perStep float64           // what each of the agent steps tests, code and review reports as its cost (a procedure step records none)
 	failing map[string]bool   // projects whose `tests` check fails
 	project map[string]string // run -> its project, as the worker calls showed it
 	calls   int
@@ -217,7 +217,7 @@ func (c *trCtl) work(w *fakeStepWorker) func(context.Context, machine.Request) (
 			}
 		}
 		res, err := w.produce(r)
-		if err == nil && per > 0 && (r.Step.Name == "generate" || r.Step.Name == "tests" || r.Step.Name == "code") {
+		if err == nil && per > 0 && (r.Step.Name == "tests" || r.Step.Name == "code" || r.Step.Name == "review") {
 			res.Usage.CostUSD = per
 		}
 		return res, err
