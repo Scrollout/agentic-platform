@@ -54,6 +54,12 @@ ended done can be captured as a pattern).
   started, for example its project appeared after the set was accepted, or the engine cannot go on
   after its retries), nothing ended the set. Q: What does the set do then? → A: its running trial
   is cancelled and the set ends `failed`, saying why; no further trial starts (owner; FR-003).
+- Found in the US2 fresh review (T019, B3): the base pattern's procedure steps (a `procedure:`
+  worker, such as `contract-check` or `generate`) record a usage of 0 tokens and $0, so their
+  tokens and cost would show as a spread of zeros. Q: Does "a fixed procedure uses no tokens" mean
+  every procedure step? → A: yes; a step whose worker is a procedure reaches no model, so its
+  events carry no usage, as `fill` steps already do, and its tokens and cost show as not available
+  (owner; FR-005, US2 scenario 3).
 
 ## Why the developer's runs do not vary today
 

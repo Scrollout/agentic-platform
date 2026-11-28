@@ -325,6 +325,29 @@ shows `1/1/2`, its files differing in the third trial; a fixed procedure's token
   `src/engine/trials/`, served by `getTrialSet`; the rows in `src/cli/`
 - [X] T018 [US2] Commit; fast lint; push (owner go-ahead); record the CI run: fast lint 0 issues; CI run 46089956544 of 5afec7b green (26 jobs)
 - [ ] T019 [US2] Fresh review of US2 judging T018's CI run; `/speckit-converge` for US2
+  Round 1 (fresh Sonnet, 7da77c5..5afec7b, CI 46089956544): B1 a step's seconds miss every attempt
+  after the first (the engine records one `StepStarted` per round); B2 a trial's attempts key
+  `AttemptMade` by round and attempt only, so another step's attempt hides a failed worker's
+  `StepRejected`; B3 procedure steps record usage 0 (owner 2026-11-28: they carry none, spec
+  Clarifications); S1-S5 suggestions -> T047
+- [X] T044 [US2] Intent and contract for T019 B1 and B3: spec Clarifications 2026-11-28, research
+  R6, the engine contract's `TrialMeasures` seconds and the run event's `usage` (a contract change
+  committed alone; descriptions only, oasdiff unchanged)
+- [ ] T045 [US2] Test author: new `src/engine/trials/measures_records_test.go` on the record shapes
+  the engine writes: one `StepStarted` per round with two attempts (seconds count both spans, less
+  interrupted time); a failed worker's `StepRejected` with usage and no `AttemptMade` in a second
+  step at the same round and attempt as the first step's `AttemptMade` (the trial counts it); a
+  procedure step with no usage shows tokens and cost not available; and new
+  `src/engine/durable/procedure_usage_test.go`: the events of a `procedure:` step carry no usage,
+  an agent step's do; seen failing before T046
+- [ ] T046 [US2] Code author (done when T045 passes and every existing test stays green): spans in
+  `measuresOf`, `made` keyed by step, round and attempt; no usage on a procedure step's events in
+  `src/engine/durable/`
+- [ ] T047 [US2] T019 suggestions, not blocking: S1 a `ResultReused` with `open_round` taken as
+  accepted files; S2 a span interrupted before its end, or open at the end, gives no step seconds;
+  S3 a trial with only `RunStarted` has seconds 0, not absent; S4 spreads pass through float32
+  (no `format: double` on `Spread`); S5 `src/cli/contract.md` "whole seconds" against "one decimal
+  for a median", and `%.2f` rounding of a half cent
 
 ---
 
