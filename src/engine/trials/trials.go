@@ -32,10 +32,13 @@ type Outcome struct {
 
 // Measures is what one trial, or one step of it, used; a nil field is a measure its record does
 // not carry ("not available"), never 0. Attempts are the AttemptMade events plus each StepRejected
-// with usage and no AttemptMade for its attempt; ReviewRounds the highest round; Seconds, for a
-// step, the sum of its attempt spans (StepStarted to its StepAccepted or StepRejected), for a trial
-// RunStarted to its end (its last event while it runs), either without the time the run was
-// interrupted (RunInterrupted to RunResumed); Tokens and CostUSD the sums of usage. For a trial,
+// with no AttemptMade of the same step, round and attempt (a failed worker or a refused result),
+// usage or not; ReviewRounds the highest round; Seconds, for a step, the sum of its attempt spans
+// (an attempt runs from its round's StepStarted, or from the previous attempt's StepRejected in the
+// same round, to its StepAccepted or StepRejected), for a trial RunStarted to its end (its last
+// event while it runs), either without the time the run was interrupted (RunInterrupted to
+// RunResumed); Tokens and CostUSD the sums of usage, none for a step whose events carry none (a
+// procedure step's). For a trial,
 // attempts, tokens and cost are over all its steps, review rounds the highest round of any.
 type Measures struct {
 	Attempts, ReviewRounds, Tokens *int
@@ -170,22 +173,31 @@ func stepOf(name string, trials []Trial) StepSpread {
 	return sp
 }
 
+// attemptKey is one attempt of one step: its step, round and attempt.
+type attemptKey struct {
+	step           string
+	round, attempt int
+}
+
 // measuresOf is what the events of step (all events when step is "") used. Seconds, for a step,
 // are its attempt spans; a trial's are left to totalsOf.
 func measuresOf(events []machine.Event, step string) Measures {
 	var m Measures
 	attempts, rounds, tokens, cost := 0, 0, 0, 0.0
 	used := false
-	made := map[[2]int]bool{}
+	made := map[attemptKey]bool{}
 	for _, e := range events {
 		if (step == "" || e.Step == step) && e.Kind == "AttemptMade" {
-			made[[2]int{e.Round, e.Attempt}] = true
+			made[attemptKey{e.Step, e.Round, e.Attempt}] = true
 		}
 	}
 	var seconds time.Duration
 	spans := false
-	var open *time.Time // the step's attempt span that has not ended
-	var paused time.Duration
+	// The step's attempt span that has not ended: from its round's StepStarted, or from the
+	// previous attempt's StepRejected in the same round (afterRejection, of round openRound).
+	var open *time.Time
+	openRound, afterRejection := 0, false
+	var paused time.Duration // interrupted time inside the open span
 	var interrupted *time.Time
 	for _, e := range events {
 		switch e.Kind {
@@ -197,22 +209,19 @@ func measuresOf(events []machine.Event, step string) Measures {
 		case "RunResumed":
 			if interrupted != nil {
 				if open != nil {
-					paused += e.At.Sub(*interrupted)
+					paused += max(e.At.Sub(laterOf(*interrupted, *open)), 0)
 				}
 				interrupted = nil
 			}
 		}
-		if step != "" && e.Step != step {
-			continue
-		}
-		if step == "" && e.Step == "" {
+		if e.Step == "" || (step != "" && e.Step != step) {
 			continue
 		}
 		switch e.Kind {
 		case "AttemptMade":
 			attempts++
 		case "StepRejected":
-			if e.Usage != nil && !made[[2]int{e.Round, e.Attempt}] {
+			if !made[attemptKey{e.Step, e.Round, e.Attempt}] { // a failed worker or a refused result
 				attempts++
 			}
 		}
@@ -230,15 +239,20 @@ func measuresOf(events []machine.Event, step string) Measures {
 		switch e.Kind {
 		case "StepStarted":
 			at := e.At
-			open, paused = &at, 0
+			open, openRound, afterRejection, paused = &at, e.Round, false, 0
 		case "StepAccepted", "StepRejected":
-			if open != nil {
+			if open != nil && (!afterRejection || e.Round == openRound) {
 				d := e.At.Sub(*open) - paused
-				if interrupted != nil && interrupted.After(*open) {
-					d -= e.At.Sub(*interrupted)
+				if interrupted != nil {
+					d -= max(e.At.Sub(laterOf(*interrupted, *open)), 0)
 				}
 				seconds += max(d, 0)
-				spans, open = true, nil
+				spans = true
+			}
+			open = nil
+			if e.Kind == "StepRejected" { // the next attempt of the round, if any, starts here
+				at := e.At
+				open, openRound, afterRejection, paused = &at, e.Round, true, 0
 			}
 		}
 	}
@@ -256,6 +270,14 @@ func measuresOf(events []machine.Event, step string) Measures {
 		m.Seconds = &sec
 	}
 	return m
+}
+
+// laterOf is the later of a and b.
+func laterOf(a, b time.Time) time.Time {
+	if a.After(b) {
+		return a
+	}
+	return b
 }
 
 // totalsOf is what a trial used over all its steps; none for a trial with nothing recorded.

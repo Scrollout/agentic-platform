@@ -177,6 +177,10 @@ func (r *run) pattern() machine.Pattern { return r.in.Pattern }
 
 func isAgent(s machine.Step) bool { return strings.HasPrefix(s.Worker, "agent:") }
 
+// isProcedure reports whether s runs on a fixed procedure (`procedure:<name>`, a `fill` step
+// among them), which reaches no model.
+func isProcedure(s machine.Step) bool { return strings.HasPrefix(s.Worker, "procedure:") }
+
 // isFill reports whether s is a captured pattern's `fill` step under the run's code version.
 func (r *run) isFill(s machine.Step) bool { return r.fills && s.Worker == fillWorker }
 
@@ -531,7 +535,7 @@ func (r *run) attempt(s machine.Step, at attemptOf) (WorkerResult, verdict, stri
 	base := machine.Event{Step: s.Name, Attempt: at.n, Round: at.round, Refs: r.in.Refs}
 	// the attempt's use goes on its AttemptMade, or on its StepRejected when it made none
 	used := base
-	if !r.isFill(s) { // a filled step reaches no model: its events carry no usage
+	if !isProcedure(s) { // a procedure reaches no model: its events carry no usage (T019 B3)
 		used.Usage = &use
 	}
 
