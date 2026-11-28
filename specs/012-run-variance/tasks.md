@@ -324,7 +324,7 @@ shows `1/1/2`, its files differing in the third trial; a fixed procedure's token
 - [X] T017 [US2] Code author (done when T015 and T016 pass): the measures and files in
   `src/engine/trials/`, served by `getTrialSet`; the rows in `src/cli/`
 - [X] T018 [US2] Commit; fast lint; push (owner go-ahead); record the CI run: fast lint 0 issues; CI run 46089956544 of 5afec7b green (26 jobs)
-- [ ] T019 [US2] Fresh review of US2 judging T018's CI run; `/speckit-converge` for US2
+- [X] T019 [US2] Fresh review of US2 judging T018's CI run; `/speckit-converge` for US2 (fixes judged by CI run 46136500394 of 2b4734e, green)
   Round 1 (fresh Sonnet, 7da77c5..5afec7b, CI 46089956544): B1 a step's seconds miss every attempt
   after the first (the engine records one `StepStarted` per round); B2 a trial's attempts key
   `AttemptMade` by round and attempt only, so another step's attempt hides a failed worker's
