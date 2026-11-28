@@ -60,6 +60,11 @@ ended done can be captured as a pattern).
   every procedure step? → A: yes; a step whose worker is a procedure reaches no model, so its
   events carry no usage, as `fill` steps already do, and its tokens and cost show as not available
   (owner; FR-005, US2 scenario 3). Records written before the change are not rewritten.
+- Found in the US2 convergence (C1, C2). Q: Does the terminal show the spread of the trials'
+  totals, and does a read while the set runs count unfinished trials? → A: the terminal's trial
+  rows are the totals, and their spread is read through the API (`totals`); a read while the set
+  runs spreads over every started trial, partial values included, and the result is final once
+  the set ends (owner; FR-005, research R6).
 
 ## Why the developer's runs do not vary today
 
@@ -108,7 +113,7 @@ trial's outcome and the unstable mark.
 
 ### User Story 2 - See where the trials differ and how their effort spreads (Priority: P2)
 
-For the ended trials of a slice, the developer sees, per step, the lowest, median and highest of the
+For the trials of a slice (while the set runs, the trials so far), the developer sees, per step, the lowest, median and highest of the
 trials' attempts, review rounds, duration, tokens and cost, and for each step whether its accepted
 files were the same in every trial that reached it.
 

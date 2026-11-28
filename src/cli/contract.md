@@ -453,7 +453,8 @@ When the set ends, `trial-set <id>` (and `trials`) prints, in this order:
 
 1. `TS-<n>  slice <slice>  state <state>[  stopped <stopped_because>][  failed <failed_because>]  done <done>/<ended>[  unstable][  methods mixed]`;
 2. a table of the trials, one row per started trial in trial order, with the columns `RUN`,
-   `OUTCOME`, `ATTEMPTS`, `ROUNDS`, `SECONDS`, `TOKENS` and `COST` (the trial's totals);
+   `OUTCOME`, `ATTEMPTS`, `ROUNDS`, `SECONDS`, `TOKENS` and `COST` (the trial's totals; their
+   lowest, median and highest are the engine's `totals`, which the client does not print);
 3. a table of the steps, one row per step of the pattern in step order, with the columns `STEP`,
    `REACHED`, `ATTEMPTS`, `ROUNDS`, `SECONDS`, `TOKENS`, `COST` (each `<lowest>/<median>/<highest>`)
    and `FILES` (`same`, or the groups of trials with equal files as `1,2|3`);

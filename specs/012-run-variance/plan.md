@@ -92,6 +92,7 @@ Each decision that outlives the feature has a record in `docs/decisions/`.
 | A trial that waits for the developer is handed over by its set | R4 | [ADR 0104](../../docs/decisions/0104-trial-waiting-for-developer-is-handed-over.md) |
 | The engine's preview contract gains `run-trials` in place, an exception to Principle XV | R9 | [ADR 0105](../../docs/decisions/0105-preview-contract-gains-run-trials-in-place.md) |
 | A set whose operation fails ends `failed` (its running trial cancelled, the reason kept); `TrialSetState`, new in this feature, gains `failed` before release | R9 | [ADR 0106](../../docs/decisions/0106-a-failed-trial-set-ends-failed.md) |
+| A step whose worker is a procedure records no `usage` (durable engine); an attempt counts from its `AttemptMade` or a `StepRejected` with none of its step, round and attempt | R6 | [ADR 0107](../../docs/decisions/0107-run-records-carry-usage-only-for-model-steps.md) |
 
 ## Threat model
 
