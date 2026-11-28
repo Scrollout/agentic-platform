@@ -474,3 +474,12 @@ planted other method, names both methods and is `less reliable`.
 
 - [X] T052 Make US2 scenario 1 cover a read while the set runs, FR-005 say the totals' spread is read through the API, `src/cli/contract.md` say a trial not ended shows its totals so far, and ADR 0107 say why feature 001's data model is not edited, per T049, T050, analyze r6 A1-A5 (partial)
 - [ ] T053 Add an API test (new file, test author) that `getTrialSet` on a `running` set spreads its steps and totals over the started trials, partial values included, with `ended` counting only the finished ones and no `previous`; the unit case is `src/engine/trials/measures_test.go:439`, per FR-005, T050 (missing; not blocking, fold into US3's T020 rig)
+
+---
+
+## Phase 12: Analyze round 7 (fresh Sonnet, 25cafae..8f043ee: gate passed, 0 CRITICAL/HIGH/MEDIUM)
+
+- [ ] T054 LOW findings, fold into T025: L1 `src/cli/contract.md` "Trial sets" row 4 and
+  `contracts/trial-sets.md` say the comparison line needs an ended trial of the set (a contract
+  change committed alone); L2 a spec Edge Cases bullet for a set with no ended trial (no
+  comparison), per spec Clarifications 2026-11-28, Principle XVIII (Instructive)
