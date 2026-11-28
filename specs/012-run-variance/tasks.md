@@ -409,3 +409,9 @@ planted other method, names both methods and is `less reliable`.
 
 - [X] T041 Reword ADR 0106's Decision bullet "any later reader or start ... ends the set the same way" to "a start, a delete or the engine's start ends it the same way; a read shows it failed and writes nothing", per T036, data model States rule 2, FR-007, SC-005, Principle IX (contradicts)
 - [X] T042 Add a test that the client's usage shows the contract's `trials-default`, or close it with a reason, per T037, tasks rule "Limits have one home" (partial); closed: the usage line reads `trials-default` from the embedded contract by code, T035 pins that value to the engine and the schema, and the output text is unchanged; a test of the help text would judge wording only
+
+---
+
+## Phase 9: Convergence
+
+- [ ] T043 Say in the engine contract's `startTrialSet` and `Operation` descriptions that a `run-trials` operation ends `failed` when its set ends `failed` (a contract change committed alone; oasdiff unchanged), per ADR 0106, data model States, tasks Rule "Contract first" (partial)
