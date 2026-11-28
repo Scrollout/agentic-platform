@@ -152,12 +152,8 @@ func parseTrialSets(args []string) (func(context.Context, *session) error, error
 			if it.Result.Unstable {
 				unstable = "unstable"
 			}
-			method := it.Method
-			if len(method) > 12 {
-				method = method[:12]
-			}
 			_, _ = fmt.Fprintf(tw, "%s\t%s\t%d\t%d/%d\t%s\t%s\t%s\n", esc(it.Id), esc(string(it.State)), it.Trials,
-				it.Result.Done, it.Result.Ended, unstable, esc(method), stamp(it.CreatedAt))
+				it.Result.Done, it.Result.Ended, unstable, esc(shortMethod(it.Method)), stamp(it.CreatedAt))
 		}
 		if err := tw.Flush(); err != nil {
 			return failf(exitFailed, "writing standard output: %v", err)
@@ -317,7 +313,7 @@ func (s *session) printResult(set *gen.TrialSet) error {
 			line += "  less reliable"
 		}
 		if p.MethodsDiffer {
-			line += "  methods differ"
+			line += "  methods differ " + esc(shortMethod(p.Method)) + " -> " + esc(shortMethod(set.Method))
 		}
 		if err := s.print("%s\n", line); err != nil {
 			return err
@@ -398,4 +394,12 @@ func filesCell(f *gen.StepFiles) string {
 		return "-"
 	}
 	return strings.Join(groups, "|")
+}
+
+// shortMethod is a method as the terminal shows it: its first 12 hex digits.
+func shortMethod(m string) string {
+	if len(m) > 12 {
+		return m[:12]
+	}
+	return m
 }
