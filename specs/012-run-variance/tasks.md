@@ -239,12 +239,14 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   erased; erasing the slice removes its sets; seen failing before T009
 - [X] T013 [US1] (after T005, T009, T011, T012 and T029) Commit (tests and code in separate commits);
   fast lint; ask the owner before pushing (every check job runs); record the CI run here. Done: code d70ee51, 6997707 (T009), 36732bf (T011); tests f5d2cbb, 16737fe, 73e0a4e, 254c9b1 (owner-approved T012 fix: step workers on the parent test's t, found on the owner's VM); helper changes approved (T002). CI 46070202691 at 254c9b1: 24/24 green, TestTrials included
-- [ ] T014 [US1] Fresh review of US1 judging T013's CI run; findings fixed as new tasks or
+- [X] T014 [US1] Fresh review of US1 judging T013's CI run; findings fixed as new tasks or
   recorded; `/speckit-converge` for US1. Round 1 (fresh Sonnet, read-only, worktree at 254c9b1, CI 46070202691
   green): B1 blocking (a set whose `run-trials` operation fails stays `running` and its trial goes
   unfollowed; Principle X, plan row X, data model States) -> owner 2026-11-28: the set ends `failed`
   (spec Clarifications, ADR 0106) -> T030-T032; S1-S5 suggestions -> T033. Round 2 (same reviewer, B1 and 254c9b1..8d1a5ae): B1 fixed; no blocking
-  regression; suggestions R2-1 to R2-3 -> T034 Analyze round 4 (fresh Sonnet, 254c9b1..f687cd1): gate passed, 0 CRITICAL/HIGH; A1 (no XV exception: the set schemas are new) to A9 fixed at their source (ADR 0106, plan, research R9, data model States, T025, T020, T030-T032)
+  regression; suggestions R2-1 to R2-3 -> T034. Review converged in 2 rounds. `/speckit-converge` for US1: pass 1 (at 14bd058)
+  appended Phase 7 T035-T040, pass 2 (e5b5192) Phase 8 T041-T042, pass 3 (91dd22c) Phase 9 T043;
+  all done or closed Analyze round 4 (fresh Sonnet, 254c9b1..f687cd1): gate passed, 0 CRITICAL/HIGH; A1 (no XV exception: the set schemas are new) to A9 fixed at their source (ADR 0106, plan, research R9, data model States, T025, T020, T030-T032)
 - [X] T030 [US1] Contract (committed alone): `TrialSetState` gains `failed` ("its operation failed:
   the running trial was cancelled and none started after"), `TrialSet` gains the optional
   `failed_because` (string, the operation's problem detail; required exactly with `failed`, absent
@@ -414,4 +416,4 @@ planted other method, names both methods and is `less reliable`.
 
 ## Phase 9: Convergence
 
-- [ ] T043 Say in the engine contract's `startTrialSet` and `Operation` descriptions that a `run-trials` operation ends `failed` when its set ends `failed` (a contract change committed alone; oasdiff unchanged), per ADR 0106, data model States, tasks Rule "Contract first" (partial)
+- [X] T043 Say in the engine contract's `startTrialSet` and `Operation` descriptions that a `run-trials` operation ends `failed` when its set ends `failed` (a contract change committed alone; oasdiff unchanged), per ADR 0106, data model States, tasks Rule "Contract first" (partial)
