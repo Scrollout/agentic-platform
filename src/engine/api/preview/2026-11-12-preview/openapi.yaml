@@ -3168,7 +3168,8 @@ components:
       additionalProperties: false
       description: >-
         What the set's trials show together, computed from their run records on each read, never
-        stored.
+        stored. While the set runs, a read spreads over every started trial, the unfinished ones
+        with what they have done so far; once the set ends, the result is final.
       properties:
         ended:
           type: integer
