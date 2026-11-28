@@ -134,7 +134,9 @@ questions on 2026-11-27 (spec, Clarifications).
   - **Comparison**: with the latest earlier `ended` or `stopped` set of the same slice that has at
     least one ended trial: the change in the share of done trials, "less reliable" when it fell,
     both sets' methods named, and "methods differ" when they do (FR-009); none when there is no
-    such set.
+    such set, or when this set has no ended trial (owner 2026-11-28, T020). "Earlier" is a lower
+    set number (set IDs come from a sequence that never repeats); a set's method is its `method`,
+    recorded at acceptance.
   - **Mixed methods** (I2): `methods_mixed` when the trials' runs (the `method` on their step
     events) ran under more than one method; the counts stay over all trials and the result says so.
   - **Interrupted time** (U4) is left out of step and trial seconds alike.

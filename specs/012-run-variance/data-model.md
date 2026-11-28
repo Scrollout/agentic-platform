@@ -107,7 +107,7 @@ Computed from the trials' run records on each read (R6; FR-007).
 | `steps` | Per step of the pattern, in order: `reached` (trials whose record has the step), each measure as `{lowest, median, highest}` or absent when not available, `files` (`same`, or groups of trials by output hashes) |
 | `totals` | `{lowest, median, highest}` of each trial's totals |
 | `methods_mixed` | True when the trials' runs ran under more than one method |
-| `previous` | The latest earlier `ended` or `stopped` set of the slice with `ended` ≥ 1: its ID, method, `done`/`ended`, the change in share, `less_reliable` when the share fell, `methods_differ`; absent when there is none |
+| `previous` | The latest earlier `ended` or `stopped` set of the slice with `ended` ≥ 1: its ID, method, `done`/`ended`, the change in share, `less_reliable` when the share fell, `methods_differ`; absent when there is none, when this set has no ended trial, or while it runs |
 
 Measures: `attempts`, `review_rounds`, `seconds`, `tokens`, `cost_usd`. Seconds, for a step and for a
 trial alike, leave out time the run was interrupted (`RunInterrupted` to `RunResumed`). The median of an even count is

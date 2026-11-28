@@ -382,10 +382,12 @@ planted other method, names both methods and is `less reliable`.
   same slice with at least one ended trial (a `cancelled`, `failed` or `running` one, or one with none ended,
   is skipped), with the change in share, `less_reliable`
   only when the share fell, `methods_differ` when the methods differ; the first set has no
-  `previous`; seen failing before T022
+  `previous`, nor has a set with no ended trial of its own (spec Clarifications 2026-11-28) or a
+  `running` one; T053's running-set read folds in here; seen failing before T022
 - [ ] T021 [P] [US3] Test author: new `src/cli/trial_sets_test.go`: `trial-sets <slice>` prints one
   table (`SET`, `STATE`, `TRIALS`, `DONE`, `UNSTABLE`, `METHOD`, `CREATED`), every page read; with
-  none, a line naming `trials`; `trial-set` prints the comparison line; seen failing before T022
+  none, a line naming `trials`; `trial-set` prints the comparison line (T038 folds in here); seen
+  failing before T022
 - [ ] T022 [US3] Code author (done when T020 and T021 pass): `previous` in `src/engine/trials/`,
   `listTrialSets` in `src/engine/api/trial_sets.go`, `trial-sets` and the comparison line in
   `src/cli/`

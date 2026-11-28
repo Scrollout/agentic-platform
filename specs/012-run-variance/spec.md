@@ -65,6 +65,10 @@ ended done can be captured as a pattern).
   rows are the totals, and their spread is read through the API (`totals`); a read while the set
   runs spreads over every started trial, partial values included, and the result is final once
   the set ends (owner; FR-005, research R6).
+- Found while briefing US3 (T020): a set can end or stop with no ended trial (for example stopped
+  `workers` before its first trial ended), so it has no share of done trials. Q: What does its
+  comparison show? → A: none, as when there is no earlier set: a share needs at least one ended
+  trial, on both sides (owner; FR-009).
 
 ## Why the developer's runs do not vary today
 
@@ -225,7 +229,8 @@ reliable than the first.
 - **FR-009**: When a set of trials of a slice ends or stops, its result MUST show the change in the
   share of trials that ended done since the latest earlier ended or stopped set of the same slice
   with at least one ended trial, and mark a fall as less reliable; sets under different methods
-  MUST be named as such. With no such set, no comparison is shown.
+  MUST be named as such. With no such set, or when the set itself has no ended trial, no
+  comparison is shown.
 - **FR-010**: Trials MUST be bounded by a budget of cost (default $2) and time for the whole set,
   both declared in the contract, in addition to each run's own budgets; a trial MUST start only when
   the set's cost so far plus that run's own cost budget is within the set's budget.
