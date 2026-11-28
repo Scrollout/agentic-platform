@@ -36,8 +36,8 @@ A set whose operation fails ends `failed` with `failed_because` (ADR 0106).
 
 `trial-set` prints `done <d>/<e>`, `unstable` when marked and `methods mixed` when they are, one row per trial (`RUN`, `OUTCOME`,
 `ATTEMPTS`, `ROUNDS`, `SECONDS`, `TOKENS`, `COST`), one row per step (`STEP`, `REACHED`, each measure
-as `lowest/median/highest` or `-`, `FILES` `same` or the groups), and the comparison line naming
-the previous set. Exit codes by the set's end:
+as `lowest/median/highest` or `-`, `FILES` `same` or the groups), and the comparison line (for an `ended` or `stopped` set with an ended trial) naming
+the previous set and, when the methods differ, both methods (first 12 hex digits each). Exit codes by the set's end:
 
 | Set | Exit |
 |-----|------|

@@ -458,8 +458,10 @@ When the set ends, `trial-set <id>` (and `trials`) prints, in this order:
 3. a table of the steps, one row per step of the pattern in step order, with the columns `STEP`,
    `REACHED`, `ATTEMPTS`, `ROUNDS`, `SECONDS`, `TOKENS`, `COST` (each `<lowest>/<median>/<highest>`)
    and `FILES` (`same`, or the groups of trials with equal files as `1,2|3`);
-4. for an `ended` or `stopped` set whose slice has a previous one (`previous`), `compared with
-   TS-<m>: done <done>/<ended> -> <done>/<ended>[  less reliable][  methods differ]`.
+4. for an `ended` or `stopped` set with at least one ended trial whose slice has a previous one
+   (`previous`), `compared with TS-<m>: done <done>/<ended> -> <done>/<ended>[  less
+   reliable][  methods differ <method> -> <method>]`, the previous set's counts and method first,
+   each method as its first 12 hex digits.
 
 A value the engine does not give (not available, or the outcome of a trial not ended) is `-`; a
 trial not ended shows the totals its record has so far. Tables are aligned
