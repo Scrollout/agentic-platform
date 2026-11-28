@@ -801,7 +801,8 @@ func (s *sliceServer) setView(set trialSetRecord) (gen.TrialSet, error) {
 		PartHashes: gen.PartHashes{Goals: set.PartHashes.Goals, Rules: set.PartHashes.Rules, Contract: set.PartHashes.Contract},
 		Operation:  set.Operation, State: set.State, Runs: slices.Clone(set.Runs), CreatedAt: set.CreatedAt, EndedAt: set.EndedAt,
 		Result: gen.TrialResult{Ended: r.Ended, Done: r.Done, Unstable: r.Unstable, MethodsMixed: r.MethodsMixed,
-			Outcomes: make([]gen.TrialOutcome, 0, len(r.Outcomes)), Steps: []gen.StepSpread{}}}
+			Outcomes: make([]gen.TrialOutcome, 0, len(r.Outcomes)), Steps: make([]gen.StepSpread, 0, len(r.Steps)),
+			Totals: spreadsView(r.Totals)}}
 	v.Budget.CostUsd, v.Budget.Hours = float32(set.Budget.CostUSD), set.Budget.Hours
 	if set.StoppedBecause != "" {
 		why := set.StoppedBecause
@@ -809,14 +810,52 @@ func (s *sliceServer) setView(set trialSetRecord) (gen.TrialSet, error) {
 	}
 	v.FailedBecause = opt(set.FailedBecause)
 	for _, o := range r.Outcomes {
-		t := gen.TrialOutcome{Trial: o.Trial, Run: o.Run, Method: opt(o.Method)}
+		t := gen.TrialOutcome{Trial: o.Trial, Run: o.Run, Method: opt(o.Method), Totals: measuresView(o.Totals)}
 		if o.Outcome != "" {
 			out := gen.RunOutcome(o.Outcome)
 			t.Outcome = &out
 		}
 		v.Result.Outcomes = append(v.Result.Outcomes, t)
 	}
+	for _, st := range r.Steps {
+		sv := gen.StepSpread{Step: st.Step, Reached: st.Reached, Measures: spreadsView(st.Measures)}
+		if f := st.Files; f != nil {
+			sv.Files = &gen.StepFiles{Same: f.Same}
+			for _, g := range f.Groups {
+				sv.Files.Groups = append(sv.Files.Groups, struct {
+					Trials []gen.TrialNumber `json:"trials"`
+				}{Trials: slices.Clone(g)})
+			}
+		}
+		v.Result.Steps = append(v.Result.Steps, sv)
+	}
 	return v, nil
+}
+
+// measuresView is a trial's measures in the contract's form; one not available stays absent.
+func measuresView(m trials.Measures) gen.TrialMeasures {
+	v := gen.TrialMeasures{Attempts: m.Attempts, ReviewRounds: m.ReviewRounds, Tokens: m.Tokens}
+	if m.Seconds != nil {
+		f := float32(*m.Seconds)
+		v.Seconds = &f
+	}
+	if m.CostUSD != nil {
+		f := float32(*m.CostUSD)
+		v.CostUsd = &f
+	}
+	return v
+}
+
+// spreadsView is the measures' spreads in the contract's form; one not available stays absent.
+func spreadsView(s trials.Spreads) gen.MeasureSpreads {
+	one := func(p *trials.Spread) *gen.Spread {
+		if p == nil {
+			return nil
+		}
+		return &gen.Spread{Lowest: float32(p.Lowest), Median: float32(p.Median), Highest: float32(p.Highest)}
+	}
+	return gen.MeasureSpreads{Attempts: one(s.Attempts), ReviewRounds: one(s.ReviewRounds), Seconds: one(s.Seconds),
+		Tokens: one(s.Tokens), CostUsd: one(s.CostUSD)}
 }
 
 // GetTrialSet shows one set with its result, read from the records: no model is called, no record
