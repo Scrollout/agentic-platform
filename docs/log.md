@@ -2,6 +2,7 @@
 
 ## 2026-11-28
 
+* **Planning**: Backlog triage (owner): of 102 open tasks in `specs/backlog.md`, 49 are closed as done or dropped and 17 are cut to their remaining defect; 53 stay open, 18 of them priority M.
 * **Planning**: Features 001 to 008: each spec's status reads `Implemented` with its merge date (they still read `Draft` or `In implementation`); feature 001's T151 (adopt Temporal) is closed as delivered by feature 002.
 * **Implementation**: Feature 012 merged to `main` (T028, owner): N-054 is `done`; the spec is `Implemented`.
 * **Planning**: Feature 012 (T028): the open non-blocking tasks T033, T034, T047, T055 and T060 are moved to the backlog as T213 to T217 (owner) and closed in the feature.
