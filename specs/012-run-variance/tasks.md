@@ -501,7 +501,7 @@ planted other method, names both methods and is `less reliable`.
 
 ## Phase 13: Convergence (US3 pass 1, at d21d2c4)
 
-- [ ] T056 [US3] (owner 2026-11-28: name both methods in the line) Contract (committed alone):
+- [X] T056 [US3] (owner 2026-11-28: name both methods in the line) Contract (committed alone):
   `src/cli/contract.md` "Trial sets" item 4 and `contracts/trial-sets.md`: the comparison line reads
   `methods differ <previous method> -> <this method>` (first 12 hex digits each), and is printed
   only for a set with an ended trial (T054 L1 folds in here), per FR-009, US3 Independent Test
@@ -510,4 +510,6 @@ planted other method, names both methods and is `less reliable`.
   the previous set's method then this set's, each cut to 12, exactly when `methods_differ`; with
   equal methods neither is printed; escaped; seen failing before T058
 - [ ] T058 [US3] Code author (done when T057 and every existing test pass): the comparison line in
-  `src/cli/trials.go`; an existing test that breaks is stopped and asked for (owner approval)
+  `src/cli/trials.go`; an existing test that breaks is stopped and asked for (owner approval).
+  Owner approved 2026-11-28 (T057's author makes it): in `src/cli/trial_sets_test.go` only the
+  expected strings at :370, :372, :378 and :488 end `methods differ <previous 12> -> <this 12>`
