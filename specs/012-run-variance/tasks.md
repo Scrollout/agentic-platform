@@ -394,6 +394,9 @@ planted other method, names both methods and is `less reliable`.
   T038; seen failing before the code); fast lint 0 issues
 - [ ] T023 [US3] Commit; fast lint; push (owner go-ahead); record the CI run
 - [ ] T024 [US3] Fresh review of US3 judging T023's CI run; `/speckit-converge` for US3
+  Round 1 (fresh Sonnet, read-only, 25cafae..d21d2c4, CI 46143180993): no blocking finding;
+  suggestions S1-S4 and untested U1-U4, U6 -> T055 (U5 empty methods: covered by
+  `previous_test.go` `TestMethodsDifferExactlyWhenTheMethodsDiffer`). Review converged in 1 round
 
 ---
 
@@ -484,3 +487,12 @@ planted other method, names both methods and is `less reliable`.
   `contracts/trial-sets.md` say the comparison line needs an ended trial of the set (a contract
   change committed alone); L2 a spec Edge Cases bullet for a set with no ended trial (no
   comparison), per spec Clarifications 2026-11-28, Principle XVIII (Instructive)
+
+- [ ] T055 [US3] T024 suggestions, not blocking: S1 each `getTrialSet` and `listTrialSets` page reads
+  every set's runs of the slice (O(sets x k) per request; no cap on sets per slice); S2 one
+  unreadable run record of any set fails every read of the slice (500); S3 say in research R6 or
+  `contracts/trial-sets.md` that the comparison selects by the shown state (a crash-left `running`
+  set shown `failed` is skipped); S4 the `ListTrialSets` doc comment wraps mid-sentence. Untested:
+  U1 an API test with a crash-left running earlier set; U2 a deleted slice's sets NotFound; U3
+  `previous` across list pages; U4 an earlier set whose run records are gone; U6 `trial-sets`
+  against the real engine
