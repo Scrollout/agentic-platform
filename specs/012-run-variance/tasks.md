@@ -393,12 +393,12 @@ planted other method, names both methods and is `less reliable`.
   `src/cli/`. Done: code 60e1d70 (method 971a744b), tests 4769349 (T020 incl. T053, T021 incl.
   T038; seen failing before the code); fast lint 0 issues
 - [X] T023 [US3] Commit; fast lint; push (owner go-ahead); record the CI run: fast lint 0 issues; CI run 46143180993 of d21d2c4 green
-- [ ] T024 [US3] Fresh review of US3 judging T023's CI run; `/speckit-converge` for US3
+- [X] T024 [US3] Fresh review of US3 judging T023's CI run; `/speckit-converge` for US3 (fixes judged by CI run 46148858951 of b21e0f0, green, 26 jobs)
   Round 1 (fresh Sonnet, read-only, 25cafae..d21d2c4, CI 46143180993): no blocking finding;
   suggestions S1-S4 and untested U1-U4, U6 -> T055 (U5 empty methods: covered by
   `previous_test.go` `TestMethodsDifferExactlyWhenTheMethodsDiffer`). Review converged in 1 round
   Converge pass 1 (at d21d2c4): C1 -> Phase 13 T056-T058 (done); pass 2 (at 3793399): converged
-  (an R6 wording note -> T054 L3). T024 ticks when the C1 fix's CI run is green
+  (an R6 wording note -> T054 L3)
 
 ---
 
