@@ -323,7 +323,7 @@ shows `1/1/2`, its files differing in the third trial; a fixed procedure's token
   groups), aligned as `runs`; seen failing before T017
 - [X] T017 [US2] Code author (done when T015 and T016 pass): the measures and files in
   `src/engine/trials/`, served by `getTrialSet`; the rows in `src/cli/`
-- [ ] T018 [US2] Commit; fast lint; push (owner go-ahead); record the CI run
+- [X] T018 [US2] Commit; fast lint; push (owner go-ahead); record the CI run: fast lint 0 issues; CI run 46089956544 of 5afec7b green (26 jobs)
 - [ ] T019 [US2] Fresh review of US2 judging T018's CI run; `/speckit-converge` for US2
 
 ---
