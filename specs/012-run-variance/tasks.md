@@ -408,8 +408,10 @@ planted other method, names both methods and is `less reliable`.
   0106), `docs/apis/engine-api.md`, `src/engine/README.md`, `src/cli/README.md` (`trials`,
   `trial-sets`, `trial-set`), `src/deploy/README.md` (`ap trials`), N-054 in
   `docs/overview/problem-space.md` (state), `docs/log.md`; `python3 scripts/okf.py check` OK
-- [ ] T026 Paid evals for the analyst and steps suites (owner go-ahead; add the branch to
-  environment dev's branch policies): the method identity changed; every counted case pass^3
+- [X] T026 Paid evals for the analyst and steps suites (owner go-ahead; add the branch to
+  environment dev's branch policies): the method identity changed; every counted case pass^3;
+  done: evals run 46156571586 at 15a0ec7, analyst and steps tests, code and review, all 42 counted
+  cases 3 of 3 trials
 - [ ] T027 Final fresh review of the feature judging the head's CI run and T026; `/speckit-analyze`
   and `/speckit-converge` for the whole feature until clean
 - [ ] T028 Merge: every task above is checked (done or `closed:`); `evals-current` on the branch

@@ -2,6 +2,7 @@
 
 ## 2026-11-28
 
+* **Implementation**: Feature 012 (T026): the analyst and steps eval suites pass under the new method identity, every one of the 42 counted cases 3 of 3 trials (evals run 46156571586 at 15a0ec7).
 * **Documentation**: Feature 012 (T025): the architecture overview describes trial sets (fresh builds of a slice as one `run-trials` operation, their bounds, the hand-over of a waiting trial, the `failed` end, the result derived from the run records, registrations by project) and lists ADR 0102 to 0107; the engine API concept lists the trial-set operations; the engine and terminal client READMEs describe the comparison with the previous set and `trial-sets`; N-054 notes the feature's state; the spec gains the edge case of a set with no ended trial and research R6 says the methods are named only when they differ (T054).
 * **Implementation**: Feature 012 (US1 to US3): `ap trials <slice> <prefix> [--trials <k>]` builds an approved slice up to 5 times, reusing nothing, and shows how many trials ended done, the unstable mark, each step's and trial's spread of attempts, review rounds, seconds, tokens and cost, which steps' files differ, and the change since the slice's previous set; `trial-sets` and `trial-set` read them again. Each story was reviewed and converged; CI 46148858951 at b21e0f0 green.
 * **Decision**: [ADR 0107](/decisions/0107-run-records-carry-usage-only-for-model-steps.md): a run's events carry `usage` only for steps that reach a model; a procedure step's tokens and cost read as not available (feature 012 US2 review, owner).
