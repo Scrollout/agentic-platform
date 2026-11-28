@@ -118,13 +118,15 @@ questions on 2026-11-27 (spec, Clarifications).
   - **Done**: trials that ended `done` over trials that ended; unstable when at least one ended done
     and at least one did not (S10).
   - **Per step**, over the trials whose record has the step: attempts (its `AttemptMade` events,
-    plus `StepRejected` events carrying `usage` without an `AttemptMade`), review rounds (the
-    highest `round`), duration (the sum of the step's attempt spans: an attempt runs from its
-    round's `StepStarted`, or from the previous attempt's `StepRejected` in the same round, to its
-    `StepAccepted` or `StepRejected`; the engine records one `StepStarted` per round, T019 B1),
-    tokens and cost (sum of `usage`; a procedure step records none, so they are not available,
-    T019 B3). Lowest, median and
-    highest as feature 008 (S10). A measure no such trial carries is "not available".
+    plus each `StepRejected` with no `AttemptMade` of the same step, round and attempt: a failed
+    worker or a refused result; every other rejection follows its attempt's `AttemptMade`; T019 B2,
+    analyze r5 A1), review rounds (the highest `round`), duration (the sum of the step's attempt
+    spans: an attempt runs from its round's `StepStarted`, or from the previous attempt's
+    `StepRejected` in the same round, to its `StepAccepted` or `StepRejected`; the engine records
+    one `StepStarted` per round, T019 B1), tokens and cost (sum of `usage`; a procedure step's
+    events carry none from T046 on, so they are not available; records written before are not
+    rewritten, T019 B3). Lowest, median and highest as feature 008 (S10). A measure no such trial
+    carries is "not available".
   - **Per trial totals**: the same measures summed, duration from `RunStarted` to the run's end
     without the time it was interrupted.
   - **Files**: per step, the `artifacts` of its last `StepAccepted` (or `ResultReused`); "same" when

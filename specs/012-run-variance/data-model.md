@@ -111,7 +111,8 @@ Computed from the trials' run records on each read (R6; FR-007).
 
 Measures: `attempts`, `review_rounds`, `seconds`, `tokens`, `cost_usd`. Seconds, for a step and for a
 trial alike, leave out time the run was interrupted (`RunInterrupted` to `RunResumed`). The median of an even count is
-the mean of the two middle values (feature 008).
+the mean of the two middle values (feature 008). A step whose worker is a procedure carries no
+`usage`, so its tokens and cost are absent (spec Clarifications 2026-11-28, T019 B3).
 
 ## Validation
 

@@ -59,7 +59,7 @@ ended done can be captured as a pattern).
   tokens and cost would show as a spread of zeros. Q: Does "a fixed procedure uses no tokens" mean
   every procedure step? → A: yes; a step whose worker is a procedure reaches no model, so its
   events carry no usage, as `fill` steps already do, and its tokens and cost show as not available
-  (owner; FR-005, US2 scenario 3).
+  (owner; FR-005, US2 scenario 3). Records written before the change are not rewritten.
 
 ## Why the developer's runs do not vary today
 

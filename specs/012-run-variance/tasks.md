@@ -337,17 +337,21 @@ shows `1/1/2`, its files differing in the third trial; a fixed procedure's token
   the engine writes: one `StepStarted` per round with two attempts (seconds count both spans, less
   interrupted time); a failed worker's `StepRejected` with usage and no `AttemptMade` in a second
   step at the same round and attempt as the first step's `AttemptMade` (the trial counts it); a
-  procedure step with no usage shows tokens and cost not available; and new
-  `src/engine/durable/procedure_usage_test.go`: the events of a `procedure:` step carry no usage,
-  an agent step's do; seen failing before T046
+  procedure step with no usage shows tokens and cost not available; a procedure step whose worker
+  fails on attempt 1 (`StepRejected`, no usage, no `AttemptMade`) and passes on attempt 2 shows
+  attempts 2 (analyze r5 A1); and new `src/engine/durable/procedure_usage_test.go`: the events of a
+  `procedure:` step carry no usage, an agent step's do; seen failing before T046
 - [ ] T046 [US2] Code author (done when T045 passes and every existing test stays green): spans in
-  `measuresOf`, `made` keyed by step, round and attempt; no usage on a procedure step's events in
-  `src/engine/durable/`
+  `measuresOf`; attempts count each `StepRejected` with no `AttemptMade` of the same step, round
+  and attempt, usage or not; no usage on the events of a step whose worker has the `procedure:`
+  prefix, in `src/engine/durable/` and `src/engine/machine/drive.go` alike (analyze r5 A2, A3);
+  a `fill` step keeps its single attempt
 - [ ] T047 [US2] T019 suggestions, not blocking: S1 a `ResultReused` with `open_round` taken as
   accepted files; S2 a span interrupted before its end, or open at the end, gives no step seconds;
   S3 a trial with only `RunStarted` has seconds 0, not absent; S4 spreads pass through float32
   (no `format: double` on `Spread`); S5 `src/cli/contract.md` "whole seconds" against "one decimal
-  for a median", and `%.2f` rounding of a half cent
+  for a median", and `%.2f` rounding of a half cent; analyze r5 A6: say that an open-round
+  `StepRejected` closes the round's last span
 
 ---
 
