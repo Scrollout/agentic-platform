@@ -165,8 +165,8 @@ questions on 2026-11-27 (spec, Clarifications).
   already use pass^k for their agents (feature 008).
 - The engine already adopts Temporal for durable operations; the set uses its existing Operation
   workflow (R1). No other project runs a pattern's build and summarises its record; the result is a
-  few counts and order statistics over the run record (R6), which needs no library. No dependency
-  is added.
+  few counts and order statistics over the run record (R6), which needs no library. No new module
+  is added (the terminal client's direct go-yaml requirement is T061).
 
 ## R9. Contract compatibility
 

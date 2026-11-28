@@ -413,8 +413,10 @@ planted other method, names both methods and is `less reliable`.
   environment dev's branch policies): the method identity changed; every counted case pass^3;
   done: evals run 46156571586 at 15a0ec7, analyst and steps tests, code and review, all 42 counted
   cases 3 of 3 trials
-- [ ] T027 Final fresh review of the feature judging the head's CI run and T026; `/speckit-analyze`
-  and `/speckit-converge` for the whole feature until clean
+- [X] T027 Final fresh review of the feature judging the head's CI run and T026; `/speckit-analyze`
+  and `/speckit-converge` for the whole feature until clean; done: review converged in 1 round
+  (Phase 15, T060), analyze round 8 gate passed (T059), converge 3 passes (T061-T063), the last
+  one wording only
 - [ ] T028 Merge: every task above is checked (done or `closed:`); `evals-current` on the branch
   lists no pending suite; the owner fast-forwards `main`; remove the branch from environment dev's
   policies; delete the branch with the owner's OK; the spec's status `Implemented`
@@ -563,5 +565,5 @@ planted other method, names both methods and is `less reliable`.
 
 ## Phase 17: Convergence (whole feature pass 2, at 4544a0b)
 
-- [X] T063 LOW: the tasks Rule "No dependency" and plan row VI say no new module and name T061's
+- [X] T063 LOW: the tasks Rule "No dependency", plan row VI and research R8 (pass 3, N2) say no new module and name T061's
   direct go-yaml requirement in `src/cli`, per Principle IX (contradicts)
