@@ -330,6 +330,9 @@ shows `1/1/2`, its files differing in the third trial; a fixed procedure's token
   `AttemptMade` by round and attempt only, so another step's attempt hides a failed worker's
   `StepRejected`; B3 procedure steps record usage 0 (owner 2026-11-28: they carry none, spec
   Clarifications); S1-S5 suggestions -> T047
+  Round 2 (fresh Sonnet, 5afec7b..2b4734e): B1, B2, B3 and A1 fixed; the three changed tests keep
+  their intent; no new finding; untested cases (a resume re-recording `StepStarted` after a final
+  rejection, a `ResultReused` while a rejection-opened span is open) -> T047
 - [X] T044 [US2] Intent and contract for T019 B1 and B3: spec Clarifications 2026-11-28, research
   R6, the engine contract's `TrialMeasures` seconds and the run event's `usage` (a contract change
   committed alone; descriptions only, oasdiff unchanged)
@@ -357,7 +360,8 @@ shows `1/1/2`, its files differing in the third trial; a fixed procedure's token
   S3 a trial with only `RunStarted` has seconds 0, not absent; S4 spreads pass through float32
   (no `format: double` on `Spread`); S5 `src/cli/contract.md` "whole seconds" against "one decimal
   for a median", and `%.2f` rounding of a half cent; analyze r5 A6: say that an open-round
-  `StepRejected` closes the round's last span
+  `StepRejected` closes the round's last span; T019 r2 untested: a resume re-recording
+  `StepStarted` after a final rejection, a `ResultReused` while a rejection-opened span is open
 
 ---
 
