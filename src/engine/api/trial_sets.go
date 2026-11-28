@@ -229,14 +229,7 @@ func (s *sliceServer) readSet(id string) (trialSetRecord, error) {
 	if err != nil {
 		return trialSetRecord{}, err
 	}
-	var r trialSetRecord
-	if err := json.Unmarshal(b, &r); err != nil {
-		return trialSetRecord{}, fmt.Errorf("trial set %s: %w", id, err)
-	}
-	if r.Runs == nil {
-		r.Runs = []string{}
-	}
-	return r, nil
+	return decodeSet(id, b)
 }
 
 func (s *sliceServer) putSet(r trialSetRecord) error {
@@ -786,17 +779,77 @@ func (s *sliceServer) trialsOf(set trialSetRecord) ([]trials.Trial, error) {
 	return out, nil
 }
 
-// setView is the set as the contract shows it, with its result computed from its trials' records.
-func (s *sliceServer) setView(set trialSetRecord) (gen.TrialSet, error) {
+// shownResult is a set as a read shows it (shownSet) with its result computed from its trials'
+// records (trials.Of).
+type shownResult struct {
+	set    trialSetRecord
+	result trials.Result
+}
+
+// show is the set as a read shows it, with its result.
+func (s *sliceServer) show(set trialSetRecord) (shownResult, error) {
+	set = s.shownSet(set)
 	ts, err := s.trialsOf(set)
 	if err != nil {
-		return gen.TrialSet{}, err
+		return shownResult{}, err
 	}
 	steps := make([]string, 0, len(s.runs.pattern.Steps))
 	for _, st := range s.runs.pattern.Steps {
 		steps = append(steps, st.Name)
 	}
-	r := trials.Of(steps, ts)
+	return shownResult{set: set, result: trials.Of(steps, ts)}, nil
+}
+
+// setNumber is n of the set ID TS-<n>.
+func setNumber(id string) int { n, _ := strconv.Atoi(strings.TrimPrefix(id, "TS-")); return n }
+
+// summary is what trials.Previous reads of a shown set.
+func (r shownResult) summary() trials.SetSummary {
+	return trials.SetSummary{Number: setNumber(r.set.ID), ID: r.set.ID, State: string(r.set.State), Method: r.set.Method,
+		Done: r.result.Done, Ended: r.result.Ended}
+}
+
+// decodeSet is a set's record as the store keeps it.
+func decodeSet(id string, b []byte) (trialSetRecord, error) {
+	var r trialSetRecord
+	if err := json.Unmarshal(b, &r); err != nil {
+		return trialSetRecord{}, fmt.Errorf("trial set %s: %w", id, err)
+	}
+	if r.Runs == nil {
+		r.Runs = []string{}
+	}
+	return r, nil
+}
+
+// showAll is every set whose record all holds, by ID, as a read shows it, each result computed
+// once per read.
+func (s *sliceServer) showAll(all map[string][]byte) (map[string]shownResult, error) {
+	shown := make(map[string]shownResult, len(all))
+	for id, b := range all {
+		r, err := decodeSet(id, b)
+		if err != nil {
+			return nil, err
+		}
+		if shown[id], err = s.show(r); err != nil {
+			return nil, err
+		}
+	}
+	return shown, nil
+}
+
+// summaries are what trials.Previous compares the shown sets by.
+func summaries(shown map[string]shownResult) []trials.SetSummary {
+	sums := make([]trials.SetSummary, 0, len(shown))
+	for _, v := range shown {
+		sums = append(sums, v.summary())
+	}
+	return sums
+}
+
+// setView is the set as the contract shows it, with its result and, when trials.Previous gives
+// one, its comparison with the slice's previous set among sums.
+func setView(shown shownResult, sums []trials.SetSummary) gen.TrialSet {
+	set, r := shown.set, shown.result
 	v := gen.TrialSet{Id: set.ID, Slice: set.Slice, Trials: set.Trials, ProjectPrefix: set.ProjectPrefix, Method: set.Method,
 		PartHashes: gen.PartHashes{Goals: set.PartHashes.Goals, Rules: set.PartHashes.Rules, Contract: set.PartHashes.Contract},
 		Operation:  set.Operation, State: set.State, Runs: slices.Clone(set.Runs), CreatedAt: set.CreatedAt, EndedAt: set.EndedAt,
@@ -829,7 +882,11 @@ func (s *sliceServer) setView(set trialSetRecord) (gen.TrialSet, error) {
 		}
 		v.Result.Steps = append(v.Result.Steps, sv)
 	}
-	return v, nil
+	if c := trials.Previous(shown.summary(), sums); c != nil {
+		v.Result.Previous = &gen.TrialComparison{TrialSet: c.TrialSet, Method: c.Method, Done: c.Done, Ended: c.Ended,
+			ShareChange: float32(c.ShareChange), LessReliable: c.LessReliable, MethodsDiffer: c.MethodsDiffer}
+	}
+	return v
 }
 
 // measuresView is a trial's measures in the contract's form; one not available stays absent.
@@ -858,10 +915,11 @@ func spreadsView(s trials.Spreads) gen.MeasureSpreads {
 		Tokens: one(s.Tokens), CostUsd: one(s.CostUSD)}
 }
 
-// GetTrialSet shows one set with its result, read from the records: no model is called, no record
-// changes and nothing is cancelled; a `running` set whose operation has ended failed is shown
-// `failed` (shownSet) until a start, a delete or the engine's start repairs it. An unknown or erased
-// set is NotFound.
+// GetTrialSet shows one set with its result and its comparison with the slice's previous set
+// (trials.Previous over the slice's sets as shown), read from the records: no model is called, no
+// record changes and nothing is cancelled; a `running` set whose operation has ended failed is
+// shown `failed` (shownSet) until a start, a delete or the engine's start repairs it. An unknown or
+// erased set is NotFound.
 func (s *sliceServer) GetTrialSet(_ context.Context, req gen.GetTrialSetRequestObject) (gen.GetTrialSetResponseObject, error) {
 	if _, err := s.trialSetStore(); err != nil {
 		return nil, err
@@ -877,14 +935,26 @@ func (s *sliceServer) GetTrialSet(_ context.Context, req gen.GetTrialSetRequestO
 	case err != nil:
 		return nil, err
 	}
-	v, err := s.setView(s.shownSet(set))
+	all, err := s.trialSets.TrialSets(set.Slice)
 	if err != nil {
 		return nil, err
 	}
+	delete(all, set.ID) // the set as just read stands for itself
+	shown, err := s.showAll(all)
+	if err != nil {
+		return nil, err
+	}
+	own, err := s.show(set)
+	if err != nil {
+		return nil, err
+	}
+	shown[set.ID] = own
+	v := setView(own, summaries(shown))
 	return gen.GetTrialSet200JSONResponse{TrialSetJSONResponse: gen.TrialSetJSONResponse{Body: v}}, nil
 }
 
-// ListTrialSets lists the slice's sets newest first, each as getTrialSet shows it; a page token
+// ListTrialSets lists the slice's sets newest first, each as getTrialSet shows it (every set's
+// result computed once per request); a page token
 // names the number of the last set of its page. An unknown slice is NotFound.
 func (s *sliceServer) ListTrialSets(_ context.Context, req gen.ListTrialSetsRequestObject) (gen.ListTrialSetsResponseObject, error) {
 	ts, err := s.trialSetStore()
@@ -903,30 +973,23 @@ func (s *sliceServer) ListTrialSets(_ context.Context, req gen.ListTrialSetsRequ
 	for set := range all {
 		ids = append(ids, set)
 	}
-	number := func(set string) int { n, _ := strconv.Atoi(strings.TrimPrefix(set, "TS-")); return n }
-	slices.SortFunc(ids, func(a, b string) int { return number(b) - number(a) })
+	slices.SortFunc(ids, func(a, b string) int { return setNumber(b) - setNumber(a) })
 	numbers := make([]int, len(ids))
 	for i, set := range ids {
-		numbers[i] = number(set)
+		numbers[i] = setNumber(set)
 	}
 	from, to, next, ok := s.pages.keysetPage(trialSetsList(id), req.Params.PageToken, numbers)
 	if !ok {
 		return problemResponse(badPageToken()), nil
 	}
 	list := gen.TrialSetList{Items: make([]gen.TrialSet, 0, to-from), NextPageToken: next}
+	shown, err := s.showAll(all)
+	if err != nil {
+		return nil, err
+	}
+	sums := summaries(shown)
 	for _, set := range ids[from:to] {
-		var r trialSetRecord
-		if err := json.Unmarshal(all[set], &r); err != nil {
-			return nil, fmt.Errorf("trial set %s: %w", set, err)
-		}
-		if r.Runs == nil {
-			r.Runs = []string{}
-		}
-		v, err := s.setView(s.shownSet(r))
-		if err != nil {
-			return nil, err
-		}
-		list.Items = append(list.Items, v)
+		list.Items = append(list.Items, setView(shown[set], sums))
 	}
 	return gen.ListTrialSets200JSONResponse{TrialSetListJSONResponse: gen.TrialSetListJSONResponse{Body: list}}, nil
 }

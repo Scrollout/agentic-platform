@@ -18,7 +18,7 @@ import (
 )
 
 // Trial sets (contract.md, "Trial sets"): `trials` starts a set and follows it, `trial-set` shows
-// one and follows it while it runs.
+// one and follows it while it runs, `trial-sets` lists a slice's sets.
 
 var (
 	trialSetID = regexp.MustCompile(`^TS-[0-9]+$`)
@@ -104,6 +104,65 @@ func parseTrialSet(args []string) (func(context.Context, *session) error, error)
 	return func(ctx context.Context, s *session) error {
 		*s.detach = fmt.Sprintf("stopped following %s; it continues. Follow it with trial-set %s.", id, id)
 		return s.followSet(ctx, id, "")
+	}, nil
+}
+
+// parseTrialSets reads `trial-sets <slice>`: every page of the slice's sets in one table, newest
+// first, as the engine orders them.
+func parseTrialSets(args []string) (func(context.Context, *session) error, error) {
+	if len(args) != 1 {
+		return nil, usagef("trial-sets: want exactly one slice")
+	}
+	if err := needSlice("trial-sets", args[0]); err != nil {
+		return nil, err
+	}
+	slice := args[0]
+	return func(ctx context.Context, s *session) error {
+		var items []gen.TrialSet
+		var token *string
+		seen := map[string]bool{}
+		for {
+			r, err := call(ctx, s, "listTrialSets", http.StatusOK, func(ctx context.Context) (*http.Response, error) {
+				return s.api.ListTrialSets(ctx, slice, &gen.ListTrialSetsParams{ApiVersion: APIVersion, PageToken: token})
+			}, gen.ParseListTrialSetsResponse)
+			if err != nil {
+				return err
+			}
+			if r.JSON200 == nil {
+				return noBody("listTrialSets")
+			}
+			items = append(items, r.JSON200.Items...)
+			next := r.JSON200.NextPageToken
+			if next == nil {
+				break
+			}
+			if seen[*next] {
+				return failf(exitFailed, "engine: listTrialSets gave the page token %q again", esc(*next))
+			}
+			seen[*next] = true
+			token = next
+		}
+		if len(items) == 0 {
+			return s.print("No trial sets yet. Start one with trials %s <prefix>.\n", slice)
+		}
+		tw := tabwriter.NewWriter(s.out, 0, 4, 2, ' ', 0)
+		_, _ = fmt.Fprintln(tw, "SET\tSTATE\tTRIALS\tDONE\tUNSTABLE\tMETHOD\tCREATED")
+		for _, it := range items {
+			unstable := "-"
+			if it.Result.Unstable {
+				unstable = "unstable"
+			}
+			method := it.Method
+			if len(method) > 12 {
+				method = method[:12]
+			}
+			_, _ = fmt.Fprintf(tw, "%s\t%s\t%d\t%d/%d\t%s\t%s\t%s\n", esc(it.Id), esc(string(it.State)), it.Trials,
+				it.Result.Done, it.Result.Ended, unstable, esc(method), stamp(it.CreatedAt))
+		}
+		if err := tw.Flush(); err != nil {
+			return failf(exitFailed, "writing standard output: %v", err)
+		}
+		return nil
 	}, nil
 }
 

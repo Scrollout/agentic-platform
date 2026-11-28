@@ -121,6 +121,7 @@ const usageLines = `usage:
   withdraw-pattern <id>                stop a captured pattern's use by new runs
   erase-pattern <id>                   erase a captured pattern, its proof slice and their records after confirmation
   trials <slice> <prefix> [--trials <k>] build the slice k times (default <trials-default>) into <prefix>-1 to <prefix>-<k> and follow the set
+  trial-sets <slice>                   list the slice's trial sets, newest first
   trial-set <id>                       show a trial set's result and follow it while it runs`
 
 // Run runs one command and returns its exit code.
@@ -240,6 +241,8 @@ func run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout io
 		do, err = parseErasePattern(rest)
 	case "trials":
 		do, err = parseTrials(rest)
+	case "trial-sets":
+		do, err = parseTrialSets(rest)
 	case "trial-set":
 		do, err = parseTrialSet(rest)
 	default:
