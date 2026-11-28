@@ -392,7 +392,7 @@ planted other method, names both methods and is `less reliable`.
   `listTrialSets` in `src/engine/api/trial_sets.go`, `trial-sets` and the comparison line in
   `src/cli/`. Done: code 60e1d70 (method 971a744b), tests 4769349 (T020 incl. T053, T021 incl.
   T038; seen failing before the code); fast lint 0 issues
-- [ ] T023 [US3] Commit; fast lint; push (owner go-ahead); record the CI run
+- [X] T023 [US3] Commit; fast lint; push (owner go-ahead); record the CI run: fast lint 0 issues; CI run 46143180993 of d21d2c4 green
 - [ ] T024 [US3] Fresh review of US3 judging T023's CI run; `/speckit-converge` for US3
   Round 1 (fresh Sonnet, read-only, 25cafae..d21d2c4, CI 46143180993): no blocking finding;
   suggestions S1-S4 and untested U1-U4, U6 -> T055 (U5 empty methods: covered by
