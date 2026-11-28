@@ -506,10 +506,10 @@ planted other method, names both methods and is `less reliable`.
   `methods differ <previous method> -> <this method>` (first 12 hex digits each), and is printed
   only for a set with an ended trial (T054 L1 folds in here), per FR-009, US3 Independent Test
   ("names both methods"), research R6 (partial)
-- [ ] T057 [US3] Test author: new `src/cli/trial_set_methods_test.go`: the comparison line names
+- [X] T057 [US3] Test author: new `src/cli/trial_set_methods_test.go`: the comparison line names
   the previous set's method then this set's, each cut to 12, exactly when `methods_differ`; with
   equal methods neither is printed; escaped; seen failing before T058
-- [ ] T058 [US3] Code author (done when T057 and every existing test pass): the comparison line in
+- [X] T058 [US3] Code author (done when T057 and every existing test pass): the comparison line in
   `src/cli/trials.go`; an existing test that breaks is stopped and asked for (owner approval).
   Owner approved 2026-11-28 (T057's author makes it): in `src/cli/trial_sets_test.go` only the
   expected strings at :370, :372, :378 and :488 end `methods differ <previous 12> -> <this 12>`
