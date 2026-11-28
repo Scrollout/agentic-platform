@@ -195,6 +195,9 @@ reliable than the first.
 - The slice is erased: refused while one of its sets is running; afterwards its sets are erased
   with it.
 - A set's 24 hours pass: its running trial is cancelled and the set stops (`time`).
+- A set ends or stops with no ended trial (for example stopped `workers` before its first trial
+  ended): it has no share of done trials, so it shows no comparison and is not the previous set of
+  a later one.
 - The set's own work fails (a trial cannot be started, or the engine cannot go on after its
   retries): its running trial is cancelled, the set ends `failed` naming why, and no further trial
   starts.

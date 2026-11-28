@@ -8,7 +8,7 @@ sources:
   - id: owner
     resource: https://claude.ai/code/session_01P2TmGw3MdjVyoyhGeQK7np
     title: Project owner's answers, 2026-11-11
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-27T12:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-28T15:00:00Z }
 ---
 
 # How to use these tables
@@ -67,6 +67,9 @@ client only, k at most 5, $2 per set).
 `in progress` since feature 008's implementation (2026-11-23): every eval job shows each case's
 passed trials, its unstable mark and the spread of its effort, keeps its measurement 90 days and
 compares with the latest earlier run in its history (evals runs 45163722619, 45170628365).
+Feature 012's three stories (trials of a slice, the spread of their effort and files, the
+comparison with the slice's previous set) pass in CI (check run 46148858951 at b21e0f0); N-054
+stays `in progress` until its paid evals (T026), final review and merge.
 
 N-040 (2026-11-21): `done` by feature 002: its three stories pass in CI (check run 44886296672
 at aab7fcb) and in the regression evals (run 44809763108), the clean-machine measurement (T032)

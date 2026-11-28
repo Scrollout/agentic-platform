@@ -71,7 +71,22 @@ sources:
   - id: adr-0097
     resource: /decisions/0097-proof-builds-a-slice-made-from-the-captured-copy.md
     title: "ADR 0097: A proof builds a slice made from the captured pattern's copy"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-27T12:00:00Z }
+  - id: plan-012
+    resource: ../../specs/012-run-variance/plan.md
+    title: Feature 012 plan, research R1 to R9
+  - id: data-model-012
+    resource: ../../specs/012-run-variance/data-model.md
+    title: Feature 012 data model
+  - id: adr-0102
+    resource: /decisions/0102-trial-set-runs-fresh-builds-and-derives-its-result.md
+    title: "ADR 0102: A trial set runs fresh builds of a slice and derives its result from their records"
+  - id: adr-0103
+    resource: /decisions/0103-worker-registrations-name-their-project.md
+    title: "ADR 0103: Step-worker registrations name their project"
+  - id: adr-0106
+    resource: /decisions/0106-a-failed-trial-set-ends-failed.md
+    title: "ADR 0106: A trial set whose operation fails ends failed"
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-28T15:00:00Z }
 ---
 
 # Context
@@ -355,6 +370,50 @@ Sources: [Feature 011 plan](../../specs/011-capture-pattern/plan.md),
 [ADR 0093](/decisions/0093-captured-pattern-used-only-under-its-proven-method.md),
 [ADR 0097](/decisions/0097-proof-builds-a-slice-made-from-the-captured-copy.md).
 
+Shipped by feature 012 ([spec](../../specs/012-run-variance/spec.md)):
+
+- **Trial sets** (`src/engine/trials`, `/slices/{sliceId}/trial-sets` and `/trial-sets/{trialSetId}`
+  in the engine API, `ap trials`): a trial set builds an approved slice k times (1 to 5, default 3)
+  into the new projects `<prefix>-1` to `<prefix>-<k>`, one run after another, so the developer
+  sees how much the builds vary. It is one operation of kind `run-trials`; each trial is an
+  ordinary run, as `startRun` without a pattern starts one, that reuses no earlier accepted result
+  and carries `trial_set` and `trial` on its `RunStarted`. The trial's run ID is written into the
+  set before the run starts, so a repeat after a stop follows or starts that same run
+  ([ADR 0102](/decisions/0102-trial-set-runs-fresh-builds-and-derives-its-result.md)).
+- **Bounds**: a trial starts only while the set's cost so far plus one run's budget stays within
+  $2; a set still running after 24 hours cancels its trial and stops. Before each trial the set
+  also stops when the slice's approved parts changed since acceptance or a project's step workers
+  are gone. The limits are the engine contract's `x-limits` (`trials-max`, `trials-default`,
+  `trial-set-cost-usd`, `trial-set-hours`), pinned to the engine by a contract test.
+- **A waiting trial is handed over**: a trial that runs out of attempts, review rounds or budget is
+  handed over by its set, counted as not done, and the next trial starts; an interrupted trial is
+  waited for within the 24 hours
+  ([ADR 0104](/decisions/0104-trial-waiting-for-developer-is-handed-over.md)).
+- **A failed set ends failed**: when the set's operation fails, its running trial is cancelled and
+  the set ends `failed` with the operation's reason. A set a crash left `running` is ended so by
+  the next start, delete or engine start; reads write nothing
+  ([ADR 0106](/decisions/0106-a-failed-trial-set-ends-failed.md)).
+- **The result is derived, never stored**: package `trials` computes it from the trials' run
+  records on each read: done out of ended, the unstable mark, per step and per trial the lowest,
+  median and highest attempts, review rounds, seconds without interrupted time, tokens and cost,
+  which steps' files differ, and the change since the slice's latest earlier set that ended or
+  stopped with an ended trial, naming both methods when they differ. A measure no trial carries is not available, never
+  0; a step whose worker is a procedure records no usage
+  ([ADR 0107](/decisions/0107-run-records-carry-usage-only-for-model-steps.md)). Sets are kept
+  in the engine store with their slice and erased with it.
+- **Registrations by project**: a step worker registers for a slice, step and project, and a run
+  uses only its own project's workers, so the k projects of a set have ready workers at once
+  ([ADR 0103](/decisions/0103-worker-registrations-name-their-project.md)).
+- **Contract changes**: additive, except the operation kind `run-trials`, added in place to
+  `2026-11-12-preview`
+  ([ADR 0105](/decisions/0105-preview-contract-gains-run-trials-in-place.md)).
+
+Sources: [Feature 012 plan](../../specs/012-run-variance/plan.md),
+[Feature 012 data model](../../specs/012-run-variance/data-model.md),
+[ADR 0102](/decisions/0102-trial-set-runs-fresh-builds-and-derives-its-result.md),
+[ADR 0103](/decisions/0103-worker-registrations-name-their-project.md),
+[ADR 0106](/decisions/0106-a-failed-trial-set-ends-failed.md).
+
 Every container runs read-only with all capabilities dropped; the analyst, contract-lint, the check
 service and the workers run under [gVisor](/components/gvisor.md). Networks are internal and isolated: `clients`,
 `agents` (engine, gateway, step workers), `checks`, `lint` and `analyst` (engine, gateway), `durable` (engine, Temporal's server) and
@@ -420,4 +479,10 @@ Each further building block gets its own concept:
 - [ADR 0099: A proof compares the filled outputs, and template paths are filled](/decisions/0099-proof-compares-filled-outputs-and-paths-are-filled.md)
 - [ADR 0100: The engine's preview contract gains enum values in place](/decisions/0100-preview-contract-gains-enum-values-in-place.md)
 - [ADR 0101: A captured pattern's filled review step runs every test](/decisions/0101-filled-review-step-runs-every-test.md)
+- [ADR 0102: A trial set runs fresh builds of a slice and derives its result from their records](/decisions/0102-trial-set-runs-fresh-builds-and-derives-its-result.md)
+- [ADR 0103: Step-worker registrations name their project](/decisions/0103-worker-registrations-name-their-project.md)
+- [ADR 0104: A trial that waits for the developer is handed over by its set](/decisions/0104-trial-waiting-for-developer-is-handed-over.md)
+- [ADR 0105: The engine's preview contract gains the operation kind run-trials in place](/decisions/0105-preview-contract-gains-run-trials-in-place.md)
+- [ADR 0106: A trial set whose operation fails ends failed](/decisions/0106-a-failed-trial-set-ends-failed.md)
+- [ADR 0107: A run's events carry usage only for steps that reach a model](/decisions/0107-run-records-carry-usage-only-for-model-steps.md)
 - ADRs 0005 to 0025: why each constitution principle exists, starting with [ADR 0005](/decisions/0005-principle-i-needs-before-solutions.md)

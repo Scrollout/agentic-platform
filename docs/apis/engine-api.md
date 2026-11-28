@@ -2,7 +2,7 @@
 type: API
 title: Engine API
 description: The engine's public HTTP API, which the terminal client and the run page call to turn a description into an approved slice, build it, and follow the work.
-tags: [apis, engine, openapi, slices, runs]
+tags: [apis, engine, openapi, slices, runs, trial-sets]
 status: draft
 resource: ../../src/engine/api/preview/2026-11-12-preview/openapi.yaml
 sources:
@@ -15,10 +15,16 @@ sources:
   - id: adr-0100
     resource: /decisions/0100-preview-contract-gains-enum-values-in-place.md
     title: "ADR 0100: The engine's preview contract gains enum values in place"
+  - id: adr-0105
+    resource: /decisions/0105-preview-contract-gains-run-trials-in-place.md
+    title: "ADR 0105: The engine's preview contract gains the operation kind run-trials in place"
+  - id: adr-0102
+    resource: /decisions/0102-trial-set-runs-fresh-builds-and-derives-its-result.md
+    title: "ADR 0102: A trial set runs fresh builds of a slice and derives its result from their records"
   - id: adr-0019
     resource: /decisions/0019-principle-xv-compatible-public-apis.md
     title: "ADR 0019: Principle XV, compatible public APIs"
-generated: { by: claude-code/claude-opus-5-5, at: 2026-11-27T12:00:00Z }
+generated: { by: claude-code/claude-opus-5-5, at: 2026-11-28T15:00:00Z }
 ---
 
 # Purpose
@@ -44,7 +50,8 @@ Each operation names its permission in `x-operation-name`.
 | runs | `GET /runs`, `GET /runs/{runId}`, `GET /runs/{runId}/events`, `GET /runs/{runId}/artifacts/{hash}`, `GET /runs/{runId}/comparison`, `POST /runs/{runId}/resume`, `/replay` and `/hand-over` |
 | operations | `GET /operations/{operationId}`, `POST /operations/{operationId}/cancel` |
 | captured patterns | `POST /captured-patterns` (captureRun), `GET /captured-patterns`, `GET /captured-patterns/{capturedPatternId}`, `DELETE /captured-patterns/{capturedPatternId}`, `PUT /captured-patterns/{capturedPatternId}/parameters`, `POST /captured-patterns/{capturedPatternId}/proof-slice`, `/approval` and `/withdrawal` |
-| workers | `POST /workers` (a step worker announces that it is ready) |
+| trial sets | `POST /slices/{sliceId}/trial-sets` (startTrialSet), `GET /slices/{sliceId}/trial-sets` (listTrialSets), `GET /trial-sets/{trialSetId}` (getTrialSet) |
+| workers | `POST /workers` (a step worker announces that it is ready, for one project of its slice) |
 | provider | `GET /providers/Agentic.Engine/operations` (lists this service's operations) |
 
 Every state change but `registerWorker` returns an operation (HTTP 202) that the client follows with
@@ -61,7 +68,25 @@ proof slice) under the current method. The limits are `x-limits`
 `made-for-proof` were added in place to this preview version
 ([ADR 0100](/decisions/0100-preview-contract-gains-enum-values-in-place.md)).
 
-Sources: [Engine OpenAPI contract](../../src/engine/api/preview/2026-11-12-preview/openapi.yaml).
+A trial set (feature 012) builds an approved slice `trials` times (1 to `x-limits.trials-max`, 5;
+`trials-default`, 3), one run after another, into the new projects `<project_prefix>-1` to
+`<project_prefix>-<trials>`, each run reusing no earlier result. `startTrialSet` refuses as
+`startRun` without `pattern` does, then `WorkersNotReady` and `ProjectExists` for the first of the
+projects, then `RunActive` while another set of the slice runs; its operation, of kind
+`run-trials`, lasts until the set ends, and cancelling it cancels the running trial. A set stops
+`budget` when one more trial would pass `trial-set-cost-usd` ($2), `time` after `trial-set-hours`
+(24), `slice-changed` or `workers`; it ends `failed` with `failed_because` when its operation
+fails. `getTrialSet` and `listTrialSets` (newest first, at most 50 per page) give each set's
+result, computed from its trials' run records on each read and changing nothing: done out of
+ended, the unstable mark, the spread (lowest, median, highest) of each step's and each trial's
+attempts, review rounds, seconds, tokens and cost, which steps' files differ, and `previous`, the
+change since the slice's latest earlier set that ended or stopped with an ended trial. A `WorkerRegistration` names its
+project, and a run uses only its own project's workers. The operation kind `run-trials` was added
+in place; every other change is additive
+([ADR 0102](/decisions/0102-trial-set-runs-fresh-builds-and-derives-its-result.md),
+[ADR 0105](/decisions/0105-preview-contract-gains-run-trials-in-place.md)).
+
+Sources: [Engine OpenAPI contract](../../src/engine/api/preview/2026-11-12-preview/openapi.yaml), [ADR 0102](/decisions/0102-trial-set-runs-fresh-builds-and-derives-its-result.md), [ADR 0105](/decisions/0105-preview-contract-gains-run-trials-in-place.md).
 
 # Authentication
 
@@ -88,8 +113,8 @@ Sources: [Engine OpenAPI contract](../../src/engine/api/preview/2026-11-12-previ
 
 # Pagination and idempotency
 
-- Lists (`listSlices`, `listRuns`, `listCapturedPatterns`, run events, run comparison) take an opaque `page_token` and
-  return `next_page_token`. Slices, runs and captured patterns are newest first, at most 50 per page. Run events
+- Lists (`listSlices`, `listRuns`, `listCapturedPatterns`, `listTrialSets`, run events, run comparison) take an opaque `page_token` and
+  return `next_page_token`. Slices, runs, captured patterns and trial sets are newest first, at most 50 per page. Run events
   are in `seq` order, at most 100 per page. Until a run ends, the last page still carries a
   token, and using it later returns the events recorded since.
 - State-changing operations but `registerWorker` accept an `Idempotency-Key`. The engine keeps a key and its first

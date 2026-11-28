@@ -133,7 +133,7 @@ questions on 2026-11-27 (spec, Clarifications).
     every trial that accepted the step has the same hashes, else the trials grouped by hashes.
   - **Comparison**: with the latest earlier `ended` or `stopped` set of the same slice that has at
     least one ended trial: the change in the share of done trials, "less reliable" when it fell,
-    both sets' methods named, and "methods differ" when they do (FR-009); none when there is no
+    and, when the sets' methods differ, "methods differ" naming both (FR-009); none when there is no
     such set, or when this set has no ended trial (owner 2026-11-28, T020). "Earlier" is a lower
     set number (set IDs come from a sequence that never repeats); a set's method is its `method`,
     recorded at acceptance.

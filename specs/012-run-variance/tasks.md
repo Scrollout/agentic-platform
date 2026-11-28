@@ -404,7 +404,7 @@ planted other method, names both methods and is `less reliable`.
 
 ## Phase 6: Polish & cross-cutting
 
-- [ ] T025 Docs: `docs/architecture/overview.md` (trial sets, registrations by project, ADR 0102 to
+- [X] T025 Docs: `docs/architecture/overview.md` (trial sets, registrations by project, ADR 0102 to
   0106), `docs/apis/engine-api.md`, `src/engine/README.md`, `src/cli/README.md` (`trials`,
   `trial-sets`, `trial-set`), `src/deploy/README.md` (`ap trials`), N-054 in
   `docs/overview/problem-space.md` (state), `docs/log.md`; `python3 scripts/okf.py check` OK
@@ -485,7 +485,7 @@ planted other method, names both methods and is `less reliable`.
 
 ## Phase 12: Analyze round 7 (fresh Sonnet, 25cafae..8f043ee: gate passed, 0 CRITICAL/HIGH/MEDIUM)
 
-- [ ] T054 LOW findings, fold into T025: L1 `src/cli/contract.md` "Trial sets" row 4 and
+- [X] T054 LOW findings, fold into T025: L1 `src/cli/contract.md` "Trial sets" row 4 and
   `contracts/trial-sets.md` say the comparison line needs an ended trial of the set (a contract
   change committed alone); L2 a spec Edge Cases bullet for a set with no ended trial (no
   comparison); L1 done by T056; L3 research R6 "both sets' methods named": the line names them

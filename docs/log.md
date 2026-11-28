@@ -1,5 +1,12 @@
 # Directory Update Log
 
+## 2026-11-28
+
+* **Documentation**: Feature 012 (T025): the architecture overview describes trial sets (fresh builds of a slice as one `run-trials` operation, their bounds, the hand-over of a waiting trial, the `failed` end, the result derived from the run records, registrations by project) and lists ADR 0102 to 0107; the engine API concept lists the trial-set operations; the engine and terminal client READMEs describe the comparison with the previous set and `trial-sets`; N-054 notes the feature's state; the spec gains the edge case of a set with no ended trial and research R6 says the methods are named only when they differ (T054).
+* **Implementation**: Feature 012 (US1 to US3): `ap trials <slice> <prefix> [--trials <k>]` builds an approved slice up to 5 times, reusing nothing, and shows how many trials ended done, the unstable mark, each step's and trial's spread of attempts, review rounds, seconds, tokens and cost, which steps' files differ, and the change since the slice's previous set; `trial-sets` and `trial-set` read them again. Each story was reviewed and converged; CI 46148858951 at b21e0f0 green.
+* **Decision**: [ADR 0107](/decisions/0107-run-records-carry-usage-only-for-model-steps.md): a run's events carry `usage` only for steps that reach a model; a procedure step's tokens and cost read as not available (feature 012 US2 review, owner).
+* **Decision**: [ADR 0106](/decisions/0106-a-failed-trial-set-ends-failed.md): a trial set whose operation fails ends `failed` with the operation's reason, its running trial cancelled; reads write nothing (feature 012 US1 review, owner).
+
 ## 2026-11-27
 
 * **Plan**: Feature 012 planned: a trial set is one `run-trials` operation of k fresh runs (`NoReuse`) into `<prefix>-1..k`, its result derived from their run records; worker registrations name their project; a trial waiting for the developer is handed over by its set; $2 and 24 hours per set. Decisions [ADR 0102](/decisions/0102-trial-set-runs-fresh-builds-and-derives-its-result.md), [ADR 0103](/decisions/0103-worker-registrations-name-their-project.md), [ADR 0104](/decisions/0104-trial-waiting-for-developer-is-handed-over.md); the `run-trials` enum value is an owner-approved Principle XV exception ([ADR 0105](/decisions/0105-preview-contract-gains-run-trials-in-place.md)).

@@ -29,6 +29,10 @@ steps' tables (`-` for a measure the engine does not give) and the comparison li
 code of the set's state. `trial-set` of an ended set prints the trial lines too. A `failed` set's
 first line ends its state with `failed <failed_because>`, and the client exits 4 with that reason,
 read from the set (not its operation).
+The comparison line (`compared with TS-<n>: done <d>/<e> -> <d>/<e>`, `less reliable` when the
+share fell, `methods differ <previous> -> <this>` with each method's first 12 hex digits when they
+differ) is printed only for an `ended` or `stopped` set for which the engine gives `previous`. `trial-sets <slice>` reads every page of
+`listTrialSets` and prints one table of the slice's sets, newest first.
 
 Signals reach `Run` through `Env.Signals`, which `main` fills with `signal.Notify` for SIGINT and
 SIGTERM: the first one stops following, never the work, prints how to follow or cancel it, and
