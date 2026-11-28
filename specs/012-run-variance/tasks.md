@@ -543,3 +543,17 @@ planted other method, names both methods and is `less reliable`.
   captured pattern's (extends T033 S1); F5 every read computes every set's result (extends T033 S4,
   T055 S1); F6 the in-memory driver's `HandOverAccepted` reason does not name the set (durable path
   only); untested: a `TS-0` or `TS-007` ID (CLI accepts, engine NotFound)
+
+---
+
+## Phase 16: Convergence (whole feature pass 1, at 1736c7d)
+
+- [ ] T061 MEDIUM: `src/cli/go.mod` makes `go.yaml.in/yaml/v3` v3.0.6 (already in the module graph,
+  indirect) a direct requirement of the terminal client, which reads `x-limits` from the embedded
+  contract with it (`src/cli/trials.go`), against the plan's "no dependency added" and Principle
+  XVI (a dependency added needs a recorded human approval); `docs/components/go-yaml.md` names only
+  `src/slice` and `src/engine`. Owner decides: keep it (record the approval, update the concept and
+  the plan) or read the limits another way, per Principles IX, XVI, tasks Rule "No dependency"
+  (partial)
+- [X] T062 LOW: plan Constitution Check row IX names ADR 0102 to 0107 (0106, 0107 were added in
+  US1 and US2), per Principle IX (partial)

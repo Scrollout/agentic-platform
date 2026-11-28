@@ -62,7 +62,7 @@ registration field, three terminal commands, one acceptance suite
 | VI. Adopt mature OSS | Pass | Docker Agent's `eval --repeat` evaluated and does not apply (R8); no dependency |
 | VII. Providers | Not applicable | No provider |
 | VIII. Containers | Pass | No new image; the k projects' step containers are the existing ones |
-| IX. Knowledge stays true | Pass | ADR 0102 to 0105, the architecture overview, the engine and terminal READMEs and the log at implementation |
+| IX. Knowledge stays true | Pass | ADR 0102 to 0107, the architecture overview, the engine and terminal READMEs and the log at implementation |
 | X. No silent loss | Pass | Each trial is an ordinary run; a set ends in exactly one state; its waits are bounded by 24 hours (R5) |
 | XI. Privacy | Pass | A set holds IDs, counts and hashes only; it is erased with its slice |
 | XII. Tenants | Not applicable | One developer by scope (feature 001 FR-021), as for slices; Complexity Tracking |
