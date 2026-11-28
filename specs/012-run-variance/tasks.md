@@ -334,7 +334,7 @@ shows `1/1/2`, its files differing in the third trial; a fixed procedure's token
   their intent; no new finding; untested cases (a resume re-recording `StepStarted` after a final
   rejection, a `ResultReused` while a rejection-opened span is open) -> T047. Converge pass 1 (at
   2b4734e) appended Phase 10 T048-T051; pass 2 with analyze round 6 (at 4906b68, gate passed)
-  appended Phase 11 T052-T053
+  appended Phase 11 T052-T053; pass 3 (at b06e32c) converged
 - [X] T044 [US2] Intent and contract for T019 B1 and B3: spec Clarifications 2026-11-28, research
   R6, the engine contract's `TrialMeasures` seconds and the run event's `usage` (a contract change
   committed alone; descriptions only, oasdiff unchanged)
