@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-22
 
-**Status**: Draft
+**Status**: Implemented (merged 2026-11-22)
 
 **Input**: Backlog task T185 (owner 2026-11-21, chosen as the next work 2026-11-22): "Analyst
 reliability (evals run 44888638411 on `main` at d67edc6): `example` failed trial 1 of 3

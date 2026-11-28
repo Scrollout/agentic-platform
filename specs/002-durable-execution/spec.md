@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-18
 
-**Status**: Draft
+**Status**: Implemented (merged 2026-11-21)
 
 **Input**: Feature 001's task T151 (owner, 2026-11-17; [ADR 0056](../../docs/decisions/0056-durable-execution-custom-for-the-mvp-temporal-after.md)):
 "Adopt Temporal for the engine's durable execution: the step machine's resume, checkpoints,

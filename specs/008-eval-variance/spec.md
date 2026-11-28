@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-23
 
-**Status**: Draft
+**Status**: Implemented (merged 2026-11-23)
 
 **Input**: Need N-054, "How much results vary from run to run is measured and shown" (owner chose it
 as the next work, 2026-11-23). Owner's scope answers the same day: the eval suites, not the

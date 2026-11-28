@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-21
 
-**Status**: Draft
+**Status**: Implemented (merged 2026-11-22)
 
 **Input**: Backlog task T180 (owner approved 2026-11-20, after feature 002): "Eval graders judge
 edge cases, not only the examples: (a) code agent: held-out edge-case tests the agent never sees

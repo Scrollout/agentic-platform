@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-11
 
-**Status**: In implementation (Story 1 done 2026-11-12; revised 2026-11-12 after fresh review round 1)
+**Status**: Implemented (merged 2026-11-18)
 
 **Input**: User description: "A developer describes what they want in their own words and receives working software for one use case. Every result is accepted by checks, and the developer is asked only about what checks cannot judge." (full description in the conversation that created this spec; summarised in the stories below)
 

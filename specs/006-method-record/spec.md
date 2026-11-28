@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-22
 
-**Status**: Draft
+**Status**: Implemented (merged 2026-11-23)
 
 **Input**: Backlog tasks T136 and T144 (owner chose T136 as the next work, 2026-11-22; T144 shares
 its design). T136 (HIGH): "The reuse key and the run record name the method that judged a result,

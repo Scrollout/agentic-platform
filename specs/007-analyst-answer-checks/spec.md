@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-22
 
-**Status**: Draft
+**Status**: Implemented (merged 2026-11-23)
 
 **Input**: Backlog tasks T195 and T196 (owner 2026-11-22: fix both in one new feature, branched
 from `main`, before feature 006 merges). T195: in evals run 45047239704 `revise-inject-approvals-field`

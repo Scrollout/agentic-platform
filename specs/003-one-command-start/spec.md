@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-18
 
-**Status**: Draft
+**Status**: Implemented (merged 2026-11-18)
 
 **Input**: Project owner, 2026-11-18, after reading how to start the MVP (generate the code, set the
 signing password, build and sign seven images one by one, make a projects folder with the right
