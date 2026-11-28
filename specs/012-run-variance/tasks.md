@@ -333,7 +333,7 @@ shows `1/1/2`, its files differing in the third trial; a fixed procedure's token
 - [X] T044 [US2] Intent and contract for T019 B1 and B3: spec Clarifications 2026-11-28, research
   R6, the engine contract's `TrialMeasures` seconds and the run event's `usage` (a contract change
   committed alone; descriptions only, oasdiff unchanged)
-- [ ] T045 [US2] Test author: new `src/engine/trials/measures_records_test.go` on the record shapes
+- [X] T045 [US2] Test author: new `src/engine/trials/measures_records_test.go` on the record shapes
   the engine writes: one `StepStarted` per round with two attempts (seconds count both spans, less
   interrupted time); a failed worker's `StepRejected` with usage and no `AttemptMade` in a second
   step at the same round and attempt as the first step's `AttemptMade` (the trial counts it); a
@@ -341,7 +341,7 @@ shows `1/1/2`, its files differing in the third trial; a fixed procedure's token
   fails on attempt 1 (`StepRejected`, no usage, no `AttemptMade`) and passes on attempt 2 shows
   attempts 2 (analyze r5 A1); and new `src/engine/durable/procedure_usage_test.go`: the events of a
   `procedure:` step carry no usage, an agent step's do; seen failing before T046
-- [ ] T046 [US2] Code author (done when T045 passes and every existing test stays green): spans in
+- [X] T046 [US2] Code author (done when T045 passes and every existing test stays green): spans in
   `measuresOf`; attempts count each `StepRejected` with no `AttemptMade` of the same step, round
   and attempt, usage or not; no usage on the events of a step whose worker has the `procedure:`
   prefix, in `src/engine/durable/` (analyze r5 A3); a `fill` step keeps its single attempt.
