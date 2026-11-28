@@ -307,7 +307,7 @@ files differ (FR-005, FR-006; research R6).
 **Independent Test**: T015 and T016 pass; quickstart 1: a code step needing 1, 1 and 2 attempts
 shows `1/1/2`, its files differing in the third trial; a fixed procedure's tokens are `-`.
 
-- [ ] T015 [P] [US2] Test author: new `src/engine/trials/measures_test.go` on planted run records:
+- [X] T015 [P] [US2] Test author: new `src/engine/trials/measures_test.go` on planted run records:
   per step over the trials that reached it, attempts (`AttemptMade` plus a `StepRejected` with
   `usage` and no `AttemptMade`), review rounds (highest `round`), seconds (the sum of the step's
   attempt spans, `StepStarted` to its `StepAccepted` or `StepRejected`, without interrupted time), tokens and cost (sum of
@@ -317,11 +317,11 @@ shows `1/1/2`, its files differing in the third trial; a fixed procedure's token
   trial that accepted the step has the same output hashes of its last `StepAccepted` or
   `ResultReused`, else the trials grouped by hashes, naming each (SC-003); a step no trial reached
   is listed with `reached 0`; seen failing before T017
-- [ ] T016 [P] [US2] Test author: new `src/cli/trial_result_test.go`: `trial-set <id>` prints the
+- [X] T016 [P] [US2] Test author: new `src/cli/trial_result_test.go`: `trial-set <id>` prints the
   trial rows (`RUN`, `OUTCOME`, `ATTEMPTS`, `ROUNDS`, `SECONDS`, `TOKENS`, `COST`) and the step rows
   (`STEP`, `REACHED`, each measure as `lowest/median/highest` or `-`, `FILES` `same` or the
   groups), aligned as `runs`; seen failing before T017
-- [ ] T017 [US2] Code author (done when T015 and T016 pass): the measures and files in
+- [X] T017 [US2] Code author (done when T015 and T016 pass): the measures and files in
   `src/engine/trials/`, served by `getTrialSet`; the rows in `src/cli/`
 - [ ] T018 [US2] Commit; fast lint; push (owner go-ahead); record the CI run
 - [ ] T019 [US2] Fresh review of US2 judging T018's CI run; `/speckit-converge` for US2
