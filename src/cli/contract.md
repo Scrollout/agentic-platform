@@ -461,7 +461,8 @@ When the set ends, `trial-set <id>` (and `trials`) prints, in this order:
 4. for an `ended` or `stopped` set whose slice has a previous one (`previous`), `compared with
    TS-<m>: done <done>/<ended> -> <done>/<ended>[  less reliable][  methods differ]`.
 
-A value the engine does not give (not available, or a trial not ended) is `-`. Tables are aligned
+A value the engine does not give (not available, or the outcome of a trial not ended) is `-`; a
+trial not ended shows the totals its record has so far. Tables are aligned
 as `slices` aligns its table. Seconds are whole seconds, costs `$<usd>` with two decimals, and a
 median that falls between two whole values keeps one decimal.
 

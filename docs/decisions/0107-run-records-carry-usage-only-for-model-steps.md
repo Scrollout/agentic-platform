@@ -44,6 +44,8 @@ Sources: [Feature 001 data model](../../specs/001-prose-to-accepted-slice/data-m
 - Records written before the change are not rewritten. The engine's in-memory driver, which only
   tests start, keeps a zero usage on procedure steps (owner 2026-11-28).
 - This qualifies feature 001's rule: `usage` is on every attempt of a step that reaches a model.
+  Feature 001's data model is that feature's finished record and is not edited; this decision is
+  the place a reader finds the exception.
 
 Sources: [Feature 012 research, R6](../../specs/012-run-variance/research.md).
 

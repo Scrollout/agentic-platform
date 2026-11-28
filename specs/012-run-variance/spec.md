@@ -113,7 +113,8 @@ trial's outcome and the unstable mark.
 
 ### User Story 2 - See where the trials differ and how their effort spreads (Priority: P2)
 
-For the trials of a slice (while the set runs, the trials so far), the developer sees, per step, the lowest, median and highest of the
+For the trials of a slice (while the set runs, the trials so far), the developer sees, per step,
+the lowest, median and highest of the
 trials' attempts, review rounds, duration, tokens and cost, and for each step whether its accepted
 files were the same in every trial that reached it.
 
@@ -127,8 +128,9 @@ procedure fills shows its files as the same.
 
 **Acceptance Scenarios**:
 
-1. **Given** ended trials, **When** the developer reads their result, **Then** every step shows the
-   lowest, median and highest of each measure over the trials that reached it, and the totals per
+1. **Given** the trials of a set (ended, or so far while it runs), **When** the developer reads
+   their result, **Then** every step shows the lowest, median and highest of each measure over the
+   trials that reached it, an unfinished trial with what it has done so far, and the totals per
    trial.
 2. **Given** two trials whose accepted code differs, **When** the result is shown, **Then** that step
    is marked as differing and names the trials whose files differ, and the developer can compare
@@ -213,7 +215,7 @@ reliable than the first.
   did not; when the trials ran under more than one method, the result MUST say so.
 - **FR-005**: The result MUST show per step, over the trials that reached it, the lowest, median and
   highest of attempts, review rounds, duration, tokens and cost, and the same for each trial's
-  totals; a measure no such trial carries MUST be shown as not available.
+  totals (through the API; the terminal prints each trial's totals); a measure no such trial carries MUST be shown as not available.
 - **FR-006**: The result MUST show per step whether its accepted files were the same in every trial
   that accepted it, and name the trials whose files differ.
 - **FR-007**: The result MUST be derived only from the trials' run records; reading it MUST NOT call

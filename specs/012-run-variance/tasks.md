@@ -332,7 +332,9 @@ shows `1/1/2`, its files differing in the third trial; a fixed procedure's token
   Clarifications); S1-S5 suggestions -> T047
   Round 2 (fresh Sonnet, 5afec7b..2b4734e): B1, B2, B3 and A1 fixed; the three changed tests keep
   their intent; no new finding; untested cases (a resume re-recording `StepStarted` after a final
-  rejection, a `ResultReused` while a rejection-opened span is open) -> T047
+  rejection, a `ResultReused` while a rejection-opened span is open) -> T047. Converge pass 1 (at
+  2b4734e) appended Phase 10 T048-T051; pass 2 with analyze round 6 (at 4906b68, gate passed)
+  appended Phase 11 T052-T053
 - [X] T044 [US2] Intent and contract for T019 B1 and B3: spec Clarifications 2026-11-28, research
   R6, the engine contract's `TrialMeasures` seconds and the run event's `usage` (a contract change
   committed alone; descriptions only, oasdiff unchanged)
@@ -463,3 +465,10 @@ planted other method, names both methods and is `less reliable`.
 - [X] T049 (owner 2026-11-28: the spread of the trials' totals is read through the API only) Say in `src/cli/contract.md` "Trial sets" and the spec that the trial rows are the totals and their spread is the API's `totals`, per FR-005, US2 scenario 1 (partial)
 - [X] T050 (owner 2026-11-28: a read while the set runs spreads over the trials so far) Say in the engine contract's `TrialResult` description (a contract change committed alone; oasdiff unchanged) and the spec that a read while the set runs spreads over every started trial, partial values included, as research R6 says, per FR-005, US2 (partial)
 - [X] T051 Narrow T038 to the "compared with" line (T021): `src/cli/trial_result_test.go` covers the step table, `spreadCell` and `filesCell`, per T016, T038 (contradicts)
+
+---
+
+## Phase 11: Convergence
+
+- [X] T052 Make US2 scenario 1 cover a read while the set runs, FR-005 say the totals' spread is read through the API, `src/cli/contract.md` say a trial not ended shows its totals so far, and ADR 0107 say why feature 001's data model is not edited, per T049, T050, analyze r6 A1-A5 (partial)
+- [ ] T053 Add an API test (new file, test author) that `getTrialSet` on a `running` set spreads its steps and totals over the started trials, partial values included, with `ended` counting only the finished ones and no `previous`; the unit case is `src/engine/trials/measures_test.go:439`, per FR-005, T050 (missing; not blocking, fold into US3's T020 rig)
