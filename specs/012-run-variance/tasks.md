@@ -375,7 +375,7 @@ research R6, R7).
 **Independent Test**: T020 and T021 pass; a second set with one more trial handed over, under a
 planted other method, names both methods and is `less reliable`.
 
-- [ ] T020 [P] [US3] Test author: new `src/engine/trials/previous_test.go` and
+- [X] T020 [P] [US3] Test author: new `src/engine/trials/previous_test.go` and
   `src/engine/api/trial_sets_list_test.go`: `listTrialSets` newest first, at most 50 per page,
   opaque page tokens, a token from another list refused 400, each item with state, k, method,
   `done`/`ended` and `unstable`; `previous` is the latest earlier `ended` or `stopped` set of the
@@ -384,13 +384,14 @@ planted other method, names both methods and is `less reliable`.
   only when the share fell, `methods_differ` when the methods differ; the first set has no
   `previous`, nor has a set with no ended trial of its own (spec Clarifications 2026-11-28) or a
   `running` one; T053's running-set read folds in here; seen failing before T022
-- [ ] T021 [P] [US3] Test author: new `src/cli/trial_sets_test.go`: `trial-sets <slice>` prints one
+- [X] T021 [P] [US3] Test author: new `src/cli/trial_sets_test.go`: `trial-sets <slice>` prints one
   table (`SET`, `STATE`, `TRIALS`, `DONE`, `UNSTABLE`, `METHOD`, `CREATED`), every page read; with
   none, a line naming `trials`; `trial-set` prints the comparison line (T038 folds in here); seen
   failing before T022
-- [ ] T022 [US3] Code author (done when T020 and T021 pass): `previous` in `src/engine/trials/`,
+- [X] T022 [US3] Code author (done when T020 and T021 pass): `previous` in `src/engine/trials/`,
   `listTrialSets` in `src/engine/api/trial_sets.go`, `trial-sets` and the comparison line in
-  `src/cli/`
+  `src/cli/`. Done: code 60e1d70 (method 971a744b), tests 4769349 (T020 incl. T053, T021 incl.
+  T038; seen failing before the code); fast lint 0 issues
 - [ ] T023 [US3] Commit; fast lint; push (owner go-ahead); record the CI run
 - [ ] T024 [US3] Fresh review of US3 judging T023's CI run; `/speckit-converge` for US3
 
@@ -442,7 +443,7 @@ planted other method, names both methods and is `less reliable`.
 - [X] T035 CRITICAL: add a contract test (new file, separate test author) that pins the engine's trial limits to the contract's `x-limits` (`trials-max`, `trials-default`, `trial-set-cost-usd`, `trial-set-hours`) and the `minimum`, `maximum` and `default` of `TrialSetRequest.trials`, `TrialSet.trials` and `trial_number` to them, failing on a planted contract copy, and covering `trialLimitsOf`'s refusals (a key missing, zero, a default above the most, a non-numeric cost) so the engine refuses to start; code only if the test fails, per Constitution III (contract test proves they match), tasks Rule "Limits have one home", FR-001 (partial)
 - [X] T036 (owner 2026-11-28: reads stay read-only; a read shows a crash-left set `failed` from its failed operation without writing; the repair (record and trial cancel) runs on `startTrialSet`, `deleteSlice` and engine start; T031 read tests change with the owner's approval per test); owner approved 2026-11-28: in `src/engine/api/trial_sets_failed_test.go` A (`TestTSFASetLeftRunningByACrash...` :269, read subtests: read shows `failed`, record stays `running`, nothing cancelled; renamed and split), B (`TestTSFATimeStopRacing...` :333, settled by a start or delete; reads show `failed` throughout), C (`TestTSFAJobWhoseRetriesRunOut...` :398, reads cancel nothing, the next start or delete cancels once; name and header comments), and the rewording of `trial_sets_failed_reason_test.go` :15 and :90's name; new cases in a new file Decide with the owner whether a read of a set may repair it (end a crash-left `running` set `failed`, cancel a failed set's unended trial, appending `RunCancelled`), then amend FR-007 and SC-005 (a read changes no run record) or keep reads read-only and repair only on `startTrialSet`, `deleteSlice` and engine start, and change the data model (States rules 2, 3), T031's tests (owner approval) and the code to match, per FR-007, SC-005, data model States (contradicts)
 - [X] T037 Derive the client's usage text "(default 3)" (`src/cli/cli.go:120`) from the embedded contract's `trials-default`, or drop the number, per tasks Rule "Limits have one home" (partial)
-- [ ] T038 Make US3's T021 exercise the "compared with" line already in `src/cli/trials.go`, which no test covers yet (T051: T016's `src/cli/trial_result_test.go` covers the step table, `spreadCell` and `filesCell`), per T021, T022 test-first order (unrequested)
+- [X] T038 Make US3's T021 exercise the "compared with" line already in `src/cli/trials.go`, which no test covers yet (T051: T016's `src/cli/trial_result_test.go` covers the step table, `spreadCell` and `filesCell`), per T021, T022 test-first order (unrequested)
 - [X] T039 Add a test (new file) that a worker token is refused on `getTrialSet` and `listTrialSets` and a page token may read them, per Constitution V, the plan's threat model, T007 (partial)
 - [X] T040 Correct T030's `maxLength` wording (none, as research R9 says), the contract's `failed_because` description (the detail, or the problem's code when the detail is empty, T034 R2-1; a contract change committed alone) and `quickstart.md` step 2's test pattern (`TestTS`), per Principle IX (partial)
 
@@ -473,7 +474,7 @@ planted other method, names both methods and is `less reliable`.
 ## Phase 11: Convergence
 
 - [X] T052 Make US2 scenario 1 cover a read while the set runs, FR-005 say the totals' spread is read through the API, `src/cli/contract.md` say a trial not ended shows its totals so far, and ADR 0107 say why feature 001's data model is not edited, per T049, T050, analyze r6 A1-A5 (partial)
-- [ ] T053 Add an API test (new file, test author) that `getTrialSet` on a `running` set spreads its steps and totals over the started trials, partial values included, with `ended` counting only the finished ones and no `previous`; the unit case is `src/engine/trials/measures_test.go:439`, per FR-005, T050 (missing; not blocking, fold into US3's T020 rig)
+- [X] T053 Add an API test (new file, test author) that `getTrialSet` on a `running` set spreads its steps and totals over the started trials, partial values included, with `ended` counting only the finished ones and no `previous`; the unit case is `src/engine/trials/measures_test.go:439`, per FR-005, T050 (missing; not blocking, fold into US3's T020 rig)
 
 ---
 
