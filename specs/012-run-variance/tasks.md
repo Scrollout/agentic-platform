@@ -344,8 +344,10 @@ shows `1/1/2`, its files differing in the third trial; a fixed procedure's token
 - [ ] T046 [US2] Code author (done when T045 passes and every existing test stays green): spans in
   `measuresOf`; attempts count each `StepRejected` with no `AttemptMade` of the same step, round
   and attempt, usage or not; no usage on the events of a step whose worker has the `procedure:`
-  prefix, in `src/engine/durable/` and `src/engine/machine/drive.go` alike (analyze r5 A2, A3);
-  a `fill` step keeps its single attempt
+  prefix, in `src/engine/durable/` (analyze r5 A3); a `fill` step keeps its single attempt.
+  Owner 2026-11-28 (A2): the in-memory driver `src/engine/machine/drive.go`, which only tests
+  start, keeps its usage on procedure steps, so `machine/workflow_failed_usage_test.go` is
+  unchanged
 - [ ] T047 [US2] T019 suggestions, not blocking: S1 a `ResultReused` with `open_round` taken as
   accepted files; S2 a span interrupted before its end, or open at the end, gives no step seconds;
   S3 a trial with only `RunStarted` has seconds 0, not absent; S4 spreads pass through float32
