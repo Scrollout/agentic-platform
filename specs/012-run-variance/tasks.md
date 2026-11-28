@@ -496,3 +496,18 @@ planted other method, names both methods and is `less reliable`.
   U1 an API test with a crash-left running earlier set; U2 a deleted slice's sets NotFound; U3
   `previous` across list pages; U4 an earlier set whose run records are gone; U6 `trial-sets`
   against the real engine
+
+---
+
+## Phase 13: Convergence (US3 pass 1, at d21d2c4)
+
+- [ ] T056 [US3] (owner 2026-11-28: name both methods in the line) Contract (committed alone):
+  `src/cli/contract.md` "Trial sets" item 4 and `contracts/trial-sets.md`: the comparison line reads
+  `methods differ <previous method> -> <this method>` (first 12 hex digits each), and is printed
+  only for a set with an ended trial (T054 L1 folds in here), per FR-009, US3 Independent Test
+  ("names both methods"), research R6 (partial)
+- [ ] T057 [US3] Test author: new `src/cli/trial_set_methods_test.go`: the comparison line names
+  the previous set's method then this set's, each cut to 12, exactly when `methods_differ`; with
+  equal methods neither is printed; escaped; seen failing before T058
+- [ ] T058 [US3] Code author (done when T057 and every existing test pass): the comparison line in
+  `src/cli/trials.go`; an existing test that breaks is stopped and asked for (owner approval)
