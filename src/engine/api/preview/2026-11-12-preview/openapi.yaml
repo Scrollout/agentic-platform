@@ -589,8 +589,10 @@ paths:
         and step without a ready worker; then ProjectExists naming the first project whose folder
         exists; then RunActive while another trial set of the slice is `running` or its operation
         has not ended. The operation (kind `run-trials`) targets the set and lasts until the set
-        ends: it succeeds when the set ends `ended` or `stopped` and ends `cancelled` when it is
-        cancelled. Cancelling it cancels the running trial and starts no other.
+        ends: it succeeds when the set ends `ended` or `stopped`, ends `cancelled` when it is
+        cancelled, and ends `failed` (the set then ends `failed`) when a trial's start is refused
+        for good or the work cannot go on after its retries. Cancelling it cancels the running trial
+        and starts no other.
       security:
       - clientToken: []
       x-error-codes:
@@ -2528,8 +2530,9 @@ components:
         ends, and succeeds whatever the run's outcome, except `cancelled`; the outcome is on the run.
         When the platform could not carry the run on, the operation fails with the run's reason. A
         `run-trials` operation lasts from the acceptance of its trial set until the set ends; it
-        succeeds when the set ends `ended` or `stopped`, whatever its trials' outcomes, and ends
-        `cancelled` when the set is cancelled; the outcomes are on the set.
+        succeeds when the set ends `ended` or `stopped`, whatever its trials' outcomes, ends
+        `cancelled` when the set is cancelled, and fails when the set ends `failed`; the outcomes
+        are on the set.
       required:
       - id
       - kind
