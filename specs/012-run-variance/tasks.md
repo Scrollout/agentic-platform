@@ -526,3 +526,20 @@ planted other method, names both methods and is `less reliable`.
 - [X] T059 LOW findings, docs only: M1 N-054's note in `docs/overview/problem-space.md` no longer
   waits on T026 (evals run 46156571586 green); M2 T025 marks `src/deploy/README.md` already current;
   M3 `src/cli/README.md` says a set with no ended trial shows no comparison line
+
+---
+
+## Phase 15: Final fresh review (T027 round 1, fresh Sonnet, aa3858a..0a641a5: no blocking finding)
+
+  CI 46156561668 at 15a0ec7 green (25 jobs); evals 46156571586 green; existing-test changes all
+  carry `Tests-approved-by:`; no dependency added; method identity converged. F2 (N-054 note) is
+  T059 M1. F1 (the recorded evals-current job listed four pending suites, as it ran beside the
+  evals dispatch; the selector at 0a641a5 gives none) is checked again by T028. Review converged in
+  1 round.
+
+- [ ] T060 T027 suggestions, not blocking: F3 `failed_because` for retry exhaustion carries the raw
+  Go error text (`failed after N attempts: ...`, possibly store paths; `trial_sets.go` `failedReason`,
+  `durable/operation.go`): consider a fixed reason; F4 `show` lists the base pattern's steps, not a
+  captured pattern's (extends T033 S1); F5 every read computes every set's result (extends T033 S4,
+  T055 S1); F6 the in-memory driver's `HandOverAccepted` reason does not name the set (durable path
+  only); untested: a `TS-0` or `TS-007` ID (CLI accepts, engine NotFound)
