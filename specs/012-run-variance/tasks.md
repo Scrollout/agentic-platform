@@ -279,14 +279,15 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   its running trial, and the repair on read, start and delete (data model, States); in `src/cli/`
   the client prints the state and exits 4 with the reason; method identity converged; then commit, fast lint, push (owner
   go-ahead), T014 round 2 on B1 and the changed lines
-- [ ] T034 [US1] Round 2 findings: R2-1 (done: fix and test, local) a `failed` set whose operation's problem has an empty
+- [X] T034 [US1] Round 2 findings: R2-1 (done: fix and test, local) a `failed` set whose operation's problem has an empty
   `detail` is answered without `failed_because`, which the contract's `allOf` requires: write a
   non-empty reason (the problem's code when the detail is empty), with a test by a separate author
   (fix before the feature is done; the contract holds); R2-2 (suggestion) an operation that fails
   before the job wrote its set leaves no set record (`getTrialSet` 404), unlike `cancelTrialSet`,
   which writes it from the operation; R2-3 (suggestion) a failed set's never-started trial is
   cancelled again (NotFound, harmless) on every read
-- [ ] T033 [US1] Suggestions of the US1 review round 1 (not blocking; decide each, or close with a
+  closed: moved to backlog T214 (owner, 2026-11-28: not blocking; feature 011's way)
+- [X] T033 [US1] Suggestions of the US1 review round 1 (not blocking; decide each, or close with a
   reason): S1 the pattern is chosen again before each trial (a captured pattern approved mid-set
   changes later trials' pattern; its refusal reads `slice-changed`) and a trial's project appearing
   after acceptance is not re-checked (now ends the set `failed`, T031); the result does not name a
@@ -297,6 +298,7 @@ only after the second ended; every trial's `RunStarted` has `trial_set` and no `
   the 24 h, cancel racing the final end, captured-pattern trials; S4 the 200 ms poll while waiting
   for another run re-reads k records each time; S5 `trial-sets` is in the terminal contract and
   README before US3 builds it; `acceptTrialHandOver` holds the runs lock up to 10 s
+  closed: moved to backlog T213 (owner, 2026-11-28: not blocking; feature 011's way)
 
 ---
 
@@ -358,13 +360,14 @@ shows `1/1/2`, its files differing in the third trial; a fixed procedure's token
   (it runs the durable engine; its failed-attempt cases fail an agent step instead of
   `contract-check`/`generate`), `src/engine/api/trial_sets_test.go:985` (the fake charges cost
   on agent steps only)
-- [ ] T047 [US2] T019 suggestions, not blocking: S1 a `ResultReused` with `open_round` taken as
+- [X] T047 [US2] T019 suggestions, not blocking: S1 a `ResultReused` with `open_round` taken as
   accepted files; S2 a span interrupted before its end, or open at the end, gives no step seconds;
   S3 a trial with only `RunStarted` has seconds 0, not absent; S4 spreads pass through float32
   (no `format: double` on `Spread`); S5 `src/cli/contract.md` "whole seconds" against "one decimal
   for a median", and `%.2f` rounding of a half cent; analyze r5 A6: say that an open-round
   `StepRejected` closes the round's last span; T019 r2 untested: a resume re-recording
   `StepStarted` after a final rejection, a `ResultReused` while a rejection-opened span is open
+  closed: moved to backlog T215 (owner, 2026-11-28: not blocking; feature 011's way)
 
 ---
 
@@ -496,7 +499,7 @@ planted other method, names both methods and is `less reliable`.
   comparison); L1 done by T056; L3 research R6 "both sets' methods named": the line names them
   when they differ, per spec Clarifications 2026-11-28, Principle XVIII (Instructive)
 
-- [ ] T055 [US3] T024 suggestions, not blocking: S1 each `getTrialSet` and `listTrialSets` page reads
+- [X] T055 [US3] T024 suggestions, not blocking: S1 each `getTrialSet` and `listTrialSets` page reads
   every set's runs of the slice (O(sets x k) per request; no cap on sets per slice); S2 one
   unreadable run record of any set fails every read of the slice (500); S3 say in research R6 or
   `contracts/trial-sets.md` that the comparison selects by the shown state (a crash-left `running`
@@ -504,6 +507,7 @@ planted other method, names both methods and is `less reliable`.
   U1 an API test with a crash-left running earlier set; U2 a deleted slice's sets NotFound; U3
   `previous` across list pages; U4 an earlier set whose run records are gone; U6 `trial-sets`
   against the real engine
+  closed: moved to backlog T216 (owner, 2026-11-28: not blocking; feature 011's way)
 
 ---
 
@@ -540,12 +544,13 @@ planted other method, names both methods and is `less reliable`.
   evals dispatch; the selector at 0a641a5 gives none) is checked again by T028. Review converged in
   1 round.
 
-- [ ] T060 T027 suggestions, not blocking: F3 `failed_because` for retry exhaustion carries the raw
+- [X] T060 T027 suggestions, not blocking: F3 `failed_because` for retry exhaustion carries the raw
   Go error text (`failed after N attempts: ...`, possibly store paths; `trial_sets.go` `failedReason`,
   `durable/operation.go`): consider a fixed reason; F4 `show` lists the base pattern's steps, not a
   captured pattern's (extends T033 S1); F5 every read computes every set's result (extends T033 S4,
   T055 S1); F6 the in-memory driver's `HandOverAccepted` reason does not name the set (durable path
   only); untested: a `TS-0` or `TS-007` ID (CLI accepts, engine NotFound)
+  closed: moved to backlog T217 (owner, 2026-11-28: not blocking; feature 011's way)
 
 ---
 

@@ -2,6 +2,7 @@
 
 ## 2026-11-28
 
+* **Planning**: Feature 012 (T028): the open non-blocking tasks T033, T034, T047, T055 and T060 are moved to the backlog as T213 to T217 (owner) and closed in the feature.
 * **Planning**: Feature 012 (T027 done): final fresh review converged in 1 round; `/speckit-analyze` round 8 passed; `/speckit-converge` for the whole feature converged in 3 passes (T061 to T063, docs and plan wording only).
 * **Planning**: Feature 012 (T027): `/speckit-analyze` round 8 (fresh reviewer, whole feature) passed the gate with 3 LOW findings, fixed as T059 (N-054 note, T025 wording, the client README says a set with no ended trial shows no comparison line).
 * **Documentation**: Feature 012 (T061, T062): the terminal client requires go-yaml directly to read its contract's trial limits (owner approved); the go-yaml concept and the plan say so; the plan's Constitution Check names ADR 0102 to 0107.
