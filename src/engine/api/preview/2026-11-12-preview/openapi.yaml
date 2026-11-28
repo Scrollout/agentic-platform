@@ -3204,8 +3204,8 @@ components:
           description: Each measure of the trials' totals as a Spread.
         previous:
           $ref: '#/components/schemas/TrialComparison'
-          description: Only on a set that `ended` or `stopped`; absent when the slice has no
-            previous set.
+          description: Only on a set that `ended` or `stopped` with at least one ended trial;
+            absent when the slice has no previous set.
     ProviderOperation:
       type: object
       required:
