@@ -2997,8 +2997,8 @@ components:
       description: >-
         What one trial, or one step of it, used. `attempts`: its AttemptMade events plus each
         StepRejected with `usage` and no AttemptMade; `review_rounds`: the highest `round`;
-        `seconds`: for a step, the sum of its attempt spans (StepStarted to its StepAccepted or
-        StepRejected), for a trial, RunStarted to its end, either without the time the run was
+        `seconds`: for a step, the sum of its attempt spans (from its round's StepStarted, or from the
+        previous attempt's StepRejected in that round, to its StepAccepted or StepRejected), for a trial, RunStarted to its end, either without the time the run was
         interrupted (RunInterrupted to RunResumed); `tokens` and `cost_usd`: the sum of `usage`. A
         measure its record does not carry is absent ("not available"), never 0.
       properties:

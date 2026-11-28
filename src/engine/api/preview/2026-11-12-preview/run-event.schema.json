@@ -113,7 +113,7 @@
         "tokens",
         "cost_usd"
       ],
-      "description": "What one attempt used: on AttemptMade, and on StepRejected for an attempt that made no AttemptMade (its worker failed or its result was refused), so the run's use can be summed from its record.",
+      "description": "What one attempt used: on AttemptMade, and on StepRejected for an attempt that made no AttemptMade (its worker failed or its result was refused), so the run's use can be summed from its record. Absent on the events of a step whose worker is a procedure, which reaches no model.",
       "properties": {
         "tokens": {
           "type": "integer",
