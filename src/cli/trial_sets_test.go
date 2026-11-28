@@ -367,15 +367,15 @@ func TestTrialSetComparisonLineForEndedAndStoppedSets(t *testing.T) {
 		{"ended, less reliable", tsOf("ended", "", 3, "done", "done", "handed-over"), tlPrev("TS-2", 3, 3, true, false),
 			"compared with TS-2: done 3/3 -> 2/3  less reliable", 7},
 		{"ended, methods differ", tsOf("ended", "", 2, "done", "done"), tlPrev("TS-7", 1, 2, false, true),
-			"compared with TS-7: done 1/2 -> 2/2  methods differ", 0},
+			"compared with TS-7: done 1/2 -> 2/2  methods differ 999999999999 -> cccccccccccc", 0},
 		{"ended, both flags in this order", tsOf("ended", "", 3, "done", "handed-over", "done"), tlPrev("TS-12", 3, 3, true, true),
-			"compared with TS-12: done 3/3 -> 2/3  less reliable  methods differ", 7},
+			"compared with TS-12: done 3/3 -> 2/3  less reliable  methods differ 999999999999 -> cccccccccccc", 7},
 		{"stopped, neither flag", tsOf("stopped", "budget", 3, "done", "done"), tlPrev("TS-1", 0, 3, false, false),
 			"compared with TS-1: done 0/3 -> 2/2", 0},
 		{"stopped, less reliable", tsOf("stopped", "time", 3, "handed-over"), tlPrev("TS-1", 1, 1, true, false),
 			"compared with TS-1: done 1/1 -> 0/1  less reliable", 7},
 		{"stopped, methods differ", tsOf("stopped", "workers", 3, "done"), tlPrev("TS-3", 5, 5, false, true),
-			"compared with TS-3: done 5/5 -> 1/1  methods differ", 0},
+			"compared with TS-3: done 5/5 -> 1/1  methods differ 999999999999 -> cccccccccccc", 0},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -485,7 +485,7 @@ func TestTrialsPrintsTheComparisonLineAsTrialSetDoes(t *testing.T) {
 	r := e.run("trials", "S-1", "notes")
 	wantExit(t, r, 7)
 	ls := tlLines(t, r.out)
-	if want := "compared with TS-4: done 3/3 -> 2/3  less reliable  methods differ"; ls[len(ls)-1] != want {
+	if want := "compared with TS-4: done 3/3 -> 2/3  less reliable  methods differ 999999999999 -> cccccccccccc"; ls[len(ls)-1] != want {
 		t.Errorf("last line = %q, want %q", ls[len(ls)-1], want)
 	}
 }
